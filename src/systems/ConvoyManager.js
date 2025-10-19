@@ -106,7 +106,7 @@ export class ConvoyManager {
         const vehicle = this.applyUpgrades(VEHICLE_TYPES[vehicleType], vehicleType);
         const cargo = from.removeSupplies(vehicle.capacity);
         
-        const convoy = new Convoy(from, to, vehicle, vehicleType, cargo);
+        const convoy = new Convoy(from, to, vehicle, vehicleType, cargo, this.game);
         
         // En tutorial, agregar al array de convoyes del tutorial
         if (this.game.state === 'tutorial' && this.game.tutorialManager?.tutorialConvoys) {
@@ -187,7 +187,7 @@ export class ConvoyManager {
         const vehicle = this.applyUpgrades(VEHICLE_TYPES['ambulance'], 'ambulance');
         
         // Usar 'ambulance' como vehicleType para forzar renderizado de bolita roja
-        const convoy = new Convoy(from, to, vehicle, 'ambulance', 0);
+        const convoy = new Convoy(from, to, vehicle, 'ambulance', 0, this.game);
         convoy.isMedical = true;
         convoy.targetFrontId = to.id;
         

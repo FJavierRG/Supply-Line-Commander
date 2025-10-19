@@ -369,13 +369,17 @@ export class NetworkManager {
             const cargo = fromNode.removeSupplies(data.cargo);
             
             // Crear convoy
-            const convoy = new Convoy(fromNode, toNode, vehicle, data.vehicleType, cargo);
+            const convoy = new Convoy(fromNode, toNode, vehicle, data.vehicleType, cargo, this.game);
             convoy.id = data.convoyId; // CRÍTICO: Usar ID del servidor
             
-            // Inicializar sistema de interpolación suave
+            // Inicializar sistema de interpolación suave y Dead Reckoning
             convoy.lastServerUpdate = Date.now();
             convoy.serverProgress = 0;
             convoy.lastServerReturning = false;
+            convoy.lastKnownProgress = 0;
+            
+            // Calcular distancia total para Dead Reckoning
+            convoy.getTotalDistance(); // Esto inicializa totalDistance
             
             this.game.convoyManager.convoys.push(convoy);
             
@@ -419,15 +423,19 @@ export class NetworkManager {
             );
             
             // Crear convoy médico
-            const convoy = new Convoy(fromNode, toNode, vehicle, 'ambulance', 0);
+            const convoy = new Convoy(fromNode, toNode, vehicle, 'ambulance', 0, this.game);
             convoy.id = data.convoyId;
             convoy.isMedical = true;
             convoy.targetFrontId = data.targetFrontId;
             
-            // Inicializar sistema de interpolación suave
+            // Inicializar sistema de interpolación suave y Dead Reckoning
             convoy.lastServerUpdate = Date.now();
             convoy.serverProgress = 0;
             convoy.lastServerReturning = false;
+            convoy.lastKnownProgress = 0;
+            
+            // Calcular distancia total para Dead Reckoning
+            convoy.getTotalDistance(); // Esto inicializa totalDistance
             
             this.game.convoyManager.convoys.push(convoy);
             

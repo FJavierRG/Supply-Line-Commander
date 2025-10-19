@@ -290,6 +290,7 @@ export class GameStateManager {
     
     /**
      * Verifica si un convoy tiene cambios significativos desde el último envío
+     * OPTIMIZADO para Dead Reckoning: menos updates durante movimiento constante
      */
     hasConvoySignificantChanges(convoy) {
         const lastConvoyState = this.lastConvoyStates.get(convoy.id);
@@ -299,12 +300,13 @@ export class GameStateManager {
             return true;
         }
         
-        // Cambios significativos en progress (≥0.1 según roadmap)
-        if (Math.abs(convoy.progress - lastConvoyState.progress) >= 0.1) {
+        // OPTIMIZACIÓN DEAD RECKONING: Reducir frecuencia de updates durante movimiento
+        // Cambios significativos en progress - aumentado de 0.1 a 0.15 (menos updates)
+        if (Math.abs(convoy.progress - lastConvoyState.progress) >= 0.15) {
             return true;
         }
         
-        // Cambios críticos
+        // Cambios críticos (siempre se envían inmediatamente)
         if (convoy.returning !== lastConvoyState.returning) {
             return true;
         }
