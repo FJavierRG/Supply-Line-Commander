@@ -8,7 +8,7 @@ export const GAME_CONFIG = {
     match: {
         duration: 520,        // Duración máxima de partida (segundos)
         countdown: 3,         // Countdown antes de empezar (segundos)
-        tickRate: 20,         // Ticks por segundo (TPS)
+        tickRate: 10,         // Ticks por segundo (TPS) - Optimización: reducido de 20 a 10
         worldWidth: 1920,     // Ancho del mundo (px)
         worldHeight: 1080     // Alto del mundo (px)
     },

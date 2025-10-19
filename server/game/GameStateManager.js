@@ -57,6 +57,16 @@ export class GameStateManager {
         this.hasPlayedEnemyContact = false;
         this.clearShootsTimer = 0;
         this.radioEffectTimer = 0;
+        
+        // Sistema de optimización - estado anterior para detectar cambios
+        this.lastSentState = null;
+        this.lastCurrencySnapshot = {
+            player1: GAME_CONFIG.currency.initial,
+            player2: GAME_CONFIG.currency.initial
+        };
+        this.lastNodeStates = new Map(); // Trackear estado anterior de cada nodo
+        this.lastConvoyStates = new Map(); // Trackear estado anterior de cada convoy
+        this.lastConstructionUpdate = 0; // Timer para construction updates
     }
     
     /**
@@ -168,54 +178,164 @@ export class GameStateManager {
     }
     
     /**
-     * Serializa nodos para enviar a cliente
+     * Verifica si un nodo tiene cambios significativos desde el último envío
+     */
+    hasNodeSignificantChanges(node) {
+        const lastNodeState = this.lastNodeStates.get(node.id);
+        
+        // Si es la primera vez que vemos este nodo, enviarlo
+        if (!lastNodeState) {
+            return true;
+        }
+        
+        // Cambios críticos que SIEMPRE requieren actualización
+        if (node.constructed !== lastNodeState.constructed ||
+            node.isConstructing !== lastNodeState.isConstructing ||
+            node.active !== lastNodeState.active ||
+            node.isAbandoning !== lastNodeState.isAbandoning) {
+            return true;
+        }
+        
+        // Cambios en posición (crítico para frentes)
+        if (Math.abs(node.x - lastNodeState.x) > 0.1 || 
+            Math.abs(node.y - lastNodeState.y) > 0.1) {
+            return true;
+        }
+        
+        // Cambios significativos en supplies (≥5 unidades)
+        if (node.supplies !== null && lastNodeState.supplies !== null) {
+            if (Math.abs(node.supplies - lastNodeState.supplies) >= 5) {
+                return true;
+            }
+        }
+        
+        // Cambios en vehículos disponibles
+        if (node.availableVehicles !== lastNodeState.availableVehicles) {
+            return true;
+        }
+        
+        // Cambios en ambulance availability
+        if (node.ambulanceAvailable !== lastNodeState.ambulanceAvailable) {
+            return true;
+        }
+        
+        // Construction timer - solo cada 0.1 segundos (según roadmap)
+        if (node.isConstructing && node.constructionTimer && lastNodeState.constructionTimer) {
+            if (Math.abs(node.constructionTimer - lastNodeState.constructionTimer) >= 0.1) {
+                return true;
+            }
+        }
+        
+        // Cambios en efectos
+        if (node.effects && node.effects.length !== (lastNodeState.effects?.length || 0)) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Serializa nodos para enviar a cliente - SOLO los que han cambiado significativamente
      */
     serializeNodes() {
-        // Filtrar nodos destruidos (active: false) antes de enviar al cliente
-        return this.nodes.filter(node => node.active !== false).map(node => ({
-            id: node.id,
-            type: node.type,
-            team: node.team,
-            x: node.x,
-            y: node.y,
-            active: node.active,
-            constructed: node.constructed,
-            isConstructing: node.isConstructing,
-            constructionTimer: node.constructionTimer || 0,
-            constructionTime: node.constructionTime || 2,
-            supplies: node.supplies,
-            maxSupplies: node.maxSupplies,
-            availableVehicles: node.availableVehicles,
-            maxVehicles: node.maxVehicles,
-            consumeRate: node.consumeRate,
-            maxXReached: node.maxXReached,
-            minXReached: node.minXReached,
-            isAbandoning: node.isAbandoning,
-            abandonPhase: node.abandonPhase,
-            effects: node.effects || [],
-            // Propiedades del sistema médico
-            hasMedicalSystem: node.hasMedicalSystem || false,
-            ambulanceAvailable: node.ambulanceAvailable || false,
-            maxAmbulances: node.maxAmbulances || 0
-        }));
+        // Filtrar nodos destruidos (active: false) y solo enviar los que han cambiado
+        return this.nodes
+            .filter(node => node.active !== false && this.hasNodeSignificantChanges(node))
+            .map(node => {
+                // Guardar estado actual para próxima comparación
+                this.lastNodeStates.set(node.id, {
+                    x: node.x,
+                    y: node.y,
+                    active: node.active,
+                    constructed: node.constructed,
+                    isConstructing: node.isConstructing,
+                    constructionTimer: node.constructionTimer || 0,
+                    supplies: node.supplies,
+                    availableVehicles: node.availableVehicles,
+                    ambulanceAvailable: node.ambulanceAvailable,
+                    isAbandoning: node.isAbandoning,
+                    effects: node.effects ? [...node.effects] : []
+                });
+                
+                return {
+                    id: node.id,
+                    type: node.type,
+                    team: node.team,
+                    x: node.x,
+                    y: node.y,
+                    active: node.active,
+                    constructed: node.constructed,
+                    isConstructing: node.isConstructing,
+                    constructionTimer: node.constructionTimer || 0,
+                    constructionTime: node.constructionTime || 2,
+                    supplies: node.supplies,
+                    maxSupplies: node.maxSupplies,
+                    availableVehicles: node.availableVehicles,
+                    maxVehicles: node.maxVehicles,
+                    consumeRate: node.consumeRate,
+                    maxXReached: node.maxXReached,
+                    minXReached: node.minXReached,
+                    isAbandoning: node.isAbandoning,
+                    abandonPhase: node.abandonPhase,
+                    effects: node.effects || [],
+                    // Propiedades del sistema médico
+                    hasMedicalSystem: node.hasMedicalSystem || false,
+                    ambulanceAvailable: node.ambulanceAvailable || false,
+                    maxAmbulances: node.maxAmbulances || 0
+                };
+            });
     }
     
     /**
-     * Serializa convoyes para enviar a cliente
+     * Verifica si un convoy tiene cambios significativos desde el último envío
+     */
+    hasConvoySignificantChanges(convoy) {
+        const lastConvoyState = this.lastConvoyStates.get(convoy.id);
+        
+        // Si es la primera vez que vemos este convoy, enviarlo
+        if (!lastConvoyState) {
+            return true;
+        }
+        
+        // Cambios significativos en progress (≥0.1 según roadmap)
+        if (Math.abs(convoy.progress - lastConvoyState.progress) >= 0.1) {
+            return true;
+        }
+        
+        // Cambios críticos
+        if (convoy.returning !== lastConvoyState.returning) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Serializa convoyes para enviar a cliente - SOLO los que han cambiado significativamente
      */
     serializeConvoys() {
-        return this.convoys.map(convoy => ({
-            id: convoy.id,
-            fromId: convoy.fromId,
-            toId: convoy.toId,
-            team: convoy.team,
-            vehicleType: convoy.vehicleType,
-            cargo: convoy.cargo,
-            progress: convoy.progress,
-            returning: convoy.returning,
-            isMedical: convoy.isMedical || false,
-            targetFrontId: convoy.targetFrontId || null
-        }));
+        return this.convoys
+            .filter(convoy => this.hasConvoySignificantChanges(convoy))
+            .map(convoy => {
+                // Guardar estado actual para próxima comparación
+                this.lastConvoyStates.set(convoy.id, {
+                    progress: convoy.progress,
+                    returning: convoy.returning
+                });
+                
+                return {
+                    id: convoy.id,
+                    fromId: convoy.fromId,
+                    toId: convoy.toId,
+                    team: convoy.team,
+                    vehicleType: convoy.vehicleType,
+                    cargo: convoy.cargo,
+                    progress: convoy.progress,
+                    returning: convoy.returning,
+                    isMedical: convoy.isMedical || false,
+                    targetFrontId: convoy.targetFrontId || null
+                };
+            });
     }
     
     /**
@@ -499,16 +619,135 @@ export class GameStateManager {
         
         // Limpiar nodos destruidos del servidor (eliminados del array)
         if (droneResult.impacts.length > 0 || droneResult.interceptions.length > 0) {
+            const beforeCount = this.nodes.length;
             this.nodes = this.nodes.filter(n => n.active !== false);
+            
+            // Limpiar tracking de nodos eliminados
+            if (this.nodes.length < beforeCount) {
+                this.cleanupNodeTracking();
+            }
         }
         
         // === ACTUALIZAR EFECTOS TEMPORALES ===
         this.effectsSystem.updateEffects(dt);
         
+        // === LIMPIAR TRACKING MAPS (cada 60 ticks para optimizar) ===
+        if (this.tickCounter % 60 === 0) {
+            this.cleanupConvoyTracking();
+        }
+        
         // === PREPARAR ESTADO COMPLETO PARA ENVIAR ===
         return this.getGameState();
     }
     
+    /**
+     * Limpia tracking maps de nodos/convoyes eliminados
+     */
+    cleanupNodeTracking() {
+        const activeNodeIds = new Set(this.nodes.map(n => n.id));
+        // Limpiar tracking de nodos que ya no existen
+        for (const nodeId of this.lastNodeStates.keys()) {
+            if (!activeNodeIds.has(nodeId)) {
+                this.lastNodeStates.delete(nodeId);
+            }
+        }
+    }
+    
+    cleanupConvoyTracking() {
+        const activeConvoyIds = new Set(this.convoys.map(c => c.id));
+        // Limpiar tracking de convoyes que ya no existen
+        for (const convoyId of this.lastConvoyStates.keys()) {
+            if (!activeConvoyIds.has(convoyId)) {
+                this.lastConvoyStates.delete(convoyId);
+            }
+        }
+    }
+    
+    /**
+     * Verifica si hay cambios significativos desde el último envío
+     */
+    hasSignificantChanges(currentState) {
+        // Si es el primer envío, siempre enviar
+        if (!this.lastSentState) {
+            return true;
+        }
+        
+        // Verificar cambios en currency (solo si hay diferencia ≥ $5)
+        const currencyChange = Math.abs(currentState.currency.player1 - this.lastSentState.currency.player1) +
+                             Math.abs(currentState.currency.player2 - this.lastSentState.currency.player2);
+        if (currencyChange >= 5) {
+            return true;
+        }
+        
+        // Verificar cambios en número de nodos
+        if (currentState.nodes.length !== this.lastSentState.nodes.length) {
+            return true;
+        }
+        
+        // Verificar cambios en convoyes
+        if (currentState.convoys.length !== this.lastSentState.convoys.length) {
+            return true;
+        }
+        
+        // Verificar cambios en drones
+        if (currentState.drones.length !== this.lastSentState.drones.length) {
+            return true;
+        }
+        
+        // Verificar cambios en emergencias
+        if (currentState.emergencies.length !== this.lastSentState.emergencies.length) {
+            return true;
+        }
+        
+        // Verificar eventos de sonido
+        if (currentState.soundEvents.length > 0) {
+            return true;
+        }
+        
+        // Verificar cambios específicos en nodos (construction, supplies significativos)
+        for (let i = 0; i < currentState.nodes.length; i++) {
+            const currentNode = currentState.nodes[i];
+            const lastNode = this.lastSentState.nodes[i];
+            
+            if (!lastNode) continue; // Nuevo nodo
+            
+            // Cambios críticos que SIEMPRE requieren actualización
+            if (currentNode.constructed !== lastNode.constructed ||
+                currentNode.isConstructing !== lastNode.isConstructing ||
+                currentNode.active !== lastNode.active) {
+                return true;
+            }
+            
+            // Cambios significativos en supplies (≥5 unidades)
+            if (currentNode.supplies !== null && lastNode.supplies !== null) {
+                const supplyDiff = Math.abs(currentNode.supplies - lastNode.supplies);
+                if (supplyDiff >= 5) {
+                    return true;
+                }
+            }
+            
+            // Cambios en posición (crítico para frentes)
+            if (currentNode.x !== lastNode.x || currentNode.y !== lastNode.y) {
+                return true;
+            }
+        }
+        
+        // Verificar cambios en convoyes (progress significativo)
+        for (let i = 0; i < currentState.convoys.length; i++) {
+            const currentConvoy = currentState.convoys[i];
+            const lastConvoy = this.lastSentState.convoys[i];
+            
+            if (!lastConvoy) continue;
+            
+            // Cambios significativos en progress (≥0.1)
+            if (Math.abs(currentConvoy.progress - lastConvoy.progress) >= 0.1) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
     /**
      * Obtiene el estado completo del juego para sincronizar con clientes
      */
@@ -527,7 +766,13 @@ export class GameStateManager {
             soundEvents: this.getSoundEvents() // Eventos de sonido de este tick
         };
         
-        // DEBUG: Convoyes funcionan correctamente - logs desactivados
+        // Optimización: Solo enviar si hay cambios significativos
+        if (!this.hasSignificantChanges(state)) {
+            return null; // Skip update - no envía nada
+        }
+        
+        // Guardar estado actual como referencia para próxima comparación
+        this.lastSentState = JSON.parse(JSON.stringify(state));
         
         return state;
     }
