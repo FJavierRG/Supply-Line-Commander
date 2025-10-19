@@ -1,14 +1,8 @@
-[providers]
-node = "18"
-
-[phases.setup]
-nixPkgs = ["nodejs", "npm"]
+[variables]
+NODE_ENV = "production"
 
 [phases.build]
 cmds = ["cd server && npm install"]
 
 [phases.start]
 cmd = "cd server && npm start"
-
-[variables]
-NODE_ENV = "production"
