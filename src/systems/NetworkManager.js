@@ -357,6 +357,7 @@ export class NetworkManager {
             // Inicializar sistema de interpolación suave
             convoy.lastServerUpdate = Date.now();
             convoy.serverProgress = 0;
+            convoy.lastServerReturning = false;
             
             this.game.convoyManager.convoys.push(convoy);
             
@@ -408,6 +409,7 @@ export class NetworkManager {
             // Inicializar sistema de interpolación suave
             convoy.lastServerUpdate = Date.now();
             convoy.serverProgress = 0;
+            convoy.lastServerReturning = false;
             
             this.game.convoyManager.convoys.push(convoy);
             

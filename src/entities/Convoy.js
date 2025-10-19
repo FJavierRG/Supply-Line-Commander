@@ -16,6 +16,7 @@ export class Convoy {
         // Interpolación suave para multijugador
         this.serverProgress = 0; // Progress que viene del servidor
         this.lastServerUpdate = 0; // Timestamp del último update del servidor
+        this.lastServerReturning = false; // Estado returning anterior del servidor
     }
     
     update(dt, speedMultiplier = 1) {
@@ -57,10 +58,30 @@ export class Convoy {
      * Actualiza el progress desde el servidor (para multijugador)
      */
     updateServerProgress(newProgress, isReturning) {
-        this.serverProgress = newProgress;
+        // Detectar cambio crítico de estado (returning cambió)
+        const returningChanged = this.lastServerReturning !== isReturning;
+        
+        if (returningChanged) {
+            console.log(`🔄 Convoy ${this.id} cambió estado: returning ${this.lastServerReturning} → ${isReturning}, progress ${this.serverProgress} → ${newProgress}`);
+            // Cambio crítico: actualizar inmediatamente, sin interpolación
+            
+            // PRIMERO: Actualizar el estado returning
+            this.returning = isReturning;
+            
+            // SEGUNDO: Actualizar progress (esto es crítico para posición correcta)
+            this.progress = newProgress;
+            this.serverProgress = newProgress;
+            
+            // TERCERO: Actualizar posición inmediatamente para evitar "salto" visual
+            this.updatePosition(0);
+        } else {
+            // Estado normal: usar interpolación suave
+            this.serverProgress = newProgress;
+            this.returning = isReturning;
+        }
+        
+        this.lastServerReturning = isReturning;
         this.lastServerUpdate = Date.now();
-        this.returning = isReturning;
-        // NO actualizar this.progress aquí - se actualiza gradualmente en updatePosition()
     }
     
     /**
