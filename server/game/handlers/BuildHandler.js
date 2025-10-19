@@ -89,6 +89,24 @@ export class BuildHandler {
     createNode(type, team, x, y, supplies = null) {
         const nodeId = `node_${uuidv4().substring(0, 8)}`;
         
+        // Establecer valores por defecto según tipo de nodo
+        let initialSupplies = supplies;
+        let maxSupplies = supplies;
+        
+        if (supplies === null) {
+            // Valores por defecto según tipo
+            if (type === 'fob') {
+                initialSupplies = 0;
+                maxSupplies = 100;
+            } else if (type === 'front') {
+                initialSupplies = 100;
+                maxSupplies = 100;
+            } else if (type === 'hq') {
+                initialSupplies = null; // Infinitos
+                maxSupplies = null;
+            }
+        }
+        
         const node = {
             id: nodeId,
             type: type,
@@ -99,13 +117,18 @@ export class BuildHandler {
             category: this.getNodeCategory(type),
             hasSupplies: this.hasSupplies(type),
             hasVehicles: this.hasVehicles(type),
-            supplies: supplies,
-            maxSupplies: supplies,
+            supplies: initialSupplies,
+            maxSupplies: maxSupplies,
             availableVehicles: this.getInitialVehicles(type),
             maxVehicles: this.getInitialVehicles(type),
             constructed: type === 'hq' || type === 'front' || type === 'fob', // HQ, frentes y FOBs ya están construidos
             isConstructing: false
         };
+        
+        // Debug log para FOBs
+        if (type === 'fob') {
+            console.log(`🏗️ FOB creado ${nodeId} por ${team}: supplies=${initialSupplies}, maxSupplies=${maxSupplies}, hasSupplies=${node.hasSupplies}`);
+        }
         
         return node;
     }

@@ -603,7 +603,11 @@ export class GameStateManager {
                     // === CONVOY NORMAL: Entregar cargo ===
                     const toNode = this.nodes.find(n => n.id === convoy.toId);
                     if (toNode && toNode.hasSupplies && toNode.supplies !== null) {
+                        const oldSupplies = toNode.supplies;
                         toNode.supplies = Math.min(toNode.maxSupplies, toNode.supplies + convoy.cargo);
+                        console.log(`🚛 Convoy ${convoy.id} entregó ${convoy.cargo} suministros a ${toNode.type} ${toNode.id}: ${oldSupplies} → ${toNode.supplies}/${toNode.maxSupplies}`);
+                    } else {
+                        console.log(`⚠️ Convoy ${convoy.id} no pudo entregar cargo a nodo ${convoy.toId}: hasSupplies=${toNode?.hasSupplies}, supplies=${toNode?.supplies}`);
                     }
                     
                     // Iniciar regreso
