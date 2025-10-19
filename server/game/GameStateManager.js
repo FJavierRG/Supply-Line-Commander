@@ -300,9 +300,9 @@ export class GameStateManager {
             return true;
         }
         
-        // OPTIMIZACIÓN DEAD RECKONING: Reducir frecuencia de updates durante movimiento
-        // Cambios significativos en progress - aumentado de 0.1 a 0.15 (menos updates)
-        if (Math.abs(convoy.progress - lastConvoyState.progress) >= 0.15) {
+        // OPTIMIZACIÓN DEAD RECKONING: Balance entre fluidez y ancho de banda
+        // Reducido de 0.15 a 0.08 para mejorar fluidez visual manteniendo Dead Reckoning
+        if (Math.abs(convoy.progress - lastConvoyState.progress) >= 0.08) {
             return true;
         }
         

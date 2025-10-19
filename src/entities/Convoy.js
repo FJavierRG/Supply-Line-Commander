@@ -175,8 +175,8 @@ export class Convoy {
             if (Math.abs(difference) < 0.001) {
                 this.progress = targetProgress;
             } else {
-                // Interpolación suave hacia el target (factor de 8 = ~125ms para llegar al target)
-                const interpolationSpeed = 8.0;
+                // Interpolación más suave hacia el target (factor aumentado de 8 a 12)
+                const interpolationSpeed = 12.0; // ~83ms para llegar al target, más fluido
                 this.progress += difference * interpolationSpeed * dt;
             }
         }
