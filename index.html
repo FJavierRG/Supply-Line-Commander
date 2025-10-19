@@ -75,12 +75,40 @@
                     </div>
                     
                     <div class="menu-actions">
-                        <button id="start-game-btn" class="menu-btn primary">Comenzar Misión</button>
+                        <button id="start-game-btn" class="menu-btn primary">Singleplayer</button>
                         <button id="multiplayer-btn" class="menu-btn primary">Multijugador</button>
                         <button id="tutorial-btn" class="menu-btn secondary">Tutorial</button>
                         <button id="arsenal-btn" class="menu-btn secondary">Arsenal</button>
                         <button id="options-btn" class="menu-btn secondary">Opciones</button>
                         <button id="exit-btn" class="menu-btn secondary">Salir</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Selector de Dificultad Singleplayer -->
+            <div id="difficulty-overlay" class="overlay hidden">
+                <div class="main-menu-container">
+                    <div class="menu-header">
+                        <button id="difficulty-back-btn" class="back-btn">← Volver</button>
+                        <h1 class="menu-title">Singleplayer</h1>
+                    </div>
+                    
+                    <div class="menu-actions">
+                        <button id="difficulty-easy-btn" class="menu-btn primary ui-frame" data-difficulty="easy">
+                            Fácil
+                        </button>
+                        
+                        <button id="difficulty-medium-btn" class="menu-btn primary ui-frame" data-difficulty="medium">
+                            Medio
+                        </button>
+                        
+                        <button id="difficulty-hard-btn" class="menu-btn primary ui-frame" data-difficulty="hard">
+                            Difícil
+                        </button>
+                        
+                        <button id="start-singleplayer-btn" class="menu-btn primary" style="margin-top: 30px; display: none;">
+                            Comenzar Partida
+                        </button>
                     </div>
                 </div>
             </div>

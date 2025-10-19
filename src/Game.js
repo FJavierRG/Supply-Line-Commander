@@ -66,7 +66,7 @@ export class Game {
         
         // Sistema de IA (configurable)
         this.aiSystemMode = AI_SYSTEM_MODE;
-        this.enemyAI = new EnemyAISystem(this);
+        this.enemyAI = null; // Se inicializará según la dificultad seleccionada
         
         if (this.aiSystemMode === 'hybrid' || this.aiSystemMode === 'modular') {
             this.aiDirector = new AIDirector(this);
@@ -102,6 +102,7 @@ export class Game {
         this.playtestUpgrades = []; // Mejoras seleccionadas para el playtest
         this.devSupplyEnemyMode = false; // Modo desarrollo: dar recursos a enemigos
         this.countdown = 0; // Cuenta atrás al inicio (3, 2, 1)
+        this.aiDifficulty = 'medium'; // Dificultad de la IA: 'easy', 'medium', 'hard'
         
         // Sistema de estadísticas de partida
         this.matchStats = {
@@ -227,7 +228,13 @@ export class Game {
         this.frontMovement.resetLevel();
         this.territory.reset();
         this.audio.resetEventFlags();
-        this.enemyAI.reset();
+        
+        // Inicializar IA con dificultad seleccionada
+        if (!this.enemyAI) {
+            this.initializeEnemyAI();
+        } else {
+            this.enemyAI.reset();
+        }
         
         // Iniciar cuenta atrás de 3 segundos
         this.countdown = 3;
@@ -876,9 +883,15 @@ export class Game {
             this.playtestUpgrades = [];
         }
         
+        // Resetear selector de dificultad PRIMERO (antes de cambiar estado)
+        if (this.inputHandler && this.inputHandler.resetDifficultySelector) {
+            this.inputHandler.resetDifficultySelector();
+        }
+        
         this.state = 'menu';
         // Limpiar canvas para que no quede frame congelado
         this.renderer.clear();
+        
         this.showMainMenu();
     }
     
@@ -896,6 +909,26 @@ export class Game {
         
         // Reset flag de playtest
         this.isPlaytesting = false;
+    }
+    
+    /**
+     * Inicializa la IA enemiga con la dificultad seleccionada
+     */
+    initializeEnemyAI() {
+        if (this.enemyAI) {
+            // Si ya existe, limpiar referencias
+            this.enemyAI = null;
+        }
+        this.enemyAI = new EnemyAISystem(this, this.aiDifficulty);
+        console.log(`🤖 IA inicializada con dificultad: ${this.aiDifficulty}`);
+    }
+    
+    /**
+     * Cambia la dificultad de la IA
+     */
+    setAIDifficulty(difficulty) {
+        this.aiDifficulty = difficulty;
+        console.log(`🤖 Dificultad IA cambiada a: ${difficulty}`);
     }
     
     startGameFromMenu() {

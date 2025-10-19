@@ -20,6 +20,9 @@ export class InputHandler {
         this.hoverTargetCache = null; // Referencia al último objetivo bajo cursor
         this.hoverDelayMs = 1500; // 1.5s
         
+        // Selector de dificultad
+        this.selectedDifficulty = null;
+        
         this.setupListeners();
     }
     
@@ -39,7 +42,7 @@ export class InputHandler {
         window.addEventListener('keyup', (e) => this.handleKeyUp(e));
         
         // Botones del menú principal
-        this.setupButton('start-game-btn', () => this.game.startGameFromMenu());
+        this.setupButton('start-game-btn', () => this.showDifficultySelector());
         this.setupButton('multiplayer-btn', () => this.showMultiplayerLobby());
         this.setupButton('tutorial-btn', () => this.game.startTutorialFromMenu());
         // Editor de mapas legacy eliminado
@@ -52,6 +55,13 @@ export class InputHandler {
         this.setupButton('join-room-btn', () => this.showJoinRoomInput());
         this.setupButton('join-with-code-btn', () => this.joinRoomWithCode());
         this.setupButton('start-multiplayer-game-btn', () => this.game.network.startGame());
+        
+        // Botones del selector de dificultad
+        this.setupButton('difficulty-back-btn', () => this.hideDifficultySelector());
+        this.setupButton('difficulty-easy-btn', () => this.selectDifficulty('easy'));
+        this.setupButton('difficulty-medium-btn', () => this.selectDifficulty('medium'));
+        this.setupButton('difficulty-hard-btn', () => this.selectDifficulty('hard'));
+        this.setupButton('start-singleplayer-btn', () => this.startSingleplayerGame());
         
         // Botones de victoria/derrota
         this.setupButton('victory-menu-btn', () => this.game.returnToMenuFromGame());
@@ -1037,6 +1047,85 @@ export class InputHandler {
     }
     
     
+    // ===== FUNCIONES DE SELECTOR DE DIFICULTAD =====
+    
+    showDifficultySelector() {
+        // Ocultar menú principal
+        this.game.ui.hideElement('main-menu-overlay');
+        
+        // Mostrar selector de dificultad
+        this.game.ui.showElement('difficulty-overlay');
+        
+        // Resetear selección
+        this.selectedDifficulty = null;
+        this.updateDifficultyButtons();
+    }
+    
+    hideDifficultySelector() {
+        // Ocultar selector de dificultad
+        this.game.ui.hideElement('difficulty-overlay');
+        
+        // Mostrar menú principal
+        this.game.ui.showElement('main-menu-overlay');
+    }
+    
+    selectDifficulty(difficulty) {
+        this.selectedDifficulty = difficulty;
+        this.game.setAIDifficulty(difficulty);
+        
+        // Actualizar botones visualmente
+        this.updateDifficultyButtons();
+        
+        // Mostrar botón "Comenzar Partida"
+        const startBtn = document.getElementById('start-singleplayer-btn');
+        if (startBtn) {
+            startBtn.style.display = 'block';
+        }
+    }
+    
+    updateDifficultyButtons() {
+        const difficulties = ['easy', 'medium', 'hard'];
+        difficulties.forEach(difficulty => {
+            const btn = document.getElementById(`difficulty-${difficulty}-btn`);
+            if (btn) {
+                if (this.selectedDifficulty === difficulty) {
+                    btn.style.background = 'rgba(78, 204, 163, 0.8)';
+                    btn.style.border = '2px solid #4ecca3';
+                } else {
+                    btn.style.background = '';
+                    btn.style.border = '';
+                }
+            }
+        });
+    }
+    
+    startSingleplayerGame() {
+        // Ocultar selector de dificultad
+        this.game.ui.hideElement('difficulty-overlay');
+        
+        // Iniciar el juego
+        this.game.startGameFromMenu();
+    }
+    
+    resetDifficultySelector() {
+        // Resetear estado del selector
+        this.selectedDifficulty = null;
+        
+        // Ocultar selector de dificultad usando clases CSS (consistente con showMainMenu)
+        const difficultyOverlay = document.getElementById('difficulty-overlay');
+        if (difficultyOverlay) {
+            difficultyOverlay.classList.add('hidden');
+        }
+        
+        // Resetear botones visualmente
+        this.updateDifficultyButtons();
+        
+        // Ocultar botón "Comenzar Partida"
+        const startBtn = document.getElementById('start-singleplayer-btn');
+        if (startBtn) {
+            startBtn.style.display = 'none';
+        }
+    }
     
     // ===== FUNCIONES DE LOBBY MULTIJUGADOR =====
     

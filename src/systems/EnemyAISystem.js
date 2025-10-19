@@ -6,19 +6,12 @@ import { FOB_CURRENCY_CONFIG } from '../config/constants.js';
 import { getNodeConfig } from '../config/nodes.js';
 
 export class EnemyAISystem {
-    constructor(game) {
+    constructor(game, difficulty = 'medium') {
         this.game = game;
+        this.difficulty = difficulty;
         
-        // Configuración de IA - APM (Acciones Por Minuto)
-        // Cada comportamiento tiene su propio intervalo para más realismo
-        this.fobCheckInterval = 2.0; // Comprobar FOBs cada 2 segundos
-        this.frontCheckInterval = 3.0; // Comprobar Frentes cada 3 segundos
-        // reactCheckInterval eliminado - Reacciones son cada frame (inmediatas)
-        this.harassCheckInterval = 25.0; // Harass con sniper cada 25 segundos (early game)
-        this.offensiveCheckInterval = 40.0; // Ataque programado cada 40 segundos
-        this.buildCheckInterval = 8.0; // Considerar construcciones cada 8 segundos
-        this.emergencyFobCheckInterval = 3.0; // EMERGENCIA: Revisar si necesita FOB cada 3 segundos
-        this.truckFactoryInterval = 180.0; // Spawnear Truck Factory cada 3 minutos (180 segundos)
+        // Aplicar configuración según dificultad
+        this.applyDifficultyConfig();
         
         // Timers independientes para cada comportamiento
         this.fobCheckTimer = 0;
@@ -60,6 +53,105 @@ export class EnemyAISystem {
             dronesLaunched: 0,
             snipersLaunched: 0
         };
+    }
+    
+    /**
+     * Aplica configuración según dificultad seleccionada
+     */
+    applyDifficultyConfig() {
+        const configs = {
+            easy: {
+                // COMPORTAMIENTO: Más conservadora
+                fobCheckInterval: 4.0,        // Menos frecuente (vs 2.0 actual)
+                frontCheckInterval: 6.0,      // Menos frecuente (vs 3.0 actual)
+                harassCheckInterval: 45.0,    // Harass menos frecuente (vs 25.0)
+                offensiveCheckInterval: 60.0, // Ataques más espaciados (vs 40.0)
+                buildCheckInterval: 12.0,     // Construcciones más lentas (vs 8.0)
+                emergencyFobCheckInterval: 5.0, // Emergencias menos frecuentes (vs 3.0)
+                truckFactoryInterval: 240.0,  // Más lento (vs 180.0)
+                
+                // REACCIONES: Más lentas y menos agresivas
+                reactionWindow: 5.0,          // Tiempo para reaccionar (vs 3.0 actual)
+                mirrorSuccessRate: 0.2,       // 20% éxito copiando (vs 30%)
+                counterDroneRate: 0.4,        // 40% éxito contra drones (vs 60%)
+                
+                // INICIATIVA: Menos agresiva
+                initiativeDelay: 30.0,        // Más tiempo inactivo antes de actuar (vs 15.0)
+                offensiveChance: 0.3,         // 30% chance de atacar (vs 50%)
+                
+                // MARGENES: Más conservadora económicamente
+                currencyMargin: 80,           // +80$ margen de seguridad (vs 50$)
+                
+                name: 'Defensiva'
+            },
+            medium: {
+                // COMPORTAMIENTO ACTUAL del sistema
+                fobCheckInterval: 2.0,
+                frontCheckInterval: 3.0,
+                harassCheckInterval: 25.0,
+                offensiveCheckInterval: 40.0,
+                buildCheckInterval: 8.0,
+                emergencyFobCheckInterval: 3.0,
+                truckFactoryInterval: 180.0,
+                
+                reactionWindow: 3.0,
+                mirrorSuccessRate: 0.3,
+                counterDroneRate: 0.6,
+                
+                initiativeDelay: 15.0,
+                offensiveChance: 0.5,
+                
+                currencyMargin: 50,
+                
+                name: 'Equilibrada'
+            },
+            hard: {
+                // COMPORTAMIENTO: Más agresiva y reactiva
+                fobCheckInterval: 1.5,        // Más frecuente (vs 2.0 actual)
+                frontCheckInterval: 2.0,      // Más frecuente (vs 3.0 actual)
+                harassCheckInterval: 20.0,    // Harass más frecuente (vs 25.0)
+                offensiveCheckInterval: 30.0, // Ataques más frecuentes (vs 40.0)
+                buildCheckInterval: 6.0,      // Construcciones más rápidas (vs 8.0)
+                emergencyFobCheckInterval: 2.0, // Emergencias más frecuentes (vs 3.0)
+                truckFactoryInterval: 150.0,  // Más rápido (vs 180.0)
+                
+                // REACCIONES: Más rápidas y efectivas
+                reactionWindow: 2.0,          // Reacciona más rápido (vs 3.0)
+                mirrorSuccessRate: 0.5,       // 50% éxito copiando (vs 30%)
+                counterDroneRate: 0.8,        // 80% éxito contra drones (vs 60%)
+                
+                // INICIATIVA: Más agresiva
+                initiativeDelay: 10.0,        // Menos tiempo inactivo (vs 15.0)
+                offensiveChance: 0.7,         // 70% chance de atacar (vs 50%)
+                
+                // MARGENES: Más agresiva económicamente
+                currencyMargin: 30,           // Solo +30$ margen (vs 50$)
+                
+                name: 'Agresiva'
+            }
+        };
+        
+        const config = configs[this.difficulty] || configs.medium;
+        
+        // Aplicar configuración
+        this.fobCheckInterval = config.fobCheckInterval;
+        this.frontCheckInterval = config.frontCheckInterval;
+        this.harassCheckInterval = config.harassCheckInterval;
+        this.offensiveCheckInterval = config.offensiveCheckInterval;
+        this.buildCheckInterval = config.buildCheckInterval;
+        this.emergencyFobCheckInterval = config.emergencyFobCheckInterval;
+        this.truckFactoryInterval = config.truckFactoryInterval;
+        
+        // Almacenar configuraciones de comportamiento
+        this.reactionWindow = config.reactionWindow;
+        this.mirrorSuccessRate = config.mirrorSuccessRate;
+        this.counterDroneRate = config.counterDroneRate;
+        this.initiativeDelay = config.initiativeDelay;
+        this.offensiveChance = config.offensiveChance;
+        this.currencyMargin = config.currencyMargin;
+        this.difficultyName = config.name;
+        
+        console.log(`🤖 IA: Dificultad "${config.name}" aplicada (${this.difficulty})`);
     }
     
     /**
@@ -288,9 +380,8 @@ export class EnemyAISystem {
         if (this.playerLastAction) {
             const actionAge = (now - this.playerLastAction.timestamp) / 1000; // En segundos
             
-            // Solo reaccionar si la acción es MUY reciente (menos de 3 segundos)
-            // Reducido de 5s a 3s para reacciones más rápidas
-            if (actionAge < 3) {
+            // Solo reaccionar si la acción es MUY reciente (según dificultad)
+            if (actionAge < this.reactionWindow) {
                 this.reactToPlayerAction(this.playerLastAction);
                 // Limpiar la acción procesada
                 this.playerLastAction = null;
@@ -305,8 +396,8 @@ export class EnemyAISystem {
         const timeSinceLastDrone = (now - this.playerLastDroneTime) / 1000; // En segundos
         const timeSinceLastInitiative = (now - this.lastInitiativeTime) / 1000; // En segundos
         
-        // Si el jugador lleva 15+ segundos sin lanzar dron Y han pasado 20s desde la última iniciativa
-        if (timeSinceLastDrone >= 15 && timeSinceLastInitiative >= 20) {
+        // Si el jugador lleva tiempo sin lanzar dron Y han pasado tiempo desde la última iniciativa (según dificultad)
+        if (timeSinceLastDrone >= this.initiativeDelay && timeSinceLastInitiative >= 20) {
             const initiated = this.takeInitiative();
             if (initiated) {
                 this.lastInitiativeTime = now;
@@ -322,20 +413,20 @@ export class EnemyAISystem {
         
         switch(action.type) {
             case 'drone':
-                // Jugador lanzó un dron → IA intenta colocar anti-drone (60% de éxito)
-                if (Math.random() > 0.4) { // 60% de éxito
+                // Jugador lanzó un dron → IA intenta colocar anti-drone (según dificultad)
+                if (Math.random() < this.counterDroneRate) {
                     this.counterDroneWithAntiDrone(action.target);
                 } else if (this.debugMode) {
-                    console.log('🤖 IA: Fallé en detectar el dron del jugador (40% fallo)');
+                    console.log(`🤖 IA: Fallé en detectar el dron del jugador (${((1-this.counterDroneRate)*100).toFixed(0)}% fallo)`);
                 }
                 break;
                 
             case 'antiDrone':
-                // Jugador construyó anti-drone → IA copia en mirror (30% de éxito)
-                if (Math.random() > 0.7) { // 30% de éxito
+                // Jugador construyó anti-drone → IA copia en mirror (según dificultad)
+                if (Math.random() < this.mirrorSuccessRate) {
                     this.mirrorPlayerBuilding(action.type, action.target);
                 } else if (this.debugMode) {
-                    console.log(`🤖 IA: No copié el anti-drone del jugador (70% fallo)`);
+                    console.log(`🤖 IA: No copié el anti-drone del jugador (${((1-this.mirrorSuccessRate)*100).toFixed(0)}% fallo)`);
                 }
                 break;
                 
@@ -455,10 +546,10 @@ export class EnemyAISystem {
         const antiDroneConfig = getNodeConfig('antiDrone');
         if (!antiDroneConfig || !antiDroneConfig.enabled) return;
         
-        // Verificar si tenemos currency + margen de seguridad (50$)
-        if (this.currency < antiDroneConfig.cost + 40) {
+        // Verificar si tenemos currency + margen de seguridad (según dificultad)
+        if (this.currency < antiDroneConfig.cost + this.currencyMargin) {
             if (this.debugMode) {
-                console.log(`🤖 IA: No tengo currency para anti-drone (tengo ${this.currency}$, necesito ${antiDroneConfig.cost + 50}$)`);
+                console.log(`🤖 IA: No tengo currency para anti-drone (tengo ${this.currency}$, necesito ${antiDroneConfig.cost + this.currencyMargin}$)`);
             }
             return;
         }
@@ -488,10 +579,10 @@ export class EnemyAISystem {
         
         if (!config || !config.enabled) return;
         
-        // Verificar si tenemos currency + margen de seguridad (50$)
-        if (this.currency < config.cost + 50) {
+        // Verificar si tenemos currency + margen de seguridad (según dificultad)
+        if (this.currency < config.cost + this.currencyMargin) {
             if (this.debugMode) {
-                console.log(`🤖 IA: No tengo currency para ${buildingType} (tengo ${this.currency}$, necesito ${config.cost + 50}$)`);
+                console.log(`🤖 IA: No tengo currency para ${buildingType} (tengo ${this.currency}$, necesito ${config.cost + this.currencyMargin}$)`);
                         }
                         return;
                     }
@@ -1108,8 +1199,8 @@ export class EnemyAISystem {
             return;
         }
         
-        if (this.currency < droneConfig.cost + 50) {
-            console.log(`🤖 IA: [DRON] ❌ CANCELADO - Sin currency suficiente (tengo ${this.currency}$, necesito ${droneConfig.cost + 50}$)`);
+        if (this.currency < droneConfig.cost + this.currencyMargin) {
+            console.log(`🤖 IA: [DRON] ❌ CANCELADO - Sin currency suficiente (tengo ${this.currency}$, necesito ${droneConfig.cost + this.currencyMargin}$)`);
             return;
         }
         
@@ -1968,12 +2059,12 @@ export class EnemyAISystem {
         this.resetStats();
         
         // Log de inicio
-        console.log('🤖 IA ENEMIGA ACTIVADA');
-        console.log('📊 Intervalos: FOBs(2s) | Frentes(3s) | Reacción(instantánea) | Harass(25s) | Emergencia FOB(3s) | Ataque(40s) | Construcción(8s)');
-        console.log('💰 Currency inicial: 0$ (tasa: 3$/s - Jugador: 2$/s) - IA tiene +1$/s de ventaja');
-        console.log('🎯 Reacciones económicas: SIN MARGEN (trade directo 175$ dron vs edificio)');
-        console.log('🚁 Evaluación estratégica: Antes de lanzar drones, evalúa necesidades de construcción');
-        console.log('🏥 Sistema médico: Emergencias aleatorias por MedicalEmergencySystem (global)');
+        console.log(`🤖 IA ENEMIGA ACTIVADA - Dificultad: ${this.difficultyName || this.difficulty.toUpperCase()}`);
+        console.log(`📊 Intervalos: FOBs(${this.fobCheckInterval}s) | Frentes(${this.frontCheckInterval}s) | Reacción(${this.reactionWindow}s) | Harass(${this.harassCheckInterval}s) | Emergencia FOB(${this.emergencyFobCheckInterval}s) | Ataque(${this.offensiveCheckInterval}s) | Construcción(${this.buildCheckInterval}s)`);
+        console.log(`💰 Currency inicial: 0$ (tasa: 3$/s - Jugador: 2$/s) - IA tiene +1$/s de ventaja`);
+        console.log(`🎯 Reacciones: ${(this.counterDroneRate*100).toFixed(0)}% anti-dron, ${(this.mirrorSuccessRate*100).toFixed(0)}% copiar edificios, margen: ${this.currencyMargin}$`);
+        console.log(`🚁 Evaluación estratégica: Antes de lanzar drones, evalúa necesidades de construcción`);
+        console.log(`🏥 Sistema médico: Emergencias aleatorias por MedicalEmergencySystem (global)`);
     }
 }
 

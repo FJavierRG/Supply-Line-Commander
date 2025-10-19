@@ -47,6 +47,8 @@ export class UIManager {
         if (mainMenu) {
             document.body.classList.add('menu-open');
             mainMenu.classList.remove('hidden');
+            // Asegurarse de que no haya conflictos con style.display
+            mainMenu.style.display = '';
             
             // Reproducir música del menú
             if (this.game && this.game.audio) {
