@@ -18,7 +18,7 @@ export const GAME_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
     currency: {
         initial: 30,          // Currency inicial de cada jugador
-        passiveRate: 2        // Generación pasiva base ($/s)
+        passiveRate: 3        // Generación pasiva base ($/s)
     },
 
     // ═══════════════════════════════════════════════════════════════

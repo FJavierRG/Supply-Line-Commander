@@ -1,6 +1,5 @@
 // ===== GESTOR DE UI =====
 //import { getAllUpgrades, getUpgradeStatus } from '../config/upgrades.js'; LEGACY, probando si al desactivar el juego sigue funcionando
-import { GAME_VERSION } from '../config/constants.js';
 
 export class UIManager {
     constructor(game) {
@@ -48,12 +47,6 @@ export class UIManager {
         if (mainMenu) {
             document.body.classList.add('menu-open');
             mainMenu.classList.remove('hidden');
-            
-            // Actualizar versión del juego dinámicamente
-            const versionElement = document.getElementById('game-version');
-            if (versionElement) {
-                versionElement.textContent = GAME_VERSION;
-            }
             
             // Reproducir música del menú
             if (this.game && this.game.audio) {

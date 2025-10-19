@@ -57,6 +57,11 @@ export class GameStateManager {
         this.hasPlayedEnemyContact = false;
         this.clearShootsTimer = 0;
         this.radioEffectTimer = 0;
+        
+        // Optimizaciones de rendimiento (FASE 2.5 y 2.6)
+        this.lastSentState = null;
+        this.lastSentTick = 0;
+        this.fullStateInterval = 100; // Enviar estado completo cada 5 segundos (100 ticks a 20 TPS)
     }
     
     /**
@@ -263,9 +268,18 @@ export class GameStateManager {
             // Actualizar simulación del juego
             const gameState = this.update(tickInterval / 1000); // dt en segundos
             
-            // Enviar estado completo cada tick (20 TPS)
+            // OPTIMIZACIÓN: Solo enviar si hay cambios o cada 5 segundos
             if (gameState) {
-                updateCallback(gameState);
+                const shouldSend = this.shouldSendUpdate(gameState);
+                if (shouldSend.needsUpdate) {
+                    // Log para debugging (cada 2 segundos)
+                    if (this.tickCounter % 40 === 0) {
+                        console.log(`📡 Enviando ${shouldSend.type} update (tick ${this.tickCounter})`);
+                    }
+                    updateCallback(shouldSend.data);
+                    this.lastSentState = gameState;
+                    this.lastSentTick = this.tickCounter;
+                }
             }
             
             // CRÍTICO: Si hay victoria, enviar evento de victoria
@@ -276,7 +290,157 @@ export class GameStateManager {
             }
         }, tickInterval);
         
-        console.log(`🎮 Game loop iniciado: ${this.tickRate} TPS (cada ${tickInterval}ms)`);
+        console.log(`🎮 Game loop iniciado: ${this.tickRate} TPS (cada ${tickInterval}ms) - OPTIMIZADO con Delta Updates`);
+    }
+    
+    /**
+     * Determina si se debe enviar una actualización y qué datos enviar
+     */
+    shouldSendUpdate(currentState) {
+        // Siempre enviar el primer estado
+        if (!this.lastSentState || this.tickCounter - this.lastSentTick >= this.fullStateInterval) {
+            return {
+                needsUpdate: true,
+                data: currentState,
+                type: 'full'
+            };
+        }
+        
+        // Calcular delta (solo cambios)
+        const delta = this.calculateDelta(this.lastSentState, currentState);
+        
+        // Solo enviar si hay cambios significativos o eventos de sonido
+        const hasChanges = delta.nodes.length > 0 || 
+                          delta.convoys.length > 0 || 
+                          delta.drones.length > 0 || 
+                          delta.emergencies.length > 0 || 
+                          delta.soundEvents.length > 0 ||
+                          delta.currencyChanged;
+        
+        if (hasChanges) {
+            return {
+                needsUpdate: true,
+                data: {
+                    tick: currentState.tick,
+                    gameTime: currentState.gameTime,
+                    delta: delta
+                },
+                type: 'delta'
+            };
+        }
+        
+        return { needsUpdate: false };
+    }
+    
+    /**
+     * Calcula las diferencias entre dos estados del juego
+     */
+    calculateDelta(lastState, currentState) {
+        const delta = {
+            nodes: [],
+            convoys: [],
+            drones: currentState.drones,
+            emergencies: currentState.emergencies,
+            soundEvents: currentState.soundEvents,
+            currencyChanged: false
+        };
+        
+        // Detectar cambios en nodos (solo enviar nodos modificados)
+        for (const currentNode of currentState.nodes) {
+            const lastNode = lastState.nodes?.find(n => n.id === currentNode.id);
+            
+            if (!lastNode) {
+                // Nodo nuevo
+                delta.nodes.push(currentNode);
+            } else if (this.nodeChanged(lastNode, currentNode)) {
+                // Solo enviar campos modificados
+                const changedFields = this.getChangedFields(lastNode, currentNode);
+                delta.nodes.push({
+                    id: currentNode.id,
+                    ...changedFields
+                });
+            }
+        }
+        
+        // Detectar cambios en convoyes
+        for (const currentConvoy of currentState.convoys) {
+            const lastConvoy = lastState.convoys?.find(c => c.id === currentConvoy.id);
+            
+            if (!lastConvoy) {
+                delta.convoys.push(currentConvoy);
+            } else if (this.convoyChanged(lastConvoy, currentConvoy)) {
+                delta.convoys.push(currentConvoy);
+            }
+        }
+        
+        // Detectar convoyes eliminados (presentes en lastState pero no en currentState)
+        if (lastState.convoys) {
+            for (const lastConvoy of lastState.convoys) {
+                const stillExists = currentState.convoys.some(c => c.id === lastConvoy.id);
+                if (!stillExists) {
+                    delta.convoys.push({ id: lastConvoy.id, _deleted: true });
+                }
+            }
+        }
+        
+        // Detectar cambios en currency
+        if (lastState.currency) {
+            delta.currencyChanged = 
+                lastState.currency.player1 !== currentState.currency.player1 ||
+                lastState.currency.player2 !== currentState.currency.player2;
+            
+            if (delta.currencyChanged) {
+                delta.currency = currentState.currency;
+            }
+        }
+        
+        return delta;
+    }
+    
+    /**
+     * Verifica si un nodo cambió significativamente
+     */
+    nodeChanged(lastNode, currentNode) {
+        const significantFields = ['x', 'y', 'supplies', 'availableVehicles', 'constructed', 'isConstructing', 'isAbandoning', 'effects'];
+        
+        for (const field of significantFields) {
+            if (lastNode[field] !== currentNode[field]) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Obtiene solo los campos que cambiaron en un nodo
+     */
+    getChangedFields(lastNode, currentNode) {
+        const changedFields = {};
+        const significantFields = ['x', 'y', 'supplies', 'availableVehicles', 'constructed', 'isConstructing', 'isAbandoning', 'effects'];
+        
+        for (const field of significantFields) {
+            if (lastNode[field] !== currentNode[field]) {
+                changedFields[field] = currentNode[field];
+            }
+        }
+        
+        return changedFields;
+    }
+    
+    /**
+     * Verifica si un convoy cambió significativamente
+     */
+    convoyChanged(lastConvoy, currentConvoy) {
+        const significantFields = ['progress', 'returning'];
+        
+        for (const field of significantFields) {
+            if (lastConvoy[field] !== currentConvoy[field]) {
+                return true;
+            }
+        }
+        
+        return false;
     }
     
     /**

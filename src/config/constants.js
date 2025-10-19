@@ -1,7 +1,5 @@
 // ===== CONFIGURACIÓN Y CONSTANTES =====
 
-export const GAME_VERSION = 'Dev Build 2.0.0-dev';
-
 export const GAME_CONFIG = {
     CANVAS_BG_COLOR: '#0a0e27',
     GRID_SIZE: 50,

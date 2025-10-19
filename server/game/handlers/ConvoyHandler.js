@@ -86,9 +86,9 @@ export class ConvoyHandler {
         
         // SONIDOS: Truck sound (si es desde HQ) o dispatch sound
         if (fromNode.type === 'hq') {
-            this.gameState.addSoundEvent('hq_dispatch'); // HQ sound con cooldown 3s
+            this.gameState.addSoundEvent('hq_dispatch', { team: playerTeam }); // HQ sound con cooldown 3s
         }
-        this.gameState.addSoundEvent('truck_dispatch'); // Truck sound con cooldown 2s
+        this.gameState.addSoundEvent('truck_dispatch', { team: playerTeam }); // Truck sound con cooldown 2s
         
         return { success: true, convoy };
     }
@@ -183,9 +183,9 @@ export class ConvoyHandler {
         
         // SONIDOS: Ambulancia (similar a convoy)
         if (fromNode.type === 'hq') {
-            this.gameState.addSoundEvent('hq_dispatch'); // HQ sound con cooldown 3s
+            this.gameState.addSoundEvent('hq_dispatch', { team: playerTeam }); // HQ sound con cooldown 3s
         }
-        this.gameState.addSoundEvent('truck_dispatch'); // Truck sound para ambulancia
+        this.gameState.addSoundEvent('truck_dispatch', { team: playerTeam }); // Truck sound para ambulancia
         
         console.log(`🚑 Ambulancia creada: ${fromId} → ${toId} (emergencia en ${toId})`);
         

@@ -120,7 +120,12 @@ export class ConvoyManager {
             this.game.matchStats.convoysDispatched++;
         }
         
-        this.game.audio.playSound('dispatch');
+        // Reproducir sonido: volumen reducido para convoyes del enemigo
+        if (from.team === this.game.myTeam) {
+            this.game.audio.playSound('dispatch'); // Sonido normal para convoyes del jugador
+        } else {
+            this.game.audio.playEnemyTruckSound(); // Sonido reducido para convoyes del enemigo
+        }
     }
     
     /**
@@ -193,7 +198,12 @@ export class ConvoyManager {
             this.convoys.push(convoy);
         }
         
-        this.game.audio.playSound('dispatch');
+        // Reproducir sonido: volumen reducido para ambulancias del enemigo
+        if (from.team === this.game.myTeam) {
+            this.game.audio.playSound('dispatch'); // Sonido normal para ambulancias del jugador
+        } else {
+            this.game.audio.playEnemyTruckSound(); // Sonido reducido para ambulancias del enemigo
+        }
     }
     
     /**

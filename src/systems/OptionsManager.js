@@ -143,32 +143,18 @@ export class OptionsManager {
                 let finalVolume = this.baseVolumes[soundType] * this.settings.masterVolume;
                 
                 // Clasificar como música o efectos de sonido
-                const musicSounds = [
-                    'ambiance',           // Sonido ambiente del fondo del juego
-                    'mainTheme',          // Música del menú principal
-                    'victoryMarch',       // Música de pantalla de victoria
-                    'clearShoots',        // Sonidos ambientales de disparos
-                    'radioEffect',        // Sonidos de radio ambiente (1-4)
-                    'radioEffect1',       // Variantes específicas de radio
-                    'radioEffect2', 
-                    'radioEffect3', 
-                    'radioEffect4'
-                ];
-                
+                const musicSounds = ['ambiance', 'mainTheme', 'victoryMarch'];
                 if (musicSounds.includes(soundType)) {
-                    // Música y sonidos ambientales
+                    // Música
                     finalVolume *= this.settings.musicVolume;
                 } else {
-                    // Efectos de sonido (incluyendo botones de menú)
+                    // Efectos de sonido
                     finalVolume *= this.settings.sfxVolume;
                 }
                 
                 console.log(`  ${soundType}: ${this.baseVolumes[soundType]} → ${finalVolume}`);
                 this.audioManager.setVolume(soundType, finalVolume);
             });
-            
-            // Actualizar volúmenes de todas las instancias activas
-            this.audioManager.updateActiveInstancesVolume();
         } else {
             console.warn('⚠️ AudioManager no disponible');
         }
