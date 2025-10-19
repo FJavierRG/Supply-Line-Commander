@@ -220,8 +220,48 @@ export class NetworkManager {
             
             // Verificar que los assets estén cargados
             const assetsLoaded = this.game.assetManager.isReady();
-            console.log('🖼️ Assets cargados:', assetsLoaded);
+            const criticalAssetsLoaded = this.game.assetManager.areCriticalAssetsLoaded();
+            console.log('🖼️ Assets cargados:', assetsLoaded, 'Assets críticos:', criticalAssetsLoaded);
             
+            // Si los assets críticos no están cargados, esperar un poco
+            if (!criticalAssetsLoaded) {
+                console.log('⏳ Esperando a que carguen los assets críticos...');
+                this.waitForCriticalAssets().then(() => {
+                    console.log('✅ Assets críticos cargados, continuando...');
+                    this.finishGameStart();
+                });
+                return;
+            }
+            
+            this.finishGameStart();
+        });
+    }
+    
+    /**
+     * Espera a que los assets críticos estén cargados
+     */
+    async waitForCriticalAssets() {
+        return new Promise((resolve) => {
+            const checkInterval = setInterval(() => {
+                if (this.game.assetManager.areCriticalAssetsLoaded()) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 100);
+            
+            // Timeout de seguridad después de 10 segundos
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                console.warn('⚠️ Timeout esperando assets críticos, continuando...');
+                resolve();
+            }, 10000);
+        });
+    }
+    
+    /**
+     * Finaliza el inicio del juego multijugador
+     */
+    finishGameStart() {
             // Verificar cámara
             console.log('📷 Cámara:', {
                 offsetX: this.game.camera.offsetX,
@@ -304,7 +344,7 @@ export class NetworkManager {
             // Forzar primer render
             this.game.render();
             console.log('🎨 Primer render forzado');
-        });
+    }
         
         this.socket.on('game_update', (gameState) => {
             // Recibir estado completo del servidor cada tick (20 TPS)

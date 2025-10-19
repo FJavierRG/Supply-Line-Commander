@@ -259,6 +259,23 @@ export class AssetManager {
     }
     
     /**
+     * Verifica si los assets críticos están cargados
+     * @returns {boolean}
+     */
+    areCriticalAssetsLoaded() {
+        const criticalAssets = [
+            'base-hq',
+            'base-fob', 
+            'base-front',
+            'base-enemy-front',
+            'base-enemy-hq',
+            'base-enemy-fob'
+        ];
+        
+        return criticalAssets.every(key => this.hasSprite(key));
+    }
+    
+    /**
      * Obtiene sprite de base según estado
      * @param {string} type - Tipo de base (hq, fob, front)
      * @param {boolean} isSelected - Si está seleccionada
