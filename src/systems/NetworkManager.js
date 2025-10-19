@@ -239,16 +239,25 @@ export class NetworkManager {
                 backgroundTiles: !!this.game.backgroundTiles
             });
             
-            // Verificar que los assets estén cargados
+            // Verificar que los assets estén completamente cargados
             const assetsLoaded = this.game.assetManager.isReady();
             const criticalAssetsLoaded = this.game.assetManager.areCriticalAssetsLoaded();
-            console.log('🖼️ Assets cargados:', assetsLoaded, 'Assets críticos:', criticalAssetsLoaded);
             
-            // Si los assets críticos no están cargados, esperar un poco
-            if (!criticalAssetsLoaded) {
-                console.log('⏳ Esperando a que carguen los assets críticos...');
+            // Verificar también que todos los assets estén realmente disponibles
+            const allAssetsReady = assetsLoaded && criticalAssetsLoaded;
+            
+            console.log('🖼️ Verificación de assets:', {
+                allLoaded: assetsLoaded,
+                criticalLoaded: criticalAssetsLoaded,
+                allReady: allAssetsReady,
+                progress: this.game.assetManager.getProgress()
+            });
+            
+            // Si no están completamente listos, esperar
+            if (!allAssetsReady) {
+                console.log('⏳ Esperando a que carguen completamente los assets...');
                 this.waitForCriticalAssets().then(() => {
-                    console.log('✅ Assets críticos cargados, continuando...');
+                    console.log('✅ Assets completamente cargados, iniciando partida...');
                     this.finishGameStart();
                 });
                 return;
@@ -571,18 +580,29 @@ export class NetworkManager {
     async waitForCriticalAssets() {
         return new Promise((resolve) => {
             const checkInterval = setInterval(() => {
-                if (this.game.assetManager.areCriticalAssetsLoaded()) {
+                const assetsLoaded = this.game.assetManager.isReady();
+                const criticalAssetsLoaded = this.game.assetManager.areCriticalAssetsLoaded();
+                const allReady = assetsLoaded && criticalAssetsLoaded;
+                
+                if (allReady) {
                     clearInterval(checkInterval);
+                    console.log('✅ Assets completamente listos');
                     resolve();
+                } else {
+                    console.log('⏳ Esperando assets...', {
+                        all: assetsLoaded,
+                        critical: criticalAssetsLoaded,
+                        progress: this.game.assetManager.getProgress()
+                    });
                 }
-            }, 100);
+            }, 200); // Verificar cada 200ms para no saturar
             
-            // Timeout de seguridad después de 10 segundos
+            // Timeout de seguridad después de 15 segundos
             setTimeout(() => {
                 clearInterval(checkInterval);
                 console.warn('⚠️ Timeout esperando assets críticos, continuando...');
                 resolve();
-            }, 10000);
+            }, 15000);
         });
     }
     
@@ -590,6 +610,21 @@ export class NetworkManager {
      * Finaliza el inicio del juego multijugador
      */
     finishGameStart() {
+        // Verificación final de assets antes de proceder
+        const finalAssetCheck = this.game.assetManager.isReady() && 
+                               this.game.assetManager.areCriticalAssetsLoaded();
+        
+        if (!finalAssetCheck) {
+            console.warn('⚠️ Assets no completamente cargados en finishGameStart(), pero continuando...');
+            console.log('🖼️ Estado final:', {
+                allLoaded: this.game.assetManager.isReady(),
+                criticalLoaded: this.game.assetManager.areCriticalAssetsLoaded(),
+                progress: this.game.assetManager.getProgress()
+            });
+        } else {
+            console.log('✅ Verificación final de assets: TODO LISTO');
+        }
+        
         // Verificar cámara
         console.log('📷 Cámara:', {
             offsetX: this.game.camera.offsetX,

@@ -12,7 +12,7 @@ export class AssetManager {
             // Bases (solo las que se usan)
             'base-hq': 'assets/sprites/bases/HQ.png',
             'base-fob': 'assets/sprites/bases/FOB.png',
-            'base-front': 'assets/sprites/bases/FRONT.png',
+            'base-front': 'assets/sprites/bases/front.png',
             'base-front-no-ammo': 'assets/sprites/bases/front_no_ammo.png',
             // Sprites enemigos (usados dinámicamente según team)
             'base-enemy-front': 'assets/sprites/bases/front_enemy.png',
@@ -272,7 +272,20 @@ export class AssetManager {
             'base-enemy-fob'
         ];
         
-        return criticalAssets.every(key => this.hasSprite(key));
+        const loadedStatus = criticalAssets.map(key => ({
+            key,
+            loaded: this.hasSprite(key),
+            exists: this.images.has(key)
+        }));
+        
+        const allLoaded = criticalAssets.every(key => this.hasSprite(key));
+        
+        // Debug: mostrar estado de assets críticos
+        if (!allLoaded) {
+            console.log('📋 Assets críticos faltantes:', loadedStatus.filter(status => !status.loaded));
+        }
+        
+        return allLoaded;
     }
     
     /**
