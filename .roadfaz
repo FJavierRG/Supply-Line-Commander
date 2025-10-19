@@ -1721,3 +1721,48 @@ PRÓXIMO: Dead Reckoning drones/fronts o balance testing
 
 ================================================================================
 
+================================================================================
+📌 SESIÓN: 2025-01-17 (Dead Reckoning PURO para Convoyes)
+FASE: FASE 3 - PREDICCIÓN DEL CLIENTE (OPTIMIZACIÓN)
+================================================================================
+
+🎯 OBJETIVO DE LA SESIÓN:
+Implementar Dead Reckoning PURO para convoyes, eliminando la interpolación
+del servidor y manteniendo fluidez total como los drones, SIN teletransportar
+cuando cambia el estado returning.
+
+🐛 PROBLEMA IDENTIFICADO:
+- Convoyes menos fluidos que drones por doble interpolación (progress + posición)
+- Cambio a returning=true causaba teletransporte visual (progress=0)
+- Threshold servidor 0.15 causaba micro-stutters vs drones (interpolación directa)
+
+✅ SOLUCIÓN IMPLEMENTADA:
+1. DEAD RECKONING PURO en Convoy.updatePosition():
+   - Predicción continua basada en velocidad conocida + Engineer Center
+   - Sin interpolación del servidor, solo corrección mínima para grandes desfases
+   - Continuidad visual perfecta durante movimiento
+
+2. MANEJO INTELIGENTE cambio de estado en updateServerProgress():
+   - Detecta cambio returning false→true (inicio vuelta)
+   - Mantiene progress visual actual (≈1.0) para evitar teletransporte
+   - Resetea lastKnownProgress=0 solo para Dead Reckoning del viaje de vuelta
+
+3. CONTINUIDAD VISUAL en updatePosition():
+   - Si returning=true y lastKnownProgress=0 y progress>0.9: continuar desde posición actual
+   - Predicción hacia atrás (progress - velocidad*tiempo) para vuelta suave
+   - Corrección mínima (factor 0.05) solo para discrepancias >0.1
+
+ARCHIVOS MODIFICADOS:
+  - src/entities/Convoy.js (Dead Reckoning puro + continuidad visual)
+
+🎯 BENEFICIOS OBTENIDOS:
+  ⭐ FLUIDEZ TOTAL: Convoyes ahora tan fluidos como drones
+  ⭐ SIN TELETRANSPORTE: Continuidad visual perfecta en cambio de estado
+  ⭐ DEAD RECKONING PURO: Predicción continua sin interpolación servidor
+  ⭐ MANTIENE SEGURIDAD: Servidor sigue siendo autoritativo para entregas
+
+ESTADO: DEAD RECKONING PURO CONVOYES COMPLETADO ✅
+PRÓXIMO: Testing comparativo drones vs convoyes fluidez
+
+================================================================================
+

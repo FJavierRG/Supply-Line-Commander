@@ -104,84 +104,92 @@ export class Convoy {
     
     /**
      * Actualiza el progress desde el servidor (para multijugador)
+     * DEAD RECKONING PURO: Solo sincroniza en cambio de estado crítico
      */
     updateServerProgress(newProgress, isReturning) {
         // Detectar cambio crítico de estado (returning cambió)
         const returningChanged = this.lastServerReturning !== isReturning;
         
         if (returningChanged) {
-            console.log(`🔄 Convoy ${this.id} cambió estado: returning ${this.lastServerReturning} → ${isReturning}, progress ${this.serverProgress} → ${newProgress}`);
-            // Cambio crítico: actualizar inmediatamente, sin interpolación
+            console.log(`🔄 Convoy ${this.id} cambió estado: returning ${this.lastServerReturning} → ${isReturning}, progress actual: ${this.progress.toFixed(3)}`);
             
-            // PRIMERO: Actualizar el estado returning
+            // CRÍTICO: Actualizar estado returning
             this.returning = isReturning;
             
-            // SEGUNDO: Actualizar progress (esto es crítico para posición correcta)
-            this.progress = newProgress;
-            this.serverProgress = newProgress;
+            if (isReturning && !this.lastServerReturning) {
+                // Cambió de ida a vuelta: El servidor resetea progress=0, pero mantenemos continuidad
+                // NO cambiar this.progress - mantener donde está visualmente (≈1.0)
+                this.lastKnownProgress = 0; // Reset para Dead Reckoning del viaje de vuelta
+                console.log(`🚛 Convoy ${this.id} iniciando vuelta - progress visual: ${this.progress.toFixed(3)}, reset DR a 0`);
+            } else if (!isReturning && this.lastServerReturning) {
+                // Cambió de vuelta a ida (nuevo convoy): usar server progress
+                this.progress = newProgress;
+                this.lastKnownProgress = newProgress;
+                console.log(`🚛 Convoy ${this.id} nuevo viaje - progress: ${newProgress}`);
+            }
             
-            // TERCERO: Actualizar posición inmediatamente para evitar "salto" visual
-            this.updatePosition(0);
         } else {
-            // Estado normal: usar interpolación suave
-            this.serverProgress = newProgress;
-            this.returning = isReturning;
+            // Estado normal: Solo actualizar referencia del servidor para Dead Reckoning
+            // No alteramos this.progress - lo maneja la predicción pura
+            this.lastKnownProgress = newProgress;
         }
         
         // Actualizar datos para Dead Reckoning
-        this.lastKnownProgress = newProgress;
         this.lastServerReturning = isReturning;
         this.lastServerUpdate = Date.now();
+        this.serverProgress = newProgress; // Referencia para validación
     }
     
     /**
-     * Actualiza posición visual con Dead Reckoning + interpolación suave (para multijugador)
-     * Predice movimiento cuando no hay updates recientes del servidor
+     * DEAD RECKONING PURO: Predice movimiento continuo sin interpolación del servidor
+     * Solo sincroniza cuando hay cambio de estado (returning)
      */
     updatePosition(dt = 0.016) {
-        if (this.serverProgress < 0 || this.serverProgress > 1) return;
+        if (!this.totalDistance || this.totalDistance <= 0) return;
         
         // Calcular tiempo desde último update del servidor
         const timeSinceUpdate = (Date.now() - this.lastServerUpdate) / 1000;
         
-        // DEAD RECKONING: Si no hay update reciente (>50ms), predecir movimiento
-        if (timeSinceUpdate > 0.05 && this.totalDistance > 0) {
-            // Calcular velocidad con bonus de Engineer Center si aplica
-            let vehicleSpeed = this.getVehicleSpeed();
-            if (this.hasEngineerCenterBonus()) {
-                vehicleSpeed *= 1.5; // +50% velocidad
-            }
-            
-            // Progress por segundo = velocidad / distancia total
-            const progressPerSecond = vehicleSpeed / this.getTotalDistance();
-            
-            // PREDICCIÓN: Calcular dónde debería estar ahora
-            const predictedProgress = this.lastKnownProgress + (progressPerSecond * timeSinceUpdate);
-            
-            // Limitar a rango válido (0-1)
-            this.progress = Math.max(0, Math.min(1.0, predictedProgress));
-            
-            // Dead Reckoning activo: log ocasional para debug (cada 1000ms máximo)
-            if (!this._lastDeadReckoningLog || Date.now() - this._lastDeadReckoningLog > 1000) {
-                console.log(`🚛 Dead Reckoning: ${this.id} predijo progress ${predictedProgress.toFixed(3)} (${(timeSinceUpdate*1000).toFixed(0)}ms sin update)`);
-                this._lastDeadReckoningLog = Date.now();
-            }
-        } else {
-            // INTERPOLACIÓN NORMAL: Si hay updates frecuentes, usar interpolación suave
-            const targetProgress = this.serverProgress;
-            const currentProgress = this.progress;
-            const difference = targetProgress - currentProgress;
-            
-            if (Math.abs(difference) < 0.001) {
-                this.progress = targetProgress;
-            } else {
-                // Interpolación más suave hacia el target (factor aumentado de 8 a 12)
-                const interpolationSpeed = 12.0; // ~83ms para llegar al target, más fluido
-                this.progress += difference * interpolationSpeed * dt;
-            }
+        // DEAD RECKONING PURO: Siempre predicir movimiento basado en velocidad conocida
+        let vehicleSpeed = this.getVehicleSpeed();
+        if (this.hasEngineerCenterBonus()) {
+            vehicleSpeed *= 1.5; // +50% velocidad
         }
         
-        // Calcular posición final entre origen y destino
+        // Progress por segundo = velocidad / distancia total
+        const progressPerSecond = vehicleSpeed / this.getTotalDistance();
+        
+        // PREDICCIÓN: Calcular dónde debería estar ahora basado en último estado conocido
+        let predictedProgress;
+        
+        // Si acabamos de cambiar a returning=true, mantener continuidad visual
+        if (this.returning && this.lastKnownProgress === 0 && this.progress > 0.9) {
+            // Estamos iniciando la vuelta desde el destino, continuar desde donde está visualmente
+            predictedProgress = this.progress - (progressPerSecond * timeSinceUpdate);
+            console.log(`🚛 Continuidad visual: ${this.id} volviendo desde progress ${this.progress.toFixed(3)}`);
+        } else {
+            // Predicción normal desde último estado conocido del servidor
+            predictedProgress = this.lastKnownProgress + (progressPerSecond * timeSinceUpdate);
+        }
+        
+        // Aplicar progress predicho continuamente
+        this.progress = Math.max(0, Math.min(1.0, predictedProgress));
+        
+        // Corrección mínima solo si el servidor está muy desincronizado
+        const serverDifference = Math.abs(this.serverProgress - predictedProgress);
+        if (timeSinceUpdate < 0.1 && serverDifference > 0.1) {
+            // Corrección muy suave solo para grandes discrepancias
+            const correctionFactor = 0.05; // Corrección muy sutil
+            this.progress += (this.serverProgress - this.progress) * correctionFactor;
+        }
+        
+        // Log ocasional para debug (cada 3000ms máximo)
+        if (!this._lastDeadReckoningLog || Date.now() - this._lastDeadReckoningLog > 3000) {
+            console.log(`🚛 Dead Reckoning: ${this.id} progress ${this.progress.toFixed(3)} (returning: ${this.returning}, server: ${this.serverProgress.toFixed(3)})`);
+            this._lastDeadReckoningLog = Date.now();
+        }
+        
+        // Calcular posición visual final
         this.updateVisualPosition();
     }
     
