@@ -1,0 +1,322 @@
+// ===== SISTEMA DE MOVIMIENTO DE FRENTES (SERVIDOR) =====
+// Este sistema se ejecuta SOLO en el servidor
+// El cliente solo renderiza las posiciones que el servidor envía
+
+// Configuración de movimiento
+const MOVEMENT_CONFIG = {
+    advanceSpeed: 8,   // Píxeles por segundo
+    retreatSpeed: 8,   // Píxeles por segundo (igual que avance para evitar superposición)
+    frontRadius: 40,
+    frontierGapPx: 25,
+    neutralZoneGapPx: 25,
+    pixelsPerCurrency: 10
+};
+
+export class FrontMovementSystemServer {
+    constructor(gameState) {
+        this.gameState = gameState;
+        this.advanceSpeed = MOVEMENT_CONFIG.advanceSpeed;
+        this.retreatSpeed = MOVEMENT_CONFIG.retreatSpeed;
+        
+        // Acumuladores de currency por avance
+        this.pendingCurrencyPixels = {
+            player1: 0,
+            player2: 0
+        };
+        
+        // Calcular rango de colisión
+        this.collisionRange = MOVEMENT_CONFIG.frontRadius + MOVEMENT_CONFIG.frontierGapPx + MOVEMENT_CONFIG.neutralZoneGapPx;
+        
+        // Flags para sonidos únicos por frente
+        this.noAmmoSoundPlayed = new Set(); // IDs de frentes que ya reprodujeron no_ammo
+    }
+
+    /**
+     * Actualizar movimiento de todos los frentes
+     * @param {number} dt - Delta time en segundos
+     */
+    update(dt) {
+        const player1Fronts = this.gameState.nodes.filter(n => n.type === 'front' && n.team === 'player1');
+        const player2Fronts = this.gameState.nodes.filter(n => n.type === 'front' && n.team === 'player2');
+        
+        // Actualizar frentes player1 (avanzan a la derecha)
+        for (const front of player1Fronts) {
+            this.updateFrontMovement(front, player2Fronts, 1, dt); // dirección +1 = derecha
+        }
+        
+        // Actualizar frentes player2 (avanzan a la izquierda)
+        for (const front of player2Fronts) {
+            this.updateFrontMovement(front, player1Fronts, -1, dt); // dirección -1 = izquierda
+        }
+        
+        // Verificar condiciones de victoria/derrota (solo cada 2 segundos)
+        // Retorna resultado de victoria si la hay
+        return this.checkVictoryConditions();
+    }
+
+    /**
+     * Actualizar movimiento de un frente
+     * @param {Object} front - Frente a actualizar
+     * @param {Array} enemyFronts - Frentes del equipo opuesto
+     * @param {number} direction - Dirección de avance (+1 derecha, -1 izquierda)
+     * @param {number} dt - Delta time en segundos
+     */
+    updateFrontMovement(front, enemyFronts, direction, dt) {
+        // Buscar frente enemigo más cercano verticalmente
+        const nearestEnemy = this.findNearestEnemyFrontVertical(front, enemyFronts);
+        
+        let movement = 0;
+        let inCollision = false;
+        let reason = '';
+        
+        // Verificar colisión con enemigo
+        if (nearestEnemy && this.areInCollisionRange(front, nearestEnemy, direction)) {
+            inCollision = true;
+            
+            // SONIDO: Primer contacto enemigo (solo una vez global)
+            if (!this.gameState.hasPlayedEnemyContact) {
+                this.gameState.addSoundEvent('enemy_contact');
+                this.gameState.hasPlayedEnemyContact = true;
+            }
+            
+            // EMPUJE: Comparar suministros
+            if (front.supplies > nearestEnemy.supplies) {
+                // Este frente tiene más → EMPUJA (avanza hacia el enemigo)
+                // PERO debe avanzar a la MISMA velocidad que el enemigo retrocede
+                // Así la distancia se mantiene constante
+                const pushSpeed = this.advanceSpeed; // 8 px/s
+                movement = pushSpeed * dt * direction;
+                reason = `EMPUJA (${front.supplies.toFixed(0)} > ${nearestEnemy.supplies.toFixed(0)})`;
+            } else if (front.supplies < nearestEnemy.supplies) {
+                // Enemigo tiene más → ES EMPUJADO (retrocede alejándose del enemigo)
+                // CRÍTICO: Retroceder a la MISMA velocidad que el enemigo avanza
+                // para mantener distancia constante
+                const pushSpeed = this.advanceSpeed; // Mismo que el empuje (8 px/s)
+                movement = -pushSpeed * dt * direction;
+                reason = `EMPUJADO (${front.supplies.toFixed(0)} < ${nearestEnemy.supplies.toFixed(0)})`;
+            } else {
+                // Recursos IGUALES
+                if (front.supplies === 0 && nearestEnemy.supplies === 0) {
+                    // AMBOS sin recursos → AMBOS retroceden (alejándose)
+                    movement = -this.retreatSpeed * dt * direction;
+                    reason = `AMBOS SIN RECURSOS (retroceden)`;
+                } else {
+                    // Recursos iguales pero > 0 → EMPATE (no se mueven)
+                    movement = 0;
+                    reason = `EMPATE (${front.supplies.toFixed(0)} = ${nearestEnemy.supplies.toFixed(0)})`;
+                }
+            }
+        } else {
+            // SIN COLISIÓN: Movimiento normal basado en recursos
+            if (front.supplies > 0) {
+                // Avanzar
+                movement = this.advanceSpeed * dt * direction;
+                reason = `AVANZA (supplies: ${front.supplies.toFixed(0)})`;
+                
+                // Resetear flag de no_ammo si volvió a tener supplies
+                if (this.noAmmoSoundPlayed.has(front.id)) {
+                    this.noAmmoSoundPlayed.delete(front.id);
+                }
+            } else {
+                // Retroceder (sin recursos)
+                movement = -this.retreatSpeed * dt * direction;
+                reason = `RETROCEDE (sin supplies)`;
+                
+                // SONIDO: No ammo (solo una vez por frente)
+                if (!this.noAmmoSoundPlayed.has(front.id)) {
+                    this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
+                    this.noAmmoSoundPlayed.add(front.id);
+                }
+            }
+        }
+        
+        // DEBUG: Log movimiento cada 2 segundos
+        if (!this._lastFrontLog) this._lastFrontLog = {};
+        if (!this._lastFrontLog[front.id] || Date.now() - this._lastFrontLog[front.id] > 2000) {
+            const dirStr = direction === 1 ? '→' : '←';
+            const enemyDist = nearestEnemy ? Math.abs(front.x - nearestEnemy.x).toFixed(0) : 'N/A';
+            console.log(`🎯 ${front.team} frente ${dirStr} x=${front.x.toFixed(0)} | ${reason} | dist=${enemyDist}px | col=${inCollision}`);
+            this._lastFrontLog[front.id] = Date.now();
+        }
+        
+        // Aplicar movimiento
+        front.x += movement;
+        
+        // Trackear avance para currency
+        if (direction === 1) {
+            // Player1: avanza a la derecha (+X)
+            if (!front.maxXReached) front.maxXReached = front.x;
+            
+            if (front.x > front.maxXReached) {
+                const pixelsGained = front.x - front.maxXReached;
+                front.maxXReached = front.x;
+                this.awardCurrencyForAdvance('player1', pixelsGained);
+            }
+        } else {
+            // Player2: avanza a la izquierda (-X)
+            if (!front.minXReached) front.minXReached = front.x;
+            
+            if (front.x < front.minXReached) {
+                const pixelsGained = front.minXReached - front.x;
+                front.minXReached = front.x;
+                this.awardCurrencyForAdvance('player2', pixelsGained);
+            }
+        }
+    }
+
+    /**
+     * Encuentra el frente enemigo más cercano verticalmente
+     */
+    findNearestEnemyFrontVertical(front, enemyFronts) {
+        if (enemyFronts.length === 0) return null;
+        
+        let nearest = null;
+        let minDistanceY = Infinity;
+        
+        for (const enemy of enemyFronts) {
+            const distanceY = Math.abs(enemy.y - front.y);
+            if (distanceY < minDistanceY) {
+                minDistanceY = distanceY;
+                nearest = enemy;
+            }
+        }
+        
+        return nearest;
+    }
+
+    /**
+     * Verifica si dos frentes están en rango de colisión
+     */
+    areInCollisionRange(front1, front2, direction) {
+        const frontRadius = MOVEMENT_CONFIG.frontRadius;
+        const gap = MOVEMENT_CONFIG.frontierGapPx;
+        
+        // Calcular posiciones de fronteras
+        let frontier1X, frontier2X;
+        
+        if (direction === 1) {
+            // Front1 avanza a la derecha
+            frontier1X = front1.x + frontRadius + gap;
+            frontier2X = front2.x - frontRadius - gap;
+        } else {
+            // Front1 avanza a la izquierda
+            frontier1X = front1.x - frontRadius - gap;
+            frontier2X = front2.x + frontRadius + gap;
+        }
+        
+        // Distancia entre fronteras
+        const frontierDistance = Math.abs(frontier2X - frontier1X);
+        
+        // En rango si están a menos de neutralZoneGapPx
+        return frontierDistance <= MOVEMENT_CONFIG.neutralZoneGapPx;
+    }
+
+    /**
+     * Otorga currency por avance de frentes
+     */
+    awardCurrencyForAdvance(team, pixelsGained) {
+        if (pixelsGained <= 0) return;
+        
+        // Acumular pixels
+        this.pendingCurrencyPixels[team] += pixelsGained;
+        
+        // Convertir a currency (solo parte entera)
+        const currencyToAward = Math.floor(this.pendingCurrencyPixels[team] / MOVEMENT_CONFIG.pixelsPerCurrency);
+        
+        if (currencyToAward > 0) {
+            this.gameState.currency[team] += currencyToAward;
+            this.pendingCurrencyPixels[team] -= currencyToAward * MOVEMENT_CONFIG.pixelsPerCurrency;
+            
+            // Log solo cada 50$ para no spamear
+            if (currencyToAward >= 50) {
+                console.log(`📈 ${team}: +${currencyToAward}$ por avance de frente (total: ${this.gameState.currency[team]}$)`);
+            }
+        }
+    }
+
+    /**
+     * Verificar condiciones de victoria/derrota
+     * Hay DOS formas de ganar:
+     * 1. Tu frente empuja hasta el HQ enemigo (victoria activa)
+     * 2. La frontera enemiga retrocede hasta su propio HQ (victoria pasiva)
+     */
+    checkVictoryConditions() {
+        const player1Fronts = this.gameState.nodes.filter(n => n.type === 'front' && n.team === 'player1' && n.active !== false);
+        const player2Fronts = this.gameState.nodes.filter(n => n.type === 'front' && n.team === 'player2' && n.active !== false);
+        const player1HQ = this.gameState.nodes.find(n => n.type === 'hq' && n.team === 'player1' && n.active !== false);
+        const player2HQ = this.gameState.nodes.find(n => n.type === 'hq' && n.team === 'player2' && n.active !== false);
+        
+        if (!player1HQ || !player2HQ) return null; // No hay HQs, no puede haber victoria
+        
+        // Calcular fronteras (usando la misma lógica que TerritorySystem)
+        const player1Frontier = this.calculateFrontier('player1', player1Fronts);
+        const player2Frontier = this.calculateFrontier('player2', player2Fronts);
+        
+        // CONDICIÓN 1: VICTORIA ACTIVA - Tu frente empuja hasta el HQ enemigo
+        // VICTORIA PLAYER1: Algún frente player1 alcanza 100px antes del HQ player2
+        for (const front of player1Fronts) {
+            if (front.x >= player2HQ.x - 100) {
+                console.log('🎉 VICTORIA PLAYER1: Frente alcanzó HQ enemigo');
+                return { winner: 'player1', reason: 'front_reached_hq' };
+            }
+        }
+        
+        // VICTORIA PLAYER2: Algún frente player2 alcanza 100px antes del HQ player1
+        for (const front of player2Fronts) {
+            if (front.x <= player1HQ.x + 100) {
+                console.log('🎉 VICTORIA PLAYER2: Frente alcanzó HQ enemigo');
+                return { winner: 'player2', reason: 'front_reached_hq' };
+            }
+        }
+        
+        // CONDICIÓN 2: VICTORIA PASIVA - La frontera enemiga retrocede hasta su HQ
+        // DEBUG: Log cada 5 segundos
+        if (!this._lastFrontierLog || Date.now() - this._lastFrontierLog > 5000) {
+            console.log(`🔍 Fronteras: P1=${player1Frontier?.toFixed(0) || 'null'} (HQ=${player1HQ.x.toFixed(0)}) | P2=${player2Frontier?.toFixed(0) || 'null'} (HQ=${player2HQ.x.toFixed(0)})`);
+            console.log(`🔍 Condiciones: P1_retreat=${player1Frontier <= player1HQ.x + 100} | P2_retreat=${player2Frontier >= player2HQ.x - 100}`);
+            this._lastFrontierLog = Date.now();
+        }
+        
+        // DERROTA PLAYER1: Su frontera retrocede hasta su HQ (victoria para player2)
+        if (player1Frontier !== null && player1Frontier <= player1HQ.x + 100) {
+            console.log('🎉 VICTORIA PLAYER2: Frontera de player1 retrocedió hasta su HQ');
+            console.log(`   Frontera P1: ${player1Frontier.toFixed(0)} | HQ P1: ${player1HQ.x.toFixed(0)} | Límite: ${(player1HQ.x + 100).toFixed(0)}`);
+            return { winner: 'player2', reason: 'frontier_collapsed' };
+        }
+        
+        // DERROTA PLAYER2: Su frontera retrocede hasta su HQ (victoria para player1)
+        if (player2Frontier !== null && player2Frontier >= player2HQ.x - 100) {
+            console.log('🎉 VICTORIA PLAYER1: Frontera de player2 retrocedió hasta su HQ');
+            console.log(`   Frontera P2: ${player2Frontier.toFixed(0)} | HQ P2: ${player2HQ.x.toFixed(0)} | Límite: ${(player2HQ.x - 100).toFixed(0)}`);
+            return { winner: 'player1', reason: 'frontier_collapsed' };
+        }
+        
+        return null; // No hay victoria aún
+    }
+    
+    /**
+     * Calcular frontera de un equipo (posición X más avanzada)
+     * Misma lógica que TerritorySystemServer.calculateFrontier()
+     */
+    calculateFrontier(team, fronts) {
+        if (fronts.length === 0) return null;
+        
+        const frontierGapPx = 25; // Mismo gap que en TerritorySystem
+        
+        if (team === 'player1') {
+            // Player1 avanza a la derecha: frontera es el X más alto
+            return Math.max(...fronts.map(f => f.x + frontierGapPx));
+        } else {
+            // Player2 avanza a la izquierda: frontera es el X más bajo
+            return Math.min(...fronts.map(f => f.x - frontierGapPx));
+        }
+    }
+
+    reset() {
+        this.pendingCurrencyPixels = {
+            player1: 0,
+            player2: 0
+        };
+    }
+}
+

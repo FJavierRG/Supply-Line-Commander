@@ -1,0 +1,1895 @@
+// ===== SISTEMA DE RENDERIZADO =====
+import { GAME_CONFIG } from '../config/constants.js';
+import { getNodeConfig } from '../config/nodes.js';
+
+export class RenderSystem {
+    constructor(canvas, assetManager = null, game = null) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.width = canvas.width;
+        this.height = canvas.height;
+        this.assetManager = assetManager; // Gestor de sprites (opcional)
+        this.game = game; // Referencia al juego (para acceder a la cámara)
+        this.backgroundPattern = null; // Patrón de fondo (se crea al cargar sprite)
+        this.mirrorViewApplied = false; // Estado de transformación de vista espejo
+        
+        // Pre-configurar fuente para textos flotantes (UNA SOLA VEZ)
+        this.ctx.font = 'bold 32px Arial'; // +35% (24 * 1.35 = 32.4 ≈ 32)
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+    }
+    
+    resize(width, height) {
+        this.width = width;
+        this.height = height;
+    }
+    
+    /**
+     * Aplica vista espejo para player2 (flip horizontal del canvas completo)
+     * Debe llamarse DESPUÉS de aplicar la cámara pero ANTES de renderizar el contenido
+     */
+    applyMirrorView() {
+        if (!this.game || !this.game.isMultiplayer) return;
+        if (this.game.myTeam !== 'player2') return;
+        if (this.mirrorViewApplied) return; // Ya aplicado
+        
+        const worldWidth = this.game.worldWidth || this.width;
+        
+        this.ctx.save();
+        // Trasladar al centro del mundo, hacer flip, y volver
+        this.ctx.translate(worldWidth, 0);
+        this.ctx.scale(-1, 1);
+        this.mirrorViewApplied = true;
+        
+        console.log('🔄 Mirror View aplicada para player2');
+    }
+    
+    /**
+     * Restaura la transformación de vista espejo
+     * Debe llamarse ANTES de restaurar la cámara
+     */
+    restoreMirrorView() {
+        if (!this.mirrorViewApplied) return;
+        
+        this.ctx.restore();
+        this.mirrorViewApplied = false;
+    }
+    
+    clear() {
+        // Limpiar el canvas completo (solo la parte visible en pantalla)
+        this.ctx.clearRect(0, 0, this.width, this.height);
+        this.ctx.fillStyle = GAME_CONFIG.CANVAS_BG_COLOR;
+        this.ctx.fillRect(0, 0, this.width, this.height);
+    }
+    
+    renderBackground() {
+        // Renderizar fondo del mundo (debe llamarse dentro del contexto de la cámara)
+        const worldWidth = this.game?.worldWidth || this.width;
+        const worldHeight = this.game?.worldHeight || this.height;
+        
+        // Fondo sólido que cubre todo el mundo
+        this.ctx.fillStyle = GAME_CONFIG.CANVAS_BG_COLOR;
+        this.ctx.fillRect(0, 0, worldWidth, worldHeight);
+        
+        // Sistema de tiles del background (si existe)
+        if (this.game?.backgroundTiles) {
+            this.game.backgroundTiles.render(this.ctx, this.assetManager);
+        } else {
+            // Fallback: patrón de fondo antiguo
+            const bgSprite = this.assetManager?.getSprite('ui-background');
+            if (bgSprite) {
+                if (!this.backgroundPattern) {
+                    this.backgroundPattern = this.ctx.createPattern(bgSprite, 'repeat');
+                }
+                if (this.backgroundPattern) {
+                    this.ctx.fillStyle = this.backgroundPattern;
+                    this.ctx.fillRect(0, 0, worldWidth, worldHeight);
+                }
+            }
+        }
+    }
+    
+    renderGrid() {
+        this.ctx.strokeStyle = GAME_CONFIG.GRID_COLOR;
+        this.ctx.lineWidth = 1;
+        
+        // Usar mundo expandido (2x ancho) para el grid
+        const worldWidth = this.game?.worldWidth || this.width;
+        const worldHeight = this.game?.worldHeight || this.height;
+        
+        const gridSize = GAME_CONFIG.GRID_SIZE;
+        for (let x = 0; x <= worldWidth; x += gridSize) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(x, 0);
+            this.ctx.lineTo(x, worldHeight);
+            this.ctx.stroke();
+        }
+        
+        for (let y = 0; y <= worldHeight; y += gridSize) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, y);
+            this.ctx.lineTo(worldWidth, y);
+            this.ctx.stroke();
+        }
+    }
+    
+    renderBackgroundRoutes(bases) {
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        this.ctx.lineWidth = 1;
+        
+        for (let i = 0; i < bases.length; i++) {
+            for (let j = i + 1; j < bases.length; j++) {
+                const dist = Math.hypot(bases[i].x - bases[j].x, bases[i].y - bases[j].y);
+                if (dist < 300) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(bases[i].x, bases[i].y);
+                    this.ctx.lineTo(bases[j].x, bases[j].y);
+                    this.ctx.stroke();
+                }
+            }
+        }
+    }
+    
+    // ========== MÉTODO UNIFICADO ==========
+    renderNode(node, isSelected = false, isHovered = false, game = null) {
+        // Permitir renderizar nodos abandonando (necesitan animación de grises)
+        if (!node) return;
+        if (!node.active && !node.isAbandoning) return;
+        
+        // Detectar si Mirror View está activo (para compensar el flip)
+        // EXCEPCIÓN: Los frentes NO necesitan compensación (ya miran hacia donde deben)
+        const needsMirrorCompensation = this.mirrorViewApplied && node.type !== 'front';
+        
+        // Todos los nodos se renderizan igual, la única diferencia es el sprite que usan
+        const isCritical = node.isCritical ? node.isCritical() : false;
+        const pulseIntensity = isCritical ? Math.sin(Date.now() / 200) * 0.5 + 0.5 : 1;
+        
+        // Emergencia médica
+        const hasEmergency = game && game.medicalSystem && game.medicalSystem.hasEmergency(node.id);
+        const emergencyPulse = hasEmergency ? Math.sin(Date.now() / 300) * 0.5 + 0.5 : 1;
+        
+        // Verificar si el frente está en retirada (sin munición)
+        const hasNoAmmo = node.type === 'front' && node.hasEffect && node.hasEffect('no_supplies');
+        
+        // Obtener sprite
+        let sprite = null;
+        let spriteKey = node.spriteKey;
+        
+        // Si está en construcción, usar sprite de construcción
+        if (node.isConstructing) {
+            spriteKey = 'building-construction';
+            sprite = this.assetManager.getSprite(spriteKey);
+        } else {
+            // Intentar usar getBaseSprite para nodos base (tiene lógica de estados)
+            if (node.category === 'map_node') {
+                sprite = this.assetManager?.getBaseSprite(node.type, false, false, isCritical, hasNoAmmo, node.team);
+            } else {
+                // Para edificios construibles, usar spriteKey directamente
+                sprite = this.assetManager.getSprite(spriteKey);
+            }
+        }
+        
+        // Solo HQs tienen resplandor
+        const isHQ = node.type === 'hq';
+        this.ctx.shadowColor = isHQ ? node.shadowColor : 'transparent';
+        this.ctx.shadowBlur = isHQ ? 20 : 0;
+        
+        // Calcular tamaño del sprite
+        let spriteSize = node.radius * 2 * 1.875;
+        
+        // Reducir tamaño de HQs y FOBs un 15%
+        if (node.type === 'hq' || node.type === 'fob') {
+            spriteSize *= 0.85;
+        }
+        
+        // Reducir tamaño de los frentes un 15%
+        if (node.type === 'front') {
+            spriteSize *= 0.85;
+        }
+        
+        // Aplicar multiplicador personalizado (anti-drone, etc)
+        if (!node.isConstructing && node.sizeMultiplier) {
+            spriteSize *= node.sizeMultiplier;
+        }
+        
+        // Renderizar sprite
+        if (sprite) {
+            // Aplicar filtro de grises si el FOB está abandonando
+            if (node.isAbandoning) {
+                this.ctx.save();
+                
+                // Fase 1: Gris claro (grayscale 50%)
+                if (node.abandonPhase === 1) {
+                    this.ctx.filter = 'grayscale(50%) brightness(0.9)';
+                } 
+                // Fase 2: Gris oscuro (grayscale 100% + brightness reducido)
+                else if (node.abandonPhase === 2) {
+                    this.ctx.filter = 'grayscale(100%) brightness(0.5)';
+                }
+                
+                // Compensar Mirror View si está activo
+                if (needsMirrorCompensation) {
+                    this.ctx.translate(node.x, node.y);
+                    this.ctx.scale(-1, 1); // Compensar el flip global
+                    
+                    // Aplicar flip horizontal del nodo si es necesario
+                    if (node.flipHorizontal && !node.isConstructing) {
+                        this.ctx.scale(-1, 1);
+                    }
+                    
+                    this.ctx.drawImage(sprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize);
+                } else if (node.flipHorizontal && !node.isConstructing) {
+                    this.ctx.translate(node.x, node.y);
+                    this.ctx.scale(-1, 1);
+                    this.ctx.drawImage(sprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize);
+                } else {
+                    this.ctx.drawImage(sprite, node.x - spriteSize/2, node.y - spriteSize/2, spriteSize, spriteSize);
+                }
+                
+                this.ctx.filter = 'none'; // Resetear filtro
+                this.ctx.restore();
+            } else {
+                // Renderizado normal sin filtro
+                this.ctx.save();
+                
+                // Compensar Mirror View si está activo
+                if (needsMirrorCompensation) {
+                    this.ctx.translate(node.x, node.y);
+                    this.ctx.scale(-1, 1); // Compensar el flip global
+                    
+                    // Aplicar flip horizontal del nodo si es necesario
+                    if (node.flipHorizontal && !node.isConstructing) {
+                        this.ctx.scale(-1, 1);
+                    }
+                    
+                    this.ctx.drawImage(sprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize);
+                } else if (node.flipHorizontal && !node.isConstructing) {
+                    this.ctx.translate(node.x, node.y);
+                    this.ctx.scale(-1, 1);
+                    this.ctx.drawImage(sprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize);
+                } else {
+                    this.ctx.drawImage(sprite, node.x - spriteSize/2, node.y - spriteSize/2, spriteSize, spriteSize);
+                }
+                
+                this.ctx.restore();
+            }
+            
+            this.ctx.shadowBlur = 0;
+            
+            // Aro de selección/hover
+            if (isSelected || isHovered) {
+                this.ctx.strokeStyle = isSelected ? '#f39c12' : '#fff';
+                this.ctx.lineWidth = isSelected ? 4 : 3;
+                this.ctx.beginPath();
+                this.ctx.arc(node.x, node.y, node.radius * 1.6, 0, Math.PI * 2);
+                this.ctx.stroke();
+            }
+        } else {
+            // Fallback si no hay sprite
+            console.warn(`⚠️ Sprite no encontrado:`, spriteKey, 'para nodo', node.type);
+            this.ctx.shadowBlur = 0;
+            this.ctx.fillStyle = '#555';
+            this.ctx.beginPath();
+            this.ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        // Barra de construcción
+        if (node.isConstructing && node.getConstructionProgress) {
+            const progress = node.getConstructionProgress();
+            const barWidth = spriteSize * 0.8;
+            const barHeight = 8;
+            const barX = node.x - barWidth / 2;
+            const barY = node.y + spriteSize / 2 + 10;
+            
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            this.ctx.fillStyle = '#2ecc71';
+            this.ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+            this.ctx.strokeStyle = '#fff';
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(barX, barY, barWidth, barHeight);
+        }
+        
+        // Renderizar UI específica del nodo
+        this.renderNodeUI(node, game, spriteSize, isSelected);
+    }
+    
+    // ========== COMPATIBILIDAD ==========
+    renderBase(base, isSelected = false, isHovered = false, game = null) {
+        this.renderNode(base, isSelected, isHovered, game);
+    }
+    
+    renderBuilding(building) {
+        this.renderNode(building, false, false, this.game);
+    }
+    
+    // ========== UI ESPECÍFICA DE CADA NODO ==========
+    renderNodeUI(node, game, spriteSize, isSelected) {
+        // Icono de emergencia médica
+        const isFront = node.type === 'front';
+        const hasEmergency = game && game.medicalSystem && game.medicalSystem.hasEmergency(node.id);
+        
+        if (hasEmergency && isFront) {
+            const emergencyPulse = Math.sin(Date.now() / 300) * 0.5 + 0.5;
+            const progress = game.medicalSystem.getEmergencyProgress(node.id);
+            
+            const iconX = node.x + node.radius + 15;
+            const iconY = node.y - node.radius;
+            const spriteSize = 28;
+            
+            // Anillo circular de progreso alrededor del icono
+            const ringRadius = spriteSize / 2 + 4; // 4px de padding alrededor del sprite
+            const ringWidth = 3;
+            
+            this.ctx.save();
+            
+            // Anillo de fondo (gris oscuro)
+            this.ctx.beginPath();
+            this.ctx.arc(iconX, iconY, ringRadius, 0, Math.PI * 2);
+            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+            this.ctx.lineWidth = ringWidth;
+            this.ctx.stroke();
+            
+            // Anillo de progreso (amarillo a rojo según el tiempo)
+            if (progress < 1) {
+                this.ctx.beginPath();
+                // Empezar desde arriba (-PI/2) y dibujar en sentido horario
+                const startAngle = -Math.PI / 2;
+                const endAngle = startAngle + (Math.PI * 2 * (1 - progress));
+                this.ctx.arc(iconX, iconY, ringRadius, startAngle, endAngle);
+                // Color que va de amarillo (255,255,0) a rojo (255,0,0)
+                const green = Math.floor((1 - progress) * 255);
+                this.ctx.strokeStyle = `rgb(255, ${green}, 0)`;
+                this.ctx.lineWidth = ringWidth;
+                this.ctx.stroke();
+            }
+            
+            this.ctx.restore();
+            
+            // Renderizar sprite de emergencia médica encima del anillo
+            const emergencySprite = this.assetManager?.getSprite('ui-emergency-medic');
+            if (emergencySprite) {
+                this.ctx.save();
+                this.ctx.globalAlpha = emergencyPulse;
+                this.ctx.drawImage(
+                    emergencySprite,
+                    iconX - spriteSize / 2,
+                    iconY - spriteSize / 2,
+                    spriteSize,
+                    spriteSize
+                );
+                this.ctx.restore();
+            }
+        }
+        
+        // Selector de recursos del HQ
+        if ((isSelected || node === game?.hoveredNode) && node.type === 'hq') {
+            this.renderResourceSelector(node);
+        }
+        
+        // Efectos (debuffs/buffs)
+        if (node.effects && node.effects.length > 0) {
+            this.renderEffects(node);
+        }
+        
+        // Barra de suministros (sin contadores de vehículos, esos se renderizan en renderVehicleUI)
+        if (node.type === 'hq') {
+            // HQ no muestra barra de suministros, solo vehículos (que se renderizan en renderVehicleUI)
+            // No renderizar nada aquí
+        } else if (node.type === 'campaignHospital' && node.constructed && !node.isConstructing) {
+            // Hospital de campaña: solo vehículos (que se renderizan en renderVehicleUI)
+            // No renderizar nada aquí
+        } else if (node.hasSupplies !== false || node.hasVehicles) {
+            // Resto de nodos: barra de suministros (sin contadores de vehículos)
+            this.renderSupplyBar(node);
+        }
+    }
+    
+    // ========== CONTADOR DE VEHÍCULOS DEL HQ ==========
+    renderHQVehicles(node) {
+        // Compensar Mirror View si está activo
+        if (this.mirrorViewApplied) {
+            this.ctx.save();
+            this.ctx.translate(node.x, node.y);
+            this.ctx.scale(-1, 1);
+            this.ctx.translate(-node.x, -node.y);
+        }
+        
+        const barWidth = node.radius * 2;
+        const barHeight = 9;
+        const barX = node.x - barWidth / 2;
+        const barY = node.y + node.radius + 20;
+        
+        // Calcular offset de shake si está activo
+        let shakeX = 0;
+        let shakeY = 0;
+        if (node.noVehiclesShake) {
+            const shakeIntensity = 3;
+            const shakeSpeed = 30;
+            shakeX = Math.sin(node.noVehiclesShakeTime * shakeSpeed) * shakeIntensity;
+            shakeY = Math.cos(node.noVehiclesShakeTime * shakeSpeed * 1.5) * shakeIntensity;
+        }
+        
+        let vehicleText;
+        let availableCount;
+        
+        // Determinar qué mostrar según el modo
+        if (node.selectedResourceType === 'medical') {
+            // Modo médico: mostrar ambulancias
+            const ambulanceAvailable = node.ambulanceAvailable ? 1 : 0;
+            const medicIconSprite = this.assetManager.getSprite('ui-medic-vehicle-icon');
+            const iconSize = 45;
+            const iconX = node.x + shakeX - 45;
+            const iconY = barY + 26 + shakeY - iconSize / 2 - 3;
+            
+            if (medicIconSprite) {
+                this.ctx.drawImage(medicIconSprite, iconX, iconY, iconSize, iconSize);
+            }
+            
+            vehicleText = `${ambulanceAvailable}/${node.maxAmbulances || 1}`;
+            availableCount = ambulanceAvailable;
+        } else {
+            // Modo normal: mostrar camiones
+            const vehicleIconSprite = this.assetManager.getSprite('ui-vehicle-icon');
+            const iconSize = 45;
+            const iconX = node.x + shakeX - 45;
+            const iconY = barY + 26 + shakeY - iconSize / 2 - 3;
+            
+            if (vehicleIconSprite) {
+                this.ctx.drawImage(vehicleIconSprite, iconX, iconY, iconSize, iconSize);
+            }
+            
+            vehicleText = `${node.availableVehicles}/${node.maxVehicles}`;
+            availableCount = node.availableVehicles;
+        }
+        
+        // Renderizar texto del contador
+        this.ctx.fillStyle = node.noVehiclesShake && availableCount === 0 ? '#e74c3c' : '#fff';
+        this.ctx.font = 'bold 21px monospace';
+        this.ctx.textAlign = 'center';
+        
+        const textX = node.x + shakeX + 15;
+        
+        // Contorno negro para mejor legibilidad
+        this.ctx.strokeStyle = '#000000';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeText(vehicleText, textX, barY + 26 + shakeY);
+        this.ctx.fillText(vehicleText, textX, barY + 26 + shakeY);
+        
+        // Restaurar Mirror View si está activo
+        if (this.mirrorViewApplied) {
+            this.ctx.restore();
+        }
+    }
+    
+    // ========== UI DEL HOSPITAL DE CAMPAÑA ==========
+    renderHospitalUI(node, spriteSize, isSelected) {
+        // Contador de vehículos médicos
+        const vehicleIconSprite = this.assetManager.getSprite('ui-medic-vehicle-icon');
+        const iconSize = 30;
+        const iconX = node.x - iconSize - 10;
+        const iconY = node.y + spriteSize / 2 - 10;
+        
+        if (vehicleIconSprite) {
+            this.ctx.drawImage(vehicleIconSprite, iconX, iconY, iconSize, iconSize);
+        }
+        
+        // Texto del contador
+        this.ctx.font = 'bold 18px Arial';
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.strokeStyle = '#000000';
+        this.ctx.lineWidth = 3;
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'middle';
+        
+        const counterText = `${node.availableVehicles}/${node.maxVehicles}`;
+        const textX = iconX + iconSize + 5;
+        const textY = iconY + iconSize / 2;
+        
+        this.ctx.strokeText(counterText, textX, textY);
+        this.ctx.fillText(counterText, textX, textY);
+        
+        // Círculo de rango (solo si está seleccionado)
+        if (this.game && this.game.selectedNode === node) {
+            this.ctx.strokeStyle = 'rgba(0, 255, 100, 0.5)';
+            this.ctx.lineWidth = 2;
+            this.ctx.setLineDash([10, 5]);
+            this.ctx.beginPath();
+            this.ctx.arc(node.x, node.y, node.actionRange, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.setLineDash([]);
+        }
+    }
+    
+    // ========== RENDERIZADO TIPO BASE ==========
+    renderBaseTypeNode(base, isSelected = false, isHovered = false, game = null) {
+        const isCritical = base.isCritical();
+        const pulseIntensity = isCritical ? Math.sin(Date.now() / 200) * 0.5 + 0.5 : 1;
+        
+        // Emergencia médica
+        const hasEmergency = game && game.medicalSystem && game.medicalSystem.hasEmergency(base.id);
+        const emergencyPulse = hasEmergency ? Math.sin(Date.now() / 300) * 0.5 + 0.5 : 1;
+        
+        // Verificar si el frente está en retirada (sin munición)
+        const hasNoAmmo = base.type === 'front' && base.hasEffect && base.hasEffect('no_supplies');
+        
+        // Intentar usar sprite si está disponible (SIEMPRE usar sprite normal, no placeholder)
+        const sprite = this.assetManager?.getBaseSprite(base.type, false, false, isCritical, hasNoAmmo);
+        
+        if (sprite) {
+            // RENDERIZADO CON SPRITE
+            // Solo HQs tienen resplandor azul (sin glow en otros nodos)
+            const isHQ = base.type === 'hq';
+            this.ctx.shadowColor = isHQ ? base.shadowColor : 'transparent';
+            this.ctx.shadowBlur = isHQ ? 20 : 0;
+            
+            // Calcular tamaño del sprite (mantener proporción, usar radius como referencia)
+            // +50% inicial + 25% adicional = 1.5 * 1.25 = 1.875
+            let spriteSize = base.radius * 2 * 1.875;
+            
+            // Reducir tamaño de HQs y FOBs un 15%
+            if (base.type === 'hq' || base.type === 'fob') {
+                spriteSize *= 0.85; // -15%
+            }
+            
+            // Reducir tamaño de los frentes un 15%
+            if (base.type === 'front') {
+                spriteSize *= 0.85; // -15%
+            }
+            
+            this.ctx.drawImage(
+                sprite,
+                base.x - spriteSize / 2,
+                base.y - spriteSize / 2,
+                spriteSize,
+                spriteSize
+            );
+            
+            this.ctx.shadowBlur = 0;
+            
+            // Aro de selección/hover
+            if (isSelected || isHovered) {
+                this.ctx.strokeStyle = isSelected ? '#f39c12' : '#fff';
+                this.ctx.lineWidth = isSelected ? 4 : 3;
+                this.ctx.beginPath();
+                this.ctx.arc(base.x, base.y, base.radius * 1.6, 0, Math.PI * 2);
+                this.ctx.stroke();
+            }
+        } else {
+            // FALLBACK: RENDERIZADO PLACEHOLDER (código original)
+            // Sombra: Solo HQs tienen resplandor azul, el resto solo cuando están críticos (rojo)
+            const isHQ = base.type === 'hq';
+            this.ctx.shadowColor = isCritical ? '#ff0000' : (isHQ ? base.shadowColor : 'transparent');
+            this.ctx.shadowBlur = isCritical ? 30 * pulseIntensity : (isHQ ? 20 : 0);
+            
+            // Base
+            this.ctx.fillStyle = base.color;
+            this.ctx.beginPath();
+            this.ctx.arc(base.x, base.y, base.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            // Borde
+            this.ctx.strokeStyle = isCritical ? `rgba(255, 0, 0, ${pulseIntensity})` :
+                                  isSelected ? '#f39c12' : 
+                                  isHovered ? '#fff' : '#555';
+            this.ctx.lineWidth = isCritical ? 4 : isSelected ? 4 : 2;
+            this.ctx.stroke();
+            
+            this.ctx.shadowBlur = 0;
+            
+            // Icono (+20% size)
+            this.ctx.fillStyle = '#fff';
+            this.ctx.font = base.type === 'hq' ? '44px Arial' : '33px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(base.icon, base.x, base.y);
+        }
+        
+        // Labels quitados (solo mostrar alerta si está crítico)
+        if (isCritical) {
+            this.ctx.fillStyle = '#ff0000';
+        this.ctx.font = 'bold 12px Arial';
+            this.ctx.fillText('⚠️', base.x, base.y - base.radius - 12);
+        }
+        
+        // Icono de emergencia médica
+        if (hasEmergency && base.type === 'front') {
+            const progress = game.medicalSystem.getEmergencyProgress(base.id);
+            
+            const iconX = base.x + base.radius + 15;
+            const iconY = base.y - base.radius;
+            const spriteSize = 28;
+            
+            // Anillo circular de progreso alrededor del icono
+            const ringRadius = spriteSize / 2 + 4; // 4px de padding alrededor del sprite
+            const ringWidth = 3;
+            
+            this.ctx.save();
+            
+            // Anillo de fondo (gris oscuro)
+            this.ctx.beginPath();
+            this.ctx.arc(iconX, iconY, ringRadius, 0, Math.PI * 2);
+            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+            this.ctx.lineWidth = ringWidth;
+            this.ctx.stroke();
+            
+            // Anillo de progreso (amarillo a rojo según el tiempo)
+            if (progress < 1) {
+                this.ctx.beginPath();
+                // Empezar desde arriba (-PI/2) y dibujar en sentido horario
+                const startAngle = -Math.PI / 2;
+                const endAngle = startAngle + (Math.PI * 2 * (1 - progress));
+                this.ctx.arc(iconX, iconY, ringRadius, startAngle, endAngle);
+                // Color que va de amarillo (255,255,0) a rojo (255,0,0)
+                const green = Math.floor((1 - progress) * 255);
+                this.ctx.strokeStyle = `rgb(255, ${green}, 0)`;
+                this.ctx.lineWidth = ringWidth;
+                this.ctx.stroke();
+            }
+            
+            this.ctx.restore();
+            
+            // Renderizar sprite de emergencia médica encima del anillo
+            const emergencySprite = this.assetManager?.getSprite('ui-emergency-medic');
+            if (emergencySprite) {
+                this.ctx.save();
+                this.ctx.globalAlpha = emergencyPulse;
+                this.ctx.drawImage(
+                    emergencySprite,
+                    iconX - spriteSize / 2,
+                    iconY - spriteSize / 2,
+                    spriteSize,
+                    spriteSize
+                );
+                this.ctx.restore();
+            }
+        }
+        
+        // Selector de tipo de recurso en HQ (si está en hover/seleccionado)
+        if ((isHovered || isSelected) && base.type === 'hq') {
+            this.renderResourceSelector(base);
+        }
+        
+        // Renderizar efectos (debuffs/buffs) en cuadrícula 3x3
+        if (base.effects && base.effects.length > 0) {
+            this.renderEffects(base);
+        }
+        
+        // Barra de suministros - SIEMPRE SE MUESTRA
+        this.renderSupplyBar(base);
+    }
+    
+    renderResourceSelector(base) {
+        const buttonSize = 40; // +15% más grande (35 * 1.15 = 40.25 ≈ 40)
+        const buttonRadius = buttonSize / 2;
+        const spacing = 10;
+        const baseY = base.y - base.radius - 75; // Subido 15% más (de -65 a -75)
+        
+        // Botón munición (REDONDO)
+        const ammoCenterX = base.x - buttonRadius - spacing/2;
+        const ammoCenterY = baseY + buttonRadius;
+        const ammoSelected = base.selectedResourceType === 'ammo';
+        
+        // Color verde militar
+        const militaryGreen = '#4a5d23';
+        const militaryGreenSolid = '#4a5d23'; // 100% opaco
+        
+        this.ctx.fillStyle = ammoSelected ? militaryGreenSolid : 'rgba(0, 0, 0, 0.7)';
+        this.ctx.beginPath();
+        this.ctx.arc(ammoCenterX, ammoCenterY, buttonRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.strokeStyle = ammoSelected ? militaryGreen : 'rgba(74, 93, 35, 0.5)';
+        this.ctx.lineWidth = ammoSelected ? 3 : 2;
+        this.ctx.stroke();
+        // Renderizar icono de vehículo (ui-vehicle-icon)
+        const vehicleIcon = this.assetManager.getSprite('ui-vehicle-icon');
+        if (vehicleIcon) {
+            const iconSize = 34; // Tamaño del icono +20% (28 * 1.2 = 33.6 ≈ 34)
+            this.ctx.drawImage(vehicleIcon, 
+                ammoCenterX - iconSize/2, ammoCenterY - iconSize/2, 
+                iconSize, iconSize);
+        } else {
+            // Fallback a emoji si no hay sprite
+            this.ctx.font = '25px Arial';
+        this.ctx.fillStyle = '#fff';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+            this.ctx.fillText('🚛', ammoCenterX, ammoCenterY);
+        }
+        
+        // Botón médico (REDONDO)
+        const medCenterX = base.x + buttonRadius + spacing/2;
+        const medCenterY = baseY + buttonRadius;
+        const medSelected = base.selectedResourceType === 'medical';
+        const ambulanceAvailable = base.ambulanceAvailable;
+        
+        // Color más apagado si no está disponible (sin tachar)
+        const medBgColor = !ambulanceAvailable ? 'rgba(100, 100, 100, 0.5)' : 
+                           medSelected ? militaryGreenSolid : 'rgba(0, 0, 0, 0.7)';
+        const medBorderColor = !ambulanceAvailable ? 'rgba(150, 150, 150, 0.5)' :
+                               medSelected ? militaryGreen : 'rgba(74, 93, 35, 0.5)';
+        
+        this.ctx.fillStyle = medBgColor;
+            this.ctx.beginPath();
+        this.ctx.arc(medCenterX, medCenterY, buttonRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.strokeStyle = medBorderColor;
+        this.ctx.lineWidth = medSelected ? 3 : 2;
+            this.ctx.stroke();
+        // Renderizar icono de vehículo médico (ui-medic-vehicle-icon)
+        const medicIcon = this.assetManager.getSprite('ui-medic-vehicle-icon');
+        if (medicIcon) {
+            const iconSize = 34; // Tamaño del icono +20% (28 * 1.2 = 33.6 ≈ 34)
+            // Aplicar opacidad si no está disponible
+            if (!ambulanceAvailable) {
+                this.ctx.globalAlpha = 0.4;
+            }
+            this.ctx.drawImage(medicIcon, 
+                medCenterX - iconSize/2, medCenterY - iconSize/2, 
+                iconSize, iconSize);
+            if (!ambulanceAvailable) {
+                this.ctx.globalAlpha = 1.0; // Restaurar opacidad
+            }
+        } else {
+            // Fallback a emoji si no hay sprite
+            this.ctx.font = '25px Arial';
+            this.ctx.fillStyle = ambulanceAvailable ? '#fff' : '#999';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText('🚑', medCenterX, medCenterY);
+        }
+        
+        // Texto indicador del modo seleccionado (más visible)
+        this.ctx.font = 'bold 17px Arial'; // +20% (14 * 1.2 = 16.8 ≈ 17)
+        const modeText = medSelected ? 'MÉDICO' : 'SUMINISTROS';
+        const modeColor = '#4a5d23'; // Verde militar para ambos
+        
+        // Fondo para el texto
+        const textMetrics = this.ctx.measureText(modeText);
+        const textWidth = textMetrics.width;
+        const textHeight = 19; // +20% (16 * 1.2 = 19.2 ≈ 19)
+        const textX = base.x - textWidth / 2;
+        const textY = baseY - 22;
+        
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.fillRect(textX - 4, textY - textHeight / 2, textWidth + 8, textHeight);
+        
+        this.ctx.strokeStyle = modeColor;
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(textX - 4, textY - textHeight / 2, textWidth + 8, textHeight);
+        
+        this.ctx.fillStyle = modeColor;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(modeText, base.x, textY);
+    }
+    
+    renderSupplyBar(base) {
+        const barWidth = base.radius * 2;
+        const barHeight = 9;  // +50%
+        const barX = base.x - barWidth / 2;
+        const barY = base.y + base.radius + 20;  // Bajado 25% más (16 * 1.25 = 20)
+        
+        // Calcular offset de shake si está activo
+        let shakeX = 0;
+        let shakeY = 0;
+        if (base.noVehiclesShake) {
+            const shakeIntensity = 3;
+            const shakeSpeed = 30;
+            shakeX = Math.sin(base.noVehiclesShakeTime * shakeSpeed) * shakeIntensity;
+            shakeY = Math.cos(base.noVehiclesShakeTime * shakeSpeed * 1.5) * shakeIntensity;
+        }
+        
+        // Compensar Mirror View si está activo
+        if (this.mirrorViewApplied) {
+            this.ctx.save();
+            this.ctx.translate(base.x, base.y);
+            this.ctx.scale(-1, 1);
+            this.ctx.translate(-base.x, -base.y);
+        }
+        
+        // HQ ALIADO no muestra barra de recursos
+        // Los vehículos se renderizan en renderVehicleUI() para evitar duplicación
+        if (base.type === 'hq' && !base.type.startsWith('enemy_')) {
+            return;
+        }
+        
+        // Icono de recursos (para FOB y Frentes)
+        const resourceIcon = this.assetManager?.getSprite('ui-supplies');
+        if (resourceIcon) {
+            // Usar sprite de recurso
+            const iconSize = 29; // +20% (24 * 1.2 = 28.8)
+            this.ctx.drawImage(
+                resourceIcon,
+                barX - iconSize - 4,
+                barY - 4,  // Ajustado verticalmente para centrar mejor
+                iconSize,
+                iconSize
+            );
+        } else {
+            // Fallback: emoji
+            this.ctx.fillStyle = '#fff';
+            this.ctx.font = '14px monospace';
+            this.ctx.textAlign = 'right';
+            this.ctx.fillText('📦', barX - 6, barY + barHeight);
+        }
+        
+        // Barra de recursos
+        this.ctx.fillStyle = '#222';
+        this.ctx.fillRect(barX, barY, barWidth, barHeight);
+        
+        const fillWidth = (base.supplies / base.maxSupplies) * barWidth;
+        this.ctx.fillStyle = base.supplies < 20 ? '#e74c3c' : '#4ecca3';
+        this.ctx.fillRect(barX, barY, fillWidth, barHeight);
+        
+        // Los contadores de vehículos se renderizan en renderVehicleUI() para evitar duplicación
+        
+        // Restaurar Mirror View si está activo
+        if (this.mirrorViewApplied) {
+            this.ctx.restore();
+        }
+    }
+    
+    renderEffects(base) {
+        // Configuración de la cuadrícula 3x3
+        const iconSize = 36;  // +15% adicional (31 * 1.15 = 35.65)
+        const spacing = 6;  // Aumentado proporcionalmente
+        const iconsPerRow = 3;
+        
+        // Posicionar arriba del nodo (más alto para no tapar el sprite)
+        const startY = base.y - base.radius - 60;
+        const totalWidth = (iconSize + spacing) * iconsPerRow - spacing;
+        const startX = base.x - totalWidth / 2;
+        
+        // Renderizar cada efecto
+        base.effects.forEach((effect, index) => {
+            const row = Math.floor(index / iconsPerRow);
+            const col = index % iconsPerRow;
+            
+            const x = startX + col * (iconSize + spacing);
+            const y = startY + row * (iconSize + spacing);
+            
+            // Obtener sprite del efecto
+            const sprite = this.assetManager?.getSprite(effect.icon);
+            
+            if (sprite) {
+                // Fondo oscuro semi-transparente
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                this.ctx.fillRect(x, y, iconSize, iconSize);
+                
+                // Borde
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                this.ctx.lineWidth = 1;
+                this.ctx.strokeRect(x, y, iconSize, iconSize);
+                
+                // Renderizar sprite
+                this.ctx.drawImage(sprite, x, y, iconSize, iconSize);
+            }
+        });
+    }
+    
+    renderEffectTooltip(hoveredEffect) {
+        const padding = 8;
+        const fontSize = 14;
+        const offsetX = 15;
+        const offsetY = -10;
+        
+        this.ctx.save();
+        
+        // Compensar Mirror View si está activo (para que texto no salga al revés)
+        if (this.mirrorViewApplied) {
+            this.ctx.scale(-1, 1);
+            this.ctx.translate(-this.game.worldWidth, 0);
+        }
+        
+        this.ctx.font = `${fontSize}px Arial`;
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'top';
+        
+        // Medir texto
+        const textWidth = this.ctx.measureText(hoveredEffect.tooltip).width;
+        const boxWidth = textWidth + padding * 2;
+        const boxHeight = fontSize + padding * 2;
+        
+        // Posicionar (debajo y a la derecha del cursor)
+        let x = hoveredEffect.x + offsetX;
+        let y = hoveredEffect.y + offsetY;
+        
+        // Ajustar si se sale de la pantalla
+        if (x + boxWidth > this.width) x = hoveredEffect.x - boxWidth - offsetX;
+        if (y + boxHeight > this.height) y = hoveredEffect.y - boxHeight + offsetY;
+        
+        // Fondo
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        this.ctx.fillRect(x, y, boxWidth, boxHeight);
+        
+        // Borde
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(x, y, boxWidth, boxHeight);
+        
+        // Texto
+        this.ctx.fillStyle = '#fff';
+        this.ctx.fillText(hoveredEffect.tooltip, x + padding, y + padding);
+        
+        this.ctx.restore();
+    }
+    
+    /**
+     * Renderiza tooltip de hover prolongado (en coordenadas de pantalla) y, si procede,
+     * los rangos asociados en coordenadas de mundo alrededor del objetivo.
+     */
+    renderHoverTooltip(hover) {
+        if (!hover) return;
+        const padding = 8;
+        const titleSize = 14;
+        const textSize = 12;
+        const offsetX = 14;
+        const offsetY = -14;
+        
+        // Medidas
+        this.ctx.font = `bold ${titleSize}px Arial`;
+        const titleWidth = this.ctx.measureText(hover.name).width;
+        this.ctx.font = `${textSize}px Arial`;
+        const descWidth = this.ctx.measureText(hover.description).width;
+        const boxWidth = Math.max(titleWidth, descWidth) + padding * 2;
+        const boxHeight = titleSize + 6 + textSize + padding * 2;
+        
+        // Posición cerca del cursor (coordenadas de pantalla)
+        let x = hover.x + offsetX;
+        let y = hover.y + offsetY;
+        if (x + boxWidth > this.width) x = hover.x - boxWidth - offsetX;
+        if (y + boxHeight > this.height) y = hover.y - boxHeight + offsetY;
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+        
+        // Fondo y borde
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        this.ctx.fillRect(x, y, boxWidth, boxHeight);
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(x, y, boxWidth, boxHeight);
+        
+        // Texto
+        this.ctx.fillStyle = '#fff';
+        this.ctx.font = `bold ${titleSize}px Arial`;
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(hover.name, x + padding, y + padding + titleSize/2);
+        this.ctx.font = `${textSize}px Arial`;
+        this.ctx.fillText(hover.description, x + padding, y + padding + titleSize + 6 + textSize/2);
+        
+        // Dibujar rangos en coordenadas de mundo (aplicar cámara temporalmente)
+        if (hover.ranges && hover.ranges.length > 0 && this.game) {
+            this.game.camera.applyToContext(this.ctx);
+            hover.ranges.forEach(r => {
+                this.ctx.strokeStyle = r.color || 'rgba(255,255,255,0.5)';
+                this.ctx.lineWidth = 2;
+                if (r.dash) this.ctx.setLineDash(r.dash); else this.ctx.setLineDash([10, 5]);
+                this.ctx.beginPath();
+                this.ctx.arc(hover.anchorX, hover.anchorY, r.radius, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+            });
+            this.game.camera.restoreContext(this.ctx);
+        }
+    }
+    
+    renderFloatingText(text) {
+        // DEPRECATED - Usar renderFloatingTextsBatch() en su lugar
+        if (text.alpha < 0.01) return;
+        
+        this.ctx.save();
+        this.ctx.globalAlpha = text.alpha;
+        this.ctx.fillStyle = text.color;
+        this.ctx.fillText(text.text, text.x, text.y);
+        this.ctx.restore();
+    }
+    
+    renderFloatingTextsBatch(texts) {
+        // OPTIMIZACIÓN MÁXIMA: Renderizar todos los textos en un solo batch
+        // Compatible con todos los navegadores (Chrome/Opera/Firefox)
+        
+        if (texts.length === 0) return;
+        
+        // Agrupar textos por color para minimizar cambios de estado
+        const textsByColor = new Map();
+        for (const text of texts) {
+            if (text.alpha < 0.01) continue; // Skip textos invisibles
+            
+            if (!textsByColor.has(text.color)) {
+                textsByColor.set(text.color, []);
+            }
+            textsByColor.get(text.color).push(text);
+        }
+        
+        // Renderizar por grupos de color (máxima eficiencia)
+        for (const [color, colorTexts] of textsByColor) {
+            this.ctx.fillStyle = color;
+            
+            for (const text of colorTexts) {
+                this.ctx.globalAlpha = text.alpha;
+                this.ctx.fillText(text.text, text.x, text.y);
+            }
+        }
+        
+        // Resetear alpha
+        this.ctx.globalAlpha = 1;
+    }
+    
+    /**
+     * Renderiza sprites flotantes (ej: sniper kill feed)
+     */
+    renderFloatingSprites(sprites) {
+        if (sprites.length === 0) return;
+        
+        for (const sprite of sprites) {
+            if (sprite.alpha < 0.01) continue; // Skip sprites invisibles
+            
+            const spriteImg = this.assetManager?.getSprite(sprite.spriteKey);
+            if (!spriteImg) continue;
+            
+            this.ctx.save();
+            this.ctx.globalAlpha = sprite.alpha;
+            
+            const width = spriteImg.width * sprite.scale;
+            const height = spriteImg.height * sprite.scale;
+            
+            this.ctx.drawImage(
+                spriteImg,
+                sprite.x - width / 2,
+                sprite.y - height / 2,
+                width,
+                height
+            );
+            
+            this.ctx.restore();
+        }
+    }
+    
+    renderConvoy(convoy) {
+        // Si está volviendo, renderizar en blanco y negro semi-transparente
+        const isReturning = convoy.returning;
+        const vehicleColor = isReturning ? '#888' : convoy.vehicle.color;
+        const opacity = isReturning ? 0.48 : 1; // 20% menos transparencia (de 0.28 a 0.48)
+        
+        // Detectar si es un convoy enemigo (origen es nodo enemigo)
+        const myTeam = this.game?.myTeam || 'ally';
+        const isEnemy = convoy.originBase && convoy.originBase.team !== myTeam;
+        
+        this.ctx.globalAlpha = opacity;
+        
+        // Usar sprites para todos los vehículos (incluida ambulancia)
+        const vehicleSpriteKey = convoy.isMedical ? 'ambulance' : convoy.vehicleType;
+        // No usar sprites "returning"; aplicamos estilos dinámicamente
+        const sprite = this.assetManager?.getVehicleSprite(vehicleSpriteKey, false);
+        const angle = convoy.getAngle();
+        
+        if (sprite) {
+            // RENDERIZADO CON SPRITE
+            // Sin glowing effect para camiones normales, solo ambulancias
+            this.ctx.shadowColor = convoy.isMedical ? '#ff3333' : 'transparent';
+            this.ctx.shadowBlur = convoy.isMedical ? 30 : 0;
+            
+            this.ctx.save();
+            this.ctx.translate(convoy.x, convoy.y);
+            
+            // Lógica de flip horizontal:
+            // - Aliados: van derecha (normal), vuelven izquierda (flip)
+            // - Enemigos: van izquierda (flip), vuelven derecha (normal)
+            let shouldFlip = isEnemy ? !isReturning : isReturning;
+            
+            // COMPENSAR MIRROR VIEW: Si la vista está mirroreada, invertir el flip
+            if (this.mirrorViewApplied) {
+                shouldFlip = !shouldFlip;
+            }
+            
+            if (shouldFlip) {
+                this.ctx.scale(-1, 1);
+            }
+            
+            // Dibujar sprite (rectangular, +95% + 25% = 1.95 * 1.25 = 2.4375)
+            const baseSize = 32 * 2.4375;
+            const spriteWidth = baseSize * 1.2; // mantener relación de aspecto alargada
+            const spriteHeight = baseSize;
+            // Filtro gris para returning
+            this.ctx.filter = isReturning ? 'grayscale(100%)' : 'none';
+            this.ctx.drawImage(
+                sprite,
+                -spriteWidth / 2,
+                -spriteHeight / 2,
+                spriteWidth,
+                spriteHeight
+            );
+            
+            this.ctx.restore();
+            this.ctx.filter = 'none';
+            this.ctx.shadowBlur = 0;
+        } else {
+            // FALLBACK: RENDERIZADO PLACEHOLDER (código original)
+            
+            // Ambulancias médicas: círculo rojo grande (+30% + 25% = 1.3 * 1.25 = 1.625)
+            const size = convoy.isMedical ? 19 : 16; // 12*1.625=19.5≈19, 10*1.625=16.25≈16
+            const shadowBlur = convoy.isMedical ? 30 : (isReturning ? 10 : 18);
+            
+            // Sombra
+            this.ctx.shadowColor = vehicleColor;
+            this.ctx.shadowBlur = shadowBlur;
+            
+            // Vehículo
+            this.ctx.fillStyle = vehicleColor;
+            this.ctx.beginPath();
+            this.ctx.arc(convoy.x, convoy.y, size, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            // Icono según tipo de vehículo
+            this.ctx.save();
+            this.ctx.translate(convoy.x, convoy.y);
+            if (isReturning) {
+                // Solo mirar a la izquierda, sin rotación
+            } else {
+                // Ir al objetivo mirando a la derecha (sin rotación)
+            }
+            
+            if (convoy.vehicleType === 'helicopter') {
+                // Icono de helicóptero: símbolo 🚁 (+30% + 25% = 1.625)
+                // No hay rotación en ningún caso ahora
+                this.ctx.font = '29px Arial'; // 18*1.625=29.25≈29
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText('🚁', 0, 0);
+            } else {
+                // Flecha normal para camiones (+30% + 25% = 1.625)
+                this.ctx.fillStyle = isReturning ? '#aaa' : '#fff';
+                this.ctx.beginPath();
+                if (isReturning) {
+                    // Flecha hacia la izquierda (12*1.625=19.5≈20, 6*1.625=9.75≈10)
+                    this.ctx.moveTo(-20, 0);
+                    this.ctx.lineTo(0, -10);
+                    this.ctx.lineTo(0, 10);
+                } else {
+                    // Flecha hacia delante (según ángulo)
+                    this.ctx.moveTo(20, 0);
+                    this.ctx.lineTo(0, -10);
+                    this.ctx.lineTo(0, 10);
+                }
+                this.ctx.fill();
+            }
+            
+            this.ctx.restore();
+            this.ctx.shadowBlur = 0;
+        }
+        
+        // Línea al destino - SOLO MOSTRAR PARA CONVOYES PROPIOS (no enemigos)
+        if (!isEnemy) {
+            this.ctx.strokeStyle = vehicleColor + (isReturning ? '20' : '40');
+            this.ctx.lineWidth = isReturning ? 1.2 : 2.4;
+            this.ctx.setLineDash([6, 6]);
+            this.ctx.beginPath();
+            this.ctx.moveTo(convoy.x, convoy.y);
+            this.ctx.lineTo(convoy.target.x, convoy.target.y);
+            this.ctx.stroke();
+            this.ctx.setLineDash([]);
+        }
+        
+        this.ctx.globalAlpha = 1;
+    }
+    
+    renderParticle(particle) {
+        this.ctx.globalAlpha = particle.alpha;
+        this.ctx.fillStyle = particle.color;
+        this.ctx.beginPath();
+        this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.globalAlpha = 1;
+    }
+    
+    renderExplosionSprite(explosion) {
+        // Animación de 3 frames: explosion-1, explosion-2, explosion-3
+        // Cada frame: 0.2s (total 0.6s)
+        if (!explosion || typeof explosion.life === 'undefined') return;
+        
+        // Obtener el frame actual según el progreso
+        const currentFrame = explosion.getCurrentFrame ? explosion.getCurrentFrame() : 'explosion-1';
+        const sprite = this.assetManager.getSprite(currentFrame);
+        if (!sprite) return;
+        
+        // Tamaño aumentado 35%: 120 * 1.35 = 162
+        const size = 162;
+        
+        this.ctx.drawImage(
+            sprite,
+            explosion.x - size/2,
+            explosion.y - size/2,
+            size,
+            size
+        );
+    }
+    
+    renderImpactMark(impactMark) {
+        const sprite = this.assetManager.getSprite(impactMark.spriteKey);
+        if (!sprite) return;
+        
+        const baseSize = 96; // Tamaño base de la marca de impacto (+20%)
+        const size = baseSize * (impactMark.scale || 1.0); // Aplicar escala personalizada
+        
+        this.ctx.save();
+        this.ctx.globalAlpha = impactMark.alpha; // 50% de opacidad
+        this.ctx.translate(impactMark.x, impactMark.y);
+        
+        // Aplicar flip horizontal si está activado
+        if (impactMark.flipH) {
+            this.ctx.scale(-1, 1);
+        }
+        
+        this.ctx.drawImage(
+            sprite,
+            -size/2,
+            -size/2,
+            size,
+            size
+        );
+        this.ctx.restore();
+    }
+    
+    // ========== RENDERIZADO TIPO EDIFICIO ==========
+    renderBuildingTypeNode(building) {
+        if (!building || !building.active) return;
+        
+        // Debug temporal
+        if (!building.spriteKey) {
+            console.warn(`⚠️ Edificio sin spriteKey:`, building.type, building);
+        }
+        
+        // Si está en construcción, mostrar sprite de construcción
+        const spriteKey = building.isConstructing ? 'building-construction' : building.spriteKey;
+        const sprite = this.assetManager.getSprite(spriteKey);
+        
+        // Tamaño del sprite: +25% (bases) + 20% adicional = 1.875 * 1.2 = 2.25
+        const baseSize = 60; // Tamaño base
+        let spriteSize = baseSize * 2.25; // +25% + 20% = 2.25x
+        
+        // Aplicar multiplicador de tamaño personalizado si existe (solo cuando NO está en construcción)
+        if (!building.isConstructing && building.sizeMultiplier) {
+            spriteSize *= building.sizeMultiplier;
+        }
+        
+        if (sprite) {
+            // Sin resplandor
+            this.ctx.shadowBlur = 0;
+            
+            // Aplicar flip horizontal si es necesario
+            if (building.flipHorizontal && !building.isConstructing) {
+                this.ctx.save();
+                this.ctx.translate(building.x, building.y);
+                this.ctx.scale(-1, 1); // Flip horizontal
+                this.ctx.drawImage(
+                    sprite,
+                    -spriteSize/2,
+                    -spriteSize/2,
+                    spriteSize,
+                    spriteSize
+                );
+                this.ctx.restore();
+            } else {
+                // Renderizar sprite del edificio (o construcción) normal
+                this.ctx.drawImage(
+                    sprite,
+                    building.x - spriteSize/2,
+                    building.y - spriteSize/2,
+                    spriteSize,
+                    spriteSize
+                );
+            }
+            
+            // Si está en construcción, mostrar barra de progreso
+            if (building.isConstructing) {
+                const progress = building.getConstructionProgress();
+                const barWidth = spriteSize * 0.8;
+                const barHeight = 8;
+                const barX = building.x - barWidth / 2;
+                const barY = building.y + spriteSize / 2 + 10;
+                
+                // Fondo de la barra
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                this.ctx.fillRect(barX, barY, barWidth, barHeight);
+                
+                // Progreso de la barra
+                this.ctx.fillStyle = '#2ecc71';
+                this.ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+                
+                // Borde de la barra
+                this.ctx.strokeStyle = '#fff';
+                this.ctx.lineWidth = 1;
+                this.ctx.strokeRect(barX, barY, barWidth, barHeight);
+            }
+        } else {
+            // Fallback: círculo con emoji (sin resplandor)
+            this.ctx.shadowBlur = 0;
+            
+            this.ctx.fillStyle = '#555';
+            this.ctx.beginPath();
+            this.ctx.arc(building.x, building.y, building.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            this.ctx.font = '30px Arial';
+            this.ctx.fillStyle = '#fff';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText('🏗️', building.x, building.y);
+        }
+        
+        // Renderizar círculo de rango del hospital de campaña (solo si está seleccionado)
+        // NOTA: El contador de vehículos se renderiza en renderVehicleUI() para evitar duplicación
+        if (building.type === 'campaignHospital' && building.constructed && !building.isConstructing) {
+            if (this.game && this.game.selectedBase === building) {
+                this.ctx.strokeStyle = 'rgba(0, 255, 100, 0.5)';
+                this.ctx.lineWidth = 2;
+                this.ctx.setLineDash([10, 5]);
+                this.ctx.beginPath();
+                this.ctx.arc(building.x, building.y, building.actionRange, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+            }
+        }
+    }
+    
+    renderDrone(drone) {
+        const droneSprite = this.assetManager.getSprite('vehicle-drone');
+        const size = 50 * 1.15; // Tamaño del sprite del dron +15%
+        
+        if (droneSprite) {
+            // Dibujar sprite del dron con sombra
+            // Drones enemigos: sombra roja, aliados: naranja
+            this.ctx.shadowColor = drone.isEnemy ? '#ff0000' : '#ff6600';
+            this.ctx.shadowBlur = 15;
+            
+            this.ctx.save();
+            this.ctx.translate(drone.x, drone.y);
+            
+            // Voltear drones enemigos horizontalmente
+            if (drone.isEnemy) {
+                this.ctx.scale(-1, 1);
+            }
+            
+            this.ctx.drawImage(
+                droneSprite,
+                -size/2,
+                -size/2,
+                size,
+                size
+            );
+            
+            this.ctx.restore();
+            this.ctx.shadowBlur = 0;
+        } else {
+            // Fallback: círculo naranja/rojo
+            this.ctx.shadowColor = drone.isEnemy ? '#ff0000' : '#ff6600';
+            this.ctx.shadowBlur = 25;
+            this.ctx.fillStyle = drone.isEnemy ? '#ff0000' : '#ff6600';
+            this.ctx.beginPath();
+            this.ctx.arc(drone.x, drone.y, 12, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.shadowBlur = 0;
+            
+            // Icono de bomba
+            this.ctx.font = '20px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillStyle = '#fff';
+            this.ctx.fillText('💣', drone.x, drone.y);
+        }
+        
+        // Línea hacia el objetivo (roja para enemigos, naranja para aliados)
+        this.ctx.strokeStyle = drone.isEnemy ? 'rgba(255, 0, 0, 0.4)' : 'rgba(255, 102, 0, 0.4)';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([6, 6]);
+        this.ctx.beginPath();
+        this.ctx.moveTo(drone.x, drone.y);
+        this.ctx.lineTo(drone.target.x, drone.target.y);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+    }
+    
+    renderRoutePreview(from, to) {
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)'; // Negro semi-transparente
+        this.ctx.lineWidth = 3.6;  // +20% (3→3.6)
+        this.ctx.setLineDash([12, 6]);  // +20% (10→12, 5→6)
+        this.ctx.beginPath();
+        this.ctx.moveTo(from.x, from.y);
+        this.ctx.lineTo(to.x, to.y);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+    }
+    
+    renderBuildPreview(x, y, bases, buildingType = 'fob') {
+        // Verificar si está demasiado cerca de otras bases
+        const minDistance = 80;
+        let tooClose = false;
+        
+        for (const base of bases) {
+            const dist = Math.hypot(x - base.x, y - base.y);
+            if (dist < minDistance) {
+                tooClose = true;
+                break;
+            }
+        }
+        
+        // Verificar si está dentro del territorio aliado
+        const inAllyTerritory = this.game && this.game.territory && this.game.territory.isInAllyTerritory(x, y);
+        
+        // Usar configuración del tipo de edificio actual
+        const config = getNodeConfig(buildingType);
+        const radius = config ? config.radius : 30;
+        
+        // Color del preview (rojo si está fuera o muy cerca, verde si es válido)
+        const isValid = !tooClose && inAllyTerritory;
+        const previewColor = isValid ? 'rgba(52, 152, 219, 0.5)' : 'rgba(231, 76, 60, 0.5)';
+        const borderColor = isValid ? '#3498db' : '#e74c3c';
+        
+        // Base semi-transparente
+        this.ctx.fillStyle = previewColor;
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Borde punteado
+        this.ctx.strokeStyle = borderColor;
+        this.ctx.lineWidth = 3;
+        this.ctx.setLineDash([8, 8]);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+        
+        // Sprite del edificio actual
+        const buildingSprite = this.assetManager.getSprite(config.spriteKey);
+        if (buildingSprite) {
+            const spriteSize = radius * 2.5; // Más grande para mejor visibilidad
+            this.ctx.globalAlpha = isValid ? 0.8 : 0.5;
+            this.ctx.drawImage(
+                buildingSprite,
+                x - spriteSize/2,
+                y - spriteSize/2,
+                spriteSize,
+                spriteSize
+            );
+            this.ctx.globalAlpha = 1;
+        } else {
+            // Fallback: icono con nombre del edificio
+        this.ctx.fillStyle = isValid ? '#fff' : '#e74c3c';
+            this.ctx.font = '16px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(config.icon || config.name || buildingType.toUpperCase(), x, y);
+        }
+        
+        // Etiqueta con nombre del edificio
+        this.ctx.fillStyle = isValid ? '#fff' : '#e74c3c';
+        this.ctx.font = 'bold 10px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        
+        // Mostrar mensaje de error específico
+        let label = config.name || buildingType.toUpperCase();
+        if (tooClose) {
+            label = '⚠️ MUY CERCA';
+        } else if (!inAllyTerritory) {
+            label = '⚠️ FUERA DE TERRITORIO';
+        }
+        this.ctx.fillText(label, x, y - radius - 10);
+        
+        // Círculo de área de construcción prohibida (si está muy cerca)
+        if (tooClose) {
+            this.ctx.strokeStyle = 'rgba(231, 76, 60, 0.3)';
+            this.ctx.lineWidth = 2;
+            this.ctx.setLineDash([5, 5]);
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, minDistance, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.setLineDash([]);
+        }
+        
+        // Mostrar círculo de rango de acción si el edificio tiene rango (solo si es válido)
+        if (config.showRangePreview && isValid) {
+            // Para anti-drones, mostrar rango de detección
+            if (config.detectionRange) {
+                this.ctx.strokeStyle = 'rgba(255, 200, 0, 0.6)';
+                this.ctx.lineWidth = 2;
+                this.ctx.setLineDash([10, 5]);
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, config.detectionRange, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+            }
+            // Para hospitales, mostrar rango de acción
+            else if (config.actionRange) {
+                this.ctx.strokeStyle = 'rgba(0, 255, 100, 0.6)';
+                this.ctx.lineWidth = 2;
+                this.ctx.setLineDash([10, 5]);
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, config.actionRange, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+            }
+        }
+    }
+    
+    renderDronePreview(x, y, hoveredBase) {
+        const radius = 30;
+        
+        // Verificar si el objetivo es válido (misma lógica que BuildingSystem.launchDrone)
+        const validTarget = hoveredBase && (
+            (hoveredBase.type === 'fob' && hoveredBase.team === 'player2') || 
+            (hoveredBase.type === 'nuclearPlant' && hoveredBase.team === 'player2') ||
+            (hoveredBase.type === 'antiDrone' && hoveredBase.team === 'player2') ||
+            (hoveredBase.type === 'hospital' && hoveredBase.team === 'player2')
+        );
+        
+        // Círculo vacío con borde blanco punteado
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        this.ctx.lineWidth = 3;
+        this.ctx.setLineDash([8, 8]);
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+        
+        // Si NO es un objetivo válido, mostrar X roja
+        if (!validTarget) {
+            this.ctx.strokeStyle = '#ff0000';
+            this.ctx.lineWidth = 4;
+            const crossSize = 15;
+            
+            // X roja
+            this.ctx.beginPath();
+            this.ctx.moveTo(x - crossSize, y - crossSize);
+            this.ctx.lineTo(x + crossSize, y + crossSize);
+            this.ctx.moveTo(x + crossSize, y - crossSize);
+            this.ctx.lineTo(x - crossSize, y + crossSize);
+            this.ctx.stroke();
+        }
+    }
+    
+    renderSniperCursor(x, y, hoveredBase) {
+        // Renderizar mira de francotirador usando sprite
+        const sprite = this.assetManager?.getSprite('sniper');
+        
+        if (sprite) {
+            // Usar sprite de mira
+            const size = 80;
+            this.ctx.globalAlpha = 0.9;
+            this.ctx.drawImage(
+                sprite,
+                x - size/2,
+                y - size/2,
+                size,
+                size
+            );
+            this.ctx.globalAlpha = 1.0;
+        } else {
+            // Fallback: renderizar mira básica con círculos
+            const radius1 = 40;
+            const radius2 = 20;
+            
+            this.ctx.strokeStyle = 'rgba(255, 50, 50, 0.8)';
+            this.ctx.lineWidth = 2;
+            
+            // Círculo externo
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, radius1, 0, Math.PI * 2);
+            this.ctx.stroke();
+            
+            // Círculo interno
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, radius2, 0, Math.PI * 2);
+            this.ctx.stroke();
+            
+            // Cruz de mira
+            this.ctx.beginPath();
+            this.ctx.moveTo(x - radius1, y);
+            this.ctx.lineTo(x + radius1, y);
+            this.ctx.moveTo(x, y - radius1);
+            this.ctx.lineTo(x, y + radius1);
+            this.ctx.stroke();
+        }
+        
+        // Indicador de objetivo inválido (si no es un frente enemigo)
+        const validTarget = hoveredBase && hoveredBase.type === 'front' && hoveredBase.team === 'player2';
+        if (!validTarget) {
+            this.ctx.strokeStyle = '#ff0000';
+            this.ctx.lineWidth = 4;
+            const crossSize = 15;
+            
+            // X roja
+            this.ctx.beginPath();
+            this.ctx.moveTo(x - crossSize, y - crossSize);
+            this.ctx.lineTo(x + crossSize, y + crossSize);
+            this.ctx.moveTo(x + crossSize, y - crossSize);
+            this.ctx.lineTo(x - crossSize, y + crossSize);
+            this.ctx.stroke();
+        }
+    }
+    
+    /**
+     * Preview de dron ENEMIGO (modo debug)
+     */
+    renderEnemyDronePreview(x, y, hoveredBase, hoveredBuilding) {
+        const radius = 30;
+        
+        // Verificar si el objetivo es válido (cualquier base o edificio aliado)
+        const validTarget = (hoveredBase && !hoveredBase.type.includes('enemy')) || 
+                           (hoveredBuilding && !hoveredBuilding.isEnemy);
+        
+        // Círculo rojo punteado
+        this.ctx.strokeStyle = validTarget ? 'rgba(255, 0, 0, 0.8)' : 'rgba(255, 0, 0, 0.4)';
+        this.ctx.lineWidth = 3;
+        this.ctx.setLineDash([8, 8]);
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+        
+        // Texto de ayuda
+        this.ctx.fillStyle = validTarget ? '#ff0000' : '#ffffff';
+        this.ctx.font = 'bold 12px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(validTarget ? 'ATACAR' : 'Selecciona objetivo', x, y - radius - 15);
+    }
+    
+    /**
+     * Preview de construcción enemiga (modo debug)
+     */
+    renderEnemyBuildPreview(x, y) {
+        const radius = 30;
+        
+        // Círculo rojo semi-transparente
+        this.ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Borde rojo punteado
+        this.ctx.strokeStyle = '#ff0000';
+        this.ctx.lineWidth = 3;
+        this.ctx.setLineDash([8, 8]);
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+        
+        // Texto
+        this.ctx.fillStyle = '#ff0000';
+        this.ctx.font = 'bold 12px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('TORRETA ENEMIGA', x, y - radius - 15);
+        
+        // Mostrar rango de detección
+        this.ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([10, 5]);
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, 160, 0, Math.PI * 2); // Rango de detección del anti-drone
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+    }
+    
+    renderDevGrid() {
+        // Cuadrícula de desarrollo con coordenadas cartesianas
+        // Sistema: (0,0) = esquina inferior izquierda
+        
+        this.ctx.save();
+        
+        // Usar dimensiones del mundo expandido
+        const worldWidth = this.game?.camera?.worldWidth || this.width;
+        const worldHeight = this.game?.camera?.worldHeight || this.height;
+        
+        // Configuración
+        const step = 0.1; // Cada 10%
+        const gridColor = 'rgba(0, 150, 255, 0.3)';
+        const axisColor = 'rgba(0, 200, 255, 0.8)';
+        const textColor = 'rgba(255, 255, 255, 0.9)';
+        
+        // Líneas verticales y horizontales
+        this.ctx.strokeStyle = gridColor;
+        this.ctx.lineWidth = 1;
+        
+        for (let i = 0; i <= 1; i += step) {
+            const x = worldWidth * i;
+            const y = worldHeight * (1 - i); // Invertir Y (sistema cartesiano)
+            
+            // Líneas verticales
+            this.ctx.beginPath();
+            this.ctx.moveTo(x, 0);
+            this.ctx.lineTo(x, worldHeight);
+            this.ctx.stroke();
+            
+            // Líneas horizontales
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, y);
+            this.ctx.lineTo(worldWidth, y);
+            this.ctx.stroke();
+        }
+        
+        // Ejes principales (X=0.5, Y=0.5)
+        this.ctx.strokeStyle = axisColor;
+        this.ctx.lineWidth = 2;
+        
+        // Eje vertical central (X = 0.5)
+        this.ctx.beginPath();
+        this.ctx.moveTo(worldWidth * 0.5, 0);
+        this.ctx.lineTo(worldWidth * 0.5, worldHeight);
+        this.ctx.stroke();
+        
+        // Eje horizontal central (Y = 0.5)
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, worldHeight * 0.5);
+        this.ctx.lineTo(worldWidth, worldHeight * 0.5);
+        this.ctx.stroke();
+        
+        // Etiquetas de coordenadas
+        this.ctx.fillStyle = textColor;
+        this.ctx.font = 'bold 11px monospace';
+        this.ctx.textAlign = 'center';
+        
+        // Etiquetas en eje X (abajo)
+        for (let i = 0; i <= 1; i += step) {
+            const x = worldWidth * i;
+            const label = i.toFixed(1);
+            this.ctx.fillText(label, x, worldHeight - 5);
+        }
+        
+        // Etiquetas en eje Y (izquierda) - Sistema cartesiano
+        this.ctx.textAlign = 'left';
+        for (let i = 0; i <= 1; i += step) {
+            const y = worldHeight * (1 - i); // Invertir para mostrar correctamente
+            const label = i.toFixed(1);
+            this.ctx.fillText(label, 5, y + 4);
+        }
+        
+        // Etiquetas de ejes
+        this.ctx.font = 'bold 14px monospace';
+        this.ctx.fillStyle = axisColor;
+        
+        // Etiqueta X (derecha abajo)
+        this.ctx.textAlign = 'right';
+        this.ctx.fillText('X →', worldWidth - 10, worldHeight - 20);
+        
+        // Etiqueta Y (izquierda arriba)
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText('↑ Y', 10, 20);
+        
+        // Nota del sistema
+        this.ctx.textAlign = 'left';
+        this.ctx.font = 'bold 12px monospace';
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        this.ctx.fillText('Sistema Cartesiano: (0,0) = Inferior Izquierda', 10, worldHeight - 40);
+        
+        this.ctx.restore();
+    }
+    
+    /**
+     * Renderiza SOLO la UI de vehículos e iconos del HQ
+     * Se llama después de renderizar todos los nodos para que siempre quede encima
+     */
+    renderVehicleUI(node, game) {
+        if (!node || (!node.active && !node.isAbandoning)) return;
+        
+        // Calcular spriteSize igual que en renderNode
+        let spriteSize = node.radius * 2 * 1.875;
+        if (node.type === 'hq' || node.type === 'fob') {
+            spriteSize *= 0.85;
+        }
+        if (node.type === 'front') {
+            spriteSize *= 0.85;
+        }
+        if (!node.isConstructing && node.sizeMultiplier) {
+            spriteSize *= node.sizeMultiplier;
+        }
+        
+        const isSelected = node === game?.selectedNode;
+        const isHovered = node === game?.hoveredNode;
+        
+        // Renderizar selector de recursos del HQ (SOLO si está seleccionado o en hover)
+        if ((isSelected || isHovered) && node.type === 'hq') {
+            this.renderResourceSelector(node);
+        }
+        
+        // Renderizar contador de vehículos según el tipo de nodo
+        if (node.type === 'hq' && !node.type.startsWith('enemy_')) {
+            // HQ aliado: usa renderHQVehicles
+            this.renderHQVehicles(node);
+        } else if (node.type === 'campaignHospital' && node.constructed && !node.isConstructing) {
+            // Compensar Mirror View si está activo
+            if (this.mirrorViewApplied) {
+                this.ctx.save();
+                this.ctx.translate(node.x, node.y);
+                this.ctx.scale(-1, 1);
+                this.ctx.translate(-node.x, -node.y);
+            }
+            
+            // Hospital de campaña: solo contador de vehículos (sin rango)
+            const vehicleIconSprite = this.assetManager.getSprite('ui-medic-vehicle-icon');
+            const iconSize = 30;
+            const iconX = node.x - iconSize - 10;
+            const iconY = node.y + spriteSize / 2 - 10;
+            
+            if (vehicleIconSprite) {
+                this.ctx.drawImage(vehicleIconSprite, iconX, iconY, iconSize, iconSize);
+            }
+            
+            this.ctx.font = 'bold 18px Arial';
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.strokeStyle = '#000000';
+            this.ctx.lineWidth = 3;
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'middle';
+            
+            const counterText = `${node.availableVehicles}/${node.maxVehicles}`;
+            const textX = iconX + iconSize + 5;
+            const textY = iconY + iconSize / 2;
+            
+            this.ctx.strokeText(counterText, textX, textY);
+            this.ctx.fillText(counterText, textX, textY);
+            
+            // Restaurar Mirror View si está activo
+            if (this.mirrorViewApplied) {
+                this.ctx.restore();
+            }
+        } else if (node.maxVehicles > 0 && node.type !== 'hq' && !node.type.startsWith('enemy_') && node.hasSupplies !== false) {
+            // Compensar Mirror View si está activo
+            if (this.mirrorViewApplied) {
+                this.ctx.save();
+                this.ctx.translate(node.x, node.y);
+                this.ctx.scale(-1, 1);
+                this.ctx.translate(-node.x, -node.y);
+            }
+            
+            // FOBs y otros nodos con vehículos (no HQ, no enemigos)
+            const barWidth = node.radius * 2;
+            const barHeight = 9;
+            const barX = node.x - barWidth / 2;
+            const barY = node.y + node.radius + 20;
+            
+            // Shake si aplica
+            let shakeX = 0;
+            let shakeY = 0;
+            if (node.noVehiclesShake) {
+                const shakeIntensity = 3;
+                const shakeSpeed = 30;
+                shakeX = Math.sin(node.noVehiclesShakeTime * shakeSpeed) * shakeIntensity;
+                shakeY = Math.cos(node.noVehiclesShakeTime * shakeSpeed * 1.5) * shakeIntensity;
+            }
+            
+            const vehicleIconSprite = this.assetManager.getSprite('ui-vehicle-icon');
+            const iconSize = 36;
+            const iconX = node.x + shakeX - 40;
+            const iconY = barY + barHeight + 26 + shakeY - iconSize / 2 - 3;
+            
+            if (vehicleIconSprite) {
+                this.ctx.drawImage(vehicleIconSprite, iconX, iconY, iconSize, iconSize);
+            }
+            
+            const vehicleText = `${node.availableVehicles}/${node.maxVehicles}`;
+            const availableCount = node.availableVehicles;
+            
+            this.ctx.fillStyle = node.noVehiclesShake && availableCount === 0 ? '#e74c3c' : '#fff';
+            this.ctx.font = 'bold 21px monospace';
+            this.ctx.textAlign = 'center';
+            
+            const textX = node.x + shakeX + 15;
+            
+            this.ctx.strokeStyle = '#000000';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeText(vehicleText, textX, barY + barHeight + 26 + shakeY);
+            this.ctx.fillText(vehicleText, textX, barY + barHeight + 26 + shakeY);
+            
+            // Restaurar Mirror View si está activo
+            if (this.mirrorViewApplied) {
+                this.ctx.restore();
+            }
+        }
+    }
+    
+}
