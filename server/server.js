@@ -9,8 +9,29 @@ import { GameStateManager } from './game/GameStateManager.js';
 const app = express();
 const httpServer = createServer(app);
 
-// Configurar CORS
-app.use(cors());
+// Configurar CORS más permisivo para desarrollo
+app.use(cors({
+    origin: true, // Permitir cualquier origen
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// Middleware adicional para CORS
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    
+    // Manejar preflight OPTIONS
+    if (req.method === 'OPTIONS') {
+        res.sendStatus(200);
+        return;
+    }
+    
+    next();
+});
+
 app.use(express.json());
 
 // Servir archivos estáticos del cliente (para ngrok/producción)
@@ -20,12 +41,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, '..')));
 
-// Configurar Socket.IO
+// Configurar Socket.IO con CORS más permisivo
 const io = new Server(httpServer, {
     cors: {
-        origin: "*", // En producción, especificar dominio exacto
-        methods: ["GET", "POST"]
-    }
+        origin: "*", // Permitir cualquier origen para desarrollo
+        methods: ["GET", "POST", "OPTIONS"],
+        allowedHeaders: ["*"],
+        credentials: true
+    },
+    allowEIO3: true // Compatibilidad con versiones anteriores
 });
 
 // Managers
@@ -615,6 +639,8 @@ const server = httpServer.listen(PORT, '0.0.0.0', () => {
     console.log('=====================================');
     console.log(`✅ Servidor corriendo en puerto ${PORT}`);
     console.log(`🌐 http://localhost:${PORT}`);
+    console.log(`🌐 http://0.0.0.0:${PORT}`);
+    console.log('✅ CORS configurado para permitir cualquier origen');
     console.log('=====================================');
 });
 

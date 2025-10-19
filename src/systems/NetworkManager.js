@@ -26,6 +26,9 @@ export class NetworkManager {
         }
         
         console.log('🌐 Server URL detectada:', this.serverUrl);
+        console.log('🌐 Hostname actual:', window.location.hostname);
+        console.log('🌐 Protocolo actual:', window.location.protocol);
+        console.log('🌐 Origen actual:', window.location.origin);
         this.isMultiplayer = false;
     }
     
@@ -55,7 +58,14 @@ export class NetworkManager {
      * Inicializar socket y eventos
      */
     initializeSocket() {
-        this.socket = io(this.serverUrl);
+        // Configurar socket con opciones para resolver problemas CORS
+        this.socket = io(this.serverUrl, {
+            transports: ['polling', 'websocket'],
+            upgrade: true,
+            rememberUpgrade: false,
+            timeout: 20000,
+            forceNew: true
+        });
         
         this.socket.on('connect', () => {
             console.log('✅ Conectado al servidor:', this.socket.id);
@@ -65,6 +75,17 @@ export class NetworkManager {
         this.socket.on('disconnect', () => {
             console.log('❌ Desconectado del servidor');
             this.connected = false;
+        });
+        
+        this.socket.on('connect_error', (error) => {
+            console.error('❌ Error de conexión CORS:', error);
+            console.error('❌ Intenta conectarse a:', this.serverUrl);
+            console.error('❌ Tipo de error:', error.type);
+            console.error('❌ Descripción:', error.description);
+        });
+        
+        this.socket.on('error', (error) => {
+            console.error('❌ Error del socket:', error);
         });
         
         // === EVENTOS DE LOBBY ===
