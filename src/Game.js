@@ -323,10 +323,10 @@ export class Game {
                 this.roadSystem.update();
             }
             
-            // CRÍTICO: Actualizar SOLO posiciones visuales de convoyes (NO progress)
-            // El progress viene del servidor, pero necesitamos calcular x,y para renderizar
+            // CRÍTICO: Actualizar SOLO posiciones visuales de convoyes con interpolación suave
+            // El progress viene del servidor, pero necesitamos interpolar suavemente entre frames
             for (const convoy of this.convoyManager.convoys) {
-                convoy.updatePosition(); // Solo calcular posición visual
+                convoy.updatePosition(dt); // Interpolación suave basada en dt
             }
             
             // CRÍTICO: NO ejecutar simulación en multijugador

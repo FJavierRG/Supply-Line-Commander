@@ -354,6 +354,10 @@ export class NetworkManager {
             const convoy = new Convoy(fromNode, toNode, vehicle, data.vehicleType, cargo);
             convoy.id = data.convoyId; // CRÍTICO: Usar ID del servidor
             
+            // Inicializar sistema de interpolación suave
+            convoy.lastServerUpdate = Date.now();
+            convoy.serverProgress = 0;
+            
             this.game.convoyManager.convoys.push(convoy);
             
             // Reproducir sonido solo si NO es de mi equipo - usar volumen reducido para enemigos
@@ -400,6 +404,10 @@ export class NetworkManager {
             convoy.id = data.convoyId;
             convoy.isMedical = true;
             convoy.targetFrontId = data.targetFrontId;
+            
+            // Inicializar sistema de interpolación suave
+            convoy.lastServerUpdate = Date.now();
+            convoy.serverProgress = 0;
             
             this.game.convoyManager.convoys.push(convoy);
             
@@ -1066,9 +1074,14 @@ export class NetworkManager {
                 const convoy = this.game.convoyManager.convoys.find(c => c.id === convoyData.id);
                 
                 if (convoy) {
-                    // CRÍTICO: Actualizar progress desde el servidor
-                    convoy.progress = convoyData.progress;
-                    convoy.returning = convoyData.returning;
+                    // CRÍTICO: Actualizar progress desde el servidor con interpolación suave
+                    if (convoy.updateServerProgress) {
+                        convoy.updateServerProgress(convoyData.progress, convoyData.returning);
+                    } else {
+                        // Fallback para compatibilidad
+                        convoy.progress = convoyData.progress;
+                        convoy.returning = convoyData.returning;
+                    }
                     convoy.isMedical = convoyData.isMedical || false;
                     convoy.targetFrontId = convoyData.targetFrontId || null;
                 }
