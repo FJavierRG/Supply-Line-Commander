@@ -661,7 +661,9 @@ export class TerritorySystem {
         
         // Detectar si somos player1 (izquierda) o player2 (derecha)
         // Buscar nuestro HQ para saber de qué lado del mapa estamos
-        const myHQ = this.game.nodes.find(n => n.type === 'hq' && n.team === this.game.myTeam);
+        // USAR getBases() para que funcione correctamente en tutorial
+        const bases = this.getBases();
+        const myHQ = bases.find(n => n.type === 'hq' && n.team === this.game.myTeam);
         const isLeftSide = myHQ && myHQ.x < this.game.worldWidth / 2;
         
         if (isLeftSide) {

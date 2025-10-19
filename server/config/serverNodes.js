@@ -7,25 +7,25 @@ export const SERVER_NODE_CONFIG = {
     // COSTOS DE EDIFICIOS
     // ═══════════════════════════════════════════════════════════════
     costs: {
-        fob: 130,
+        fob: 120,
         antiDrone: 115,
         droneLauncher: 100,
         nuclearPlant: 200,
         truckFactory: 100,
-        engineerCenter: 100,
-        campaignHospital: 100
+        engineerCenter: 120,
+        campaignHospital: 60
     },
 
     // ═══════════════════════════════════════════════════════════════
     // TIEMPOS DE CONSTRUCCIÓN (segundos)
     // ═══════════════════════════════════════════════════════════════
     buildTimes: {
-        fob: 2,
+        fob: 4,
         antiDrone: 4.5,
         droneLauncher: 2,
-        nuclearPlant: 2,
+        nuclearPlant: 4,
         truckFactory: 2,
-        engineerCenter: 2,
+        engineerCenter: 4,
         campaignHospital: 2
     },
 
@@ -77,7 +77,7 @@ export const SERVER_NODE_CONFIG = {
     vehicles: {
         truck: {
             baseCapacity: 15,
-            speed: 100 // px/s
+            speed: 120 // px/s
         },
         heavy_truck: {
             baseCapacity: 15,  // Base, se le suma el bonus de truckFactory
@@ -92,7 +92,7 @@ export const SERVER_NODE_CONFIG = {
     // RANGOS
     // ═══════════════════════════════════════════════════════════════
     ranges: {
-        campaignHospital: 260 // px - rango de acción del hospital
+        campaignHospital: 240 // px - rango de acción del hospital
     }
 };
 

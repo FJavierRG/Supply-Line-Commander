@@ -6,11 +6,14 @@ export const GAME_CONFIG = {
     // CONFIGURACIÓN DE PARTIDA
     // ═══════════════════════════════════════════════════════════════
     match: {
-        duration: 520,        // Duración máxima de partida (segundos)
+        duration: 520,        // Duración máxima de partida (segundos) Legacy
         countdown: 3,         // Countdown antes de empezar (segundos)
         tickRate: 10,         // Ticks por segundo (TPS) - Optimización: reducido de 20 a 10
         worldWidth: 1920,     // Ancho del mundo (px)
-        worldHeight: 1080     // Alto del mundo (px)
+        worldHeight: 1080,    // Alto del mundo (px)
+        // Líneas de victoria (15% y 85% del ancho de pantalla)
+        victoryLineLeft: 0.15,    // 15% del ancho = línea de victoria para player2
+        victoryLineRight: 0.85     // 85% del ancho = línea de victoria para player1
     },
 
     // ═══════════════════════════════════════════════════════════════

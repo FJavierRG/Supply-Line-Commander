@@ -2,6 +2,8 @@
 // Este sistema se ejecuta SOLO en el servidor
 // El cliente solo renderiza las posiciones que el servidor envía
 
+import { GAME_CONFIG } from '../config/gameConfig.js';
+
 // Configuración de movimiento
 const MOVEMENT_CONFIG = {
     advanceSpeed: 8,   // Píxeles por segundo
@@ -252,42 +254,47 @@ export class FrontMovementSystemServer {
         const player1Frontier = this.calculateFrontier('player1', player1Fronts);
         const player2Frontier = this.calculateFrontier('player2', player2Fronts);
         
-        // CONDICIÓN 1: VICTORIA ACTIVA - Tu frente empuja hasta el HQ enemigo
-        // VICTORIA PLAYER1: Algún frente player1 alcanza 100px antes del HQ player2
+        // Calcular líneas de victoria basadas en porcentajes (15% y 85% del ancho)
+        const worldWidth = GAME_CONFIG.match.worldWidth;
+        const victoryLineLeft = GAME_CONFIG.match.victoryLineLeft * worldWidth;  // 15% = 288px
+        const victoryLineRight = GAME_CONFIG.match.victoryLineRight * worldWidth; // 85% = 1632px
+        
+        // CONDICIÓN 1: VICTORIA ACTIVA - Tu frente empuja hasta la línea de victoria
+        // VICTORIA PLAYER1: Algún frente player1 alcanza el 85% del ancho (1632px)
         for (const front of player1Fronts) {
-            if (front.x >= player2HQ.x - 100) {
-                console.log('🎉 VICTORIA PLAYER1: Frente alcanzó HQ enemigo');
+            if (front.x >= victoryLineRight) {
+                console.log(`🎉 VICTORIA PLAYER1: Frente alcanzó línea de victoria (${(victoryLineRight).toFixed(0)}px = ${(GAME_CONFIG.match.victoryLineRight * 100).toFixed(0)}%)`);
                 return { winner: 'player1', reason: 'front_reached_hq' };
             }
         }
         
-        // VICTORIA PLAYER2: Algún frente player2 alcanza 100px antes del HQ player1
+        // VICTORIA PLAYER2: Algún frente player2 alcanza el 15% del ancho (288px)
         for (const front of player2Fronts) {
-            if (front.x <= player1HQ.x + 100) {
-                console.log('🎉 VICTORIA PLAYER2: Frente alcanzó HQ enemigo');
+            if (front.x <= victoryLineLeft) {
+                console.log(`🎉 VICTORIA PLAYER2: Frente alcanzó línea de victoria (${(victoryLineLeft).toFixed(0)}px = ${(GAME_CONFIG.match.victoryLineLeft * 100).toFixed(0)}%)`);
                 return { winner: 'player2', reason: 'front_reached_hq' };
             }
         }
         
-        // CONDICIÓN 2: VICTORIA PASIVA - La frontera enemiga retrocede hasta su HQ
+        // CONDICIÓN 2: VICTORIA PASIVA - La frontera enemiga retrocede hasta las líneas de victoria
         // DEBUG: Log cada 5 segundos
         if (!this._lastFrontierLog || Date.now() - this._lastFrontierLog > 5000) {
             console.log(`🔍 Fronteras: P1=${player1Frontier?.toFixed(0) || 'null'} (HQ=${player1HQ.x.toFixed(0)}) | P2=${player2Frontier?.toFixed(0) || 'null'} (HQ=${player2HQ.x.toFixed(0)})`);
-            console.log(`🔍 Condiciones: P1_retreat=${player1Frontier <= player1HQ.x + 100} | P2_retreat=${player2Frontier >= player2HQ.x - 100}`);
+            console.log(`🔍 Líneas victoria: Izquierda=${(victoryLineLeft).toFixed(0)}px (${(GAME_CONFIG.match.victoryLineLeft * 100)}%) | Derecha=${(victoryLineRight).toFixed(0)}px (${(GAME_CONFIG.match.victoryLineRight * 100)}%)`);
             this._lastFrontierLog = Date.now();
         }
         
-        // DERROTA PLAYER1: Su frontera retrocede hasta su HQ (victoria para player2)
-        if (player1Frontier !== null && player1Frontier <= player1HQ.x + 100) {
-            console.log('🎉 VICTORIA PLAYER2: Frontera de player1 retrocedió hasta su HQ');
-            console.log(`   Frontera P1: ${player1Frontier.toFixed(0)} | HQ P1: ${player1HQ.x.toFixed(0)} | Límite: ${(player1HQ.x + 100).toFixed(0)}`);
+        // DERROTA PLAYER1: Su frontera retrocede hasta la línea del 15% (victoria para player2)
+        if (player1Frontier !== null && player1Frontier <= victoryLineLeft) {
+            console.log(`🎉 VICTORIA PLAYER2: Frontera de player1 retrocedió hasta línea de victoria (${(victoryLineLeft).toFixed(0)}px = ${(GAME_CONFIG.match.victoryLineLeft * 100)}%)`);
+            console.log(`   Frontera P1: ${player1Frontier.toFixed(0)} | Límite: ${(victoryLineLeft).toFixed(0)}`);
             return { winner: 'player2', reason: 'frontier_collapsed' };
         }
         
-        // DERROTA PLAYER2: Su frontera retrocede hasta su HQ (victoria para player1)
-        if (player2Frontier !== null && player2Frontier >= player2HQ.x - 100) {
-            console.log('🎉 VICTORIA PLAYER1: Frontera de player2 retrocedió hasta su HQ');
-            console.log(`   Frontera P2: ${player2Frontier.toFixed(0)} | HQ P2: ${player2HQ.x.toFixed(0)} | Límite: ${(player2HQ.x - 100).toFixed(0)}`);
+        // DERROTA PLAYER2: Su frontera retrocede hasta la línea del 85% (victoria para player1)
+        if (player2Frontier !== null && player2Frontier >= victoryLineRight) {
+            console.log(`🎉 VICTORIA PLAYER1: Frontera de player2 retrocedió hasta línea de victoria (${(victoryLineRight).toFixed(0)}px = ${(GAME_CONFIG.match.victoryLineRight * 100)}%)`);
+            console.log(`   Frontera P2: ${player2Frontier.toFixed(0)} | Límite: ${(victoryLineRight).toFixed(0)}`);
             return { winner: 'player1', reason: 'frontier_collapsed' };
         }
         

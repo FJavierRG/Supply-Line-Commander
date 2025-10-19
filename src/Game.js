@@ -832,11 +832,7 @@ export class Game {
         // Detener todos los sonidos
         this.audio.stopAllSounds();
         
-        // Ocultar botón de debug y panel
-        const debugBtn = document.getElementById('toggle-debug-btn');
-        const debugPanel = document.getElementById('debug-antidrone-panel');
-        if (debugBtn) debugBtn.style.display = 'none';
-        if (debugPanel) debugPanel.style.display = 'none';
+        // Desactivar modos debug
         this.debugMode = false;
         this.debugEnemyBuildMode = false;
         this.debugEnemyDroneMode = false;

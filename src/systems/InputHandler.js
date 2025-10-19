@@ -122,21 +122,6 @@ export class InputHandler {
         //     this.toggleDebugMode();
         // });
         
-        this.setupButton('debug-toggle-enemy-build-btn', () => {
-            this.toggleEnemyBuildMode();
-        });
-        
-        this.setupButton('debug-launch-enemy-drone-btn', () => {
-            this.launchEnemyDrone();
-        });
-        
-        this.setupButton('debug-launch-enemy-sniper-btn', () => {
-            this.launchEnemySniper();
-        });
-        
-        this.setupButton('debug-show-info-btn', () => {
-            this.showDebugInfo();
-        });
     }
     
     /**
@@ -284,7 +269,6 @@ export class InputHandler {
                 console.log(`💣 Dron ENEMIGO lanzado hacia ${target.type || target.name} en (${target.x.toFixed(0)}, ${target.y.toFixed(0)})`);
                 // Desactivar modo tras lanzar
                 this.game.debugEnemyDroneMode = false;
-                this.updateDebugDroneButton();
             } else {
                 console.log('⚠️ Selecciona un objetivo válido (base o edificio)');
             }
@@ -302,7 +286,6 @@ export class InputHandler {
                 console.log(`🎯 DEBUG: Sniper enemigo ejecutado (usa lógica de IA)`);
                 // Desactivar modo tras lanzar
                 this.game.debugEnemySniperMode = false;
-                this.updateDebugSniperButton();
             } else {
                 console.log('⚠️ Selecciona un FRENTE ALIADO (tipo "front")');
             }
@@ -634,7 +617,6 @@ export class InputHandler {
             // Si está en modo construcción enemiga, cancelar
             if (this.game.debugEnemyBuildMode) {
                 this.game.debugEnemyBuildMode = false;
-                this.toggleEnemyBuildMode(); // Actualizar botón
                 console.log('✅ MODO DEBUG: Construcción enemiga cancelada');
                 return;
             }
@@ -642,7 +624,6 @@ export class InputHandler {
             // Si está en modo dron enemigo, cancelar
             if (this.game.debugEnemyDroneMode) {
                 this.game.debugEnemyDroneMode = false;
-                this.updateDebugDroneButton();
                 console.log('✅ MODO DEBUG: Lanzamiento de dron enemigo cancelado');
                 return;
             }
@@ -650,7 +631,6 @@ export class InputHandler {
             // Si está en modo sniper enemigo, cancelar
             if (this.game.debugEnemySniperMode) {
                 this.game.debugEnemySniperMode = false;
-                this.updateDebugSniperButton();
                 console.log('✅ MODO DEBUG: Sniper enemigo cancelado');
                 return;
             }
@@ -658,11 +638,6 @@ export class InputHandler {
             this.game.togglePause();
         }
         
-        // F1 para toggle debug mode
-        if (e.key === 'F1') {
-            e.preventDefault();
-            this.toggleDebugMode();
-        }
         
         // Comandos de debug para testear sistema anti-drones
         if (this.game.debugMode && this.game.state === 'playing') {
@@ -1061,155 +1036,7 @@ export class InputHandler {
         console.log(`🔴 Torreta anti-drone ENEMIGA colocada en (${x.toFixed(0)}, ${y.toFixed(0)})`);
     }
     
-    /**
-     * Toggle modo debug
-     */
-    toggleDebugMode() {
-        this.game.debugMode = !this.game.debugMode;
-        
-        const debugBtn = document.getElementById('toggle-debug-btn');
-        const debugPanel = document.getElementById('debug-antidrone-panel');
-        
-        if (this.game.debugMode) {
-            console.log('🐛 Modo debug: ACTIVADO');
-            if (debugBtn) debugBtn.style.background = 'rgba(0, 255, 0, 0.9)';
-            if (debugPanel) debugPanel.style.display = 'block';
-        } else {
-            console.log('🐛 Modo debug: DESACTIVADO');
-            if (debugBtn) debugBtn.style.background = 'rgba(255, 102, 0, 0.9)';
-            if (debugPanel) debugPanel.style.display = 'none';
-            // Desactivar modos de construcción/dron/sniper si estaban activos
-            if (this.game.debugEnemyBuildMode) {
-                this.game.debugEnemyBuildMode = false;
-                this.toggleEnemyBuildMode();
-            }
-            if (this.game.debugEnemyDroneMode) {
-                this.game.debugEnemyDroneMode = false;
-                this.updateDebugDroneButton();
-            }
-            if (this.game.debugEnemySniperMode) {
-                this.game.debugEnemySniperMode = false;
-                this.updateDebugSniperButton();
-            }
-        }
-    }
     
-    /**
-     * Toggle modo construcción de torretas enemigas
-     */
-    toggleEnemyBuildMode() {
-        this.game.debugEnemyBuildMode = !this.game.debugEnemyBuildMode;
-        
-        const btn = document.getElementById('debug-toggle-enemy-build-btn');
-        
-        if (this.game.debugEnemyBuildMode) {
-            console.log('🔴 MODO: Colocar torretas ENEMIGAS (click en mapa)');
-            if (btn) {
-                btn.style.background = 'rgba(255, 0, 0, 0.8)';
-                btn.style.borderColor = '#ff0000';
-                btn.textContent = '✅ Modo Activo (ESC cancela)';
-            }
-        } else {
-            console.log('✅ MODO: Construcción enemiga desactivada');
-            if (btn) {
-                btn.style.background = 'rgba(255, 0, 0, 0.3)';
-                btn.style.borderColor = '#ff0000';
-                btn.textContent = '🔴 Colocar Torreta Enemiga';
-            }
-        }
-    }
-    
-    /**
-     * Activa modo de selección para lanzar dron enemigo
-     */
-    launchEnemyDrone() {
-        this.game.debugEnemyDroneMode = !this.game.debugEnemyDroneMode;
-        this.updateDebugDroneButton();
-        
-        if (this.game.debugEnemyDroneMode) {
-            console.log('💣 MODO: Selecciona objetivo para dron enemigo (click en base/edificio)');
-        } else {
-            console.log('✅ MODO: Lanzamiento de dron enemigo cancelado');
-        }
-    }
-    
-    /**
-     * Actualiza el botón de lanzar dron enemigo
-     */
-    updateDebugDroneButton() {
-        const btn = document.getElementById('debug-launch-enemy-drone-btn');
-        if (!btn) return;
-        
-        if (this.game.debugEnemyDroneMode) {
-            btn.style.background = 'rgba(255, 100, 0, 0.8)';
-            btn.style.borderColor = '#ff6400';
-            btn.textContent = '✅ Selecciona Objetivo';
-        } else {
-            btn.style.background = 'rgba(255, 100, 0, 0.3)';
-            btn.style.borderColor = '#ff6400';
-            btn.textContent = '💣 Lanzar Dron Enemigo';
-        }
-    }
-    
-    /**
-     * Activa modo de selección para lanzar sniper enemigo (usa la lógica de la IA)
-     */
-    launchEnemySniper() {
-        this.game.debugEnemySniperMode = !this.game.debugEnemySniperMode;
-        this.updateDebugSniperButton();
-        
-        if (this.game.debugEnemySniperMode) {
-            console.log('🎯 MODO: Click en frente aliado para ejecutar sniper enemigo (usa lógica IA)');
-        } else {
-            console.log('✅ MODO: Sniper enemigo cancelado');
-        }
-    }
-    
-    /**
-     * Actualiza el botón de lanzar sniper enemigo
-     */
-    updateDebugSniperButton() {
-        const btn = document.getElementById('debug-launch-enemy-sniper-btn');
-        if (!btn) return;
-        
-        if (this.game.debugEnemySniperMode) {
-            btn.style.background = 'rgba(180, 0, 255, 0.8)';
-            btn.style.borderColor = '#b400ff';
-            btn.textContent = '✅ Click en Frente Aliado';
-        } else {
-            btn.style.background = 'rgba(180, 0, 255, 0.3)';
-            btn.style.borderColor = '#b400ff';
-            btn.textContent = '🎯 Lanzar Sniper Enemigo';
-        }
-    }
-    
-    /**
-     * Muestra información del sistema anti-drones y estadísticas de la IA
-     */
-    showDebugInfo() {
-        const info = this.game.antiDroneSystem.getDebugInfo();
-        console.log('📊 === SISTEMA ANTI-DRONES ===');
-        console.log('Torretas activas:', info.activeBuildings);
-        console.log('Rango detección:', info.defaultDetectionRange + 'px');
-        console.log('Torretas en cooldown:', info.buildingsOnCooldown);
-        
-        const drones = this.game.droneSystem.getDrones();
-        console.log('📊 === DRONES ACTIVOS ===');
-        console.log('Total:', drones.length);
-        drones.forEach((d, i) => {
-            console.log(`  ${i+1}. ${d.isEnemy ? 'ENEMIGO' : 'ALIADO'} en (${d.x.toFixed(0)}, ${d.y.toFixed(0)}) → ${d.target?.type || 'sin objetivo'}`);
-        });
-        
-        const aiStats = this.game.enemyAI.getStats();
-        console.log('📊 === ESTADÍSTICAS IA ENEMIGA ===');
-        console.log('Currency IA:', this.game.enemyAI.getCurrency() + '$');
-        console.log('Decisiones totales:', aiStats.decisions);
-        console.log('Suministros enviados:', aiStats.suppliesSent);
-        console.log('Ambulancias enviadas:', aiStats.medicsSent);
-        console.log('Edificios construidos:', aiStats.buildingsBuilt);
-        console.log('Drones lanzados:', aiStats.dronesLaunched);
-        console.log('Snipers lanzados:', aiStats.snipersLaunched);
-    }
     
     // ===== FUNCIONES DE LOBBY MULTIJUGADOR =====
     

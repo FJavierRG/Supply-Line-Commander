@@ -201,6 +201,12 @@ export class BuildingSystem {
             // En tutorial, agregar al array de nodos del tutorial
             if (this.game.state === 'tutorial' && this.game.tutorialManager?.tutorialNodes) {
                 this.game.tutorialManager.tutorialNodes.push(newNode);
+                
+                // Tutorial: Hardcodear FOB con 0 suministros (aislado del resto del juego)
+                if (buildingId === 'fob') {
+                    newNode.supplies = 0;
+                    console.log('🎓 Tutorial: FOB construido con 0 suministros');
+                }
             } else {
                 this.game.nodes.push(newNode);
             }

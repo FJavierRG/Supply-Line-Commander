@@ -85,7 +85,7 @@ export class TutorialManager {
         this.textBoxElement.style.cssText = `
             position: fixed;
             top: 50px;
-            left: 50%;
+            left: calc(50% + 50px);
             transform: translateX(-50%);
             width: 500px;
             padding: 30px;
@@ -337,26 +337,39 @@ export class TutorialManager {
                 const offsetX = step.spotlightOffsetX || 0;
                 const offsetY = step.spotlightOffsetY || 0;
                 
+                // Obtener escalado del canvas una sola vez
+                const canvas = this.game.canvas;
+                const scaleX = canvas.offsetWidth / canvas.width;
+                const scaleY = canvas.offsetHeight / canvas.height;
+                
                 // Convertir coordenadas del mundo a coordenadas de pantalla
                 const screenPos = this.worldToScreen(target.x, target.y);
                 
-                // Aplicar offsets específicos del paso
-                const finalX = screenPos.x + offsetX;
-                const finalY = screenPos.y + offsetY;
+                // Escalar el radio para mantener proporción
+                const scaledRadius = radius * Math.min(scaleX, scaleY);
+                
+                // Aplicar offsets específicos del paso (escalados)
+                const finalX = screenPos.x + (offsetX * scaleX);
+                // Añadir offset hacia abajo del 30% del diámetro escalado
+                const diameterOffset = scaledRadius * 2 * 0.30; // 30% del diámetro hacia abajo
+                const finalY = screenPos.y + (offsetY * scaleY) + diameterOffset;
+                
+                // Calcular radio del borde (ya tenemos scaledRadius)
+                const scaledBorderRadius = (radius + 5) * Math.min(scaleX, scaleY);
                 
                 // Usar globalCompositeOperation para "cortar" el spotlight
                 ctx.globalCompositeOperation = 'destination-out';
                 ctx.beginPath();
-                ctx.arc(finalX, finalY, radius, 0, Math.PI * 2);
+                ctx.arc(finalX, finalY, scaledRadius, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.globalCompositeOperation = 'source-over';
                 
-                // Borde brillante alrededor del spotlight
+                // Borde brillante alrededor del spotlight (también escalado)
                 ctx.strokeStyle = '#ffcc00';
-                ctx.lineWidth = 3;
+                ctx.lineWidth = 3 * Math.min(scaleX, scaleY); // Escalar grosor del borde
                 ctx.setLineDash([8, 4]);
                 ctx.beginPath();
-                ctx.arc(finalX, finalY, radius + 5, 0, Math.PI * 2);
+                ctx.arc(finalX, finalY, scaledBorderRadius, 0, Math.PI * 2);
                 ctx.stroke();
                 ctx.setLineDash([]);
             }
@@ -365,14 +378,27 @@ export class TutorialManager {
     
     /**
      * Convierte coordenadas del mundo a coordenadas de pantalla
+     * Considera el escalado CSS del canvas y su posición real en la página
      */
     worldToScreen(worldX, worldY) {
-        // Simplemente usar las coordenadas directamente
-        // El nodo está en el canvas del juego, el spotlight está en coordenadas de ventana
-        // Como el canvas del juego ocupa toda la ventana, las coordenadas coinciden
+        const canvas = this.game.canvas;
+        
+        // 1. Aplicar transformación de cámara (aunque esté fija, puede tener offset)
+        const cameraPos = this.game.camera.worldToScreen(worldX, worldY);
+        
+        // 2. Obtener escalado CSS del canvas
+        // canvas.width/height = resolución interna fija (1920x1080)
+        // canvas.offsetWidth/Height = tamaño visual en pantalla
+        const scaleX = canvas.offsetWidth / canvas.width;
+        const scaleY = canvas.offsetHeight / canvas.height;
+        
+        // 3. Obtener posición del canvas en la página
+        const canvasRect = canvas.getBoundingClientRect();
+        
+        // 4. Aplicar transformaciones: coordenadas del mundo → CSS → posición en ventana
         return {
-            x: worldX,
-            y: worldY
+            x: canvasRect.left + (cameraPos.x * scaleX),
+            y: canvasRect.top + (cameraPos.y * scaleY)
         };
     }
     

@@ -41,6 +41,8 @@ export class EnemyAISystem {
         this.playerLastAction = null; // { type: 'drone'|'antiDrone'|'nuclearPlant'|'hospital', target: {x, y}, timestamp: Date.now() }
         this.playerLastDroneTime = 0; // Timestamp del último dron del jugador
         this.lastInitiativeTime = 0; // Cooldown para iniciativa
+        this.lastDroneLaunchTime = 0; // Timestamp del último dron lanzado por la IA
+        this.hasLaunchedDroneRecently = false; // Flag para evaluar necesidades estratégicas
         
         // Tracking de emergencias médicas atendidas (para no enviar múltiples ambulancias)
         this.medicalEmergenciesHandled = new Set(); // frontIds de emergencias ya atendidas
@@ -401,6 +403,11 @@ export class EnemyAISystem {
      * @param {string} buildingType - Tipo de edificio ('nuclearPlant' o 'campaignHospital')
      */
     reactToDroneableTarget(targetPos, buildingType) {
+        // EVALUAR NECESIDADES ESTRATÉGICAS: ¿Debería construir algo antes?
+        if (this.shouldBuildBeforeDrone()) {
+            return; // Construyó algo, no lanzar dron reactivo esta vez
+        }
+        
         // Verificar si tiene lanzadera
         if (!this.hasDroneLauncher()) {
             if (this.debugMode) {
@@ -432,6 +439,8 @@ export class EnemyAISystem {
         this.game.droneSystem.launchDrone(droneStartX, droneStartY, target, 'enemy');
         this.currency -= droneConfig.cost;
         this.stats.dronesLaunched++;
+        this.lastDroneLaunchTime = Date.now(); // Actualizar timestamp del último dron
+        this.hasLaunchedDroneRecently = true; // Marcar que lanzó un dron recientemente
         
         const threatType = buildingType === 'nuclearPlant' ? 'Planta' : 'Hospital';
         console.log(`🤖 IA: 🚁 DRON REACTIVO → ${threatType} destruido | ${this.currency}$ restantes`);
@@ -459,7 +468,7 @@ export class EnemyAISystem {
             targetNode.x + Math.random() * 80 - 50, // Pequeña variación para no ser exacto
             targetNode.y + Math.random() * 60 - 40,
             'antiDrone',
-            { isConstructed: true, team: 'enemy' }
+            { isConstructed: true, team: 'player2' }
         );
         
         if (antiDrone) {
@@ -493,7 +502,7 @@ export class EnemyAISystem {
         const mirrorY = targetPos.y; // Misma Y
         
         // Determinar el tipo a usar para construcción
-        // antiDrone tiene enemy_antiDrone, pero nuclearPlant y campaignHospital usan el mismo tipo con team: 'enemy'
+        // antiDrone tiene enemy_antiDrone, pero nuclearPlant y campaignHospital usan el mismo tipo con team: 'player2'
         const typeToUse = buildingType === 'antiDrone' ? 'enemy_antiDrone' : buildingType;
         
         // Crear edificio enemigo
@@ -501,7 +510,7 @@ export class EnemyAISystem {
             mirrorX,
             mirrorY,
             typeToUse,
-            { isConstructed: true, team: 'enemy' }
+            { isConstructed: true, team: 'player2' }
         );
         
         if (building) {
@@ -721,7 +730,7 @@ export class EnemyAISystem {
         }
         
         // Buscar frentes aliados
-        const allyFronts = this.game.nodes.filter(n => n.type === 'front' && n.constructed);
+        const allyFronts = this.game.nodes.filter(n => n.type === 'front' && n.team === 'ally' && n.constructed);
         if (allyFronts.length === 0) {
             console.log(`🤖 IA: [HARASS] ❌ CANCELADO - No hay frentes aliados`);
             return;
@@ -928,7 +937,7 @@ export class EnemyAISystem {
         }
         
         // Buscar frentes aliados como objetivos
-        const allyFronts = this.game.nodes.filter(n => n.type === 'front' && n.constructed);
+        const allyFronts = this.game.nodes.filter(n => n.type === 'front' && n.team === 'ally' && n.constructed);
         if (allyFronts.length === 0) {
             console.log(`🤖 IA: [SNIPER] ❌ CANCELADO - No hay frentes aliados disponibles`);
             return;
@@ -1005,7 +1014,7 @@ export class EnemyAISystem {
         // Crear lanzadera enemiga
         const launcher = this.game.baseFactory.createBase(mirrorX, mirrorY, 'droneLauncher', {
             isEnemy: true,
-            team: 'enemy',
+            team: 'player2',
             isConstructed: true  // Construida inmediatamente
         });
         
@@ -1023,10 +1032,68 @@ export class EnemyAISystem {
     }
     
     /**
+     * Evalúa si la IA debería construir algo estratégico antes de lanzar otro dron
+     * @returns {boolean} true si encontró algo que construir, false si puede lanzar dron
+     */
+    shouldBuildBeforeDrone() {
+        if (!this.hasLaunchedDroneRecently) return false; // Solo evaluar después de lanzar un dron
+        
+        const enemyFOBs = this.getEnemyFOBs();
+        const enemyNuclearPlants = this.game.nodes.filter(n => 
+            n.type === 'nuclearPlant' && 
+            n.team === 'player2' &&
+            n.constructed && 
+            !n.isConstructing
+        );
+        
+        const droneConfig = getNodeConfig('drone');
+        const fobConfig = getNodeConfig('fob');
+        const nuclearConfig = getNodeConfig('nuclearPlant');
+        
+        // PRIORIDAD 1: Construir FOB si tiene pocos (menos de 2) y currency suficiente
+        if (fobConfig && 
+            this.currency >= fobConfig.cost + 50 && // Currency para FOB + margen
+            enemyFOBs.length < 2) {
+            
+            console.log(`🤖 IA: [ESTRATÉGICO] 🔨 Construyendo FOB antes del siguiente dron (FOBs: ${enemyFOBs.length})`);
+            this.buildStrategicFOB();
+            this.hasLaunchedDroneRecently = false; // Reset flag
+            return true;
+        }
+        
+        // PRIORIDAD 2: Construir planta nuclear si tiene pocas (menos de 2) y currency suficiente
+        if (nuclearConfig && 
+            this.currency >= nuclearConfig.cost + 50 && // Currency para planta + margen
+            enemyNuclearPlants.length < 2) {
+            
+            console.log(`🤖 IA: [ESTRATÉGICO] ⚡ Construyendo planta nuclear antes del siguiente dron (Plantas: ${enemyNuclearPlants.length})`);
+            this.buildNuclearPlant();
+            this.hasLaunchedDroneRecently = false; // Reset flag
+            return true;
+        }
+        
+        // PRIORIDAD 3: Construir lanzadera si no tiene y tiene currency
+        if (!this.hasDroneLauncher() && this.currency >= 200) {
+            console.log(`🤖 IA: [ESTRATÉGICO] 🚀 Construyendo lanzadera antes del siguiente dron`);
+            this.attemptDroneLauncherConstruction();
+            this.hasLaunchedDroneRecently = false; // Reset flag
+            return true;
+        }
+        
+        // No hay necesidades estratégicas urgentes, puede lanzar dron
+        return false;
+    }
+
+    /**
      * Intenta lanzar un dron si tiene currency suficiente
      * Selecciona el objetivo más valioso estratégicamente
      */
     attemptDroneLaunch() {
+        // EVALUAR NECESIDADES ESTRATÉGICAS: ¿Debería construir algo antes?
+        if (this.shouldBuildBeforeDrone()) {
+            return; // Construyó algo, intentar dron en el siguiente ciclo
+        }
+        
         // Verificar si tiene lanzadera
         if (!this.hasDroneLauncher()) {
             if (this.debugMode) {
@@ -1071,6 +1138,8 @@ export class EnemyAISystem {
         this.game.droneSystem.launchDrone(droneStartX, droneStartY, bestTarget, 'enemy');
         this.currency -= droneConfig.cost;
         this.stats.dronesLaunched++;
+        this.lastDroneLaunchTime = Date.now(); // Actualizar timestamp del último dron
+        this.hasLaunchedDroneRecently = true; // Marcar que lanzó un dron recientemente
         
         console.log(`🤖 IA: 🚁 DRON lanzado → ${bestTarget.name} | ${this.currency}$ restantes`);
     }
@@ -1317,7 +1386,7 @@ export class EnemyAISystem {
             posX,
             posY,
             'nuclearPlant',
-            { isConstructed: true, team: 'enemy' }
+            { isConstructed: true, team: 'player2' }
         );
         
         if (plant) {
@@ -1490,9 +1559,9 @@ export class EnemyAISystem {
      */
     analyzeGameState() {
         const enemyFOBs = this.getEnemyFOBs();
-        const allyFOBs = this.game.nodes.filter(n => n.type === 'fob' && n.constructed);
+        const allyFOBs = this.game.nodes.filter(n => n.type === 'fob' && n.team === 'ally' && n.constructed);
         const enemyFronts = this.getEnemyFronts();
-        const allyFronts = this.game.nodes.filter(n => n.type === 'front' && n.constructed);
+        const allyFronts = this.game.nodes.filter(n => n.type === 'front' && n.team === 'ally' && n.constructed);
         
         // === FACTOR 1: Número de FOBs ===
         let fobScore = 0;
@@ -1841,7 +1910,7 @@ export class EnemyAISystem {
         
         // Crear la Truck Factory enemiga usando BaseFactory
         const truckFactory = this.game.baseFactory.createBase(x, y, 'truckFactory', {
-            team: 'enemy',
+            team: 'player2',
             isConstructed: false // Se crea sin construcción para que se ejecute la lógica
         });
         
@@ -1894,6 +1963,8 @@ export class EnemyAISystem {
         this.playerLastAction = null;
         this.playerLastDroneTime = 0;
         this.lastInitiativeTime = 0;
+        this.lastDroneLaunchTime = 0;
+        this.hasLaunchedDroneRecently = false;
         this.resetStats();
         
         // Log de inicio
@@ -1901,6 +1972,7 @@ export class EnemyAISystem {
         console.log('📊 Intervalos: FOBs(2s) | Frentes(3s) | Reacción(instantánea) | Harass(25s) | Emergencia FOB(3s) | Ataque(40s) | Construcción(8s)');
         console.log('💰 Currency inicial: 0$ (tasa: 3$/s - Jugador: 2$/s) - IA tiene +1$/s de ventaja');
         console.log('🎯 Reacciones económicas: SIN MARGEN (trade directo 175$ dron vs edificio)');
+        console.log('🚁 Evaluación estratégica: Antes de lanzar drones, evalúa necesidades de construcción');
         console.log('🏥 Sistema médico: Emergencias aleatorias por MedicalEmergencySystem (global)');
     }
 }
