@@ -844,8 +844,9 @@ export class GameStateManager {
         const state = {
             tick: this.tickCounter,
             gameTime: this.gameTime,
-            nodes: isInitialSync ? this.serializeAllNodes() : this.serializeNodes(),
-            convoys: isInitialSync ? this.serializeAllConvoys() : this.serializeConvoys(),
+            // SIEMPRE enviar todos los nodos activos - la optimización está en la frecuencia, no en filtrar nodos
+            nodes: this.serializeAllNodes(),
+            convoys: this.serializeAllConvoys(), // También todos los convoyes
             drones: this.droneSystem.getDrones(), // Drones activos con posiciones
             emergencies: this.medicalSystem.getEmergencies(),
             currency: {
