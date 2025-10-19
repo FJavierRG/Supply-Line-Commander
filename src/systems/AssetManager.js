@@ -12,7 +12,7 @@ export class AssetManager {
             // Bases (solo las que se usan)
             'base-hq': 'assets/sprites/bases/HQ.png',
             'base-fob': 'assets/sprites/bases/FOB.png',
-            'base-front': 'assets/sprites/bases/FRONT.png',
+            'base-front': 'assets/sprites/bases/front.png',
             'base-front-no-ammo': 'assets/sprites/bases/front_no_ammo.png',
             // Sprites enemigos (usados dinámicamente según team)
             'base-enemy-front': 'assets/sprites/bases/front_enemy.png',

@@ -11,7 +11,7 @@ export class AudioManager {
         
         // Pool de sonidos activos para permitir múltiples simultáneos
         this.activeDroneSounds = new Map(); // droneId -> Audio instance
-        this.soundInstances = []; // Array de todas las instancias de audio activas
+        this.soundInstances = []; // Array de objetos {audio, src} para todas las instancias de audio activas
         
         // Timers para sonidos ambientales
         this.clearShootsTimer = 0;
@@ -45,7 +45,9 @@ export class AudioManager {
             bomShoot: 0.3, // Sonido de disparo anti-drone (-25% de 0.4)
             antiDroneSpawn: 0.2625, // Sonido al construir anti-drone (-25% de 0.35)
             antiDroneAttack: 0.3, // Sonido de alerta de ataque anti-drone (-25% de 0.4)
-            sniperSpotted: 0.84 // Sonido de francotirador detectando objetivo (+110%)
+            sniperSpotted: 0.84, // Sonido de francotirador detectando objetivo (+110%)
+            sniperShoot: 0.1, // Sonido de disparo de francotirador
+            menuHover: 0.4 // Sonido de hover en botones de menú
         };
         
         this.loadSounds();
@@ -96,7 +98,7 @@ export class AudioManager {
         
         // Sonido de francotirador
         this.sounds.sniperSpotted = this.createAudio('assets/sounds/normalized/sniper_spotted_normalized.wav', this.volumes.sniperSpotted, false);
-        this.sounds.sniperShoot = this.createAudio('assets/sounds/normalized/sniper_shoot.wav', 0.1, false); // 50% del volumen anterior
+        this.sounds.sniperShoot = this.createAudio('assets/sounds/normalized/sniper_shoot.wav', this.volumes.sniperShoot, false);
         
         // Música de menú
         this.music.mainTheme = this.createAudio('assets/sounds/normalized/main_theme.wav', this.volumes.mainTheme, true); // Loop activado
@@ -105,7 +107,7 @@ export class AudioManager {
         this.music.victoryMarch = this.createAudio('assets/sounds/normalized/Victory-March.wav', this.volumes.victoryMarch, false); // Sin loop
         
         // Sonido de hover en menú
-        this.sounds.menuHover = this.createAudio('assets/sounds/normalized/menu_choice.wav', 0.4, false);
+        this.sounds.menuHover = this.createAudio('assets/sounds/normalized/menu_choice.wav', this.volumes.menuHover, false);
     }
     
     createAudio(src, volume, loop) {
@@ -116,25 +118,71 @@ export class AudioManager {
     }
     
     /**
+     * Encuentra el volumen actual configurado para un sonido basado en la ruta del archivo
+     * @param {string} src - Ruta del archivo de audio
+     * @param {number} defaultVolume - Volumen por defecto si no se encuentra mapeo
+     * @returns {number} Volumen actual configurado
+     */
+    getCurrentVolumeForSource(src, defaultVolume = 0.5) {
+        // Mapear rutas a tipos de sonido para obtener el volumen actual
+        const sourceMap = {
+            'explosion_normalized.wav': 'explosion',
+            'place_building_normalized.wav': 'placeBuilding',
+            'bom_shoot1_normalized.wav': 'bomShoot',
+            'antidrone_spawn_normalized.wav': 'antiDroneSpawn',
+            'antidrone_attack_normalized.wav': 'antiDroneAttack',
+            'man_down1_normalized.wav': 'manDown',
+            'man_down2_normalized.wav': 'manDown',
+            'no_ammo1_normalized.wav': 'noAmmo',
+            'no_ammo2_normalized.wav': 'noAmmo',
+            'no_ammo3_normalized.wav': 'noAmmo',
+            'no_ammo4_normalized.wav': 'noAmmo',
+            'radio_effect1_normalized.wav': 'radioEffect',
+            'radio_effect2_normalized.wav': 'radioEffect',
+            'radio_effect3_normalized.wav': 'radioEffect',
+            'radio_effect4_normalized.wav': 'radioEffect',
+            'droneflying_normalized.wav': 'drone'
+        };
+        
+        // Extraer el nombre del archivo de la ruta
+        const fileName = src.split('/').pop();
+        
+        // Buscar en el mapeo
+        const soundType = sourceMap[fileName];
+        if (soundType && this.volumes[soundType] !== undefined) {
+            return this.volumes[soundType];
+        }
+        
+        // Si no se encuentra, usar el volumen por defecto pasado como parámetro
+        return defaultVolume;
+    }
+    
+    /**
      * Reproduce un sonido SIN cancelar instancias previas
      * Crea una nueva instancia cada vez para permitir solapamiento
      * @param {string} src - Ruta del archivo de audio
-     * @param {number} volume - Volumen (0.0 a 1.0)
+     * @param {number} volume - Volumen base (se actualiza si hay configuración específica)
      * @returns {Audio} Instancia de audio creada
      */
     playSoundInstance(src, volume) {
-        const audio = this.createAudio(src, volume, false);
+        // Obtener el volumen actual configurado para este sonido
+        const currentVolume = this.getCurrentVolumeForSource(src, volume);
+        
+        const audio = this.createAudio(src, currentVolume, false);
+        
+        // Crear objeto para guardar tanto el audio como la información de la ruta
+        const soundInstance = { audio: audio, src: src };
         
         // Limpiar cuando termine
         audio.addEventListener('ended', () => {
-            const index = this.soundInstances.indexOf(audio);
+            const index = this.soundInstances.findIndex(instance => instance.audio === audio);
             if (index > -1) {
                 this.soundInstances.splice(index, 1);
             }
         });
         
         audio.play().catch(e => {});
-        this.soundInstances.push(audio);
+        this.soundInstances.push(soundInstance);
         
         return audio;
     }
@@ -151,6 +199,28 @@ export class AudioManager {
             this.music[soundName].volume = Math.max(0, Math.min(1, volume));
             this.volumes[soundName] = this.music[soundName].volume;
         }
+    }
+    
+    /**
+     * Actualiza los volúmenes de todas las instancias activas de sonido
+     * Útil cuando cambian las configuraciones de volumen
+     */
+    updateActiveInstancesVolume() {
+        this.soundInstances.forEach(soundInstance => {
+            if (soundInstance && soundInstance.audio && soundInstance.src) {
+                const currentVolume = this.getCurrentVolumeForSource(soundInstance.src, soundInstance.audio.volume || 0.5);
+                soundInstance.audio.volume = currentVolume;
+            }
+        });
+        
+        // También actualizar drones activos
+        this.activeDroneSounds.forEach((audio, droneId) => {
+            if (audio) {
+                // Para drones, sabemos que siempre usan droneflying_normalized.wav
+                const currentVolume = this.volumes.drone || 0.5;
+                audio.volume = currentVolume;
+            }
+        });
     }
     
     /**
@@ -320,6 +390,15 @@ export class AudioManager {
                 sound.currentTime = 0;
             }
         });
+        
+        // Detener todas las instancias activas de sonidos
+        this.soundInstances.forEach(soundInstance => {
+            if (soundInstance && soundInstance.audio) {
+                soundInstance.audio.pause();
+                soundInstance.audio.currentTime = 0;
+            }
+        });
+        this.soundInstances.length = 0; // Limpiar el array
         
         // Detener todos los sonidos de drones
         this.stopAllDroneSounds();

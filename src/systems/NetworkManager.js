@@ -282,7 +282,7 @@ export class NetworkManager {
                 console.log(`✅ Edificio ${data.type} creado localmente con ID ${data.nodeId} (en construcción)`);
                 
                 // CRÍTICO: Reproducir sonido para AMBOS jugadores (en multiplayer nadie lo reproduce localmente)
-                this.game.audio.playPlaceBuildingSound();
+                    this.game.audio.playPlaceBuildingSound();
                 
                 // NO reproducir sonido de anti-drone aquí (se reproduce al terminar construcción)
             }
