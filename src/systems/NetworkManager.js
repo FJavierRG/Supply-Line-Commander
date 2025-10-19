@@ -318,6 +318,11 @@ export class NetworkManager {
                 newNode.constructionTime = data.constructionTime || 2;
                 newNode.constructionTimer = 0;
                 
+                // Inicializar propiedades de interpolación para multijugador
+                if (newNode.updateServerPosition) {
+                    newNode.updateServerPosition(data.x, data.y);
+                }
+                
                 this.game.nodes.push(newNode);
                 
                 console.log(`✅ Edificio ${data.type} creado localmente con ID ${data.nodeId} (en construcción)`);
@@ -924,6 +929,11 @@ export class NetworkManager {
             node.supplies = nodeData.supplies;
             node.availableVehicles = nodeData.availableVehicles;
             
+            // Inicializar propiedades de interpolación para multijugador
+            if (node.updateServerPosition) {
+                node.updateServerPosition(nodeData.x, nodeData.y);
+            }
+            
             this.game.nodes.push(node);
             
             console.log(`  ✓ Nodo creado: ${nodeData.type} (${nodeData.team}) en (${nodeData.x}, ${nodeData.y})`);
@@ -991,9 +1001,15 @@ export class NetworkManager {
                 if (node) {
                     // Actualizar nodo existente
                     
-                    // Actualizar posición (frentes se mueven)
-                    node.x = nodeData.x;
-                    node.y = nodeData.y;
+                    // Actualizar posición - usar interpolación suave para fronts en multijugador
+                    if (this.game.isMultiplayer && node.type === 'front') {
+                        // Para fronts, usar interpolación suave
+                        node.updateServerPosition(nodeData.x, nodeData.y);
+                    } else {
+                        // Para otros nodos (construcciones), actualización directa
+                        node.x = nodeData.x;
+                        node.y = nodeData.y;
+                    }
                     
                     // Actualizar suministros
                     node.supplies = nodeData.supplies;

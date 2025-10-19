@@ -221,10 +221,10 @@ export class GameStateManager {
             return true;
         }
         
-        // Construction timer - solo cada 0.1 segundos (según roadmap)
-        if (node.isConstructing && node.constructionTimer && lastNodeState.constructionTimer) {
-            if (Math.abs(node.constructionTimer - lastNodeState.constructionTimer) >= 0.1) {
-                return true;
+        // Construction timer - actualizar más frecuentemente para barrita fluida
+        if (node.isConstructing && node.constructionTimer !== undefined && lastNodeState.constructionTimer !== undefined) {
+            if (Math.abs(node.constructionTimer - lastNodeState.constructionTimer) >= 0.03) {
+                return true; // Actualizar cada ~0.03s para 30+ FPS suaves
             }
         }
         

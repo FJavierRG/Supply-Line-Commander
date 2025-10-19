@@ -116,6 +116,11 @@ export class MapNode {
         this.selected = false;
         this.noVehiclesShake = false;
         this.noVehiclesShakeTime = 0;
+        
+        // Interpolación suave para multijugador (especialmente fronts)
+        this.serverX = x; // Posición objetivo del servidor para interpolación
+        this.serverY = y;
+        this.lastServerUpdate = 0; // Timestamp del último update del servidor
     }
     
     /**
@@ -351,6 +356,41 @@ export class MapNode {
     getConstructionProgress() {
         if (!this.needsConstruction) return 1;
         return Math.min(1, this.constructionTimer / this.constructionTime);
+    }
+    
+    /**
+     * Actualizar posición desde el servidor con interpolación suave (para multijugador)
+     */
+    updateServerPosition(newX, newY) {
+        this.serverX = newX;
+        this.serverY = newY;
+        this.lastServerUpdate = Date.now();
+    }
+    
+    /**
+     * Actualizar posición visual con interpolación suave (para multijugador)
+     * Solo para nodos que se mueven como fronts
+     */
+    updatePosition(dt = 0.016) {
+        // Solo interpolar si es un frente (se mueve) y hay diferencia significativa
+        if (this.type === 'front' && this.serverX !== undefined && this.serverY !== undefined) {
+            const dx = this.serverX - this.x;
+            const dy = this.serverY - this.y;
+            const distance = Math.hypot(dx, dy);
+            
+            if (distance > 0.5) { // Solo interpolar si hay diferencia significativa
+                const interpolationSpeed = 8.0; // Mismo factor que convoyes
+                const moveX = dx * interpolationSpeed * dt;
+                const moveY = dy * interpolationSpeed * dt;
+                
+                this.x += moveX;
+                this.y += moveY;
+            } else {
+                // Si está muy cerca, usar posición exacta del servidor
+                this.x = this.serverX;
+                this.y = this.serverY;
+            }
+        }
     }
     
     // ========== COMPATIBILIDAD (para sistemas que buscan propiedades específicas) ==========

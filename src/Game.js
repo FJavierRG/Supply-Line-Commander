@@ -332,6 +332,13 @@ export class Game {
                 convoy.updatePosition(dt); // Interpolación suave basada en dt
             }
             
+            // Interpolación suave de nodos (especialmente fronts que se mueven)
+            for (const node of this.nodes) {
+                if (node.updatePosition) {
+                    node.updatePosition(dt);
+                }
+            }
+            
             // Interpolación suave de drones (posiciones desde servidor)
             for (const drone of this.droneSystem.getDrones()) {
                 if (drone.serverX !== undefined && drone.serverY !== undefined) {
