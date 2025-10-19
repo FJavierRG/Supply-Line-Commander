@@ -318,6 +318,9 @@ export class Game {
             this.ui.updateHUD(this.getGameState());
             this.inputHandler.updateHoverTooltip();
             
+            // Actualizar ping/latencia
+            this.network.update(dt);
+            
             // Actualizar sistema de carreteras (renderizado)
             if (this.roadSystem) {
                 this.roadSystem.update();
@@ -327,6 +330,29 @@ export class Game {
             // El progress viene del servidor, pero necesitamos interpolar suavemente entre frames
             for (const convoy of this.convoyManager.convoys) {
                 convoy.updatePosition(dt); // Interpolación suave basada en dt
+            }
+            
+            // Interpolación suave de drones (posiciones desde servidor)
+            for (const drone of this.droneSystem.getDrones()) {
+                if (drone.serverX !== undefined && drone.serverY !== undefined) {
+                    // Interpolar hacia posición objetivo del servidor
+                    const dx = drone.serverX - drone.x;
+                    const dy = drone.serverY - drone.y;
+                    const distance = Math.hypot(dx, dy);
+                    
+                    if (distance > 1) { // Solo interpolar si hay diferencia significativa
+                        const interpolationSpeed = 8.0; // Mismo factor que convoyes
+                        const moveX = dx * interpolationSpeed * dt;
+                        const moveY = dy * interpolationSpeed * dt;
+                        
+                        drone.x += moveX;
+                        drone.y += moveY;
+                    } else {
+                        // Si está muy cerca, usar posición exacta del servidor
+                        drone.x = drone.serverX;
+                        drone.y = drone.serverY;
+                    }
+                }
             }
             
             // CRÍTICO: NO ejecutar simulación en multijugador

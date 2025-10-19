@@ -11,6 +11,11 @@ export class NetworkManager {
         this.myTeam = null;
         this.opponentTeam = null;
         
+        // Medición de latencia/ping
+        this.lastPingTime = 0;
+        this.ping = 0;
+        this.pingUpdateInterval = 0;
+        
         // Auto-detectar URL del servidor
         // Si se accede vía ngrok/producción, usar la misma URL
         // Si es localhost, usar localhost:3000
@@ -86,6 +91,14 @@ export class NetworkManager {
         
         this.socket.on('error', (error) => {
             console.error('❌ Error del socket:', error);
+        });
+        
+        // Ping/pong para medir latencia
+        this.socket.on('pong', (timestamp) => {
+            this.ping = Date.now() - timestamp;
+            if (this.ping > 200) {
+                console.log(`⚠️ Ping alto: ${this.ping}ms`);
+            }
         });
         
         // === EVENTOS DE LOBBY ===
@@ -1106,10 +1119,11 @@ export class NetworkManager {
                 let drone = this.game.droneSystem.drones.find(d => d.id === droneData.id);
                 
                 if (drone) {
-                    // Actualizar posición desde servidor
-                    drone.x = droneData.x;
-                    drone.y = droneData.y;
+                    // Interpolación suave: guardar posición objetivo del servidor
+                    drone.serverX = droneData.x;
+                    drone.serverY = droneData.y;
                     drone.targetId = droneData.targetId;
+                    drone.lastServerUpdate = Date.now();
                 } else {
                     // Dron nuevo del servidor - crear localmente
                     const targetNode = this.game.nodes.find(n => n.id === droneData.targetId);
@@ -1118,11 +1132,14 @@ export class NetworkManager {
                             id: droneData.id,
                             x: droneData.x,
                             y: droneData.y,
+                            serverX: droneData.x,  // Posición objetivo del servidor
+                            serverY: droneData.y,
                             target: targetNode,
                             targetId: droneData.targetId,
                             speed: 300,
                             active: true,
-                            isEnemy: (droneData.team !== this.myTeam)
+                            isEnemy: (droneData.team !== this.myTeam),
+                            lastServerUpdate: Date.now()
                         };
                         
                         this.game.droneSystem.drones.push(newDrone);
@@ -1952,6 +1969,27 @@ export class NetworkManager {
         document.body.appendChild(overlay);
     }
     
+    /**
+     * Actualiza el ping periódicamente (llamado desde Game.update)
+     */
+    update(dt) {
+        if (!this.connected || !this.socket) return;
+        
+        // Enviar ping cada 5 segundos
+        this.pingUpdateInterval += dt;
+        if (this.pingUpdateInterval >= 5.0) {
+            this.pingUpdateInterval = 0;
+            this.socket.emit('ping', Date.now());
+        }
+    }
+    
+    /**
+     * Obtiene el ping actual en ms
+     */
+    getPing() {
+        return this.ping;
+    }
+
     /**
      * Desconectar del servidor
      */

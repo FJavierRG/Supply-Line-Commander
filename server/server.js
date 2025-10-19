@@ -477,6 +477,13 @@ io.on('connection', (socket) => {
         }
     });
     
+    /**
+     * Ping/pong para medir latencia
+     */
+    socket.on('ping', (timestamp) => {
+        socket.emit('pong', timestamp);
+    });
+    
     // === DESCONEXIÓN ===
     
     socket.on('disconnect', () => {
