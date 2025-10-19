@@ -235,6 +235,177 @@ export class NetworkManager {
             
             this.finishGameStart();
         });
+
+        // === EVENTOS DE JUEGO ===
+        
+        this.socket.on('game_update', (gameState) => {
+            // Recibir estado completo del servidor cada tick (20 TPS)
+            this.applyGameState(gameState);
+        });
+        
+        this.socket.on('game_over', (data) => {
+            console.log('🏆 Partida terminada:', data);
+            this.handleGameOver(data);
+        });
+        
+        this.socket.on('building_created', (data) => {
+            console.log('🏗️ Edificio creado por servidor:', data.type, 'equipo:', data.team, 'en', data.x, data.y);
+            
+            // Verificar que no exista ya (evitar duplicados)
+            const exists = this.game.nodes.find(n => n.id === data.nodeId);
+            if (exists) {
+                console.warn(`⚠️ Nodo ${data.nodeId} ya existe, ignorando building_created`);
+                return;
+            }
+            
+            // Crear el nodo en el cliente (servidor ya validó y autorizó)
+            const newNode = this.game.baseFactory.createBase(
+                data.x,
+                data.y,
+                data.type,
+                {
+                    team: data.team,
+                    isConstructed: false // CRÍTICO: Empieza en construcción
+                }
+            );
+            
+            if (newNode) {
+                // Sobrescribir ID y estado desde el servidor
+                newNode.id = data.nodeId;
+                newNode.isConstructing = true;
+                newNode.constructed = false;
+                newNode.constructionTime = data.constructionTime || 2;
+                newNode.constructionTimer = 0;
+                
+                this.game.nodes.push(newNode);
+                
+                console.log(`✅ Edificio ${data.type} creado localmente con ID ${data.nodeId} (en construcción)`);
+                
+                // CRÍTICO: Reproducir sonido para AMBOS jugadores (en multiplayer nadie lo reproduce localmente)
+                this.game.audio.playPlaceBuildingSound();
+                
+                // NO reproducir sonido de anti-drone aquí (se reproduce al terminar construcción)
+            }
+        });
+        
+        this.socket.on('convoy_spawned', (data) => {
+            // Buscar los nodos
+            const fromNode = this.game.nodes.find(n => n.id === data.fromId);
+            const toNode = this.game.nodes.find(n => n.id === data.toId);
+            
+            if (!fromNode || !toNode) {
+                console.warn('⚠️ No se encontraron nodos para convoy:', data);
+                return;
+            }
+            
+            // Crear convoy visual en el cliente (el servidor maneja la lógica)
+            const convoy = new Convoy(this.game, fromNode, toNode, data.vehicleType, data.id);
+            this.game.convoyManager.convoys.push(convoy);
+            
+            console.log(`🚛 Convoy ${data.vehicleType} creado: ${fromNode.type} → ${toNode.type}`);
+        });
+        
+        this.socket.on('ambulance_spawned', (data) => {
+            console.log(`🚑 Ambulancia autorizada por servidor: ${data.fromId} → ${data.toId} (emergencia: ${data.targetFrontId})`);
+            
+            // Buscar los nodos
+            const fromNode = this.game.nodes.find(n => n.id === data.fromId);
+            const toNode = this.game.nodes.find(n => n.id === data.toId);
+            const targetFront = this.game.nodes.find(n => n.id === data.targetFrontId);
+            
+            if (!fromNode || !toNode || !targetFront) {
+                console.warn('⚠️ No se encontraron nodos para ambulancia:', data);
+                return;
+            }
+            
+            // Crear ambulancia visual en el cliente
+            const ambulance = new Convoy(this.game, fromNode, toNode, 'ambulance', data.id);
+            ambulance.isMedical = true;
+            ambulance.targetFrontId = data.targetFrontId;
+            this.game.convoyManager.convoys.push(ambulance);
+            
+            console.log(`🚑 Ambulancia creada visualmente: ${fromNode.type} → ${toNode.type} (emergencia: ${targetFront.type})`);
+        });
+        
+        this.socket.on('sniper_fired', (data) => {
+            console.log(`🎯 Sniper disparado por ${data.shooterId} → frente ${data.targetId}`);
+            
+            // Buscar el nodo del sniper y el objetivo
+            const shooter = this.game.nodes.find(n => n.id === data.shooterId);
+            const target = this.game.nodes.find(n => n.id === data.targetId);
+            
+            if (shooter && target) {
+                // Crear efecto visual del disparo
+                this.game.particleSystem.createSniperTrail(shooter.x, shooter.y, target.x, target.y);
+                
+                // Mostrar feed de kill si hay impacto
+                if (data.hit) {
+                    this.game.ui.showKillFeed(data.shooterTeam, data.targetTeam, 'sniper');
+                }
+            }
+        });
+        
+        this.socket.on('drone_launched', (data) => {
+            console.log(`💣 Dron lanzado por ${data.team}: ${data.droneId} → ${data.targetId}`);
+            
+            // El servidor maneja la lógica, solo crear efecto visual
+            const launcher = this.game.nodes.find(n => n.id === data.launcherId);
+            const target = this.game.nodes.find(n => n.id === data.targetId);
+            
+            if (launcher && target) {
+                this.game.droneSystem.createDroneVisual(launcher, target, data.team, data.droneId);
+            }
+        });
+        
+        this.socket.on('drone_impact', (impact) => {
+            console.log(`💥 Dron ${impact.droneId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`);
+            
+            // Crear efectos visuales de explosión
+            this.game.particleSystem.createExplosion(impact.x, impact.y, impact.explosionRadius || 60);
+            
+            // Mostrar feed si destruyó un edificio
+            if (impact.destroyedBuilding) {
+                const building = this.game.nodes.find(n => n.id === impact.targetId);
+                if (building) {
+                    this.game.ui.showKillFeed(impact.team, building.team, 'drone');
+                }
+            }
+        });
+        
+        this.socket.on('antidrone_alert', (alert) => {
+            console.log(`🚨 Anti-drone ${alert.antiDroneId} detectó dron ${alert.droneId} (alerta)`);
+            
+            // Crear efecto visual de alerta
+            const antiDrone = this.game.nodes.find(n => n.id === alert.antiDroneId);
+            if (antiDrone) {
+                this.game.particleSystem.createAlertEffect(antiDrone.x, antiDrone.y);
+            }
+        });
+        
+        this.socket.on('drone_intercepted', (interception) => {
+            console.log(`🎯 Anti-drone ${interception.antiDroneId} interceptó dron ${interception.droneId}`);
+            
+            // Crear efecto visual de interceptación
+            this.game.particleSystem.createInterceptionExplosion(
+                interception.x, 
+                interception.y, 
+                interception.interceptionRadius || 40
+            );
+        });
+        
+        this.socket.on('cheat_success', (data) => {
+            console.log(`✅ CHEAT: ${data.message}`);
+        });
+        
+        this.socket.on('opponent_disconnected', () => {
+            console.log('❌ Oponente desconectado');
+            // Podrías mostrar una pantalla de espera o terminar la partida
+        });
+        
+        this.socket.on('error', (data) => {
+            console.error('⚠️ Error del servidor:', data.message);
+            alert(`Error: ${data.message}`);
+        });
     }
     
     /**
@@ -344,314 +515,6 @@ export class NetworkManager {
             // Forzar primer render
             this.game.render();
             console.log('🎨 Primer render forzado');
-    }
-        
-        this.socket.on('game_update', (gameState) => {
-            // Recibir estado completo del servidor cada tick (20 TPS)
-            this.applyGameState(gameState);
-        });
-        
-        this.socket.on('game_over', (data) => {
-            console.log('🏆 Partida terminada:', data);
-            this.handleGameOver(data);
-        });
-        
-        this.socket.on('building_created', (data) => {
-            console.log('🏗️ Edificio creado por servidor:', data.type, 'equipo:', data.team, 'en', data.x, data.y);
-            
-            // Verificar que no exista ya (evitar duplicados)
-            const exists = this.game.nodes.find(n => n.id === data.nodeId);
-            if (exists) {
-                console.warn(`⚠️ Nodo ${data.nodeId} ya existe, ignorando building_created`);
-                return;
-            }
-            
-            // Crear el nodo en el cliente (servidor ya validó y autorizó)
-            const newNode = this.game.baseFactory.createBase(
-                data.x,
-                data.y,
-                data.type,
-                {
-                    team: data.team,
-                    isConstructed: false // CRÍTICO: Empieza en construcción
-                }
-            );
-            
-            if (newNode) {
-                // Sobrescribir ID y estado desde el servidor
-                newNode.id = data.nodeId;
-                newNode.isConstructing = true;
-                newNode.constructed = false;
-                newNode.constructionTime = data.constructionTime || 2;
-                newNode.constructionTimer = 0;
-                
-                this.game.nodes.push(newNode);
-                
-                console.log(`✅ Edificio ${data.type} creado localmente con ID ${data.nodeId} (en construcción)`);
-                
-                // CRÍTICO: Reproducir sonido para AMBOS jugadores (en multiplayer nadie lo reproduce localmente)
-                    this.game.audio.playPlaceBuildingSound();
-                
-                // NO reproducir sonido de anti-drone aquí (se reproduce al terminar construcción)
-            }
-        });
-        
-        this.socket.on('convoy_spawned', (data) => {
-            // Buscar los nodos
-            const fromNode = this.game.nodes.find(n => n.id === data.fromId);
-            const toNode = this.game.nodes.find(n => n.id === data.toId);
-            
-            if (!fromNode || !toNode) {
-                console.error('⚠️ No se encontraron los nodos para el convoy:', data.fromId, data.toId);
-                return;
-            }
-            
-            // Tomar vehículo (el servidor ya lo validó)
-            fromNode.takeVehicle();
-            
-            // Crear convoy localmente
-            const VEHICLE_TYPES = {
-                'truck': {
-                    capacity: 15,
-                    speed: 50,
-                    spritePath: 'vehicles/convoy.png'
-                },
-                'heavy_truck': {
-                    capacity: 25,
-                    speed: 40,
-                    spritePath: 'vehicles/convoy_heavy.png'
-                }
-            };
-            
-            const vehicle = this.game.convoyManager.applyUpgrades(
-                VEHICLE_TYPES[data.vehicleType],
-                data.vehicleType
-            );
-            
-            const cargo = fromNode.removeSupplies(data.cargo);
-            
-            // Crear convoy
-            const convoy = new Convoy(fromNode, toNode, vehicle, data.vehicleType, cargo);
-            convoy.id = data.convoyId; // CRÍTICO: Usar ID del servidor
-            
-            this.game.convoyManager.convoys.push(convoy);
-            
-            // Reproducir sonido solo si NO es de mi equipo
-            if (data.team !== this.myTeam) {
-                this.game.audio.playSound('dispatch');
-            }
-        });
-        
-        this.socket.on('ambulance_spawned', (data) => {
-            console.log(`🚑 Ambulancia autorizada por servidor: ${data.fromId} → ${data.toId} (emergencia: ${data.targetFrontId})`);
-            
-            // Buscar los nodos
-            const fromNode = this.game.nodes.find(n => n.id === data.fromId);
-            const toNode = this.game.nodes.find(n => n.id === data.toId);
-            
-            if (!fromNode || !toNode) {
-                console.error('⚠️ No se encontraron los nodos para la ambulancia:', data.fromId, data.toId);
-                return;
-            }
-            
-            // Tomar ambulancia del HQ
-            if (fromNode.type === 'hq') {
-                fromNode.takeAmbulance();
-            } else if (fromNode.type === 'campaignHospital') {
-                fromNode.dispatchAmbulance();
-            }
-            
-            // Crear ambulancia localmente
-            const VEHICLE_TYPES = {
-                'ambulance': {
-                    capacity: 0,
-                    speed: 60,
-                    spritePath: 'vehicles/ambulance.png'
-                }
-            };
-            
-            const vehicle = this.game.convoyManager.applyUpgrades(
-                VEHICLE_TYPES['ambulance'],
-                'ambulance'
-            );
-            
-            // Crear convoy médico
-            const convoy = new Convoy(fromNode, toNode, vehicle, 'ambulance', 0);
-            convoy.id = data.convoyId;
-            convoy.isMedical = true;
-            convoy.targetFrontId = data.targetFrontId;
-            
-            this.game.convoyManager.convoys.push(convoy);
-            
-            console.log(`✅ Ambulancia ${data.convoyId} creada localmente`);
-            
-            // Reproducir sonido solo si NO es de mi equipo
-            if (data.team !== this.myTeam) {
-                this.game.audio.playSound('dispatch');
-            }
-        });
-        
-        /**
-         * Manejo de disparo de francotirador
-         */
-        this.socket.on('sniper_fired', (data) => {
-            console.log(`🎯 Sniper disparado por ${data.shooterId} → frente ${data.targetId}`);
-            
-            // Buscar el frente objetivo
-            const targetFront = this.game.nodes.find(n => n.id === data.targetId);
-            
-            if (targetFront) {
-                // Reproducir sonido de disparo
-                this.game.audio.sounds.sniperShoot.play();
-                
-                // Crear sprite flotante de sniper kill feed
-                this.game.particleSystem.createFloatingSprite(
-                    targetFront.x, 
-                    targetFront.y - 40, 
-                    'ui-sniper-kill'
-                );
-                
-                console.log(`✅ Efectos visuales de sniper aplicados`);
-            } else {
-                console.warn(`⚠️ Frente objetivo ${data.targetId} no encontrado`);
-            }
-        });
-        
-        /**
-         * Manejo de lanzamiento de dron
-         */
-        this.socket.on('drone_launched', (data) => {
-            console.log(`💣 Dron lanzado por ${data.team}: ${data.droneId} → ${data.targetId}`);
-            
-            // El servidor ya lo tiene en el estado, solo reproducir sonido
-            this.game.audio.playDroneSound(data.droneId);
-            
-            console.log(`✅ Dron ${data.droneId} lanzado - servidor simula trayectoria`);
-        });
-        
-        /**
-         * Manejo de impacto de dron
-         */
-        this.socket.on('drone_impact', (impact) => {
-            console.log(`💥 Dron ${impact.droneId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`);
-            
-            // Detener sonido del dron
-            this.game.audio.stopDroneSound(impact.droneId);
-            
-            // Reproducir sonido de explosión
-            this.game.audio.playExplosionSound();
-            
-            // Crear explosión grande con partículas grises
-            this.game.particleSystem.createExplosion(impact.x, impact.y, '#808080', 40);
-            
-            // Añadir sprite de explosión animado
-            this.game.particleSystem.createExplosionSprite(impact.x, impact.y);
-            
-            // Crear marca de impacto permanente (cráter grande)
-            this.game.particleSystem.createImpactMark(impact.x, impact.y, 'impact_icon', 1.2);
-            
-            console.log(`✅ Efectos de explosión de dron aplicados`);
-        });
-        
-        /**
-         * Manejo de alerta de anti-drone (dron detectado en rango de 220px)
-         */
-        this.socket.on('antidrone_alert', (alert) => {
-            console.log(`🚨 Anti-drone ${alert.antiDroneId} detectó dron ${alert.droneId} (alerta)`);
-            
-            // Reproducir sonido de ataque anti-drone (alerta)
-            this.game.audio.playAntiDroneAttackSound();
-        });
-        
-        /**
-         * Manejo de intercepción de dron por anti-drone
-         */
-        this.socket.on('drone_intercepted', (interception) => {
-            console.log(`🎯 Anti-drone ${interception.antiDroneId} interceptó dron ${interception.droneId}`);
-            
-            // Detener sonido del dron
-            this.game.audio.stopDroneSound(interception.droneId);
-            
-            // Sonido de disparo anti-drone
-            this.game.audio.playBomShootSound();
-            
-            // Crear partículas de explosión del dron en el aire (naranja, más pequeña)
-            this.game.particleSystem.createExplosion(
-                interception.x, 
-                interception.y, 
-                '#ff6b35', // Naranja
-                8 // Menos partículas que explosión de edificio
-            );
-            
-            // Crear cráter pequeño del dron destruido (50% del tamaño)
-            this.game.particleSystem.createImpactMark(interception.x, interception.y, 'impact_icon', 0.5);
-            
-            // Crear línea de disparo (efecto visual) desde anti-drone al dron
-            const building = this.game.nodes.find(n => n.id === interception.antiDroneId);
-            if (building) {
-                // Crear partículas a lo largo de la línea de disparo
-                const dx = interception.x - interception.antiDroneX;
-                const dy = interception.y - interception.antiDroneY;
-                const particles = 5;
-                for (let i = 0; i < particles; i++) {
-                    const t = i / (particles - 1);
-                    const x = interception.antiDroneX + dx * t;
-                    const y = interception.antiDroneY + dy * t;
-                    
-                    this.game.particleSystem.createParticle(
-                        x, y,
-                        0, 0, // Sin velocidad
-                        '#ffff00', // Amarillo para el disparo
-                        300 // Duración corta
-                    );
-                }
-            }
-            
-            // Marcar anti-drone para fade out (como edificios abandonados)
-            const antiDroneNode = this.game.nodes.find(n => n.id === interception.antiDroneId);
-            if (antiDroneNode) {
-                antiDroneNode.isAbandoning = true;
-                antiDroneNode.abandonPhase = 1; // Empezar fade out
-                
-                // Programar eliminación después del fade out (2 segundos)
-                setTimeout(() => {
-                    const index = this.game.nodes.indexOf(antiDroneNode);
-                    if (index > -1) {
-                        this.game.nodes.splice(index, 1);
-                    }
-                }, 2000);
-            }
-            
-            console.log(`✅ Efectos de intercepción aplicados - Dron destruido, anti-drone en fade out`);
-        });
-        
-        this.socket.on('cheat_success', (data) => {
-            console.log(`✅ CHEAT: ${data.message}`);
-        });
-        
-        this.socket.on('opponent_disconnected', () => {
-            console.log('❌ Oponente desconectado');
-            alert('Oponente desconectado. Victoria por abandono.');
-            this.game.handleVictory();
-        });
-        
-        // CRÍTICO: Manejar final de partida (victoria/derrota)
-        this.socket.on('game_over', (victoryResult) => {
-            console.log('🏆 Partida terminada:', victoryResult);
-            
-            if (victoryResult.winner === this.game.myTeam) {
-                console.log('🎉 ¡VICTORIA!');
-                this.game.triggerVictory();
-            } else {
-                console.log('💀 Derrota');
-                this.game.triggerDefeat();
-            }
-        });
-        
-        this.socket.on('error', (data) => {
-            console.error('⚠️ Error del servidor:', data.message);
-            alert(`Error: ${data.message}`);
-        });
     }
     
     // === ACCIONES DEL CLIENTE ===
