@@ -884,30 +884,14 @@ export class NetworkManager {
     }
     
     /**
-     * Aplicar estado del servidor (COMPLETO o DELTA)
+     * Aplicar estado completo del servidor (SERVIDOR AUTORITATIVO COMPLETO)
      */
     applyGameState(gameState) {
         if (!gameState) return;
         
-        // Determinar si es un delta update o estado completo
-        const isDelta = gameState.delta !== undefined;
-        
-        if (isDelta) {
-            // Es un delta update - aplicar solo cambios
-            this.applyDeltaUpdate(gameState);
-        } else {
-            // Es un estado completo - aplicar todo
-            this.applyFullState(gameState);
-        }
-        
         // Guardar el último estado recibido (para reloj, etc.)
         this.lastGameState = gameState;
-    }
-    
-    /**
-     * Aplicar estado completo del servidor
-     */
-    applyFullState(gameState) {
+        
         // === ACTUALIZAR CURRENCY ===
         if (gameState.currency) {
             const oldCurrency = this.game.currency.missionCurrency;
@@ -1109,112 +1093,6 @@ export class NetworkManager {
         // === PROCESAR EVENTOS DE SONIDO ===
         if (gameState.soundEvents && gameState.soundEvents.length > 0) {
             gameState.soundEvents.forEach(event => {
-                this.handleSoundEvent(event);
-            });
-        }
-    }
-    
-    /**
-     * Aplicar delta update del servidor (solo cambios)
-     */
-    applyDeltaUpdate(gameState) {
-        const delta = gameState.delta;
-        
-        // === ACTUALIZAR CURRENCY (solo si cambió) ===
-        if (delta.currencyChanged && delta.currency) {
-            const oldCurrency = this.game.currency.missionCurrency;
-            this.game.currency.missionCurrency = delta.currency[this.myTeam];
-            
-            // DEBUG: Log cuando cambia significativamente
-            if (!this._lastCurrencyLog || Math.abs(this.game.currency.missionCurrency - this._lastCurrencyLog) >= 10) {
-                console.log(`💰 Currency delta: ${oldCurrency} → ${this.game.currency.missionCurrency}$`);
-                this._lastCurrencyLog = this.game.currency.missionCurrency;
-            }
-        }
-        
-        // === ACTUALIZAR NODOS (solo modificados) ===
-        if (delta.nodes && delta.nodes.length > 0) {
-            delta.nodes.forEach(nodeData => {
-                let node = this.game.nodes.find(n => n.id === nodeData.id);
-                
-                if (node) {
-                    // Actualizar solo campos que cambiaron
-                    if (nodeData.x !== undefined) node.x = nodeData.x;
-                    if (nodeData.y !== undefined) node.y = nodeData.y;
-                    if (nodeData.supplies !== undefined) node.supplies = nodeData.supplies;
-                    if (nodeData.availableVehicles !== undefined) node.availableVehicles = nodeData.availableVehicles;
-                    if (nodeData.constructed !== undefined) node.constructed = nodeData.constructed;
-                    if (nodeData.isConstructing !== undefined) node.isConstructing = nodeData.isConstructing;
-                    if (nodeData.isAbandoning !== undefined) node.isAbandoning = nodeData.isAbandoning;
-                    if (nodeData.effects !== undefined) node.effects = nodeData.effects;
-                }
-            });
-        }
-        
-        // === ACTUALIZAR CONVOYES (solo cambios) ===
-        if (delta.convoys && delta.convoys.length > 0) {
-            delta.convoys.forEach(convoyData => {
-                if (convoyData._deleted) {
-                    // Eliminar convoy
-                    const index = this.game.convoyManager.convoys.findIndex(c => c.id === convoyData.id);
-                    if (index !== -1) {
-                        this.game.convoyManager.convoys.splice(index, 1);
-                    }
-                } else {
-                    // Actualizar convoy existente o crear nuevo
-                    let convoy = this.game.convoyManager.convoys.find(c => c.id === convoyData.id);
-                    if (convoy) {
-                        // Actualizar progreso
-                        convoy.progress = convoyData.progress;
-                        convoy.returning = convoyData.returning;
-                    }
-                }
-            });
-        }
-        
-        // === ACTUALIZAR DRONES ===
-        if (delta.drones && delta.drones.length >= 0) {
-            // Limpiar drones existentes
-            this.game.droneSystem.drones.length = 0;
-            
-            // Aplicar drones del servidor
-            delta.drones.forEach(droneData => {
-                if (droneData.active !== false) {
-                    const newDrone = {
-                        id: droneData.id,
-                        x: droneData.x,
-                        y: droneData.y,
-                        targetId: droneData.targetId,
-                        team: droneData.team,
-                        isEnemy: (droneData.team !== this.myTeam)
-                    };
-                    this.game.droneSystem.drones.push(newDrone);
-                }
-            });
-        }
-        
-        // === ACTUALIZAR EMERGENCIAS ===
-        if (delta.emergencies && delta.emergencies.length >= 0) {
-            // Limpiar emergencias antiguas
-            this.game.medicalSystem.activeEmergencies.clear();
-            
-            // Aplicar emergencias del servidor
-            delta.emergencies.forEach(emergency => {
-                if (!emergency.resolved) {
-                    this.game.medicalSystem.activeEmergencies.set(emergency.frontId, {
-                        frontId: emergency.frontId,
-                        startTime: Date.now() - (20000 - emergency.timeLeft),
-                        duration: 20000,
-                        resolved: false,
-                        penalty: false
-                    });
-                }
-            });
-        }
-        
-        // === PROCESAR EVENTOS DE SONIDO ===
-        if (delta.soundEvents && delta.soundEvents.length > 0) {
-            delta.soundEvents.forEach(event => {
                 this.handleSoundEvent(event);
             });
         }
