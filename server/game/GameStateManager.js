@@ -67,6 +67,8 @@ export class GameStateManager {
         this.lastNodeStates = new Map(); // Trackear estado anterior de cada nodo
         this.lastConvoyStates = new Map(); // Trackear estado anterior de cada convoy
         this.lastConstructionUpdate = 0; // Timer para construction updates
+        this.gameStartTicks = 0; // Contador de ticks desde inicio del juego
+        this.INITIAL_SYNC_TICKS = 30; // Enviar estado completo los primeros 30 ticks (3 segundos @ 10TPS)
     }
     
     /**
@@ -337,6 +339,84 @@ export class GameStateManager {
                 };
             });
     }
+
+    /**
+     * Serializa TODOS los nodos para envío inicial (sin filtrado)
+     */
+    serializeAllNodes() {
+        // Filtrar solo nodos destruidos, pero enviar todos los demás sin filtrado de cambios
+        return this.nodes
+            .filter(node => node.active !== false)
+            .map(node => {
+                // Guardar estado para tracking (aunque sea inicial)
+                this.lastNodeStates.set(node.id, {
+                    x: node.x,
+                    y: node.y,
+                    active: node.active,
+                    constructed: node.constructed,
+                    isConstructing: node.isConstructing,
+                    constructionTimer: node.constructionTimer || 0,
+                    supplies: node.supplies,
+                    availableVehicles: node.availableVehicles,
+                    ambulanceAvailable: node.ambulanceAvailable,
+                    isAbandoning: node.isAbandoning,
+                    effects: node.effects ? [...node.effects] : []
+                });
+                
+                return {
+                    id: node.id,
+                    type: node.type,
+                    team: node.team,
+                    x: node.x,
+                    y: node.y,
+                    active: node.active,
+                    constructed: node.constructed,
+                    isConstructing: node.isConstructing,
+                    constructionTimer: node.constructionTimer || 0,
+                    constructionTime: node.constructionTime || 2,
+                    supplies: node.supplies,
+                    maxSupplies: node.maxSupplies,
+                    availableVehicles: node.availableVehicles,
+                    maxVehicles: node.maxVehicles,
+                    consumeRate: node.consumeRate,
+                    maxXReached: node.maxXReached,
+                    minXReached: node.minXReached,
+                    isAbandoning: node.isAbandoning,
+                    abandonPhase: node.abandonPhase,
+                    effects: node.effects || [],
+                    // Propiedades del sistema médico
+                    hasMedicalSystem: node.hasMedicalSystem || false,
+                    ambulanceAvailable: node.ambulanceAvailable || false,
+                    maxAmbulances: node.maxAmbulances || 0
+                };
+            });
+    }
+
+    /**
+     * Serializa TODOS los convoyes para envío inicial (sin filtrado)
+     */
+    serializeAllConvoys() {
+        return this.convoys.map(convoy => {
+            // Guardar estado para tracking (aunque sea inicial)
+            this.lastConvoyStates.set(convoy.id, {
+                progress: convoy.progress,
+                returning: convoy.returning
+            });
+            
+            return {
+                id: convoy.id,
+                fromId: convoy.fromId,
+                toId: convoy.toId,
+                team: convoy.team,
+                vehicleType: convoy.vehicleType,
+                cargo: convoy.cargo,
+                progress: convoy.progress,
+                returning: convoy.returning,
+                isMedical: convoy.isMedical || false,
+                targetFrontId: convoy.targetFrontId || null
+            };
+        });
+    }
     
     /**
      * Maneja solicitud de construcción
@@ -413,6 +493,7 @@ export class GameStateManager {
             if (this.countdown <= 0) {
                 this.countdown = 0;
                 this.gameStarted = true;
+                this.gameStartTicks = 0; // Reset contador para sync inicial
                 console.log('🎮 Servidor: Countdown terminado - INICIANDO SIMULACIÓN');
                 
                 // Evento de sonido: secuencia de inicio (engine + infantry moves)
@@ -426,6 +507,11 @@ export class GameStateManager {
         
         // Actualizar tiempo (solo después del countdown)
         this.gameTime += dt;
+        
+        // Incrementar contador de ticks desde inicio del juego
+        if (this.gameStartTicks < this.INITIAL_SYNC_TICKS) {
+            this.gameStartTicks++;
+        }
         
         // === SONIDOS AMBIENTALES (timers) ===
         this.clearShootsTimer += dt;
@@ -752,11 +838,14 @@ export class GameStateManager {
      * Obtiene el estado completo del juego para sincronizar con clientes
      */
     getGameState() {
+        // Durante el período inicial, enviar estado completo sin filtrado para asegurar sincronización
+        const isInitialSync = this.gameStartTicks < this.INITIAL_SYNC_TICKS;
+        
         const state = {
             tick: this.tickCounter,
             gameTime: this.gameTime,
-            nodes: this.serializeNodes(),
-            convoys: this.serializeConvoys(),
+            nodes: isInitialSync ? this.serializeAllNodes() : this.serializeNodes(),
+            convoys: isInitialSync ? this.serializeAllConvoys() : this.serializeConvoys(),
             drones: this.droneSystem.getDrones(), // Drones activos con posiciones
             emergencies: this.medicalSystem.getEmergencies(),
             currency: {
@@ -766,8 +855,8 @@ export class GameStateManager {
             soundEvents: this.getSoundEvents() // Eventos de sonido de este tick
         };
         
-        // Optimización: Solo enviar si hay cambios significativos
-        if (!this.hasSignificantChanges(state)) {
+        // Durante sync inicial, siempre enviar. Después, aplicar optimización
+        if (!isInitialSync && !this.hasSignificantChanges(state)) {
             return null; // Skip update - no envía nada
         }
         
