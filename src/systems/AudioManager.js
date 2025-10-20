@@ -52,8 +52,8 @@ export class AudioManager {
     }
     
     loadSounds() {
-        // Base URL para todos los sonidos desde GitHub Raw
-        const SOUNDS_BASE_URL = 'https://raw.githubusercontent.com/FJavierRG/ProyectoMil/main/assets/sounds/normalized/';
+        // Base URL para todos los sonidos desde JSDelivr (más compatible con audio)
+        const SOUNDS_BASE_URL = 'https://cdn.jsdelivr.net/gh/FJavierRG/ProyectoMil@main/assets/sounds/normalized/';
         
         // Música de fondo (normalizada)
         this.music.ambiance = this.createAudio(SOUNDS_BASE_URL + 'warsound_normalized.wav', this.volumes.ambiance, true);
