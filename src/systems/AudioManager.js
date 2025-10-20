@@ -99,7 +99,7 @@ export class AudioManager {
         this.sounds.sniperShoot = this.createAudio('assets/sounds/normalized/sniper_shoot.wav', 0.1, false); // 50% del volumen anterior
         
         // Música de menú
-        this.music.mainTheme = this.createAudio('https://raw.githubusercontent.com/FJavierRG/ProyectoMil/main/assets/sounds/normalized/main_theme.wav', this.volumes.mainTheme, true); // Loop activado
+        this.music.mainTheme = this.createAudio('assets/sounds/normalized/main_theme.wav', this.volumes.mainTheme, true); // Loop activado
         
         // Música de victoria
         this.music.victoryMarch = this.createAudio('assets/sounds/normalized/Victory-March.wav', this.volumes.victoryMarch, false); // Sin loop
