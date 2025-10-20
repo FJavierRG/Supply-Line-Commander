@@ -52,60 +52,63 @@ export class AudioManager {
     }
     
     loadSounds() {
+        // Base URL para todos los sonidos desde GitHub Raw
+        const SOUNDS_BASE_URL = 'https://raw.githubusercontent.com/FJavierRG/ProyectoMil/main/assets/sounds/normalized/';
+        
         // Música de fondo (normalizada)
-        this.music.ambiance = this.createAudio('assets/sounds/normalized/warsound_normalized.wav', this.volumes.ambiance, true);
+        this.music.ambiance = this.createAudio(SOUNDS_BASE_URL + 'warsound_normalized.wav', this.volumes.ambiance, true);
         
         // Efectos de sonido originales (normalizados)
-        this.sounds.truck = this.createAudio('assets/sounds/normalized/truckengine_normalized.wav', this.volumes.truck, false);
-        this.sounds.hq = this.createAudio('assets/sounds/normalized/hqsound_normalized.wav', this.volumes.hq, false);
-        this.sounds.explosion = this.createAudio('assets/sounds/normalized/explosion_normalized.wav', this.volumes.explosion, false);
-        this.sounds.drone = this.createAudio('assets/sounds/normalized/droneflying_normalized.wav', this.volumes.drone, false);
+        this.sounds.truck = this.createAudio(SOUNDS_BASE_URL + 'truckengine_normalized.wav', this.volumes.truck, false);
+        this.sounds.hq = this.createAudio(SOUNDS_BASE_URL + 'hqsound_normalized.wav', this.volumes.hq, false);
+        this.sounds.explosion = this.createAudio(SOUNDS_BASE_URL + 'explosion_normalized.wav', this.volumes.explosion, false);
+        this.sounds.drone = this.createAudio(SOUNDS_BASE_URL + 'droneflying_normalized.wav', this.volumes.drone, false);
         
         // Nuevos sonidos ambientales (normalizados)
-        this.sounds.clearShoots = this.createAudio('assets/sounds/normalized/clear_shoots_ambiance_normalized.wav', this.volumes.clearShoots, false);
-        this.sounds.countdown = this.createAudio('assets/sounds/normalized/countdown_normalized.wav', this.volumes.countdown, false);
-        this.sounds.enemyContact = this.createAudio('assets/sounds/normalized/enemy_contact_normalized.wav', this.volumes.enemyContact, false);
-        this.sounds.startingEngine = this.createAudio('assets/sounds/normalized/startinggame_engine_normalized.wav', this.volumes.startingEngine, false);
-        this.sounds.placeBuilding = this.createAudio('assets/sounds/normalized/place_building_normalized.wav', this.volumes.placeBuilding, false);
+        this.sounds.clearShoots = this.createAudio(SOUNDS_BASE_URL + 'clear_shoots_ambiance_normalized.wav', this.volumes.clearShoots, false);
+        this.sounds.countdown = this.createAudio(SOUNDS_BASE_URL + 'countdown_normalized.wav', this.volumes.countdown, false);
+        this.sounds.enemyContact = this.createAudio(SOUNDS_BASE_URL + 'enemy_contact_normalized.wav', this.volumes.enemyContact, false);
+        this.sounds.startingEngine = this.createAudio(SOUNDS_BASE_URL + 'startinggame_engine_normalized.wav', this.volumes.startingEngine, false);
+        this.sounds.placeBuilding = this.createAudio(SOUNDS_BASE_URL + 'place_building_normalized.wav', this.volumes.placeBuilding, false);
         
         // Variantes de infantry move (normalizadas)
-        this.sounds.infantryMove1 = this.createAudio('assets/sounds/normalized/infantry_move1_normalized.wav', this.volumes.infantryMove, false);
-        this.sounds.infantryMove2 = this.createAudio('assets/sounds/normalized/infantry_move2_normalized.wav', this.volumes.infantryMove, false);
-        this.sounds.infantryMove3 = this.createAudio('assets/sounds/normalized/infantry_move3_normalized.wav', this.volumes.infantryMove, false);
+        this.sounds.infantryMove1 = this.createAudio(SOUNDS_BASE_URL + 'infantry_move1_normalized.wav', this.volumes.infantryMove, false);
+        this.sounds.infantryMove2 = this.createAudio(SOUNDS_BASE_URL + 'infantry_move2_normalized.wav', this.volumes.infantryMove, false);
+        this.sounds.infantryMove3 = this.createAudio(SOUNDS_BASE_URL + 'infantry_move3_normalized.wav', this.volumes.infantryMove, false);
         
         // Variantes de man down (normalizadas)
-        this.sounds.manDown1 = this.createAudio('assets/sounds/normalized/man_down1_normalized.wav', this.volumes.manDown, false);
-        this.sounds.manDown2 = this.createAudio('assets/sounds/normalized/man_down2_normalized.wav', this.volumes.manDown, false);
+        this.sounds.manDown1 = this.createAudio(SOUNDS_BASE_URL + 'man_down1_normalized.wav', this.volumes.manDown, false);
+        this.sounds.manDown2 = this.createAudio(SOUNDS_BASE_URL + 'man_down2_normalized.wav', this.volumes.manDown, false);
         
         // Variantes de no ammo (normalizadas)
-        this.sounds.noAmmo1 = this.createAudio('assets/sounds/normalized/no_ammo1_normalized.wav', this.volumes.noAmmo, false);
-        this.sounds.noAmmo2 = this.createAudio('assets/sounds/normalized/no_ammo2_normalized.wav', this.volumes.noAmmo, false);
-        this.sounds.noAmmo3 = this.createAudio('assets/sounds/normalized/no_ammo3_normalized.wav', this.volumes.noAmmo, false);
-        this.sounds.noAmmo4 = this.createAudio('assets/sounds/normalized/no_ammo4_normalized.wav', this.volumes.noAmmo, false);
+        this.sounds.noAmmo1 = this.createAudio(SOUNDS_BASE_URL + 'no_ammo1_normalized.wav', this.volumes.noAmmo, false);
+        this.sounds.noAmmo2 = this.createAudio(SOUNDS_BASE_URL + 'no_ammo2_normalized.wav', this.volumes.noAmmo, false);
+        this.sounds.noAmmo3 = this.createAudio(SOUNDS_BASE_URL + 'no_ammo3_normalized.wav', this.volumes.noAmmo, false);
+        this.sounds.noAmmo4 = this.createAudio(SOUNDS_BASE_URL + 'no_ammo4_normalized.wav', this.volumes.noAmmo, false);
         
         // Variantes de radio effect (normalizadas)
-        this.sounds.radioEffect1 = this.createAudio('assets/sounds/normalized/radio_effect1_normalized.wav', this.volumes.radioEffect, false);
-        this.sounds.radioEffect2 = this.createAudio('assets/sounds/normalized/radio_effect2_normalized.wav', this.volumes.radioEffect, false);
-        this.sounds.radioEffect3 = this.createAudio('assets/sounds/normalized/radio_effect3_normalized.wav', this.volumes.radioEffect, false);
-        this.sounds.radioEffect4 = this.createAudio('assets/sounds/normalized/radio_effect4_normalized.wav', this.volumes.radioEffect, false);
+        this.sounds.radioEffect1 = this.createAudio(SOUNDS_BASE_URL + 'radio_effect1_normalized.wav', this.volumes.radioEffect, false);
+        this.sounds.radioEffect2 = this.createAudio(SOUNDS_BASE_URL + 'radio_effect2_normalized.wav', this.volumes.radioEffect, false);
+        this.sounds.radioEffect3 = this.createAudio(SOUNDS_BASE_URL + 'radio_effect3_normalized.wav', this.volumes.radioEffect, false);
+        this.sounds.radioEffect4 = this.createAudio(SOUNDS_BASE_URL + 'radio_effect4_normalized.wav', this.volumes.radioEffect, false);
         
         // Sonidos de sistema anti-drone
-        this.sounds.bomShoot = this.createAudio('assets/sounds/normalized/bom_shoot1_normalized.wav', this.volumes.bomShoot, false);
-        this.sounds.antiDroneSpawn = this.createAudio('assets/sounds/normalized/antidrone_spawn_normalized.wav', this.volumes.antiDroneSpawn, false);
-        this.sounds.antiDroneAttack = this.createAudio('assets/sounds/normalized/antidrone_attack_normalized.wav', this.volumes.antiDroneAttack, false);
+        this.sounds.bomShoot = this.createAudio(SOUNDS_BASE_URL + 'bom_shoot1_normalized.wav', this.volumes.bomShoot, false);
+        this.sounds.antiDroneSpawn = this.createAudio(SOUNDS_BASE_URL + 'antidrone_spawn_normalized.wav', this.volumes.antiDroneSpawn, false);
+        this.sounds.antiDroneAttack = this.createAudio(SOUNDS_BASE_URL + 'antidrone_attack_normalized.wav', this.volumes.antiDroneAttack, false);
         
         // Sonido de francotirador
-        this.sounds.sniperSpotted = this.createAudio('assets/sounds/normalized/sniper_spotted_normalized.wav', this.volumes.sniperSpotted, false);
-        this.sounds.sniperShoot = this.createAudio('assets/sounds/normalized/sniper_shoot.wav', 0.1, false); // 50% del volumen anterior
+        this.sounds.sniperSpotted = this.createAudio(SOUNDS_BASE_URL + 'sniper_spotted_normalized.wav', this.volumes.sniperSpotted, false);
+        this.sounds.sniperShoot = this.createAudio(SOUNDS_BASE_URL + 'sniper_shoot.wav', 0.1, false); // 50% del volumen anterior
         
         // Música de menú
-        this.music.mainTheme = this.createAudio('assets/sounds/normalized/main_theme.wav', this.volumes.mainTheme, true); // Loop activado
+        this.music.mainTheme = this.createAudio(SOUNDS_BASE_URL + 'main_theme.wav', this.volumes.mainTheme, true); // Loop activado
         
         // Música de victoria
-        this.music.victoryMarch = this.createAudio('assets/sounds/normalized/Victory-March.wav', this.volumes.victoryMarch, false); // Sin loop
+        this.music.victoryMarch = this.createAudio(SOUNDS_BASE_URL + 'Victory-March.wav', this.volumes.victoryMarch, false); // Sin loop
         
         // Sonido de hover en menú
-        this.sounds.menuHover = this.createAudio('assets/sounds/normalized/menu_choice.wav', 0.4, false);
+        this.sounds.menuHover = this.createAudio(SOUNDS_BASE_URL + 'menu_choice.wav', 0.4, false);
     }
     
     createAudio(src, volume, loop) {
