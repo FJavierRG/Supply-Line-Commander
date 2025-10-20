@@ -101,20 +101,44 @@ export class AudioManager {
         this.sounds.sniperSpotted = this.createAudio(SOUNDS_BASE_URL + 'sniper_spotted_normalized.wav', this.volumes.sniperSpotted, false);
         this.sounds.sniperShoot = this.createAudio(SOUNDS_BASE_URL + 'sniper_shoot.wav', 0.1, false); // 50% del volumen anterior
         
-        // Música de menú
-        this.music.mainTheme = this.createAudio(SOUNDS_BASE_URL + 'main_theme.wav', this.volumes.mainTheme, true); // Loop activado
+        // Música de menú - TEST: verificar URL primero
+        const mainThemeUrl = SOUNDS_BASE_URL + 'main_theme.wav';
+        console.log('🎵 Intentando cargar música del menú desde:', mainThemeUrl);
+        this.music.mainTheme = this.createAudio(mainThemeUrl, this.volumes.mainTheme, true); // Loop activado
         
         // Música de victoria
         this.music.victoryMarch = this.createAudio(SOUNDS_BASE_URL + 'Victory-March.wav', this.volumes.victoryMarch, false); // Sin loop
         
-        // Sonido de hover en menú
-        this.sounds.menuHover = this.createAudio(SOUNDS_BASE_URL + 'menu_choice.wav', 0.4, false);
+        // Sonido de hover en menú - TEST: probar con sonido más pequeño
+        const menuHoverUrl = SOUNDS_BASE_URL + 'menu_choice.wav';
+        console.log('🔊 Cargando sonido de hover desde:', menuHoverUrl);
+        this.sounds.menuHover = this.createAudio(menuHoverUrl, 0.4, false);
     }
     
     createAudio(src, volume, loop) {
         const audio = new Audio(src);
         audio.volume = volume;
         audio.loop = loop;
+        
+        // Añadir listeners para debug
+        audio.addEventListener('error', (e) => {
+            console.error(`❌ Error cargando audio: ${src}`, e);
+            console.error(`   Error details:`, {
+                code: audio.error?.code,
+                message: audio.error?.message,
+                networkState: audio.networkState,
+                readyState: audio.readyState
+            });
+        });
+        
+        audio.addEventListener('loadstart', () => {
+            console.log(`🔄 Cargando audio: ${src}`);
+        });
+        
+        audio.addEventListener('canplaythrough', () => {
+            console.log(`✅ Audio listo: ${src}`);
+        });
+        
         return audio;
     }
     
