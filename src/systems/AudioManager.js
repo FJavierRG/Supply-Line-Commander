@@ -52,8 +52,8 @@ export class AudioManager {
     }
     
     loadSounds() {
-        // Base URL para todos los sonidos desde JSDelivr (más compatible con audio)
-        const SOUNDS_BASE_URL = 'https://cdn.jsdelivr.net/gh/FJavierRG/ProyectoMil@main/assets/sounds/normalized/';
+        // Base URL para todos los sonidos desde GitHub Raw (volvemos aquí pero mejor)
+        const SOUNDS_BASE_URL = 'https://raw.githubusercontent.com/FJavierRG/ProyectoMil/main/assets/sounds/normalized/';
         
         // Música de fondo (normalizada)
         this.music.ambiance = this.createAudio(SOUNDS_BASE_URL + 'warsound_normalized.wav', this.volumes.ambiance, true);
@@ -101,9 +101,19 @@ export class AudioManager {
         this.sounds.sniperSpotted = this.createAudio(SOUNDS_BASE_URL + 'sniper_spotted_normalized.wav', this.volumes.sniperSpotted, false);
         this.sounds.sniperShoot = this.createAudio(SOUNDS_BASE_URL + 'sniper_shoot.wav', 0.1, false); // 50% del volumen anterior
         
-        // Música de menú - TEST: verificar URL primero
+        // Música de menú - PRUEBA: cargar con fetch para verificar que funciona
         const mainThemeUrl = SOUNDS_BASE_URL + 'main_theme.wav';
         console.log('🎵 Intentando cargar música del menú desde:', mainThemeUrl);
+        
+        // Test: verificar que la URL es accesible
+        fetch(mainThemeUrl, {method: 'HEAD'})
+            .then(response => {
+                console.log('✅ URL accesible, Content-Type:', response.headers.get('content-type'));
+            })
+            .catch(error => {
+                console.error('❌ URL no accesible:', error);
+            });
+        
         this.music.mainTheme = this.createAudio(mainThemeUrl, this.volumes.mainTheme, true); // Loop activado
         
         // Música de victoria
@@ -116,11 +126,14 @@ export class AudioManager {
     }
     
     createAudio(src, volume, loop) {
-        const audio = new Audio(src);
+        const audio = new Audio();
+        
+        // Configurar propiedades ANTES de asignar src
         audio.volume = volume;
         audio.loop = loop;
+        audio.crossOrigin = 'anonymous'; // Importante para CORS
         
-        // Añadir listeners para debug
+        // Añadir listeners para debug ANTES de cargar
         audio.addEventListener('error', (e) => {
             console.error(`❌ Error cargando audio: ${src}`, e);
             console.error(`   Error details:`, {
@@ -138,6 +151,9 @@ export class AudioManager {
         audio.addEventListener('canplaythrough', () => {
             console.log(`✅ Audio listo: ${src}`);
         });
+        
+        // Asignar src DESPUÉS de configurar todo
+        audio.src = src;
         
         return audio;
     }
