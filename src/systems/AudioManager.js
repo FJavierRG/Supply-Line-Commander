@@ -115,6 +115,12 @@ export class AudioManager {
         const audio = new Audio(src);
         audio.volume = volume;
         audio.loop = loop;
+        
+        // Debug: verificar si se puede cargar el archivo
+        audio.addEventListener('loadstart', () => console.log(`🎵 Cargando: ${src}`));
+        audio.addEventListener('canplaythrough', () => console.log(`✅ Listo: ${src}`));
+        audio.addEventListener('error', (e) => console.log(`❌ Error cargando: ${src}`, e));
+        
         return audio;
     }
     
