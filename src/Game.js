@@ -185,6 +185,9 @@ export class Game {
         // Ocultar pantalla de carga y mostrar "Press to Continue"
         this.loadingScreen.hide();
         this.loadingScreen.showPressToContinue(() => {
+            // CRÍTICO: Desbloquear el contexto de audio del navegador
+            this.audio.unlockAudioContext();
+            
             // Al hacer clic, mostrar el menú principal (esto activará el audio)
             if (this.state === 'menu') {
                 this.showMainMenu();

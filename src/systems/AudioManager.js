@@ -115,13 +115,46 @@ export class AudioManager {
         const audio = new Audio(src);
         audio.volume = volume;
         audio.loop = loop;
-        
-        // Debug: verificar si se puede cargar el archivo
-        audio.addEventListener('loadstart', () => console.log(`🎵 Cargando: ${src}`));
-        audio.addEventListener('canplaythrough', () => console.log(`✅ Listo: ${src}`));
-        audio.addEventListener('error', (e) => console.log(`❌ Error cargando: ${src}`, e));
-        
         return audio;
+    }
+    
+    /**
+     * Desbloquea el contexto de audio del navegador
+     * Debe llamarse después de una interacción del usuario
+     */
+    unlockAudioContext() {
+        // Intentar reproducir un sonido silencioso para desbloquear el contexto
+        const testAudio = new Audio();
+        testAudio.volume = 0.01; // Muy bajo para no molestarte
+        testAudio.preload = 'none';
+        
+        // Intentar reproducir
+        const playPromise = testAudio.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                console.log('🔊 Contexto de audio desbloqueado correctamente');
+                testAudio.pause();
+                testAudio.currentTime = 0;
+            }).catch(error => {
+                console.log('⚠️ No se pudo desbloquear audio:', error);
+            });
+        }
+        
+        // También intentar con el tema del menú si existe
+        if (this.music.mainTheme) {
+            this.music.mainTheme.volume = 0;
+            const mainThemePromise = this.music.mainTheme.play();
+            if (mainThemePromise !== undefined) {
+                mainThemePromise.then(() => {
+                    console.log('🔊 Tema del menú preparado para desbloqueo');
+                    this.music.mainTheme.pause();
+                    this.music.mainTheme.currentTime = 0;
+                    this.music.mainTheme.volume = this.volumes.mainTheme; // Restaurar volumen
+                }).catch(() => {
+                    this.music.mainTheme.volume = this.volumes.mainTheme; // Restaurar volumen
+                });
+            }
+        }
     }
     
     /**
@@ -292,7 +325,9 @@ export class AudioManager {
      */
     playMainTheme() {
         if (this.music.mainTheme) {
-            this.music.mainTheme.play().catch(e => {});
+            this.music.mainTheme.play().catch(e => {
+                console.log('🔊 Audio del menú bloqueado por navegador:', e.name);
+            });
         }
     }
     
