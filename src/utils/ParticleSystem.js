@@ -74,6 +74,7 @@ export class ParticleSystem {
         this.explosionSprites = [];
         this.floatingTexts = [];
         this.floatingSprites = []; // Sprites flotantes (ej: sniper kill feed)
+        this.fallingSprites = []; // Sprites que caen (ej: specops unit)
         this.impactMarks = []; // Marcas de impacto persistentes
         
         // Sistema de acumulación de textos flotantes para evitar spam
@@ -86,6 +87,7 @@ export class ParticleSystem {
         this.explosionSprites = this.explosionSprites.filter(e => e.update(dt));
         this.floatingTexts = this.floatingTexts.filter(t => t.update(dt));
         this.floatingSprites = this.floatingSprites.filter(s => s.update(dt));
+        this.fallingSprites = this.fallingSprites.filter(s => s.update(dt));
         
         // Procesar acumulador de textos flotantes
         const currentTime = Date.now();
@@ -139,6 +141,8 @@ export class ParticleSystem {
         this.particles = [];
         this.explosionSprites = [];
         this.floatingTexts = [];
+        this.floatingSprites = [];
+        this.fallingSprites = [];
         this.impactMarks = [];
         this.floatingTextAccumulator.clear();
     }
@@ -190,6 +194,17 @@ export class ParticleSystem {
     
     getFloatingSprites() {
         return this.floatingSprites;
+    }
+    
+    /**
+     * Crea un sprite que cae desde arriba y desaparece
+     */
+    createFallingSprite(x, y, spriteKey, scale = 0.67) {
+        this.fallingSprites.push(new FallingSprite(x, y, spriteKey, scale));
+    }
+    
+    getFallingSprites() {
+        return this.fallingSprites;
     }
     
     /**
@@ -279,6 +294,30 @@ export class FloatingSprite {
         if (this.life < this.maxLife / 2) {
             this.alpha = (this.life / (this.maxLife / 2));
         }
+        
+        return this.life > 0;
+    }
+}
+
+export class FallingSprite {
+    constructor(x, y, spriteKey, scale = 0.67) {
+        this.x = x;
+        this.y = y;
+        this.spriteKey = spriteKey;
+        this.life = 2.0; // 2 segundos
+        this.maxLife = 2.0;
+        this.alpha = 1;
+        this.velocityY = 60; // Cae hacia abajo
+        this.scale = scale;
+        this.startY = y; // Posición inicial para referencia
+    }
+    
+    update(dt) {
+        this.life -= dt;
+        this.y += this.velocityY * dt;
+        
+        // Fade out gradualmente durante toda la vida
+        this.alpha = this.life / this.maxLife;
         
         return this.life > 0;
     }

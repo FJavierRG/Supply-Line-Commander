@@ -1,6 +1,7 @@
 // ===== GESTOR DE CONVOYES =====
 import { Convoy } from '../entities/Convoy.js';
-import { VEHICLE_TYPES, VALID_ROUTES } from '../config/constants.js';
+import { VEHICLE_TYPES, VALID_ROUTES, RACE_SPECIAL_ROUTES } from '../config/constants.js';
+import { getRaceConfig, canRaceUseFOBs, getRaceTransportSystem } from '../config/races.js';
 
 export class ConvoyManager {
     constructor(game) {
@@ -50,6 +51,8 @@ export class ConvoyManager {
      * Crea una ruta de suministros entre dos bases
      */
     createRoute(from, to) {
+        console.log(`🔍 DEBUG: createRoute llamado desde ${from.type} (${from.id}) hacia ${to.type} (${to.id})`);
+        
         // Verificar que los nodos no estén abandonando
         if (from.isAbandoning || to.isAbandoning) {
             console.log('⚠️ No se puede enviar convoy: nodo abandonando');
@@ -62,19 +65,51 @@ export class ConvoyManager {
             return;
         }
         
-        // Validar jerarquía logística
-        if (!VALID_ROUTES[from.type] || !VALID_ROUTES[from.type].includes(to.type)) {
+        // 🆕 NUEVO: Validar jerarquía logística CON soporte para razas especiales
+        const validRoutes = this.getValidRoutesForRace(from.type, this.game.selectedRace);
+        console.log(`🔍 DEBUG: Rutas válidas para ${from.type} (${this.game.selectedRace}):`, validRoutes);
+        if (!validRoutes || !validRoutes.includes(to.type)) {
+            console.log(`❌ Ruta bloqueada: ${from.type} → ${to.type} no está en rutas válidas`);
             return;
         }
         
-        // Verificar que haya vehículos disponibles
-        if (!from.hasAvailableVehicle()) {
+        // Verificar que haya vehículos disponibles (o helicópteros para frentes)
+        if (from.type === 'front' && from.hasHelicopters) {
+            // Para frentes con helicópteros, verificar helicópteros disponibles
+            if (!from.hasAvailableHelicopter()) {
+                return;
+            }
+        } else if (from.type === 'hq' && this.game.selectedRace === 'B_Nation' && from.hasHelicopters) {
+            // Para HQ de B_Nation con helicópteros, verificar helicópteros disponibles
+            if (!from.hasAvailableHelicopter()) {
+                return;
+            }
+        } else if ((from.type === 'aerialBase' || from.isAerialBase) && from.landedHelicopters && from.landedHelicopters.length > 0) {
+            // 🆕 NUEVO: Base Aérea puede enviar helicópteros si tiene alguno aterrizado
+            console.log(`✅ Base Aérea tiene ${from.landedHelicopters.length} helicópteros - permitiendo envío`);
+            // No hacer nada, permitir continuar
+        } else if ((from.type === 'aerialBase' || from.isAerialBase)) {
+            // 🆕 NUEVO: Base Aérea sin helicópteros - inicializar array si no existe
+            if (!from.landedHelicopters) {
+                from.landedHelicopters = [];
+            }
+            console.log(`❌ Base Aérea sin helicópteros disponibles (tiene ${from.landedHelicopters.length})`);
             return;
+        } else {
+            // Para otros nodos, verificar vehículos normales
+            if (!from.hasAvailableVehicle()) {
+                return;
+            }
         }
         
-        // Verificar suministros
-        if (!from.hasEnoughSupplies(10)) {
-            return;
+        // 🆕 NUEVO: Seleccionar tipo de vehículo según la raza y origen
+        let vehicleType = this.selectVehicleType(from, this.game.selectedRace);
+        
+        // Verificar suministros (solo para sistema tradicional)
+        if (this.game.selectedRace !== 'B_Nation') {
+            if (!from.hasEnoughSupplies(10)) {
+                return;
+            }
         }
         
         // === MULTIJUGADOR: Enviar solicitud al servidor ===
@@ -85,28 +120,57 @@ export class ConvoyManager {
             return;
         }
         
-        // === SINGLEPLAYER: Crear convoy localmente ===
+        // === SINGLEPLAYER: Manejar helicópteros con sistema persistente ===
+        if (vehicleType === 'helicopter') {
+            console.log(`🚁 SINGLEPLAYER: Llamando dispatchHelicopter desde ${from.type} hacia ${to.type}`);
+            const success = this.game.dispatchHelicopter(from.id, to.id);
+            if (!success) {
+                console.error('❌ No se pudo despachar helicóptero');
+            } else {
+                console.log(`✅ Helicóptero despachado exitosamente`);
+            }
+            return;
+        }
+        
+        // === SINGLEPLAYER: Crear convoy localmente (solo para trucks) ===
         
         // Tomar vehículo de la base
         if (!from.takeVehicle()) {
             return;
         }
         
-        // Elegir tipo de camión según el origen
-        // HQ → FOB/Frente: Heavy Truck (lento)
-        // FOB → FOB/Frente: Truck normal (rápido)
-        let vehicleType;
-        if (from.type === 'hq') {
-            vehicleType = 'heavy_truck'; // Camión pesado desde HQ
-        } else {
-            vehicleType = 'truck'; // Camión normal desde FOB
-        }
-        
         // Crear convoy con el tipo apropiado
         const vehicle = this.applyUpgrades(VEHICLE_TYPES[vehicleType], vehicleType);
-        const cargo = from.removeSupplies(vehicle.capacity);
+        
+        // 🆕 NUEVO: Sistema de cargo separado por raza
+        let cargo = 0;
+        if (this.game.selectedRace === 'B_Nation') {
+            // SISTEMA AÉREO: Solo carga suministros cuando sale del HQ
+            if (from.type === 'hq') {
+                cargo = from.removeSupplies(vehicle.capacity);
+            } else {
+                // Cuando sale de un Front, NO quita suministros
+                cargo = 0;
+            }
+        } else {
+            // SISTEMA TRADICIONAL: Cargo normal
+            cargo = from.removeSupplies(vehicle.capacity);
+        }
         
         const convoy = new Convoy(from, to, vehicle, vehicleType, cargo, this.game);
+        
+        // Verificar si la base de origen está afectada por fobSabotage
+        if (from.type === 'fob') {
+            const isSabotaged = from.isSabotaged ? from.isSabotaged() : from.hasEffect && from.hasEffect('fobSabotage');
+            
+            if (isSabotaged) {
+                console.log(`⚡ Convoy desde FOB ${from.id} saboteada - penalización aplicada`);
+                // Marcar el convoy para aplicación de penalización de velocidad
+                convoy.sabotageOrigin = true;
+                convoy.sabotageSpeedPenalty = true; // Se aplicará en el primer update
+                convoy.firstSabotageUpdate = true; // Para consumir camión solo la primera vez
+            }
+        }
         
         // En tutorial, agregar al array de convoyes del tutorial
         if (this.game.state === 'tutorial' && this.game.tutorialManager?.tutorialConvoys) {
@@ -267,6 +331,26 @@ export class ConvoyManager {
             // Velocidad normal (sin penalizaciones de terreno)
             let speedMultiplier = 1;
             
+            // Aplicar penalización de fobSabotage si el convoy viene de una FOB sabotajeada
+            if ((convoy.sabotageOrigin && convoy.sabotageSpeedPenalty) || (convoy.harassedOrigin && convoy.harassedSpeedPenalty)) {
+                // Aplicar penalización constante durante todo el trayecto
+                speedMultiplier = 0.5; // 50% de penalización
+                
+                // Consumir un camión del contador de fobSabotage SOLO la primera vez
+                const firstUpdate = convoy.firstSabotageUpdate || convoy.firstHarassedUpdate;
+                if (convoy.originBase && firstUpdate === true) {
+                    if (typeof convoy.originBase.consumeFobSabotageTruck === 'function') {
+                        convoy.originBase.consumeFobSabotageTruck();
+                        convoy.firstSabotageUpdate = false;
+                        console.log(`🚛 Convoy desde FOB saboteada - camión afectado`);
+                    } else if (typeof convoy.originBase.consumeHarassmentTruck === 'function') {
+                        convoy.originBase.consumeHarassmentTruck();
+                        convoy.firstHarassedUpdate = false;
+                        console.log(`🚛 Convoy desde FOB saboteada - camión afectado`);
+                    }
+                }
+            }
+            
             const arrived = convoy.update(dt, speedMultiplier);
             
             
@@ -276,20 +360,44 @@ export class ConvoyManager {
                 if (convoy.returning) {
                     // Llegó de vuelta a la base de origen - devolver vehículo
                     if (convoy.isMedical) {
-                        // Retornar ambulancia (funciona para cualquier HQ y Hospital)
+                        // CRÍTICO: Solo HQ regresa ambulancia, Hospital se consume
                         if (convoy.originBase.type === 'hq') {
                             convoy.originBase.returnAmbulance();
                         } else if (convoy.originBase.type === 'campaignHospital') {
-                            convoy.originBase.returnHospitalAmbulance();
+                            // NO devolver - la ambulancia del hospital se consume
+                            console.log(`🚑 Ambulancia ${convoy.id} CONSUMIDA del Hospital ${convoy.originBase.team}`);
                         }
                     } else {
                         convoy.originBase.returnVehicle();
                     }
                     this.convoys.splice(i, 1);
                 } else {
-                    // Llegó al destino - entregar y empezar retorno
-                    this.deliverSupplies(convoy);
-                    convoy.startReturning();
+                    // Llegó al destino
+                    if (convoy.isMedical && convoy.originBase.type === 'campaignHospital') {
+                        // Ambulancia del hospital: resolver emergencia y eliminar convoy (no regresa)
+                        this.deliverSupplies(convoy);
+                        
+                        // Verificar si el hospital se queda sin ambulancias para eliminarlo
+                        if (convoy.originBase.availableVehicles <= 0) {
+                            console.log(`🏥 Hospital ${convoy.originBase.id} sin ambulancias - ELIMINANDO`);
+                            convoy.originBase.active = false; // Marcar para eliminación
+                        }
+                        
+                        this.convoys.splice(i, 1);
+                    } else {
+                        // SISTEMA TRADICIONAL: Entrega normal de suministros
+                        this.deliverSupplies(convoy);
+                        
+                        // SINGLEPLAYER: Implementar lógica de returning localmente
+                        if (!this.game.isMultiplayer) {
+                            convoy.returning = true;
+                            convoy.progress = 0;
+                            convoy.target = convoy.originBase; // Actualizar target para el regreso
+                            console.log(`🚛 SINGLEPLAYER: Convoy ${convoy.id} iniciando regreso a ${convoy.originBase.type}`);
+                        } else {
+                            convoy.startReturning();
+                        }
+                    }
                 }
             }
         }
@@ -316,6 +424,54 @@ export class ConvoyManager {
      */
     getCount() {
         return this.convoys.length;
+    }
+    
+    // 🆕 NUEVO: Método para obtener rutas válidas por raza
+    getValidRoutesForRace(fromType, raceId) {
+        const raceConfig = getRaceConfig(raceId);
+        
+        // Si la raza tiene rutas especiales (aerial), usarlas
+        if (raceConfig?.specialMechanics?.transportSystem === 'aerial') {
+            return RACE_SPECIAL_ROUTES[raceId]?.[fromType] || VALID_ROUTES[fromType];
+        }
+        
+        // Si no, usar rutas normales
+        return VALID_ROUTES[fromType];
+    }
+    
+    // 🆕 NUEVO: Método para seleccionar tipo de vehículo por raza
+    selectVehicleType(from, raceId) {
+        const raceConfig = getRaceConfig(raceId);
+        
+        // Si es HQ y la raza tiene transporte aéreo
+        if (from.type === 'hq' && raceConfig?.specialMechanics?.transportSystem === 'aerial') {
+            return 'helicopter';
+        }
+        
+        // Si es Front y tiene helicópteros, usar helicóptero
+        if (from.type === 'front' && from.hasHelicopters) {
+            return 'helicopter';
+        }
+        
+        // 🆕 NUEVO: Si es Base Aérea con helicópteros, usar helicóptero
+        if ((from.type === 'aerialBase' || from.isAerialBase) && from.landedHelicopters && from.landedHelicopters.length > 0) {
+            return 'helicopter';
+        }
+        
+        // 🆕 NUEVO: Si es Base Aérea sin helicópteros, inicializar array
+        if ((from.type === 'aerialBase' || from.isAerialBase)) {
+            if (!from.landedHelicopters) {
+                from.landedHelicopters = [];
+            }
+            return 'helicopter'; // Devolver helicopter aunque esté vacía para que el error se muestre arriba
+        }
+        
+        // Lógica estándar
+        if (from.type === 'hq') {
+            return 'heavy_truck';
+        } else {
+            return 'truck';
+        }
     }
 }
 

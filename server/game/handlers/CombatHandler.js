@@ -55,6 +55,50 @@ export class CombatHandler {
     }
     
     /**
+     * Maneja sabotaje de FOB
+     */
+    handleFobSabotage(playerTeam, targetId) {
+        const targetNode = this.gameState.nodes.find(n => n.id === targetId);
+        
+        if (!targetNode) {
+            return { success: false, reason: 'Objetivo no encontrado' };
+        }
+        
+        // Validar que sea una FOB enemiga
+        if (targetNode.type !== 'fob' || targetNode.team === playerTeam) {
+            return { success: false, reason: 'Solo puedes sabotear FOBs enemigas' };
+        }
+        
+        // Costo del sabotaje
+        const sabotageCost = SERVER_NODE_CONFIG.actions.fobSabotage.cost;
+        
+        // Verificar currency
+        if (this.gameState.currency[playerTeam] < sabotageCost) {
+            return { success: false, reason: 'Currency insuficiente' };
+        }
+        
+        // Descontar currency
+        this.gameState.currency[playerTeam] -= sabotageCost;
+        
+        // Añadir efecto de sabotaje
+        if (!targetNode.effects) targetNode.effects = [];
+        
+        const sabotageEffect = {
+            type: 'fobSabotage',
+            speedPenalty: 0.5, // 50% de penalización
+            truckCount: 3, // Número de camiones afectados
+            icon: 'ui-no-supplies',
+            tooltip: 'Saboteada: -50% velocidad en los siguientes 3 camiones'
+        };
+        
+        targetNode.effects.push(sabotageEffect);
+        
+        console.log(`⚡ FOB ${targetId} saboteada por ${playerTeam} - Los siguientes 3 camiones tendrán -50% velocidad`);
+        
+        return { success: true, targetId, effect: sabotageEffect };
+    }
+    
+    /**
      * Maneja lanzamiento de dron
      */
     handleDroneLaunch(playerTeam, targetId) {

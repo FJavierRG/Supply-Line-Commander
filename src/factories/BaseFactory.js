@@ -63,6 +63,8 @@ export class BaseFactory {
             this.applyFOBUpgrades(node, isConstructed, startingSuppliesPercent);
         } else if (node.type === 'front') {
             this.applyFrontUpgrades(node, isConstructed, startingSuppliesPercent);
+        } else if (node.type === 'aerialBase' || node.isAerialBase) {
+            this.applyAerialBaseUpgrades(node, isConstructed);
         }
     }
     
@@ -70,7 +72,11 @@ export class BaseFactory {
      * Aplica upgrades específicos del HQ
      */
     applyHQUpgrades(node) {
-        // Sin upgrades permanentes, valores base
+        // 🆕 NUEVO: Reducir vehículos para segunda nación
+        if (this.game && this.game.selectedRace === 'B_Nation') {
+            node.baseMaxVehicles = 1; // Solo 1 helicóptero
+            node.availableVehicles = 1; // Disponible desde el inicio
+        }
     }
     
     /**
@@ -97,5 +103,30 @@ export class BaseFactory {
         if (node.hasSupplies) {
             node.supplies = node.maxSupplies;
         }
+        
+        // 🆕 NUEVO: Activar sistema de helicópteros para segunda nación
+        if (this.game && this.game.selectedRace === 'B_Nation') {
+            node.hasHelicopters = true;
+            node.maxHelicopters = 1;
+            node.availableHelicopters = 0; // Empiezan sin helicópteros
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Aplica upgrades específicos de Base Aérea
+     */
+    applyAerialBaseUpgrades(node, isConstructed) {
+        // Base Aérea SIEMPRE empieza con su capacidad máxima (200)
+        if (node.hasSupplies) {
+            node.supplies = node.maxSupplies;
+            console.log(`🏭 Base Aérea inicializada con ${node.supplies} suministros`);
+        }
+        
+        // 🆕 NUEVO: Inicializar array de helicópteros aterrizados
+        node.landedHelicopters = [];
+        
+        // 🆕 NUEVO: Asegurar que autoDestroy esté aplicado
+        node.autoDestroy = true;
+        console.log(`🏭 Base Aérea configurada con autoDestroy: ${node.autoDestroy}`);
     }
 }

@@ -8,6 +8,8 @@ export class AudioManager {
         this.truckCooldown = 2000;
         this.lastHQSound = 0;
         this.hqCooldown = 3000;
+        this.lastWhisperSound = 0;
+        this.whisperCooldown = 3000; // 3 segundos como solicitado
         
         // Pool de sonidos activos para permitir múltiples simultáneos
         this.activeDroneSounds = new Map(); // droneId -> Audio instance
@@ -45,7 +47,9 @@ export class AudioManager {
             bomShoot: 0.3, // Sonido de disparo anti-drone (-25% de 0.4)
             antiDroneSpawn: 0.2625, // Sonido al construir anti-drone (-25% de 0.35)
             antiDroneAttack: 0.3, // Sonido de alerta de ataque anti-drone (-25% de 0.4)
-            sniperSpotted: 0.84 // Sonido de francotirador detectando objetivo (+110%)
+            sniperSpotted: 0.84, // Sonido de francotirador detectando objetivo (+110%)
+            chopper: 0.2, // Sonido de chopper (muy reducido, era demasiado alto)
+            whisper: 0.9 // Sonido de whisper para specops (+30%: 0.3 * 1.3 = 0.39)
         };
         
         this.loadSounds();
@@ -103,6 +107,12 @@ export class AudioManager {
         // Sonido de francotirador
         this.sounds.sniperSpotted = this.createAudio(SOUNDS_BASE_URL + 'sniper_spotted_normalized.wav', this.volumes.sniperSpotted, false);
         this.sounds.sniperShoot = this.createAudio(SOUNDS_BASE_URL + 'sniper_shoot.wav', 0.1, false); // 50% del volumen anterior
+        
+        // Sonido de chopper
+        this.sounds.chopper = this.createAudio(SOUNDS_BASE_URL + 'chopper_normalized.wav', this.volumes.chopper, false);
+        
+        // Sonido de whisper para specops
+        this.sounds.whisper = this.createAudio(SOUNDS_BASE_URL + 'specops_whisper.wav', this.volumes.whisper, false);
         
         // Música de menú - PRUEBA: cargar con fetch para verificar que funciona
         const mainThemeUrl = SOUNDS_BASE_URL + 'main_theme.wav';
@@ -666,6 +676,68 @@ export class AudioManager {
     resetManDownFlag(frontId) {
         if (frontId) {
             this.manDownSoundPlayed.delete(frontId);
+        }
+    }
+    
+    /**
+     * Reproduce sonido de chopper con velocidad x1.25 y fadeout al 50% final
+     */
+    playChopperSound() {
+        if (this.sounds.chopper) {
+            const audio = this.sounds.chopper.cloneNode(true);
+            audio.playbackRate = 1.25; // Velocidad x1.25 como solicitado
+            audio.currentTime = 0;
+            audio.volume = this.volumes.chopper; // Establecer volumen inicial
+            
+            // Aplicar fadeout al 50% final del clip
+            audio.addEventListener('loadedmetadata', () => {
+                if (audio.duration) {
+                    const fadeStartTime = audio.duration * 0.5; // 50% del clip
+                    const fadeDuration = audio.duration * 0.5; // Los últimos 50%
+                    
+                    const startFade = () => {
+                        const currentTime = audio.currentTime;
+                        if (currentTime >= fadeStartTime) {
+                            const fadeProgress = (currentTime - fadeStartTime) / fadeDuration;
+                            audio.volume = Math.max(0, this.volumes.chopper * (1 - fadeProgress));
+                        } else {
+                            // Mantener volumen inicial antes del fadeout
+                            audio.volume = this.volumes.chopper;
+                        }
+                    };
+                    
+                    // Aplicar fadeout durante la reproducción
+                    const fadeInterval = setInterval(() => {
+                        if (audio.ended || audio.paused) {
+                            clearInterval(fadeInterval);
+                        } else {
+                            startFade();
+                        }
+                    }, 50); // Verificar cada 50ms
+                    
+                    // Limpiar intervalo cuando termine
+                    audio.addEventListener('ended', () => clearInterval(fadeInterval));
+                    audio.addEventListener('pause', () => clearInterval(fadeInterval));
+                }
+            });
+            
+            audio.play().catch(e => console.log('Error reproduciendo chopper:', e));
+        }
+    }
+    
+    /**
+     * Reproduce sonido de whisper con cooldown de 3 segundos
+     */
+    playWhisperSound() {
+        const now = Date.now();
+        
+        if (now - this.lastWhisperSound >= this.whisperCooldown) {
+            if (this.sounds.whisper) {
+                this.sounds.whisper.currentTime = 0;
+                this.sounds.whisper.volume = this.volumes.whisper; // Asegurar volumen actualizado
+                this.sounds.whisper.play().catch(e => console.log('Error reproduciendo whisper:', e));
+                this.lastWhisperSound = now;
+            }
         }
     }
     

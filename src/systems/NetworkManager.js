@@ -149,6 +149,22 @@ export class NetworkManager {
             this.displayRoomsList(rooms);
         });
         
+        // === EVENTOS DE SELECCIÓN DE RAZAS ===
+        
+        this.socket.on('race_selected', (data) => {
+            console.log('🏛️ Raza seleccionada:', data.raceId);
+            // Actualizar la UI local con la selección confirmada
+            if (this.game.raceSelectionManager) {
+                this.game.raceSelectionManager.onRaceSelected(data.raceId);
+            }
+        });
+        
+        this.socket.on('race_selection_updated', (data) => {
+            console.log('🔄 Actualización de selección de razas:', data);
+            // Actualizar la UI del lobby con los nuevos datos
+            this.updateLobbyUI(data);
+        });
+        
         // === EVENTOS DE JUEGO ===
         
         this.socket.on('countdown', (data) => {
@@ -169,12 +185,39 @@ export class NetworkManager {
         
         this.socket.on('game_start', (data) => {
             console.log('🎮 Partida iniciada! Mi equipo:', data.myTeam);
+            console.log('🏛️ Datos recibidos del servidor:', data);
             this.isMultiplayer = true;
             this.myTeam = data.myTeam;
             this.opponentTeam = data.opponentTeam;
             
             // Asignar team al juego
             this.game.myTeam = this.myTeam;
+            
+            // 🆕 NUEVO: Establecer raza seleccionada desde el servidor
+            if (data.selectedRace) {
+                this.game.selectedRace = data.selectedRace;
+                console.log('🏛️ Raza establecida desde servidor:', data.selectedRace);
+                console.log('🏛️ this.game.selectedRace ahora es:', this.game.selectedRace);
+                
+                // 🆕 NUEVO: Actualizar la tienda con la nueva raza
+                if (this.game.storeUI) {
+                    this.game.storeUI.setRace(data.selectedRace);
+                    console.log('🏛️ Tienda actualizada con raza:', data.selectedRace);
+                }
+            } else {
+                console.log('❌ No se recibió selectedRace del servidor');
+            }
+            
+            // 🆕 CENTRALIZADO: Sincronizar información de razas del estado inicial
+            if (data.initialState && data.initialState.playerRaces) {
+                console.log('🏛️ Información de razas recibida:', data.initialState.playerRaces);
+                this.game.playerRaces = data.initialState.playerRaces;
+            }
+            
+            if (data.initialState && data.initialState.raceConfigs) {
+                console.log('🏛️ Configuraciones de razas recibidas:', data.initialState.raceConfigs);
+                this.game.raceConfigs = data.initialState.raceConfigs;
+            }
             
             // CRÍTICO: Desactivar tutorial ANTES de cargar estado
             if (this.game.tutorialManager) {
@@ -335,6 +378,7 @@ export class NetworkManager {
         });
         
         this.socket.on('convoy_spawned', (data) => {
+            console.log('🚁 CONVOY_SPAWNED recibido:', data);
             // Buscar los nodos
             const fromNode = this.game.nodes.find(n => n.id === data.fromId);
             const toNode = this.game.nodes.find(n => n.id === data.toId);
@@ -345,7 +389,11 @@ export class NetworkManager {
             }
             
             // Tomar vehículo (el servidor ya lo validó)
-            fromNode.takeVehicle();
+            if (data.vehicleType === 'helicopter') {
+                fromNode.takeHelicopter();
+            } else {
+                fromNode.takeVehicle();
+            }
             
             // Crear convoy localmente
             const VEHICLE_TYPES = {
@@ -358,6 +406,11 @@ export class NetworkManager {
                     capacity: 25,
                     speed: 40,
                     spritePath: 'vehicles/convoy_heavy.png'
+                },
+                'helicopter': {
+                    capacity: 100,
+                    speed: 3,
+                    spritePath: 'vehicles/chopper.png'
                 }
             };
             
@@ -389,8 +442,26 @@ export class NetworkManager {
             }
         });
         
+        // 🆕 NUEVO: Evento de helicóptero despachado
+        this.socket.on('helicopter_dispatched', (data) => {
+            console.log('🚁 HELICOPTER_DISPATCHED recibido:', data);
+            
+            // El helicóptero ya está sincronizado por el game_state
+            // Solo necesitamos reproducir sonido si es del enemigo
+            if (data.team !== this.myTeam) {
+                // TODO: Agregar sonido específico de helicóptero enemigo
+                console.log('🚁 Helicóptero enemigo despachado');
+            }
+        });
+        
+        // 🆕 NUEVO: Evento de convoy/helicóptero fallido
+        this.socket.on('convoy_failed', (data) => {
+            console.log('⚠️ CONVOY_FAILED:', data.reason);
+            // TODO: Mostrar mensaje visual al usuario (cuando se implemente showMessage en UIManager)
+        });
+        
         this.socket.on('ambulance_spawned', (data) => {
-            console.log(`🚑 Ambulancia autorizada por servidor: ${data.fromId} → ${data.toId} (emergencia: ${data.targetFrontId})`);
+            // console.log(`🚑 Ambulancia autorizada por servidor: ${data.fromId} → ${data.toId}`);
             
             // Buscar los nodos
             const fromNode = this.game.nodes.find(n => n.id === data.fromId);
@@ -471,6 +542,41 @@ export class NetworkManager {
             } else {
                 console.warn(`⚠️ Frente objetivo ${data.targetId} no encontrado`);
             }
+        });
+        
+        /**
+         * Manejo de sabotaje de FOB
+         */
+        this.socket.on('fob_sabotage_fired', (data) => {
+            console.log(`⚡ FOB sabotajeada por ${data.saboteurId} → FOB ${data.targetId}`);
+            
+            // Buscar la FOB objetivo
+            const targetFOB = this.game.nodes.find(n => n.id === data.targetId);
+            
+            if (targetFOB) {
+                // Crear efecto visual: specops unit cayendo desde arriba de la FOB
+                if (this.game.particleSystem.createFallingSprite) {
+                    this.game.particleSystem.createFallingSprite(
+                        targetFOB.x, 
+                        targetFOB.y - 80, // Aparece unos píxeles encima de la FOB
+                        'specops_unit',
+                        0.08 // Escala pequeña para sprite 1024x1024 (similar al tamaño del dron)
+                    );
+                }
+                
+                // Reproducir sonido de chopper con velocidad x1.25
+                if (this.game.audio && this.game.audio.playChopperSound) {
+                    this.game.audio.playChopperSound();
+                }
+                
+                console.log(`✅ FOB ${data.targetId} saboteada - efectos aplicados`);
+            } else {
+                console.warn(`⚠️ FOB objetivo ${data.targetId} no encontrada`);
+            }
+        });
+        
+        this.socket.on('fob_sabotage_failed', (data) => {
+            console.log(`⚠️ Sabotaje de FOB falló: ${data.reason}`);
         });
         
         /**
@@ -830,10 +936,36 @@ export class NetworkManager {
     requestConvoy(fromId, toId) {
         if (!this.isMultiplayer || !this.roomId) return;
         
+        console.log('🚁 CONVOY_REQUEST enviado:', { fromId, toId, roomId: this.roomId });
         this.socket.emit('convoy_request', {
             roomId: this.roomId,
             fromId,
             toId
+        });
+    }
+    
+    /**
+     * Seleccionar raza en multiplayer
+     */
+    selectRace(raceId) {
+        console.log('🏛️ DEBUG selectRace:', {
+            raceId,
+            isMultiplayer: this.isMultiplayer,
+            roomId: this.roomId,
+            socket: !!this.socket
+        });
+        
+        if (!this.isMultiplayer || !this.roomId) {
+            console.log('❌ selectRace bloqueado - isMultiplayer:', this.isMultiplayer, 'roomId:', this.roomId);
+            return;
+        }
+        
+        console.log('🏛️ Seleccionando raza:', raceId, 'en sala:', this.roomId);
+        console.log('🏛️ Estado multiplayer:', this.isMultiplayer, 'roomId:', this.roomId);
+        
+        this.socket.emit('select_race', {
+            roomId: this.roomId,
+            raceId: raceId
         });
     }
     
@@ -861,6 +993,20 @@ export class NetworkManager {
         console.log(`🎯 Enviando sniper_request: target=${targetId}`);
         
         this.socket.emit('sniper_request', {
+            roomId: this.roomId,
+            targetId
+        });
+    }
+    
+    /**
+     * Solicita sabotaje de FOB al servidor
+     */
+    requestFobSabotage(targetId) {
+        if (!this.isMultiplayer || !this.roomId) return;
+        
+        console.log(`⚡ Enviando fob_sabotage_request: target=${targetId}`);
+        
+        this.socket.emit('fob_sabotage_request', {
             roomId: this.roomId,
             targetId
         });
@@ -937,6 +1083,17 @@ export class NetworkManager {
             node.supplies = nodeData.supplies;
             node.availableVehicles = nodeData.availableVehicles;
             
+            // 🆕 NUEVO: Sincronizar propiedades de inversión (intelRadio)
+            if (nodeData.investmentTimer !== undefined) {
+                node.investmentTimer = nodeData.investmentTimer;
+            }
+            if (nodeData.investmentStarted !== undefined) {
+                node.investmentStarted = nodeData.investmentStarted;
+            }
+            if (nodeData.investmentCompleted !== undefined) {
+                node.investmentCompleted = nodeData.investmentCompleted;
+            }
+            
             // Inicializar propiedades de interpolación para multijugador
             if (node.updateServerPosition) {
                 node.updateServerPosition(nodeData.x, nodeData.y);
@@ -989,14 +1146,60 @@ export class NetworkManager {
         // Guardar el último estado recibido (para reloj, etc.)
         this.lastGameState = gameState;
         
+        // === 🆕 ACTUALIZAR HELICÓPTEROS ===
+        if (gameState.helicopters) {
+            if (!this.game.helicopters) {
+                this.game.helicopters = [];
+            }
+            
+            // Sincronizar array de helicópteros
+            gameState.helicopters.forEach(heliData => {
+                let heli = this.game.helicopters.find(h => h.id === heliData.id);
+                
+                if (!heli) {
+                    // Crear nuevo helicóptero
+                    heli = { ...heliData };
+                    this.game.helicopters.push(heli);
+                    console.log(`🚁 CLIENTE: Helicóptero ${heli.id} creado (team: ${heli.team})`);
+                    
+                    // Inicializar datos de interpolación
+                    heli.lastServerUpdate = Date.now();
+                    heli.lastKnownProgress = heliData.progress || 0;
+                    heli.serverProgress = heliData.progress || 0;
+                } else {
+                    // Actualizar helicóptero existente
+                    // CRÍTICO: NO sobrescribir progress directamente (igual que convoys)
+                    heli.state = heliData.state;
+                    heli.cargo = heliData.cargo;
+                    heli.currentNodeId = heliData.currentNodeId;
+                    heli.targetNodeId = heliData.targetNodeId;
+                    heli.initialDistance = heliData.initialDistance;
+                    // NO actualizar heli.progress - lo maneja updateHelicopterPosition()
+                    
+                    // Actualizar referencias del servidor para interpolación (igual que convoys)
+                    heli.serverProgress = heliData.progress;
+                    heli.lastKnownProgress = heliData.progress;
+                    heli.lastServerUpdate = Date.now();
+                }
+            });
+            
+            // Eliminar helicópteros que ya no existen en el servidor
+            this.game.helicopters = this.game.helicopters.filter(heli => 
+                gameState.helicopters.some(h => h.id === heli.id)
+            );
+        }
+        
         // === ACTUALIZAR CURRENCY ===
         if (gameState.currency) {
             const oldCurrency = this.game.currency.missionCurrency;
             this.game.currency.missionCurrency = gameState.currency[this.myTeam];
             
-            // DEBUG: Log cuando cambia significativamente
-            if (!this._lastCurrencyLog || Math.abs(this.game.currency.missionCurrency - this._lastCurrencyLog) >= 10) {
-                console.log(`💰 Currency actualizada: ${oldCurrency} → ${this.game.currency.missionCurrency}$`);
+            // DEBUG: Log cuando cambia significativamente (solo cambios grandes o cada 5 segundos)
+            const now = Date.now();
+            if ((!this._lastCurrencyLogTime || now - this._lastCurrencyLogTime > 5000) && 
+                Math.abs(this.game.currency.missionCurrency - oldCurrency) >= 20) {
+                console.log(`💰 Currency: ${oldCurrency} → ${this.game.currency.missionCurrency}$`);
+                this._lastCurrencyLogTime = now;
                 this._lastCurrencyLog = this.game.currency.missionCurrency;
             }
         }
@@ -1023,6 +1226,28 @@ export class NetworkManager {
                     node.supplies = nodeData.supplies;
                     node.availableVehicles = nodeData.availableVehicles;
                     
+                    // 🆕 CENTRALIZADO: Actualizar propiedades de helicópteros según raza
+                    if (nodeData.hasHelicopters !== undefined) {
+                        node.hasHelicopters = nodeData.hasHelicopters;
+                        // console.log(`🚁 CLIENTE: Nodo ${node.id} (${node.type}) hasHelicopters = ${nodeData.hasHelicopters}`);
+                    }
+                    if (nodeData.availableHelicopters !== undefined) {
+                        node.availableHelicopters = nodeData.availableHelicopters;
+                        // console.log(`🚁 CLIENTE: Nodo ${node.id} (${node.type}) availableHelicopters = ${nodeData.availableHelicopters}`);
+                    }
+                    if (nodeData.maxHelicopters !== undefined) {
+                        node.maxHelicopters = nodeData.maxHelicopters;
+                        // console.log(`🚁 CLIENTE: Nodo ${node.id} (${node.type}) maxHelicopters = ${nodeData.maxHelicopters}`);
+                    }
+                    
+                    // 🆕 NUEVO: Sincronizar helicópteros aterrizados
+                    if (nodeData.landedHelicopters !== undefined) {
+                        node.landedHelicopters = nodeData.landedHelicopters;
+                    }
+                    
+                    // Actualizar estado activo
+                    node.active = nodeData.active;
+                    
                     // Actualizar estado de construcción
                     const wasConstructing = node.isConstructing;
                     node.constructed = nodeData.constructed;
@@ -1030,14 +1255,8 @@ export class NetworkManager {
                     node.constructionTimer = nodeData.constructionTimer || 0;
                     node.constructionTime = nodeData.constructionTime || 2;
                     
-                    // DEBUG: Log progreso de construcción
+                    // DEBUG: Log progreso de construcción (solo cada 25% o cada 2 segundos)
                     if (node.isConstructing && nodeData.constructionTimer !== undefined) {
-                        const progress = (nodeData.constructionTimer / nodeData.constructionTime * 100).toFixed(0);
-                        if (!this._lastConstructionLog) this._lastConstructionLog = {};
-                        if (!this._lastConstructionLog[node.id] || Date.now() - this._lastConstructionLog[node.id] > 500) {
-                            console.log(`🏗️ Construcción ${node.id}: ${progress}% (${nodeData.constructionTimer.toFixed(2)}s/${nodeData.constructionTime}s)`);
-                            this._lastConstructionLog[node.id] = Date.now();
-                        }
                     }
                     
                     // Log cuando se completa construcción
@@ -1069,6 +1288,9 @@ export class NetworkManager {
                     // Actualizar abandono
                     node.isAbandoning = nodeData.isAbandoning;
                     node.abandonPhase = nodeData.abandonPhase;
+                    if (nodeData.abandonStartTime !== undefined) {
+                        node.abandonStartTime = nodeData.abandonStartTime; // 🆕 NUEVO: Sincronizar timestamp del abandono
+                    }
                     
                     // Actualizar efectos (wounded, etc.)
                     if (nodeData.effects) {
@@ -1084,6 +1306,17 @@ export class NetworkManager {
                     }
                     if (nodeData.maxAmbulances !== undefined) {
                         node.maxAmbulances = nodeData.maxAmbulances;
+                    }
+                    
+                    // 🆕 NUEVO: Actualizar propiedades de inversión (intelRadio)
+                    if (nodeData.investmentTimer !== undefined) {
+                        node.investmentTimer = nodeData.investmentTimer;
+                    }
+                    if (nodeData.investmentStarted !== undefined) {
+                        node.investmentStarted = nodeData.investmentStarted;
+                    }
+                    if (nodeData.investmentCompleted !== undefined) {
+                        node.investmentCompleted = nodeData.investmentCompleted;
                     }
                 } else {
                     // Nodo nuevo del servidor (construcción autorizada)
@@ -1348,9 +1581,31 @@ export class NetworkManager {
                         <div style="font-size: 18px; font-weight: bold; color: white; margin-bottom: 3px;">
                             ${player.name}${youLabel}
                         </div>
-                        <div style="font-size: 14px; color: ${teamColor};">
+                        <div style="font-size: 14px; color: ${teamColor}; margin-bottom: 8px;">
                             Equipo: ${teamName}
                         </div>
+                        ${isMe ? `
+                            <select id="race-select-${player.id}" style="
+                                padding: 5px 10px;
+                                background: rgba(0, 0, 0, 0.7);
+                                border: 2px solid #4ecca3;
+                                border-radius: 5px;
+                                color: white;
+                                font-size: 14px;
+                                width: 200px;
+                            " ${player.ready ? 'disabled' : ''}>
+                                <option value="">Seleccionar nación</option>
+                                <option value="A_Nation" ${player.selectedRace === 'A_Nation' ? 'selected' : ''}>Fuerzas Unificadas</option>
+                                <option value="B_Nation" ${player.selectedRace === 'B_Nation' ? 'selected' : ''}>Fuerza de Asalto Directa</option>
+                            </select>
+                        ` : `
+                            <div style="font-size: 14px; color: ${player.selectedRace ? '#2ecc71' : '#e74c3c'};">
+                                ${player.selectedRace ? 
+                                    (player.selectedRace === 'A_Nation' ? 'Fuerzas Unificadas' : 'Fuerza de Asalto Directa') : 
+                                    'Sin seleccionar'
+                                }
+                            </div>
+                        `}
                     </div>
                 </div>
             `;
@@ -1383,12 +1638,83 @@ export class NetworkManager {
             }
         }
         
-        // Actualizar botón de inicio (solo visible para host si todos están ready)
+        // Actualizar botón de inicio (solo visible para host si todos están ready Y han seleccionado nación)
         const startBtn = document.getElementById('start-multiplayer-game-btn');
         if (startBtn && this.myTeam === 'player1') {
             const allReady = data.players.length === 2 && data.players.every(p => p.ready);
-            startBtn.style.display = allReady ? 'block' : 'none';
+            const allHaveRace = data.players.every(p => p.selectedRace);
+            
+            console.log('🔍 DEBUG Botón Inicio:', {
+                myTeam: this.myTeam,
+                playersCount: data.players.length,
+                allReady,
+                allHaveRace,
+                players: data.players.map(p => ({ 
+                    name: p.name, 
+                    ready: p.ready, 
+                    selectedRace: p.selectedRace,
+                    team: p.team,
+                    id: p.id
+                }))
+            });
+            
+            startBtn.style.display = (allReady && allHaveRace) ? 'block' : 'none';
         }
+        
+        // Configurar event listeners para los selects de raza
+        this.setupRaceSelectListeners();
+    }
+    
+    /**
+     * Configurar event listeners para los selects de raza
+     */
+    setupRaceSelectListeners() {
+        const playersList = document.getElementById('players-list');
+        if (!playersList) return;
+        
+        // Buscar todos los selects de raza
+        const raceSelects = playersList.querySelectorAll('select[id^="race-select-"]');
+        
+        raceSelects.forEach(select => {
+            // Remover listeners anteriores para evitar duplicados
+            select.removeEventListener('change', this.handleRaceSelect);
+            
+            // Agregar nuevo listener
+            select.addEventListener('change', (e) => {
+                const raceId = e.target.value;
+                console.log('🏛️ Event listener activado:', raceId);
+                if (raceId) {
+                    console.log('🏛️ Enviando al servidor:', raceId);
+                    this.socket.emit('select_race', {
+                        roomId: this.roomId,
+                        raceId: raceId
+                    });
+                }
+            });
+        });
+    }
+    
+    /**
+     * Obtener datos del jugador actual
+     */
+    getMyPlayerData() {
+        // Buscar en el estado actual del lobby
+        const playersList = document.getElementById('players-list');
+        if (!playersList) return null;
+        
+        // Buscar el select del jugador actual
+        const mySelect = playersList.querySelector(`select[id^="race-select-"]`);
+        if (!mySelect) return null;
+        
+        // Extraer el ID del jugador del ID del select
+        const playerId = mySelect.id.replace('race-select-', '');
+        const selectedRace = mySelect.value || null;
+        
+        return {
+            id: playerId,
+            selectedRace: selectedRace,
+            ready: this.isReady
+        };
     }
     
     /**
@@ -1399,6 +1725,15 @@ export class NetworkManager {
         const readyBtn = document.getElementById('ready-toggle-btn');
         if (readyBtn) {
             readyBtn.onclick = () => {
+                // Verificar que haya seleccionado una nación antes de marcar ready
+                if (!this.isReady) {
+                    const myPlayer = this.getMyPlayerData();
+                    if (!myPlayer || !myPlayer.selectedRace) {
+                        alert('Debes seleccionar una nación antes de marcar listo');
+                        return;
+                    }
+                }
+                
                 this.isReady = !this.isReady;
                 this.socket.emit('player_ready', { roomId: this.roomId, ready: this.isReady });
                 // El botón muestra lo CONTRARIO de tu estado (la acción que puedes hacer)

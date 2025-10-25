@@ -27,6 +27,7 @@ import { AIDirector } from './ai/AIDirector.js';
 import { TutorialSystem } from './systems/TutorialSystem.js';
 import { TutorialManager } from './systems/TutorialManager.js';
 import { NetworkManager } from './systems/NetworkManager.js';
+import { RaceSelectionManager } from './systems/RaceSelectionManager.js';
 import { Mission20 } from './missions/Mission20.js';
 import { GAME_CONFIG, VALID_ROUTES, FOB_CURRENCY_CONFIG } from './config/constants.js';
 
@@ -78,8 +79,14 @@ export class Game {
         this.tutorialSystem = new TutorialSystem(this);
         this.tutorialManager = new TutorialManager(this);
         
+        // Sistema de selección de raza
+        this.raceSelection = new RaceSelectionManager(this);
+        this.selectedRace = null; // Se establecerá cuando el usuario seleccione una raza
+        
         // Sistema de red (multijugador)
         this.network = new NetworkManager(this);
+        // 🆕 NUEVO: Hacer NetworkManager disponible globalmente para botones HTML
+        window.networkManager = this.network;
         this.isMultiplayer = false;
         this.myTeam = 'ally'; // Por defecto en singleplayer
         
@@ -122,6 +129,7 @@ export class Game {
         
         // Entidades - ARRAY UNIFICADO
         this.nodes = []; // Todos los nodos del mapa (bases, edificios, etc)
+        this.helicopters = []; // 🆕 NUEVO: Array de helicópteros persistentes
         this.selectedNode = null;
         this.hoveredNode = null;
         this.hoveredEffect = null; // { tooltip: string, x: number, y: number }
@@ -136,6 +144,22 @@ export class Game {
         
         // Inicializar
         this.init();
+    }
+    
+    /**
+     * Maneja la selección de raza del usuario
+     * @param {string} raceId - ID de la raza seleccionada
+     */
+    onRaceSelected(raceId) {
+        this.selectedRace = raceId;
+        console.log(`🏛️ Raza seleccionada: ${raceId}`);
+        
+        // Actualizar sistemas con la nueva raza
+        this.storeUI.setRace(raceId);
+        this.buildSystem.setRace(raceId);
+        
+        // Iniciar la misión con la raza seleccionada
+        this.startMission();
     }
     
     resizeCanvas() {
@@ -200,6 +224,7 @@ export class Game {
         this.score = 0;
         this.deliveries = 0;
         this.nodes = []; // Limpiar todos los nodos
+        this.helicopters = []; // 🆕 NUEVO: Limpiar helicópteros
         this.convoyManager.clear();
         this.particleSystem.clear();
         
@@ -268,9 +293,13 @@ export class Game {
         this.camera.setWorldSize(this.worldWidth, this.worldHeight);
         this.ui.hideElement('camera-slider-container');
         
-        // Generar nodos desde la misión actual
-        this.nodes = this.currentMission.generateBases(this.worldWidth, this.worldHeight, this.baseFactory);
+        // 🆕 NUEVO: Generar nodos desde la misión actual pasando la raza actual
+        this.nodes = this.currentMission.generateBases(this.worldWidth, this.worldHeight, this.baseFactory, this.selectedRace);
         
+        // 🆕 NUEVO: Crear helicóptero inicial si la raza es B_Nation
+        if (this.selectedRace === 'B_Nation') {
+            this.createInitialHelicopter();
+        }
         
         // Generar sistema de tiles del background
         this.backgroundTiles = new BackgroundTileSystem(this.worldWidth, this.worldHeight, 60);
@@ -286,10 +315,189 @@ export class Game {
         this.gameLoop();
     }
     
+    /**
+     * 🆕 NUEVO: Crea el helicóptero inicial para B_Nation en singleplayer
+     */
+    createInitialHelicopter() {
+        // Buscar el HQ del jugador
+        const hq = this.nodes.find(n => n.type === 'hq' && n.team === 'ally');
+        if (!hq) {
+            console.error('❌ No se encontró HQ del jugador para crear helicóptero');
+            return;
+        }
+        
+        // Crear helicóptero
+        const heli = {
+            id: `heli_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            team: 'ally',
+            state: 'landed',
+            currentNodeId: hq.id,
+            targetNodeId: null,
+            progress: null,
+            initialDistance: null,
+            cargo: 0
+        };
+        
+        this.helicopters.push(heli);
+        hq.landedHelicopters.push(heli.id);
+        
+        console.log(`🚁 SINGLEPLAYER: Helicóptero ${heli.id} creado en HQ`);
+    }
+    
+    /**
+     * 🆕 NUEVO: Actualiza helicópteros en singleplayer (simula servidor)
+     */
+    updateHelicopters(dt) {
+        for (const heli of this.helicopters) {
+            if (heli.state === 'flying') {
+                // Actualizar progreso
+                const fromNode = this.nodes.find(n => n.id === heli.currentNodeId);
+                const toNode = this.nodes.find(n => n.id === heli.targetNodeId);
+                
+                if (!fromNode || !toNode) continue;
+                
+                // Velocidad: 150 px/s (debe coincidir con serverNodes.js)
+                const speed = 150;
+                const progressIncrement = (speed * dt) / heli.initialDistance;
+                heli.progress += progressIncrement;
+                
+                // Llegó al destino
+                if (heli.progress >= 1.0) {
+                    heli.progress = 1.0;
+                    this.handleHelicopterArrival(heli, toNode);
+                }
+            }
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Maneja la llegada del helicóptero a un nodo
+     */
+    handleHelicopterArrival(heli, toNode) {
+        // Entregar o recargar suministros
+        if (toNode.type === 'front') {
+            // Entregar suministros al Front
+            const deliveryAmount = 50;
+            if (heli.cargo >= deliveryAmount) {
+                toNode.supplies = Math.min(toNode.maxSupplies, toNode.supplies + deliveryAmount);
+                heli.cargo -= deliveryAmount;
+                console.log(`🚁 SINGLEPLAYER: Helicóptero entregó ${deliveryAmount} suministros a Front`);
+            }
+        } else if (toNode.type === 'hq') {
+            // Recargar en HQ (infinito)
+            heli.cargo = 100;
+            console.log(`🚁 SINGLEPLAYER: Helicóptero recargó en HQ (cargo: ${heli.cargo})`);
+        } else if (toNode.type === 'aerialBase' || toNode.isAerialBase) {
+            // 🆕 NUEVO: Recargar en Base Aérea
+            const neededCargo = 100 - heli.cargo; // Cuánto necesita el helicóptero
+            const availableCargo = toNode.supplies || 0; // Cuánto tiene la base
+            
+            // Recargar lo que sea posible
+            const rechargeAmount = Math.min(neededCargo, availableCargo);
+            heli.cargo += rechargeAmount;
+            toNode.supplies -= rechargeAmount;
+            
+            console.log(`🚁 SINGLEPLAYER: Helicóptero recargó ${rechargeAmount} en Base Aérea (cargo: ${heli.cargo}, base restante: ${toNode.supplies})`);
+        }
+        
+        // Aterrizar
+        heli.state = 'landed';
+        heli.currentNodeId = toNode.id;
+        heli.targetNodeId = null;
+        heli.progress = null;
+        heli.initialDistance = null;
+        
+        // Agregar a la lista de helicópteros aterrizados del nodo
+        if (!toNode.landedHelicopters.includes(heli.id)) {
+            toNode.landedHelicopters.push(heli.id);
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Despega un helicóptero desde un nodo hacia otro (singleplayer)
+     */
+    dispatchHelicopter(fromNodeId, toNodeId) {
+        const fromNode = this.nodes.find(n => n.id === fromNodeId);
+        const toNode = this.nodes.find(n => n.id === toNodeId);
+        
+        if (!fromNode || !toNode) {
+            console.error('❌ Nodos no encontrados para dispatch de helicóptero');
+            return false;
+        }
+        
+        // Buscar helicóptero aterizado en el nodo de origen
+        const heliId = fromNode.landedHelicopters[0];
+        if (!heliId) {
+            console.error('❌ No hay helicópteros disponibles en el nodo');
+            return false;
+        }
+        
+        const heli = this.helicopters.find(h => h.id === heliId);
+        if (!heli) {
+            console.error('❌ Helicóptero no encontrado');
+            return false;
+        }
+        
+        // Cargar suministros si sale del HQ
+        if (fromNode.type === 'hq') {
+            heli.cargo = 100;
+            console.log(`🚁 SINGLEPLAYER: Helicóptero cargó 100 suministros del HQ`);
+        }
+        
+        // Validar cargo según destino
+        
+        // FRONT: necesita al menos 50 de cargo
+        if (toNode.type === 'front' && heli.cargo < 50) {
+            console.error(`❌ Sin suficientes suministros para Front (necesita 50, tiene ${heli.cargo})`);
+            return false;
+        }
+        
+        // HQ: acepta helicópteros con cualquier cargo (recarga infinita siempre disponible)
+        
+        // BASE AÉREA: acepta cualquier helicóptero que no esté lleno
+        const isAerialBase = toNode.type === 'aerialBase' || toNode.isAerialBase;
+        if (isAerialBase) {
+            // Ya está lleno - no necesita recargar
+            if (heli.cargo >= 100) {
+                console.error('❌ El helicóptero ya está lleno - no necesita recargar');
+                return false;
+            }
+            
+            // Base sin suministros
+            if (toNode.supplies <= 0) {
+                console.error('❌ La Base Aérea no tiene suministros disponibles');
+                return false;
+            }
+        }
+        
+        // Calcular distancia
+        const dx = toNode.x - fromNode.x;
+        const dy = toNode.y - fromNode.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Despegar
+        heli.state = 'flying';
+        heli.currentNodeId = fromNodeId;
+        heli.targetNodeId = toNodeId;
+        heli.progress = 0;
+        heli.initialDistance = distance;
+        
+        // Remover del nodo de origen
+        fromNode.landedHelicopters = fromNode.landedHelicopters.filter(id => id !== heliId);
+        
+        console.log(`🚁 SINGLEPLAYER: Helicóptero despegó de ${fromNode.type} hacia ${toNode.type}`);
+        
+        // Reproducir sonido
+        this.audio.playChopperSound();
+        
+        return true;
+    }
+    
     
     gameLoop() {
+        // console.log(`🔄 GameLoop ejecutándose - state: ${this.state}`);
         // Solo actualizar si está en estado de juego activo
-        if (this.state !== 'playing' && this.state !== 'victory' && this.state !== 'defeat' && this.state !== 'tutorial') {
+        if (this.state !== 'playing' && this.state !== 'victory' && this.state !== 'defeat' && this.state !== 'tutorial' && this.state !== 'menu') {
             // IMPORTANTE: Continuar el loop incluso si no está en estado activo
             requestAnimationFrame(() => this.gameLoop());
             return;
@@ -308,7 +516,17 @@ export class Game {
             if (this.state === 'playing' && !this.paused) {
                 this.update(dt);
             }
-            this.render();
+            
+            // CRÍTICO: Renderizar siempre, incluso en estado 'menu' si hay pantalla de selección de raza
+            if (this.state === 'menu' && this.raceSelection && this.raceSelection.isVisible) {
+                // console.log('🏛️ RENDERIZANDO pantalla de selección de raza');
+                // Solo renderizar la pantalla de selección de raza
+                this.raceSelection.render(this.renderer.ctx);
+            } else {
+                // console.log(`🎮 RENDERIZANDO juego normal - state: ${this.state}, raceSelection visible: ${this.raceSelection?.isVisible}`);
+                // Renderizado normal del juego
+                this.render();
+            }
         }
         
         requestAnimationFrame(() => this.gameLoop());
@@ -340,6 +558,15 @@ export class Game {
             // El progress viene del servidor, pero necesitamos interpolar suavemente entre frames
             for (const convoy of this.convoyManager.convoys) {
                 convoy.updatePosition(dt); // Interpolación suave basada en dt
+            }
+            
+            // 🆕 NUEVO: Actualizar helicópteros con interpolación suave (igual que convoys)
+            if (this.helicopters) {
+                for (const heli of this.helicopters) {
+                    if (heli.state === 'flying') {
+                        this.updateHelicopterPosition(heli, dt);
+                    }
+                }
             }
             
             // Interpolación suave de nodos (especialmente fronts que se mueven)
@@ -421,6 +648,11 @@ export class Game {
             // Actualizar convoyes
             this.convoyManager.update(dt);
             
+            // 🆕 NUEVO: Actualizar helicópteros (singleplayer)
+            if (this.selectedRace === 'B_Nation') {
+                this.updateHelicopters(dt);
+            }
+            
             // Actualizar drones
             this.droneSystem.update(dt);
             
@@ -441,6 +673,36 @@ export class Game {
                 if (node.isAbandoning && node.abandonPhase === 3) {
                     console.log(`❌ ${node.name} #${node.id} (${node.type}) eliminado por abandono`);
                     this.nodes.splice(i, 1);
+                }
+            }
+            
+            // Eliminar hospitales sin ambulancias
+            for (let i = this.nodes.length - 1; i >= 0; i--) {
+                const node = this.nodes[i];
+                if (node.type === 'campaignHospital' && !node.active) {
+                    console.log(`🏥 ${node.name} #${node.id} eliminado - sin ambulancias disponibles`);
+                    this.nodes.splice(i, 1);
+                }
+            }
+            
+            // 🆕 NUEVO: Iniciar abandono de bases aéreas agotadas sin helicópteros
+            for (let i = this.nodes.length - 1; i >= 0; i--) {
+                const node = this.nodes[i];
+                if ((node.type === 'aerialBase' || node.isAerialBase)) {
+                    // Solo log cada 60 frames (1 segundo) para evitar spam
+                    if (this.frameCount % 60 === 0) {
+                        console.log(`🔍 DEBUG Base Aérea #${node.id}: supplies=${node.supplies}, autoDestroy=${node.autoDestroy}, landedHelicopters=${node.landedHelicopters?.length || 0}, isAbandoning=${node.isAbandoning}`);
+                    }
+                    
+                    if (node.supplies <= 0 && 
+                        node.autoDestroy && 
+                        (!node.landedHelicopters || node.landedHelicopters.length === 0) &&
+                        !node.isAbandoning) {
+                        console.log(`💥 Base Aérea #${node.id} agotada y vacía - iniciando abandono`);
+                        node.isAbandoning = true;
+                        node.abandonStartTime = Date.now();
+                        node.abandonPhase = 1;
+                    }
                 }
             }
             
@@ -641,6 +903,44 @@ export class Game {
         ctx.restore();
     }
     
+    /**
+     * 🆕 NUEVO: Actualiza la posición del helicóptero con interpolación suave
+     * (Mismo sistema que los convoys)
+     */
+    updateHelicopterPosition(heli, dt) {
+        if (!heli.initialDistance || heli.initialDistance <= 0) return;
+        
+        // Inicializar datos de interpolación si no existen
+        if (!heli.lastServerUpdate) {
+            heli.lastServerUpdate = Date.now();
+            heli.lastKnownProgress = heli.progress || 0;
+            heli.serverProgress = heli.progress || 0;
+        }
+        
+        // Calcular tiempo desde último update del servidor
+        const timeSinceUpdate = (Date.now() - heli.lastServerUpdate) / 1000;
+        
+        // Velocidad del helicóptero (debe coincidir con servidor)
+        const heliSpeed = 150; // px/s
+        
+        // Progress por segundo = velocidad / distancia total
+        const progressPerSecond = heliSpeed / heli.initialDistance;
+        
+        // PREDICCIÓN: Calcular dónde debería estar ahora basado en último estado conocido
+        const predictedProgress = heli.lastKnownProgress + (progressPerSecond * timeSinceUpdate);
+        
+        // Aplicar progress predicho continuamente
+        heli.progress = Math.max(0, Math.min(1.0, predictedProgress));
+        
+        // Corrección mínima solo si el servidor está muy desincronizado
+        const serverDifference = Math.abs(heli.serverProgress - predictedProgress);
+        if (timeSinceUpdate < 0.1 && serverDifference > 0.1) {
+            // Corrección muy suave solo para grandes discrepancias
+            const correctionFactor = 0.05;
+            heli.progress += (heli.serverProgress - heli.progress) * correctionFactor;
+        }
+    }
+    
     
     render() {
         // CRÍTICO: En multijugador, verificar que NO estamos en estado tutorial
@@ -658,7 +958,7 @@ export class Game {
         
         // Debug: Log ONE TIME para confirmar que render se ejecuta
         if (this.isMultiplayer && !this._renderLoggedOnce) {
-            console.log(`🎨 RENDER ejecutándose: state=${this.state}, nodes=${this.nodes.length}`);
+            // console.log(`🎨 RENDER ejecutándose: state=${this.state}, nodes=${this.nodes.length}`);
             this._renderLoggedOnce = true;
         }
         
@@ -701,6 +1001,15 @@ export class Game {
         // Renderizar convoyes
         this.convoyManager.getConvoys().forEach(convoy => this.renderer.renderConvoy(convoy));
         
+        // 🆕 NUEVO: Renderizar helicópteros
+        if (this.helicopters && this.helicopters.length > 0) {
+            this.helicopters.forEach(heli => {
+                if (heli.state === 'flying') {
+                    this.renderer.renderHelicopter(heli);
+                }
+            });
+        }
+        
         // Renderizar líneas de detección anti-drone → dron (ANTES de renderizar drones)
         this.renderAntiDroneDetectionLines();
         
@@ -728,6 +1037,14 @@ export class Game {
             this.renderer.renderFloatingSprites(floatingSprites);
         }
         
+        // Renderizar sprites que caen (ej: specops unit)
+        if (this.particleSystem.getFallingSprites && this.renderer.renderFallingSprites) {
+            const fallingSprites = this.particleSystem.getFallingSprites();
+            if (fallingSprites.length > 0) {
+                this.renderer.renderFallingSprites(fallingSprites);
+            }
+        }
+        
         // Preview de ruta (solo si la ruta es válida)
         if (this.selectedNode && this.hoveredNode && this.selectedNode !== this.hoveredNode) {
             // Verificar si la ruta es válida según VALID_ROUTES
@@ -749,6 +1066,9 @@ export class Game {
             } else if (this.buildSystem.sniperMode) {
                 // Preview del francotirador: mira con sprite de sniper
                 this.renderer.renderSniperCursor(mousePos.x, mousePos.y, this.hoveredNode);
+            } else if (this.buildSystem.fobSabotageMode) {
+                // Preview del sabotaje: cursor specops_selector
+                this.renderer.renderFobSabotageCursor(mousePos.x, mousePos.y, this.hoveredNode);
             } else {
                 // Preview del edificio actual
                 const buildingType = this.buildSystem.currentBuildingType || 'fob';
@@ -786,10 +1106,13 @@ export class Game {
         // DESPUÉS de restaurar mirror view para que estén en coordenadas correctas
         this.renderGameUI();
         
+        // === UI FIJA EN PANTALLA (fuera del contexto de cámara) ===
+        
+        // Renderizar pantalla de selección de raza (si está visible) - ANTES de restaurar cámara
+        this.raceSelection.render(this.renderer.ctx);
+        
         // Restaurar cámara (siempre activa)
         this.camera.restoreContext(this.renderer.ctx);
-        
-        // === UI FIJA EN PANTALLA (fuera del contexto de cámara) ===
         
         // Renderizar tienda (fija en pantalla)
         this.storeUI.updateLayout(this.canvas.width, this.canvas.height);
@@ -941,8 +1264,41 @@ export class Game {
             return;
         }
         
-        this.state = 'playing';
+        // Mostrar pantalla de selección de raza en lugar de iniciar directamente
         this.ui.hideMainMenu();
+        this.raceSelection.show();
+        
+        // CRÍTICO: Asegurar que el gameLoop esté ejecutándose
+        if (!this._gameLoopRunning) {
+            this._gameLoopRunning = true;
+            this.lastTime = Date.now();
+            this.gameLoop();
+            console.log('🔄 GameLoop iniciado para pantalla de selección de raza');
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Callback llamado cuando el usuario selecciona una raza en singleplayer
+     */
+    onRaceSelected(raceId) {
+        console.log(`🏛️ Raza seleccionada en singleplayer: ${raceId}`);
+        this.selectedRace = raceId;
+        
+        // 🆕 NUEVO: Inicializar playerRaces para singleplayer
+        // player1 = el jugador, player2 = la IA (A_Nation por defecto)
+        this.playerRaces = {
+            player1: raceId,
+            player2: 'A_Nation' // La IA siempre usa A_Nation por ahora
+        };
+        
+        console.log('🏛️ playerRaces inicializado:', this.playerRaces);
+        
+        // Actualizar la tienda con la raza seleccionada
+        if (this.storeUI) {
+            this.storeUI.setRace(raceId);
+        }
+        
+        // Iniciar la misión
         this.startMission();
     }
     

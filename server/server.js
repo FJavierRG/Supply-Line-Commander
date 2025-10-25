@@ -3,7 +3,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { RoomManager } from './managers/RoomManager.js';
+import { RoomManager } from './game/managers/RoomManager.js';
 import { GameStateManager } from './game/GameStateManager.js';
 
 const app = express();
@@ -199,6 +199,52 @@ io.on('connection', (socket) => {
     });
     
     /**
+     * Seleccionar raza
+     */
+    socket.on('select_race', (data) => {
+        console.log('🏛️ SERVIDOR: Recibido select_race:', data);
+        const { roomId, raceId } = data;
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room) throw new Error('Sala no encontrada');
+            
+            // Validar que la raza sea válida
+            const validRaces = ['A_Nation', 'B_Nation'];
+            if (!validRaces.includes(raceId)) {
+                throw new Error('Raza inválida');
+            }
+            
+            // Encontrar el jugador y actualizar su raza
+            const player = room.players.find(p => p.id === socket.id);
+            if (!player) throw new Error('Jugador no encontrado');
+            
+            player.selectedRace = raceId;
+            
+            // Confirmar selección al jugador
+            socket.emit('race_selected', {
+                raceId: raceId,
+                playerName: player.name
+            });
+            
+            // Notificar a todos los jugadores de la sala
+            io.to(roomId).emit('race_selection_updated', {
+                players: room.players.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    team: p.team,
+                    selectedRace: p.selectedRace,
+                    ready: p.ready
+                }))
+            });
+            
+            console.log(`✅ Jugador ${player.name} seleccionó raza ${raceId} en sala ${roomId}`);
+        } catch (error) {
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
+    /**
      * Expulsar jugador (solo host)
      */
     socket.on('kick_player', (data) => {
@@ -280,6 +326,14 @@ io.on('connection', (socket) => {
                 throw new Error('Todos los jugadores deben estar listos');
             }
             
+            // 🆕 NUEVO: Verificar que ambos jugadores hayan seleccionado raza
+            const player1 = room.players.find(p => p.team === 'player1');
+            const player2 = room.players.find(p => p.team === 'player2');
+            
+            if (!player1.selectedRace || !player2.selectedRace) {
+                throw new Error('Ambos jugadores deben seleccionar una raza');
+            }
+            
             // Iniciar countdown
             startGameCountdown(roomId);
             
@@ -341,15 +395,30 @@ io.on('connection', (socket) => {
             const result = room.gameState.handleConvoy(playerTeam, fromId, toId);
             
             if (result.success) {
-                // Broadcast a todos
-                io.to(roomId).emit('convoy_spawned', {
-                    convoyId: result.convoy.id,
-                    fromId,
-                    toId,
-                    team: playerTeam,
-                    vehicleType: result.convoy.vehicleType,
-                    cargo: result.convoy.cargo
-                });
+                // 🆕 NUEVO: Distinguir entre convoy y helicóptero
+                if (result.helicopter) {
+                    // Es un helicóptero - enviar evento especial
+                    const heliData = {
+                        helicopterId: result.helicopter.id,
+                        fromId,
+                        toId,
+                        team: playerTeam
+                    };
+                    
+                    io.to(roomId).emit('helicopter_dispatched', heliData);
+                } else {
+                    // Es un convoy tradicional
+                    const convoyData = {
+                        convoyId: result.convoy.id,
+                        fromId,
+                        toId,
+                        team: playerTeam,
+                        vehicleType: result.convoy.vehicleType,
+                        cargo: result.convoy.cargo
+                    };
+                    
+                    io.to(roomId).emit('convoy_spawned', convoyData);
+                }
             } else {
                 socket.emit('convoy_failed', { reason: result.reason });
             }
@@ -416,6 +485,37 @@ io.on('connection', (socket) => {
             } else {
                 socket.emit('sniper_failed', { reason: result.reason });
                 console.log(`⚠️ Sniper rechazado: ${result.reason}`);
+            }
+        } catch (error) {
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
+    /**
+     * Sabotaje de FOB
+     */
+    socket.on('fob_sabotage_request', (data) => {
+        const { roomId, targetId } = data;
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room || !room.gameState) throw new Error('Partida no iniciada');
+            
+            const playerTeam = roomManager.getPlayerTeam(roomId, socket.id);
+            const result = room.gameState.handleFobSabotage(playerTeam, targetId);
+            
+            if (result.success) {
+                // Broadcast a todos
+                io.to(roomId).emit('fob_sabotage_fired', {
+                    saboteurId: playerTeam,
+                    targetId: result.targetId,
+                    effect: result.effect
+                });
+                
+                console.log(`⚡ FOB sabotajeada por ${playerTeam} → FOB ${targetId}`);
+            } else {
+                socket.emit('fob_sabotage_failed', { reason: result.reason });
+                console.log(`⚠️ Sabotaje rechazado: ${result.reason}`);
             }
         } catch (error) {
             socket.emit('error', { message: error.message });
@@ -535,6 +635,7 @@ function broadcastLobbyUpdate(roomId) {
             name: p.name,
             team: p.team,
             ready: p.ready,
+            selectedRace: p.selectedRace, // ✅ AGREGAR CAMPO FALTANTE
             isHost: room.players[0].id === p.id
         }))
     };
@@ -576,6 +677,20 @@ function startGame(roomId) {
         room.gameState = gameState;
         room.status = 'playing';
         
+        // 🆕 CENTRALIZADO: Establecer razas seleccionadas ANTES de crear estado inicial
+        const player1 = room.players.find(p => p.team === 'player1');
+        const player2 = room.players.find(p => p.team === 'player2');
+        
+        if (player1.selectedRace) {
+            gameState.setPlayerRace('player1', player1.selectedRace);
+            console.log(`🏛️ Raza establecida para player1: ${player1.selectedRace}`);
+        }
+        if (player2.selectedRace) {
+            gameState.setPlayerRace('player2', player2.selectedRace);
+            console.log(`🏛️ Raza establecida para player2: ${player2.selectedRace}`);
+        }
+        
+        // 🆕 CENTRALIZADO: Ahora crear estado inicial con las razas ya configuradas
         const initialState = gameState.getInitialState();
         
         // Enviar estado inicial a cada jugador (con su team asignado)
@@ -585,6 +700,7 @@ function startGame(roomId) {
                 playerSocket.emit('game_start', {
                     myTeam: player.team,
                     opponentTeam: player.team === 'player1' ? 'player2' : 'player1',
+                    selectedRace: player.selectedRace, // 🆕 NUEVO: Enviar raza seleccionada
                     initialState: initialState,
                     duration: 520
                 });

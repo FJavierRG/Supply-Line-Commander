@@ -1208,6 +1208,7 @@ export class EnemyAISystem {
         const allyTargets = this.game.nodes.filter(n => 
             (n.type === 'fob' || 
              n.type === 'nuclearPlant' || 
+             n.type === 'intelRadio' ||
              n.type === 'campaignHospital') &&
             n.team === 'ally' &&
             n.constructed &&

@@ -2,6 +2,9 @@
 
 export class Convoy {
     constructor(fromBase, toBase, vehicle, vehicleType, cargo, game = null) {
+        // 🆕 NUEVO: ID único para el convoy
+        this.id = `convoy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
         this.x = fromBase.x;
         this.y = fromBase.y;
         this.originBase = fromBase; // Base de origen (para volver)
@@ -23,6 +26,16 @@ export class Convoy {
         this.totalDistance = 0; // Distancia total calculada una vez
         this.vehicleSpeed = this.getVehicleSpeed(); // Velocidad conocida del vehículo
         this.game = game; // Referencia al game para verificar Engineer Centers
+        
+        // Sistema de fobSabotage (nuevo)
+        this.sabotageOrigin = false;
+        this.sabotageSpeedPenalty = false;
+        this.firstSabotageUpdate = false;
+        
+        // Sistema de fobSabotage (legacy - mantener compatibilidad)
+        this.harassedOrigin = false;
+        this.harassedSpeedPenalty = false;
+        this.firstHarassedUpdate = false;
     }
     
     update(dt, speedMultiplier = 1) {
@@ -99,7 +112,7 @@ export class Convoy {
     startReturning() {
         this.returning = true;
         this.cargo = 0; // Ya entregó la carga
-        this.target = this.originBase; // Volver a la base de origen
+        // NO cambiar target aquí - se maneja en updateVisualPosition()
     }
     
     /**
@@ -111,8 +124,6 @@ export class Convoy {
         const returningChanged = this.lastServerReturning !== isReturning;
         
         if (returningChanged) {
-            console.log(`🔄 Convoy ${this.id} cambió estado: returning ${this.lastServerReturning} → ${isReturning}, progress actual: ${this.progress.toFixed(3)}`);
-            
             // CRÍTICO: Actualizar estado returning
             this.returning = isReturning;
             
@@ -120,12 +131,10 @@ export class Convoy {
                 // Cambió de ida a vuelta: El servidor resetea progress=0, pero mantenemos continuidad
                 // NO cambiar this.progress - mantener donde está visualmente (≈1.0)
                 this.lastKnownProgress = 0; // Reset para Dead Reckoning del viaje de vuelta
-                console.log(`🚛 Convoy ${this.id} iniciando vuelta - progress visual: ${this.progress.toFixed(3)}, reset DR a 0`);
             } else if (!isReturning && this.lastServerReturning) {
                 // Cambió de vuelta a ida (nuevo convoy): usar server progress
                 this.progress = newProgress;
                 this.lastKnownProgress = newProgress;
-                console.log(`🚛 Convoy ${this.id} nuevo viaje - progress: ${newProgress}`);
             }
             
         } else {
@@ -166,7 +175,6 @@ export class Convoy {
         if (this.returning && this.lastKnownProgress === 0 && this.progress > 0.9) {
             // Estamos iniciando la vuelta desde el destino, continuar desde donde está visualmente
             predictedProgress = this.progress - (progressPerSecond * timeSinceUpdate);
-            console.log(`🚛 Continuidad visual: ${this.id} volviendo desde progress ${this.progress.toFixed(3)}`);
         } else {
             // Predicción normal desde último estado conocido del servidor
             predictedProgress = this.lastKnownProgress + (progressPerSecond * timeSinceUpdate);
@@ -183,12 +191,6 @@ export class Convoy {
             this.progress += (this.serverProgress - this.progress) * correctionFactor;
         }
         
-        // Log ocasional para debug (cada 3000ms máximo)
-        if (!this._lastDeadReckoningLog || Date.now() - this._lastDeadReckoningLog > 3000) {
-            console.log(`🚛 Dead Reckoning: ${this.id} progress ${this.progress.toFixed(3)} (returning: ${this.returning}, server: ${this.serverProgress.toFixed(3)})`);
-            this._lastDeadReckoningLog = Date.now();
-        }
-        
         // Calcular posición visual final
         this.updateVisualPosition();
     }
@@ -197,8 +199,17 @@ export class Convoy {
      * Actualiza la posición visual basada en el progress actual
      */
     updateVisualPosition() {
-        const fromBase = this.returning ? this.target : this.originBase;
-        const toBase = this.returning ? this.originBase : this.target;
+        let fromBase, toBase;
+        
+        if (this.returning) {
+            // Volviendo: desde el destino original hacia la base de origen
+            fromBase = this.target;  // Destino original (donde llegó)
+            toBase = this.originBase; // Base de origen (donde debe volver)
+        } else {
+            // Yendo: desde la base de origen hacia el target
+            fromBase = this.originBase;
+            toBase = this.target;
+        }
         
         // Calcular posición basada en progress
         this.x = fromBase.x + (toBase.x - fromBase.x) * this.progress;

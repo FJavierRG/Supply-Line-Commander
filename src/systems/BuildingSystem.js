@@ -1,6 +1,7 @@
 // ===== SISTEMA DE CONSTRUCCIÓN =====
 import { FOB_CURRENCY_CONFIG } from '../config/constants.js';
-import { getNodeConfig, getBuildableNodes } from '../config/nodes.js';
+import { getNodeConfig, getBuildableNodes, isNodeAvailableForRace } from '../config/nodes.js';
+import { getDefaultRace } from '../config/races.js';
 import { MapNode } from '../entities/MapNode.js';
 
 // Compatibilidad temporal
@@ -17,8 +18,35 @@ export class BuildingSystem {
     constructor(game) {
         this.game = game;
         this.buildMode = false;
+        this.droneMode = false;
+        this.sniperMode = false;
+        this.fobSabotageMode = false;
         this.currentBuildingType = null; // Tipo de edificio que se está construyendo actualmente
+        this.currentRace = getDefaultRace(); // Raza actual (por defecto 'default')
         this.minDistance = 80; // Distancia mínima entre bases
+    }
+    
+    /**
+     * Establece la raza actual
+     * @param {string} raceId - ID de la raza a establecer
+     */
+    setRace(raceId) {
+        if (this.currentRace !== raceId) {
+            this.currentRace = raceId;
+            // Desactivar modo construcción si estaba activo
+            if (this.isActive()) {
+                this.deactivateBuildMode();
+            }
+            console.log(`🏗️ BuildingSystem actualizado para raza: ${raceId}`);
+        }
+    }
+    
+    /**
+     * Obtiene la raza actual
+     * @returns {string} ID de la raza actual
+     */
+    getCurrentRace() {
+        return this.currentRace;
     }
     
     /**
@@ -105,6 +133,12 @@ export class BuildingSystem {
             return;
         }
         
+        // Si es fobSabotage, activar modo especial
+        if (buildingId === 'fobSabotage') {
+            this.activateFobSabotageMode();
+            return;
+        }
+        
         // Activar modo construcción
         this.buildMode = true;
         this.currentBuildingType = buildingId;
@@ -180,7 +214,7 @@ export class BuildingSystem {
         }
         
         // Verificar que no esté muy cerca de otras bases o edificios
-        if (!this.isValidLocation(x, y)) {
+        if (!this.isValidLocation(x, y, buildingId)) {
             console.log('⚠️ Muy cerca de otra base/edificio');
             return;
         }
@@ -219,6 +253,7 @@ export class BuildingSystem {
             // Registrar acción en la IA enemiga para que pueda reaccionar
             if (buildingConfig.id === 'antiDrone' || 
                 buildingConfig.id === 'nuclearPlant' || 
+                buildingConfig.id === 'intelRadio' ||
                 buildingConfig.id === 'campaignHospital') {
                 this.game.enemyAI.registerPlayerAction(buildingConfig.id, { x, y });
                 // También notificar al AIDirector si está en modo híbrido
@@ -250,10 +285,30 @@ export class BuildingSystem {
     /**
      * Verifica si una ubicación es válida para construir
      */
-    isValidLocation(x, y) {
-        for (const base of this.game.bases) {
-            const dist = Math.hypot(x - base.x, y - base.y);
-            if (dist < this.minDistance) {
+    isValidLocation(x, y, buildingType = null) {
+        // Verificar colisiones con todos los nodos existentes (bases + edificios construidos)
+        const allNodes = [...this.game.bases, ...this.game.nodes];
+        
+        for (const node of allNodes) {
+            if (!node.active) continue;
+            
+            const dist = Math.hypot(x - node.x, y - node.y);
+            
+            // Obtener radio de detección del nodo existente
+            const existingConfig = getNodeConfig(node.type);
+            const existingDetectionRadius = existingConfig?.detectionRadius || (existingConfig?.radius || 30) * 2.5;
+            
+            // Obtener radio de detección del edificio que se está construyendo
+            let newDetectionRadius = this.minDistance; // Fallback al valor antiguo
+            if (buildingType) {
+                const newConfig = getNodeConfig(buildingType);
+                newDetectionRadius = newConfig?.detectionRadius || (newConfig?.radius || 30) * 2.5;
+            }
+            
+            // Verificar colisión: ningún edificio puede estar dentro del área de detección del otro
+            const minSeparation = Math.max(existingDetectionRadius, newDetectionRadius);
+            
+            if (dist < minSeparation) {
                 return false;
             }
         }
@@ -276,6 +331,8 @@ export class BuildingSystem {
     resetLevel() {
         this.deactivateBuildMode();
         this.droneMode = false;
+        this.sniperMode = false;
+        this.fobSabotageMode = false;
         this.currentBuildingType = null;
     }
     
@@ -283,7 +340,7 @@ export class BuildingSystem {
      * Verifica si el modo construcción O drone está activo
      */
     isActive() {
-        return this.buildMode || this.droneMode || this.sniperMode;
+        return this.buildMode || this.droneMode || this.sniperMode || this.fobSabotageMode;
     }
     
     /**
@@ -349,7 +406,7 @@ export class BuildingSystem {
         }
         
         // Validar que sea un objetivo enemigo válido (edificios construibles, no HQ ni frentes)
-        const validTargetTypes = ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter'];
+        const validTargetTypes = ['fob', 'nuclearPlant', 'intelRadio', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter'];
         const isEnemyTarget = targetBase.team !== this.game.myTeam && validTargetTypes.includes(targetBase.type);
         
         if (!isEnemyTarget) {
@@ -530,6 +587,114 @@ export class BuildingSystem {
      */
     exitSniperMode() {
         this.sniperMode = false;
+        this.game.canvas.style.cursor = 'default';
+    }
+    
+    /**
+     * Activa el modo fobSabotage
+     */
+    activateFobSabotageMode() {
+        // Verificar currency
+        const fobSabotageConfig = getNodeConfig('fobSabotage');
+        if (!this.canAffordBuilding('fobSabotage')) {
+            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${fobSabotageConfig.cost})`);
+            return;
+        }
+        
+        // Salir del modo construcción si estaba activo
+        if (this.buildMode) {
+            this.exitBuildMode();
+        }
+        
+        this.fobSabotageMode = true;
+        this.game.selectedBase = null;
+        
+        // Cursor personalizado con specops_selector
+        this.game.canvas.style.cursor = 'none'; // Ocultar cursor default
+        
+        // Reproducir sonido de whisper con cooldown de 3 segundos
+        if (this.game.audio && this.game.audio.playWhisperSound) {
+            this.game.audio.playWhisperSound();
+        }
+        
+        console.log('⚡ Modo sabotaje activado - Selecciona una FOB enemiga para aplicar penalización de velocidad');
+    }
+    
+    /**
+     * Ejecuta el acoso en una FOB enemiga
+     */
+    executeFobSabotage(targetFOB) {
+        // VALIDACIÓN: Solo FOBs enemigas
+        const isEnemyFOB = targetFOB.team !== this.game.myTeam && targetFOB.type === 'fob';
+        
+        if (!targetFOB || !isEnemyFOB) {
+            console.log('⚠️ Solo puedes sabotear FOBs enemigas');
+            return;
+        }
+        
+        const fobSabotageConfig = getNodeConfig('fobSabotage');
+        
+        // Verificar currency
+        if (!this.canAffordBuilding('fobSabotage')) {
+            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${fobSabotageConfig.cost})`);
+            this.exitFobSabotageMode();
+            return;
+        }
+        
+        // === MULTIJUGADOR: Enviar solicitud al servidor ===
+        if (this.game.isMultiplayer && this.game.network) {
+            console.log(`⚡ Enviando fob_sabotage_request al servidor: target=${targetFOB.id}`);
+            this.game.network.requestFobSabotage(targetFOB.id);
+            this.exitFobSabotageMode();
+            return;
+        }
+        
+        // === SINGLEPLAYER: Ejecutar localmente ===
+        
+        // Gastar currency
+        if (!this.game.spendMissionCurrency(fobSabotageConfig.cost)) {
+            console.log('❌ Error al gastar currency');
+            this.exitFobSabotageMode();
+            return;
+        }
+        
+        // Aplicar efecto fobSabotage a la FOB
+        targetFOB.addEffect({
+            type: 'fobSabotage',
+            speedPenalty: fobSabotageConfig.speedPenalty, // 0.5 (50% penalización)
+            truckCount: fobSabotageConfig.truckCount, // 3 camiones
+            icon: fobSabotageConfig.effectIcon,
+            tooltip: `Saboteada: -50% velocidad en los siguientes ${fobSabotageConfig.truckCount} camiones`
+        });
+        
+        this.game.matchStats.snipersLaunched++; // Usar este contador temporalmente
+        
+        // Crear efecto visual: specops unit cayendo desde arriba de la FOB
+        if (this.game.particleSystem.createFallingSprite) {
+            this.game.particleSystem.createFallingSprite(
+                targetFOB.x, 
+                targetFOB.y - 80, // Aparece unos píxeles encima de la FOB
+                'specops_unit',
+                0.08 // Escala pequeña para sprite 1024x1024 (similar al tamaño del dron)
+            );
+        }
+        
+        // Reproducir sonido de chopper con velocidad x1.25
+        if (this.game.audio && this.game.audio.playChopperSound) {
+            this.game.audio.playChopperSound();
+        }
+        
+        console.log(`⚡ FOB ${targetFOB.id} sabotajeada - Los siguientes ${fobSabotageConfig.truckCount} camiones tendrán -50% velocidad`);
+        
+        // Desactivar modo fobSabotage
+        this.exitFobSabotageMode();
+    }
+    
+    /**
+     * Sale del modo fobSabotage
+     */
+    exitFobSabotageMode() {
+        this.fobSabotageMode = false;
         this.game.canvas.style.cursor = 'default';
     }
     

@@ -17,6 +17,8 @@ export class MapNode {
         this.spriteKey = config.spriteKey || 'base-fob';
         this.category = config.category || 'buildable';
         this.radius = config.radius || 30;
+        this.hitboxRadius = config.hitboxRadius || this.radius; // Hitbox separada del tamaño visual
+        this.detectionRadius = config.detectionRadius || null; // Área de detección para colisiones
         this.cost = config.cost || 0;
         
         // Propiedades de comportamiento
@@ -59,6 +61,16 @@ export class MapNode {
             this.availableVehicles = this.baseMaxVehicles;
         }
         
+        // 🆕 NUEVO: Sistema de helicópteros para frentes (segunda nación)
+        this.hasHelicopters = config.hasHelicopters || false;
+        if (this.hasHelicopters) {
+            this.maxHelicopters = config.maxHelicopters || 1;
+            this.availableHelicopters = 0; // Empiezan sin helicópteros
+        }
+        
+        // 🆕 NUEVO: Array de IDs de helicópteros aterrizados en este nodo
+        this.landedHelicopters = [];
+        
         // Sistema médico (solo HQ)
         this.hasMedicalSystem = config.hasMedicalSystem || false;
         if (this.hasMedicalSystem) {
@@ -71,6 +83,7 @@ export class MapNode {
         if (config.canDispatchMedical) {
             this.canDispatchMedical = true;
             this.actionRange = config.actionRange || 200;
+            this.lastAutoResponse = 0; // Para cooldown de respuesta automática
         }
         
         // Team (para diferenciar aliados de enemigos en edificios construibles)
@@ -101,6 +114,13 @@ export class MapNode {
         this.showRangePreview = config.showRangePreview || false;
         this.passiveIncomeBonus = config.passiveIncomeBonus || 0;
         
+        // Sistema de inversión (intelRadio)
+        this.investmentTime = config.investmentTime || 0;
+        this.investmentReturn = config.investmentReturn || 0;
+        this.investmentTimer = 0; // Timer para contar el tiempo de inversión
+        this.investmentStarted = false;
+        this.investmentCompleted = false; // Flag para evitar múltiples pagos
+        
         // Sistema de efectos (debuffs/buffs)
         this.effects = [];
         
@@ -108,8 +128,15 @@ export class MapNode {
         this.isAbandoning = false;           // Si está en proceso de abandono
         this.abandonStartTime = 0;           // Timestamp de inicio del abandono
         this.abandonPhase = 0;               // 0 = normal, 1 = gris claro (2s), 2 = gris oscuro (3s), 3 = eliminado
-        this.abandonPhase1Duration = 2000;  // 2 segundos en gris claro
-        this.abandonPhase2Duration = 3000;  // 3 segundos en gris oscuro
+        
+        // Tiempos de abandono específicos por tipo (intelRadio más rápido)
+        if (this.type === 'intelRadio') {
+            this.abandonPhase1Duration = 500;   // 0.5 segundos en gris claro
+            this.abandonPhase2Duration = 500;   // 0.5 segundos en gris oscuro (total 1s)
+        } else {
+            this.abandonPhase1Duration = 2000;  // 2 segundos en gris claro
+            this.abandonPhase2Duration = 3000;  // 3 segundos en gris oscuro
+        }
         
         // Visual
         this.hover = false;
@@ -162,6 +189,43 @@ export class MapNode {
                         this.game.tutorialManager.notifyAction('fob_constructed', { nodeId: this.id });
                     }
                 }
+                
+                // Notificar al sistema médico cuando un hospital termina de construirse (CLIENTE)
+                if (this.type === 'campaignHospital' && this.game && this.game.medicalSystem) {
+                    console.log(`🏥 CLIENTE: Hospital ${this.id} terminó de construirse, notificando sistema médico`);
+                    this.game.medicalSystem.notifyNewHospital(this);
+                }
+                
+                // Iniciar sistema de inversión para intelRadio
+                if (this.type === 'intelRadio' && this.investmentTime > 0) {
+                    this.investmentStarted = true;
+                    this.investmentTimer = 0;
+                    console.log(`💰 Radio Inteligencia ${this.id} iniciando inversión - ${this.investmentTime}s para obtener ${this.investmentReturn}$`);
+                }
+            }
+        }
+        
+        // Sistema de inversión (intelRadio)
+        if (this.type === 'intelRadio' && this.investmentStarted && this.constructed && !this.investmentCompleted) {
+            this.investmentTimer += dt;
+            
+            if (this.investmentTimer >= this.investmentTime) {
+                // Marcar como completado ANTES de hacer el pago para evitar múltiples pagos
+                this.investmentCompleted = true;
+                
+                // Pagar inversión al jugador (solo una vez)
+                if (this.game && this.game.addMissionCurrency && !this.game.isMultiplayer) {
+                    this.game.addMissionCurrency(this.investmentReturn);
+                    console.log(`💰 Radio Inteligencia ${this.id} pagó ${this.investmentReturn}$ (inversión completada)`);
+                } else if (this.game && this.game.isMultiplayer) {
+                    // En multiplayer, el servidor maneja el currency
+                    console.log(`💰 Radio Inteligencia ${this.id} completó inversión (servidor maneja el pago)`);
+                }
+                
+                // Marcar para eliminación
+                this.isAbandoning = true;
+                this.abandonStartTime = Date.now();
+                this.abandonPhase = 1;
             }
         }
         
@@ -210,8 +274,45 @@ export class MapNode {
     onEffectExpired(effect) {
         if (effect.type === 'wounded' && effect.onExpire) {
             effect.onExpire(this);
+        } else if (effect.type === 'fobSabotage') {
+            // El efecto fobSabotage se auto-elimina cuando se consumen todos los camiones
+            console.log(`⏱️ Efecto '${effect.type}' completado en FOB #${this.id}`);
         }
         console.log(`⏱️ Efecto '${effect.type}' expirado en nodo #${this.id}`);
+    }
+    
+    /**
+     * Consumir un camión del efecto fobSabotage
+     * Retorna true si el efecto debe continuar, false si debe eliminarse
+     */
+    consumeFobSabotageTruck() {
+        const sabotageEffect = this.effects.find(e => e.type === 'fobSabotage');
+        if (!sabotageEffect) return false;
+        
+        sabotageEffect.truckCount--;
+        console.log(`🚛 FOB ${this.id} camión afectado por fobSabotage - quedan ${sabotageEffect.truckCount} camiones`);
+        
+        if (sabotageEffect.truckCount <= 0) {
+            this.removeEffect('fobSabotage');
+            return false;
+        }
+        return true;
+    }
+    
+    /**
+     * Verifica si esta FOB está afectada por fobSabotage
+     */
+    isSabotaged() {
+        return this.hasEffect('fobSabotage');
+    }
+    
+    // Mantener compatibilidad con el nombre anterior (temporal)
+    consumeHarassmentTruck() {
+        return this.consumeFobSabotageTruck();
+    }
+    
+    isHarassed() {
+        return this.isSabotaged();
     }
     
     // ========== SISTEMA DE SUMINISTROS ==========
@@ -263,6 +364,35 @@ export class MapNode {
         if (this.hasVehicles && this.availableVehicles < this.maxVehicles) {
             this.availableVehicles++;
         }
+    }
+    
+    // ========== SISTEMA DE HELICÓPTEROS (FRENTES) ==========
+    
+    hasAvailableHelicopter() {
+        // 🆕 NUEVO: Verificar si hay helicópteros aterrizados en este nodo
+        return this.landedHelicopters && this.landedHelicopters.length > 0;
+    }
+    
+    takeHelicopter() {
+        if (this.hasAvailableHelicopter()) {
+            this.availableHelicopters--;
+            return true;
+        }
+        return false;
+    }
+    
+    returnHelicopter() {
+        if (this.hasHelicopters && this.availableHelicopters < this.maxHelicopters) {
+            this.availableHelicopters++;
+        }
+    }
+    
+    addHelicopter() {
+        if (this.hasHelicopters && this.availableHelicopters < this.maxHelicopters) {
+            this.availableHelicopters++;
+            return true;
+        }
+        return false;
     }
     
     // ========== SISTEMA MÉDICO (HQ) ==========

@@ -27,8 +27,8 @@ export const VEHICLE_TYPES = {
     },
     helicopter: {
         name: 'Helicóptero de Emergencia',
-        capacity: 20,  // Helicóptero lleva más carga
-        speed: 3,      // Más rápido que camión
+        capacity: 100,  // 🆕 ACTUALIZADO: Capacidad total inicial
+        speed: 2,      // Más rápido que camión
         color: '#f39c12'  // Amarillo/naranja
     },
     ambulance: {
@@ -54,6 +54,15 @@ export const VALID_ROUTES = {
     'hq': ['fob'],
     'fob': ['front', 'fob'],
     'front': []          // Los frentes solo reciben, nunca envían
+};
+
+// 🆕 NUEVO: Rutas especiales por raza
+export const RACE_SPECIAL_ROUTES = {
+    B_Nation: {
+        'hq': ['front', 'aerialBase'],           // HQ → Front o Base Aérea
+        'front': ['hq', 'front', 'aerialBase'], // Front → HQ, Front o Base Aérea
+        'aerialBase': ['hq', 'front']           // 🆕 NUEVO: Base Aérea → HQ o Front
+    }
 };
 
 export const FRONT_MOVEMENT_CONFIG = {

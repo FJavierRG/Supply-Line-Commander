@@ -1,1768 +1,486 @@
-================================================================================
-                    ROADMAP MULTIJUGADOR - Supply Line Commander
-                            Proyecto: Implementación 1v1
-================================================================================
-
-📋 VERSIÓN: 2.0 - REDISEÑADO
-📅 FECHA INICIO: 2025-10-16
-📅 FECHA REDISEÑO: 2025-10-17
-🎯 OBJETIVO: Sistema multijugador 1v1 con servidor autoritativo COMPLETO
-
-⚠️ VERSIÓN 1.x FUE DESCARTADA - Enfoque híbrido causó desync masivo
-
-================================================================================
-                        💀 POST-MORTEM: ¿QUÉ SALIÓ MAL EN v1.x?
-================================================================================
-
-ARQUITECTURA IMPLEMENTADA (INCORRECTA):
-✅ Servidor autoriza ACCIONES de jugador (build_request, convoy_request)
-❌ Clientes ejecutan SIMULACIÓN independientemente
-❌ Cada cliente tiene su propia versión de la realidad
-
-PROBLEMAS CRÍTICOS IDENTIFICADOS:
-1. medicalSystem.update() → Genera emergencias DIFERENTES (RNG local)
-2. frontMovement.update() → Mueve frentes INDEPENDIENTEMENTE
-3. territory.update() → Verifica FOBs localmente (player2 pierde edificios)
-4. consumo de supplies → Cada cliente lo simula por separado
-5. currency pasiva → Generación local desincronizada
-
-RESULTADO:
-- Jugador azul (player1) ve una partida
-- Jugador rojo (player2) ve OTRA partida completamente diferente
-- Posiciones de frentes diferentes
-- Emergencias médicas diferentes
-- Player2 no puede jugar (filtros incorrectos + territorio roto)
-- DESYNC TOTAL
-
-LECCIÓN APRENDIDA:
-❌ NO hacer servidor "semi-autoritativo" (solo para inputs)
-✅ Servidor debe ejecutar TODA la simulación del juego
-✅ Clientes solo renderizan lo que el servidor les dice
-
-================================================================================
-                        📊 ESTADO ACTUAL DEL CÓDIGO (2025-10-17)
-================================================================================
-
-LO QUE ESTÁ HECHO Y FUNCIONA:
-✅ FASE 0: Refactorización PvP (team='player1'/'player2') - COMPLETADA
-✅ Servidor Node.js + Socket.IO básico
-✅ Sistema de lobby (crear/unirse a salas)
-✅ Sincronización de estado inicial (mapa generado por servidor)
-✅ BuildingSystem/ConvoyManager envían requests al servidor
-✅ NetworkManager recibe building_created/convoy_spawned
-
-LO QUE ESTÁ ROTO:
-❌ Cada cliente ejecuta su propia simulación del juego
-❌ Sistemas NO están en el servidor: Medical, FrontMovement, Territory, etc.
-❌ Filtros de team en InputHandler/BuildingSystem/TerritorySystem (arreglados pero no testeados)
-❌ Player2 no puede jugar (territorio, selección, ataques rotos)
-❌ Desync masivo (dos partidas independientes)
-
-INFRAESTRUCTURA DE SERVIDOR CREADA:
-- server/server.js (Express + Socket.IO)
-- server/managers/RoomManager.js (gestión de salas)
-- server/game/GameStateManager.js (estado inicial + game loop a 20 TPS)
-- Eventos: build_request, convoy_request, game_update
-
-LO QUE FALTA (CRÍTICO):
-- Migrar TODOS los sistemas de simulación al servidor
-- Hacer clientes "dumb" (solo renderizan + envían inputs)
-- Sincronizar estado completo cada tick (nodes, convoys, emergencies, etc.)
-
-COMPONENTES QUE DEBEN MOVERSE AL SERVIDOR:
-1. ✅ Currency pasiva (parcialmente en GameStateManager)
-2. ❌ MedicalEmergencySystem (generación/penalización)
-3. ❌ FrontMovementSystem (avance/retroceso)
-4. ❌ ConvoyManager.update() (movimiento, llegadas, retornos)
-5. ❌ DroneSystem.update() (trayectoria, impactos)
-6. ❌ TerritorySystem.checkFOBsOutOfTerritory()
-7. ❌ Consumo de supplies de frentes
-8. ❌ Condiciones de victoria/derrota
-
-================================================================================
-                            🗺️ ROADMAP DE IMPLEMENTACIÓN
-================================================================================
-
-⚠️ IMPORTANTE: Este roadmap tiene una FASE 0 crítica que refactoriza el código
-               PvE para prepararlo para PvP. NO saltar esta fase.
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                     FASE 0: REFACTORIZACIÓN PARA PVP                        │
-│         Eliminar Hardcoding de 'ally' vs 'enemy' - Preparar Código         │
-│                            ⚠️ CRÍTICA - NO SALTAR                           │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-CONTEXTO DEL PROBLEMA:
-El juego actual está hardcodeado para PvE (Jugador vs IA):
-  - Tipos de nodos duplicados: hq/enemy_hq, fob/enemy_fob, front/enemy_front
-  - 108+ referencias a tipos 'enemy_*' en el código
-  - Sprites específicos para enemigos
-  - VALID_ROUTES duplicadas para aliados y enemigos
-  - Asume que 'enemy' = IA controlada, no jugador humano
-
-Para multijugador, necesitamos que AMBOS jugadores usen los MISMOS tipos de nodos,
-diferenciándolos solo por el campo 'team'.
-
-OBJETIVOS:
-- Unificar todos los nodos bajo tipos genéricos (hq, fob, front)
-- Usar campo 'team' para diferenciar jugadores ('player1' vs 'player2')
-- Hacer sistema de sprites dinámico según equipo
-- Preparar código para que "oponente" pueda ser IA o humano
-- Mantener compatibilidad con singleplayer vs IA
-
-TAREAS:
-
-[0.1] ANÁLISIS Y PLANIFICACIÓN
-
-  [X] Crear plan de migración por archivo (docs/PHASE0_MIGRATION_PLAN.md)
-  [X] Definir nueva nomenclatura de equipos:
-      Opción A: 'player1' / 'player2' (descriptivo) ✅ ELEGIDA
-      Opción B: 'red' / 'blue' (visual)
-      Opción C: 'team_a' / 'team_b' (neutral)
-      DECISIÓN: player1/player2 - Descriptivo, escalable, sin sesgos
-
-[0.2] UNIFICAR CONFIGURACIÓN DE NODOS ✅ COMPLETADA
-
-  [X] Eliminar nodos duplicados en src/config/nodes.js
-      - Borrar enemy_hq (usar solo 'hq') ✅
-      - Borrar enemy_fob (usar solo 'fob') ✅
-      - Borrar enemy_front (usar solo 'front') ✅
-  [X] Actualizar funciones helper
-      - getEnemyNodes() marcada como deprecated ✅
-      - Añadida getTeamCapableNodes() ✅
-  [X] Unificar VALID_ROUTES en constants.js ✅
-      ANTES:
-        'hq': ['fob'],
-        'enemy_hq': ['enemy_fob']
-      DESPUÉS:
-        'hq': ['fob']  // Funciona para ambos equipos
-
-[0.3] REFACTORIZAR SISTEMA DE SPRITES ✅ COMPLETADA
-
-  [X] Actualizado AssetManager.js
-      - Renombrados sprite keys: base-enemy-hq, base-enemy-fob, base-enemy-front ✅
-      - Añadido parámetro team a getBaseSprite() ✅
-  [X] Actualizado RenderSystem.js (17 referencias)
-      - Eliminadas referencias a enemy_hq|enemy_fob|enemy_front ✅
-      - Pasado parámetro team a getBaseSprite() ✅
-  [X] Actualizadas referencias team === 'enemy' a 'player2' (8 archivos) ✅
-  [X] ⭐ Vista espejo (Mirror View) - COMPLETADA ✅
-      - RenderSystem: applyMirrorView() / restoreMirrorView()
-      - InputHandler: transformMirrorCoordinates() para mouse
-      - Compensación en sprites/textos (excepto frentes)
-      - UI fija sin transformación
-      - Player2 ve su HQ a la izquierda
-
-[0.4] REFACTORIZAR CÓDIGO CORE
-  [ ] Actualizar BaseFactory.js
-      - Eliminar referencias a 'enemy_fob', etc.
-      - Crear nodos con team en vez de tipo específico
-  [ ] Actualizar Mission.js y Mission20.js
-      - generateBases() debe crear nodos con team, no tipos enemy_*
-      - Ejemplo:
-        ANTES: createBase(x, y, 'enemy_hq', {...})
-        DESPUÉS: createBase(x, y, 'hq', { team: 'player2', ... })
-  [ ] Actualizar ConvoyManager.js
-      - Eliminar checks de tipo 'enemy_fob'
-      - Usar node.team para determinar si es convoy enemigo
-  [ ] Actualizar InputHandler.js
-      - Reemplazar comparaciones de tipo enemy_*
-      - Usar node.team para validar interacciones
-      - ⭐ Transformar coordenadas del mouse para player2
-        Si myTeam === 'player2':
-          mouseX_real = worldWidth - mouseX_clicked
-        Para que los clics coincidan con la vista flippeada
-
-[0.5] REFACTORIZAR SISTEMAS
-  [ ] Actualizar RenderSystem.js (16 ocurrencias)
-      - Reemplazar checks tipo === 'enemy_fob'
-      - Usar node.team === 'player2'
-  [ ] Actualizar TerritorySystem.js
-      - Filtrar por team, no por tipo enemy_*
-  [ ] Actualizar BuildingSystem.js
-      - Validar objetivos por team, no por tipo
-  [ ] Actualizar DroneSystem.js
-      - Detectar enemigos por team
-  [ ] Actualizar AntiDroneSystem.js
-      - Detectar amenazas por team
-  [ ] Actualizar FrontMovementSystem.js
-      - Victoria/derrota por team, no por tipo
-
-[0.6] REFACTORIZAR IA ENEMIGA
-  [ ] Actualizar EnemyAISystem.js
-      - getEnemyHQ(): buscar por team='player2', no tipo='enemy_hq'
-      - getEnemyFOBs(): buscar por team='player2' && type='fob'
-      - getEnemyFronts(): buscar por team='player2' && type='front'
-  [ ] Actualizar AIDirector.js y subsistemas
-      - StateAnalyzer.js
-      - ThreatAnalyzer.js
-      - ActionEvaluator.js
-  [ ] Añadir propiedad 'controlledByAI' a nodos (opcional)
-      - Para diferenciar si un nodo player2 es IA o humano
-      - Útil para modo multijugador
-
-[0.7] TESTING DE REGRESIÓN ✅ COMPLETADA
-
-  [X] Testear singleplayer vs IA ✅
-      - Partida completa jugada exitosamente
-      - 0 errores en consola
-      - Todas las mecánicas funcionan
-  [X] Bugs encontrados y arreglados en tiempo real:
-      • TerritorySystem: Filtro de team en fronteras
-      • MapNode: Sprites enemigos por type no category
-      • ConvoyManager: Validación team en createRoute()
-  [X] Verificar IA funciona correctamente ✅
-  [X] Verificar sprites correctos (azul/rojo) ✅
-  [X] Verificar fronteras territoriales ✅
-  [X] Verificar construcción de edificios ✅
-  [X] Verificar envío de convoyes ✅
-  [X] Verificar drones y anti-drones ✅
-  [X] Verificar emergencias médicas ✅
-  [X] Verificar movimiento de frentes ✅
-  [X] Verificar 0 errores en consola ✅
-  [X] Partida completa de inicio a fin sin bugs ✅
-
-[0.8] DOCUMENTACIÓN ✅ COMPLETADA
-
-  [X] Actualizar ARCHITECTURE.md con nueva estructura ✅
-      - Versión actualizada a 2.0 (PvP-Ready)
-      - Sección de refactorización PvP añadida
-      - Categoría 'enemy' marcada como eliminada
-  [X] Documentar decisión de nomenclatura de equipos ✅
-      - player1 / player2 documentado en plan de migración
-  [X] Crear guía de migración para futuras referencias ✅
-      - docs/PHASE0_MIGRATION_PLAN.md (plan completo)
-      - docs/PHASE0_CHANGELOG.md (resumen ejecutivo)
-  [X] Código funcional y testeado ✅
-
-ENTREGABLE FASE 0:
-✅ Código sin referencias hardcodeadas a 'enemy_*'
-✅ Sistema unificado de nodos con diferenciación por 'team'
-✅ Sprites dinámicos según equipo
-✅ ⭐ Vista espejo implementada (player2 ve su HQ a la izquierda) - COMPLETADA 2025-10-17
-✅ Input del mouse transformado correctamente para player2
-✅ Singleplayer vs IA sigue funcionando perfectamente
-✅ Código preparado para que 'player2' sea humano o IA
-✅ 0 errores de regresión
-
-ANTES DE FASE 1:
-- Merge de feature/pvp-refactor a rama principal
-- Tag de versión: v2.0-pvp-ready
-- Backup del código legacy en rama separada
-
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│            FASE 1 (REDISEÑADA): SERVIDOR AUTORITATIVO COMPLETO              │
-│         Migrar TODA la simulación del cliente al servidor                  │
-│                   ⚠️ CRÍTICA - Fundación de todo                            │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-CONTEXTO:
-La v1.x creó un híbrido roto: servidor validaba inputs, clientes simulaban.
-La v2.0 será SERVIDOR AUTORITATIVO COMPLETO:
-  - Servidor ejecuta TODO: medical, frentes, convoyes, territory, etc.
-  - Clientes solo: envían inputs + renderizan lo que el servidor envía
-  - Un solo "source of truth"
-
-OBJETIVOS:
-- Mover sistemas de simulación del cliente al servidor
-- Servidor envía estado completo cada tick (20 TPS)
-- Clientes se convierten en "dumb terminals"
-- Eliminar toda lógica de simulación de clientes en multijugador
-
-ARQUITECTURA:
-```
-SERVIDOR (Node.js)                    CLIENTES (Browser)
-=================                     ==================
-GameStateManager                      NetworkManager
-  ├─ nodes[]                            ├─ Recibe game_state
-  ├─ convoys[]                          ├─ Aplica a game.nodes
-  ├─ emergencies[]                      └─ Solo renderiza
-  ├─ currency{}
-  └─ Systems:
-      ├─ MedicalSystem
-      ├─ FrontMovementSystem
-      ├─ ConvoyLogic
-      ├─ TerritoryLogic
-      └─ VictoryLogic
-
-Flujo: Cliente envía INPUT → Servidor simula → Servidor envía STATE → Cliente renderiza
-```
-
-TAREAS:
-
-[1.1] PREPARAR ESTRUCTURA DEL SERVIDOR ✅ COMPLETADO
-
-  [✅] Refactorizar GameStateManager.js:
-      - Mantener: estado actual (nodes, convoys, currency)
-      - Añadir: emergencies[], frontMovementState, territoryState
-      - Separar: lógica de simulación en métodos claros
-  
-  [✅] Crear server/systems/ (versiones servidor de sistemas cliente):
-      - MedicalSystemServer.js
-      - FrontMovementSystemServer.js
-      - TerritorySystemServer.js
-      - DroneSystemServer.js (pendiente para Fase 2)
-      
-  [✅] Decidir enfoque de código compartido:
-      OPCIÓN A (recomendada): Duplicar lógica en servidor (Node.js puro)
-      OPCIÓN B: Hacer módulos isomórficos (complica el código)
-      DECISIÓN: OPCIÓN A - Implementado con éxito
-
-[1.2] MIGRAR SISTEMA MÉDICO AL SERVIDOR ✅ COMPLETADO
-
-  [✅] Implementar MedicalSystemServer.js:
-      - Generar emergencias (RNG con seed sincronizada)
-      - Aplicar penalizaciones a frentes
-      - Detectar resolución (ambulancia llega)
-      - Expirar emergencias
-  
-  [✅] Integrar en GameStateManager.update():
-      - Llamar medicalSystem.update(dt)
-      - Actualizar estado de nodos (consumeRate)
-  
-  [✅] Sincronizar emergencias con clientes:
-      - Añadir emergencies[] al game_state enviado
-      - Cliente renderiza emergencias del servidor
-      - Cliente NO genera emergencias localmente
-  
-  [✅] CRÍTICO: Desactivar MedicalEmergencySystem local en multijugador:
-      ```javascript
-      // Game.js - update()
-      if (!this.isMultiplayer) {
-          this.medicalSystem.update(dt * 1000);
-      }
-      ```
-
-[1.3] MIGRAR MOVIMIENTO DE FRENTES AL SERVIDOR ✅ COMPLETADO
-
-  [✅] Implementar FrontMovementSystemServer.js:
-      - Calcular avance/retroceso basado en supplies
-      - Detectar colisiones entre frentes
-      - Detectar victoria (frente llega a HQ enemigo)
-      - Actualizar maxXReached de frentes
-  
-  [✅] Integrar en GameStateManager.update():
-      - Llamar frontMovement.update(dt)
-      - Detectar condiciones de victoria/derrota
-  
-  [✅] Sincronizar posiciones de frentes:
-      - Enviar { id, x, y, maxXReached } en game_state
-      - Cliente actualiza posiciones desde servidor
-  
-  [✅] CRÍTICO: Desactivar FrontMovementSystem local:
-      ```javascript
-      if (!this.isMultiplayer) {
-          this.frontMovement.update(dt * 1000);
-      }
-      ```
-
-[1.4] MIGRAR LÓGICA DE CONVOYES AL SERVIDOR ✅ COMPLETADO
-
-  [✅] GameStateManager ya tiene handleConvoy() - EXPANDIR:
-      - Crear convoy con ID único
-      - Simular movimiento en update()
-      - Detectar llegadas (entregar cargo)
-      - Detectar retornos (devolver vehículo)
-  
-  [✅] Sincronizar convoyes con clientes:
-      - Enviar convoys[] completo: { id, fromId, toId, progress, returning, team }
-      - Cliente crea/actualiza Convoy objects desde datos servidor
-      - Cliente NO simula movimiento de convoyes
-  
-  [✅] CRÍTICO: Desactivar ConvoyManager.update() local:
-      ```javascript
-      if (!this.isMultiplayer) {
-          this.convoyManager.update(dt);
-      }
-      ```
-  
-  [✅] NetworkManager: Aplicar convoy_updates:
-      - Crear Convoy si no existe
-      - Actualizar progress desde servidor
-      - Eliminar si completed
-
-[1.5] MIGRAR SISTEMA DE TERRITORIO AL SERVIDOR ✅ COMPLETADO
-
-  [✅] Implementar TerritorySystemServer.js:
-      - Calcular fronteras (ally/enemy)
-      - Verificar FOBs fuera de territorio
-      - Marcar edificios para abandono
-  
-  [✅] Integrar en GameStateManager.update():
-      - Llamar territory.checkAbandon() cada X segundos
-      - Actualizar nodos con isAbandoning
-  
-  [✅] Sincronizar abandono con clientes:
-      - Enviar { id, isAbandoning, abandonPhase } en nodes[]
-      - Cliente aplica estado de abandono
-  
-  [✅] CRÍTICO: Desactivar Territory.checkFOBsOutOfTerritory() local:
-      ```javascript
-      if (!this.isMultiplayer) {
-          this.territory.update(dt);
-      } else {
-          // Solo actualizar fronteras para renderizado
-          this.territory.initializeAllyFrontier();
-          this.territory.initializeEnemyFrontier();
-      }
-      ```
-
-[1.6] MIGRAR CONSUMO DE SUPPLIES AL SERVIDOR ✅ COMPLETADO
-
-  [✅] En GameStateManager.update():
-      - Iterar frentes activos
-      - Aplicar consumeRate * dt
-      - Actualizar supplies (Math.max(0, ...))
-  
-  [✅] Sincronizar supplies con clientes:
-      - Incluir { id, supplies } en nodes[] del game_state
-      - Cliente actualiza node.supplies desde servidor
-
-[1.7] SINCRONIZACIÓN COMPLETA DEL ESTADO ✅ COMPLETADO
-
-  [✅] Expandir game_state enviado cada tick:
-      ```javascript
-      {
-          tick: number,                    // Número de tick del servidor
-          gameTime: number,                // Tiempo transcurrido
-          nodes: [                         // Estado completo de nodos
-              { id, x, y, supplies, availableVehicles, isAbandoning, ... }
-          ],
-          convoys: [                       // Estado completo de convoyes
-              { id, fromId, toId, progress, returning, team }
-          ],
-          emergencies: [                   // Emergencias activas
-              { frontId, timeLeft, resolved }
-          ],
-          currency: {                      // Currency actualizada
-              player1: number,
-              player2: number
-          }
-      }
-      ```
-  
-  [✅] NetworkManager.applyUpdates() - REESCRIBIR COMPLETO:
-      - Aplicar nodes[] (crear/actualizar/eliminar)
-      - Aplicar convoys[] (crear/actualizar/eliminar)
-      - Aplicar emergencies[]
-      - Aplicar currency
-  
-  [✅] Enviar game_state cada tick (20 TPS):
-      - En startGame() → gameLoop a 50ms
-      - Enviar solo si hay cambios (optimizar después)
-
-[1.8] DESACTIVAR SIMULACIÓN LOCAL EN CLIENTES ✅ COMPLETADO
-
-  [✅] Game.js - update():
-      ```javascript
-      if (this.isMultiplayer) {
-          // NO actualizar sistemas de simulación
-          // Solo actualizar UI, particulas, input
-          this.particleSystem.update(dt);
-          this.ui.updateHUD(this.getGameState());
-          return; // CRÍTICO: No ejecutar simulación
-      }
-      
-      // Singleplayer: Ejecutar todo normal
-      this.medicalSystem.update(dt * 1000);
-      this.frontMovement.update(dt * 1000);
-      // ...etc
-      ```
-  
-  [✅] Verificar que clientes NO ejecuten:
-      - medicalSystem.update()
-      - frontMovement.update()
-      - convoyManager.update()
-      - territory.update() (excepto render)
-      - enemyAI.update() (ya desactivado)
-
-[1.9] TESTING CRÍTICO ✅ COMPLETADO
-
-  [✅] Servidor standalone:
-      - Iniciar servidor
-      - Verificar logs del game loop (20 TPS)
-      - Verificar que systems se ejecuten
-  
-  [✅] Un solo cliente conectado:
-      - Ver que recibe game_state cada 50ms
-      - Verificar que nodos/convoyes se actualizan
-      - Verificar que emergencias aparecen
-  
-  [✅] Dos clientes conectados:
-      - Ambos ven EXACTAMENTE lo mismo
-      - Posiciones de frentes idénticas
-      - Emergencias aparecen en el mismo frame
-      - Convoyes se mueven sincronizados
-  
-  [✅] Acciones de jugadores:
-      - Player1 construye → Player2 lo ve inmediatamente
-      - Player2 envía convoy → Player1 lo ve
-      - Edificios creados en ambas pantallas
-  
-  [✅] CRITERIO DE ÉXITO:
-      - ✅ 0 desync observable
-      - ✅ Mismas posiciones de todo
-      - ✅ Mismos eventos (emergencias)
-      - ✅ Ambos jugadores pueden jugar
-      - ✅ Frentes se mueven igual en ambas pantallas
-
-ENTREGABLE FASE 1 v2.0: ✅ COMPLETADO
-✅ Servidor ejecuta TODA la simulación del juego
-✅ Clientes solo renderizan estado del servidor
-✅ 0 desync - ambos ven exactamente lo mismo
-✅ Player1 y Player2 pueden jugar completamente
-✅ Fundación sólida para optimizaciones futuras
-
-🎉 FASE 1 v2.0 - COMPLETADA EXITOSAMENTE 🎉
-📅 Fecha de finalización: 2025-01-17
-👨‍💻 Implementado por: AI Assistant + Usuario
-🔧 Estado: FUNCIONAL - Sin desync observable
-📋 Próxima fase: FASE 2 v2.0 - Funcionalidades Avanzadas
-
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                  FASE 2: MECÁNICAS AVANZADAS Y OPTIMIZACIÓN                 │
-│            Drones, Snipers, Victoria/Derrota, Delta Updates                │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-CONTEXTO:
-Fase 1 v2.0 migró la simulación básica (medical, frentes, convoyes, territory).
-Fase 2 completa el resto: drones, snipers, victoria, y optimiza la sincronización.
-
-OBJETIVOS:
-- Migrar DroneSystem y AntiDroneSystem al servidor
-- Implementar victoria/derrota en servidor
-- Optimizar sincronización (delta updates en vez de estado completo)
-- Refinar experiencia de juego
-
-TAREAS:
-
-[2.1] MIGRAR SISTEMA DE DRONES AL SERVIDOR
-
-  [ ] Implementar DroneSystemServer.js:
-      - Crear drones con trayectoria
-      - Simular movimiento hacia objetivo
-      - Detectar impactos
-      - Aplicar daño a edificios
-      - Sistema anti-drones: detectar intercepción
-  
-  [ ] Integrar en GameStateManager:
-      - handleDroneLaunch(team, targetId)
-      - update(): simular drones activos
-      - Aplicar daño cuando impactan
-  
-  [ ] Sincronizar con clientes:
-      - Añadir drones[] al game_state: { id, x, y, targetId, team }
-      - Cliente crea sprites de drones desde servidor
-      - Cliente NO simula trayectoria
-  
-  [ ] CRÍTICO: Desactivar DroneSystem.update() local:
-      ```javascript
-      if (!this.isMultiplayer) {
-          this.droneSystem.update(dt);
-      }
-      ```
-
-[2.2] MIGRAR FRANCOTIRADORES AL SERVIDOR
-
-  [ ] Implementar en GameStateManager:
-      - handleSniperStrike(team, targetFrontId)
-      - Aplicar efecto "wounded" a frente (duplicar consumo)
-      - Duración del efecto (15s)
-      - Expirar efecto
-  
-  [ ] Sincronizar efectos con clientes:
-      - Incluir effects[] en nodes: { type: 'wounded', expiresAt }
-      - Cliente aplica efectos desde servidor
-  
-  [ ] Eventos para feedback visual:
-      - SERVER → ALL: sniper_strike { targetId, shooterTeam }
-      - Cliente reproduce animación/sonido
-
-[2.3] SISTEMA ANTI-DRONES
-
-  [ ] Ya implementado en DroneSystemServer:
-      - Detectar anti-drones en rango del dron
-      - Calcular probabilidad de intercepción
-      - Eliminar dron si interceptado
-  
-  [ ] Evento de intercepción:
-      - SERVER → ALL: drone_intercepted { droneId, antiDroneId }
-      - Cliente reproduce efecto visual
-
-[2.4] VICTORIA/DERROTA ✅ COMPLETADA
-  
-  [X] Detectar en FrontMovementSystemServer:
-      - Frente player1 llega a HQ player2 → Player1 gana
-      - Frente player2 llega a HQ player1 → Player2 gana
-      - Frontera retrocede hasta HQ propio → Victoria enemiga
-  
-  [X] En GameStateManager.update():
-      - Verificar condiciones cada tick
-      - Al detectar victoria: room.status = 'finished'
-      - Detener game loop
-      - Añadir estadísticas (duración, edificios, avance, currency)
-  
-  [X] Evento game_over:
-      - SERVER → ALL: game_over { winner, reason, stats }
-      - stats: duration, buildings, maxAdvance, finalCurrency
-  
-  [X] Cliente maneja game_over:
-      - Pantalla victoria/derrota con título animado
-      - Estadísticas comparativas (ambos jugadores)
-      - Botón volver al menú
-
-[2.5] OPTIMIZACIÓN: DELTA UPDATES
-
-  [ ] En GameStateManager:
-      - Guardar lastSentState
-      - Al enviar game_state: comparar con lastSentState
-      - Enviar solo diferencias:
-          ```javascript
-          {
-              tick: number,
-              delta: {
-                  nodes: [ { id, ...changedFields } ],  // Solo campos modificados
-                  convoys: [ ...nuevos o eliminados ],
-                  emergencies: [ ...cambios ],
-                  currency: { ...solo si cambió }
-              }
-          }
-          ```
-  
-  [ ] NetworkManager.applyDelta():
-      - Aplicar cambios incrementales
-      - Mantener estado local sincronizado
-  
-  [ ] Fallback: Full state cada 5 segundos
-      - Para recuperar de posibles desyncs
-      - SERVER → ALL: game_state_full
-
-[2.6] OPTIMIZACIÓN: RATE LIMITING
-
-  [ ] Enviar game_state solo cuando hay cambios:
-      - No enviar si nada se movió/cambió
-      - Throttling inteligente
-  
-  [ ] Priorizar updates críticos:
-      - Construcciones/acciones: inmediatas
-      - Movimiento de convoyes/frentes: cada tick
-      - Currency: cada segundo
-
-[2.7] TESTING AVANZADO
-
-  [ ] Drones y snipers:
-      - Player1 lanza dron → Player2 lo ve
-      - Dron impacta FOB → Ambos ven el daño
-      - Sniper dispara → Ambos ven efecto wounded
-  
-  [ ] Victoria/Derrota:
-      - Frente llega a HQ → Detecta victoria
-      - Pantalla correcta para ambos jugadores
-      - Estadísticas precisas
-  
-  [ ] Delta updates:
-      - Verificar que reduce ancho de banda
-      - Sin regression en sincronización
-      - Full state recovery funciona
-
-ENTREGABLE FASE 2:
-✅ Drones y snipers completamente sincronizados
-✅ Victoria/derrota funcional y justa
-✅ Optimización de red (delta updates)
-✅ Partida completa 1v1 jugable end-to-end
-✅ Ancho de banda optimizado
-
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    FASE 3: OPTIMIZACIÓN Y LATENCIA                          │
-│              Predicción Cliente + Reconciliación Servidor                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-OBJETIVOS:
-- Mejorar experiencia en conexiones con latencia
-- Implementar predicción del cliente
-- Reconciliación cuando servidor corrige
-- Reducir lag perceptible
-
-TAREAS:
-
-[3.1] PREDICCIÓN DEL CLIENTE
-  [ ] Client-side prediction para acciones propias
-      - Cliente ejecuta acción inmediatamente (optimista)
-      - Espera confirmación del servidor
-      - Si servidor rechaza → rollback
-  [X] Interpolación de entidades remotas ✅ COMPLETADO
-      - [X] Suavizar movimiento de convoyes del oponente
-      - [X] Interpolar posiciones de drones
-      - [X] Buffer de estados para interpolación
-  [ ] Compensación de latencia
-      - Medir RTT (Round Trip Time)
-      - Ajustar predicción según latencia
-
-[3.2] RECONCILIACIÓN SERVIDOR-CLIENTE
-  [ ] Sistema de secuencia (sequence numbers)
-      - Cada acción del cliente tiene ID único
-      - Servidor responde con mismo ID
-      - Cliente puede identificar qué fue confirmado
-  [ ] Rollback y replay
-      - Si servidor rechaza acción predicha
-      - Cliente deshace cambio local
-      - Aplica estado correcto del servidor
-  [ ] Manejo de conflictos
-      - Dos jugadores intentan acción simultánea
-      - Servidor decide orden (timestamp)
-
-[3.3] OPTIMIZACIÓN DE RED
-  [ ] Reducir tamaño de mensajes
-      - Usar IDs numéricos en vez de strings
-      - Comprimir coordenadas (ej: Int16 en vez de Float)
-      - Agrupar múltiples updates en un mensaje
-  [ ] Reducir frecuencia de updates
-      - Entidades estáticas no se re-envían
-      - Solo enviar cambios significativos
-  [X] Dead reckoning
-      - Cliente predice trayectorias lineales ✅
-      - Servidor solo corrige desviaciones ✅
-      - Implementado para convoyes (trucks, heavy_trucks, ambulancias)
-      - Threshold optimizado: 0.15 en progress para reducir updates
-      - Engineer Center bonus incluido en predicciones
-
-[3.4] TESTING DE LATENCIA
-  [ ] Simulador de lag
-      - Herramienta para añadir latencia artificial
-      - Testear con 50ms, 100ms, 200ms
-  [ ] Verificar experiencia
-      - Acciones propias se sienten instantáneas
-      - Oponente se ve fluido
-      - No hay "teleporting"
-
-ENTREGABLE FASE 3:
-✅ Juego jugable con latencia hasta 150ms
-✅ Predicción cliente funciona correctamente
-✅ Reconciliación sin errores visuales
-✅ Experiencia fluida
-
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    FASE 4: ROBUSTEZ Y CALIDAD DE VIDA                       │
-│              Reconexión, Observadores, Sistema de Partidas                  │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-OBJETIVOS:
-- Manejar desconexiones y reconexión
-- Sistema de observadores (spectators)
-- Historial de partidas
-- Mejoras de UX
-
-TAREAS:
-
-[4.1] SISTEMA DE RECONEXIÓN
-  [ ] Detectar desconexión
-      - Timeout en servidor (10 segundos sin heartbeat)
-      - Notificar al otro jugador
-  [ ] Pausar partida
-      - Congelar estado del juego
-      - Mostrar "Esperando reconexión..." (60s)
-  [ ] Reconectar jugador
-      - Cliente intenta reconectar automáticamente
-      - Enviar token de sesión para identificarse
-      - Servidor envía estado completo actualizado
-  [ ] Abandono
-      - Si no reconecta en 60s → victoria del oponente
-      - Opción manual de rendirse
-
-[4.2] MODO OBSERVADOR (OPCIONAL)
-  [ ] Permitir espectadores en partida
-      - Máximo 5 observadores por partida
-      - Reciben estado readonly
-      - No pueden interactuar
-  [ ] UI de observador
-      - Cámara libre
-      - Puede ver recursos de ambos jugadores
-      - Panel de estadísticas en tiempo real
-
-[4.3] SISTEMA DE PARTIDAS
-  [ ] Historial de partidas
-      - Guardar resultado de cada partida en BD (opcional: SQLite)
-      - Victoria/derrota
-      - Duración
-      - Estadísticas
-  [ ] Perfil de jugador
-      - Nombre/apodo
-      - Victorias/derrotas totales
-      - Estadísticas agregadas
-  [ ] Tabla de clasificación (opcional)
-      - Top 10 jugadores
-      - Ordenar por victorias
-
-[4.4] MEJORAS DE UX
-  [ ] Chat en partida
-      - Mensajes entre jugadores
-      - Solo durante countdown inicial y al finalizar
-      - (NO durante partida para evitar distracciones)
-  [ ] Emotes/comandos rápidos
-      - "GG", "WP", etc.
-  [ ] Notificaciones visuales
-      - "Oponente ha construido X"
-      - "Oponente ha lanzado dron"
-  [ ] Sonidos de red
-      - Sonido al conectar/desconectar
-      - Feedback auditivo de acciones del oponente
-
-ENTREGABLE FASE 4:
-✅ Reconexión funcional
-✅ Partida no se pierde por desconexión temporal
-✅ Historial guardado
-✅ Experiencia pulida
-
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         FASE 5: DESPLIEGUE Y TESTING                        │
-│                  Hosting, Seguridad, Testing Completo                       │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-OBJETIVOS:
-- Desplegar servidor en producción
-- Testing exhaustivo
-- Seguridad y prevención de cheating
-- Monitoreo
-
-TAREAS:
-
-[5.1] SEGURIDAD
-  [ ] Validación servidor-side
-      - NUNCA confiar en datos del cliente
-      - Validar TODAS las acciones
-      - Rate limiting (anti-spam)
-  [ ] Prevención de cheating
-      - Servidor simula TODO
-      - Cliente solo renderiza
-      - Detectar acciones imposibles (timing, recursos)
-  [ ] Autenticación básica
-      - Token de sesión
-      - Verificar identidad en cada mensaje
-
-[5.2] DESPLIEGUE
-  [ ] Preparar servidor para producción
-      - Variables de entorno (.env)
-      - Modo producción vs desarrollo
-      - Logging (winston, morgan)
-  [ ] Hosting del servidor
-      - Opción 1: VPS (DigitalOcean, Linode) - $5-10/mes
-      - Opción 2: Heroku (free tier limitado)
-      - Opción 3: Railway.app
-  [ ] Hosting del cliente
-      - Opción 1: GitHub Pages (estático)
-      - Opción 2: Netlify/Vercel
-      - Conectar cliente a servidor de producción
-
-[5.3] TESTING COMPLETO
-  [ ] Testing funcional
-      - 50+ partidas de prueba
-      - Diferentes escenarios
-      - Todas las mecánicas verificadas
-  [ ] Testing de carga
-      - 5-10 partidas simultáneas
-      - Verificar rendimiento del servidor
-  [ ] Testing de red
-      - Diferentes condiciones de latencia
-      - Pérdida de paquetes
-      - Desconexiones
-
-[5.4] MONITOREO Y ANALYTICS
-  [ ] Logs del servidor
-      - Errores críticos
-      - Conexiones/desconexiones
-      - Acciones sospechosas
-  [ ] Métricas básicas
-      - Partidas activas
-      - Jugadores conectados
-      - Latencia promedio
-  [ ] Dashboard (opcional)
-      - Visualizar métricas en tiempo real
-      - Estado del servidor
-
-ENTREGABLE FASE 5:
-✅ Servidor desplegado y accesible
-✅ Cliente conecta a servidor de producción
-✅ Sistema seguro
-✅ Testing completo pasado
-✅ Monitoreo activo
-
-
-================================================================================
-                            🛠️ STACK TECNOLÓGICO
-================================================================================
-
-SERVIDOR:
-- Runtime: Node.js 18+
-- Framework Web: Express.js
-- WebSockets: Socket.IO 4.x
-- Base de datos (opcional): SQLite / MongoDB
-- Utilidades: uuid, dotenv
-
-CLIENTE:
-- Mantener arquitectura actual (vanilla JS + Canvas)
-- Añadir: socket.io-client
-- Gestión de estado: Refactor parcial de Game.js
-
-INFRAESTRUCTURA:
-- Servidor: VPS Linux (Ubuntu 22.04)
-- Cliente: Static hosting (GitHub Pages / Netlify)
-- CI/CD: GitHub Actions (opcional)
-
-================================================================================
-                        📐 DECISIONES DE ARQUITECTURA
-================================================================================
-
-1. SERVIDOR AUTORITATIVO
-   - El servidor es la única fuente de verdad
-   - Cliente solo envía inputs, nunca estado
-   - Previene cheating
-
-2. TICK RATE: 20 TPS
-   - Balance entre precisión y ancho de banda
-   - Suficiente para RTS (no requiere 60 TPS como shooter)
-
-3. SINCRONIZACIÓN POR EVENTOS + SNAPSHOTS
-   - Eventos para acciones discretas (build, convoy)
-   - Snapshots cada 1s para estado completo (fallback)
-
-4. SIN AUTENTICACIÓN COMPLEJA INICIAL
-   - Fase 1-4: Nombre de usuario simple
-   - Futuro: Login con password/OAuth
-
-5. MANTENER COMPATIBILIDAD CON SINGLEPLAYER
-   - No romper código existente
-   - Modo singleplayer sigue funcionando
-   - Multijugador como modo adicional
-
-================================================================================
-                          🎯 CRITERIOS DE ÉXITO
-================================================================================
-
-TÉCNICOS:
-- ✅ Latencia < 150ms sigue siendo jugable
-- ✅ 0 desincronizaciones de estado
-- ✅ Reconexión funciona en 95% de casos
-- ✅ Servidor soporta 10 partidas simultáneas sin lag
-- ✅ 0 posibilidad de cheating
-
-EXPERIENCIA DE USUARIO:
-- ✅ Lobby intuitivo (< 30s para empezar partida)
-- ✅ Acciones propias se sienten instantáneas
-- ✅ Partida completa sin crashes
-- ✅ Feedback claro de acciones del oponente
-- ✅ Resultados justos (sin bugs que afecten victoria)
-
-NEGOCIO:
-- ✅ Servidor cuesta < $10/mes en fase inicial
-- ✅ Escalable a más jugadores sin reescritura
-- ✅ Código mantenible
-
-================================================================================
-                            ⚠️ RIESGOS Y MITIGACIONES
-================================================================================
-
-RIESGO 1: Complejidad de refactorización
-   Mitigación: Mantener código singleplayer intacto, crear capa de abstracción
-
-RIESGO 2: Latencia alta hace el juego injugable
-   Mitigación: Implementar predicción cliente desde Fase 3, servidor regional
-
-RIESGO 3: Bugs de sincronización difíciles de debuggear
-   Mitigación: Logs exhaustivos, modo debug con trazas, replay de partidas
-
-RIESGO 4: Cheating
-   Mitigación: Servidor autoritativo desde Fase 1, validación estricta
-
-RIESGO 5: Costo de hosting
-   Mitigación: Empezar con tier gratuito/barato, escalar solo si hay demanda
-
-================================================================================
-                        📊 TRACKING DE PROGRESO v2.0
-================================================================================
-
-✅ FASE 0: [X] 100% - COMPLETADA (Refactorización PvP)
-  - [X] 0.1 Análisis y planificación ✅
-  - [X] 0.2 Unificar configuración de nodos ✅
-  - [X] 0.3 Refactorizar sistema de sprites ✅
-  - [X] 0.4 Refactorizar código core ✅
-  - [X] 0.5 Refactorizar sistemas ✅
-  - [X] 0.6 Refactorizar IA enemiga ✅
-  - [X] 0.7 Testing de regresión ✅
-  - [X] 0.8 Documentación ✅
-
-❌ FASE 1 v1.x: DESCARTADA (Servidor semi-autoritativo roto)
-  - Infraestructura básica creada pero arquitectura incorrecta
-  - Resultó en desync masivo y 2 partidas independientes
-  - Lecciones aprendidas documentadas en post-mortem
-
-✅ FASE 1 v2.0: [X] 100% - COMPLETADA (Servidor autoritativo COMPLETO)
-  - [X] 1.1 Preparar estructura del servidor
-  - [X] 1.2 Migrar sistema médico al servidor
-  - [X] 1.3 Migrar movimiento de frentes al servidor
-  - [X] 1.4 Migrar lógica de convoyes al servidor
-  - [X] 1.5 Migrar sistema de territorio al servidor
-  - [X] 1.6 Migrar consumo de supplies al servidor
-  - [X] 1.7 Sincronización completa del estado
-  - [X] 1.8 Desactivar simulación local en clientes
-  - [X] 1.9 Testing crítico
-
-✅ FASE 2: [▓▓▓▓▓▓▓] 95% - COMPLETADA (Mecánicas avanzadas + Optimizaciones)
-  - [X] 2.1 Migrar drones al servidor ✅
-  - [X] 2.2 Migrar snipers al servidor ✅
-  - [X] 2.3 Sistema anti-drones ✅
-  - [X] 2.4 Victoria/derrota ✅
-  - [X] 2.5 Delta updates (optimización básica) ✅
-  - [X] 2.6 Rate limiting (optimización básica) ✅
-  - [X] 2.7 Interpolación suave (convoy, drone, front) ✅
-
-FASE 3: [▓▓░░░░░] 15% - INICIADA (Predicción cliente básica)
-FASE 4: [ ] 0% - BLOQUEADA
-FASE 5: [ ] 0% - BLOQUEADA
-
-PROGRESO REAL: 2/6 fases completadas + 95% Fase 2 (65% total)
-ESTADO: ⭐ MULTIPLAYER ÓPTIMO - Interpolación suave implementada
-
-================================================================================
-                            📝 NOTAS IMPORTANTES
-================================================================================
-
-1. ESTE ES EL PROYECTO BASE (SINGLEPLAYER)
-   - No modificar archivos existentes sin copia de seguridad
-
-2. ENFOQUE ITERATIVO
-   - Cada fase debe ser funcional y testeable
-   - No pasar a siguiente fase hasta completar anterior
-
-3. DOCUMENTACIÓN CONTINUA
-   - Documentar decisiones de diseño
-   - Actualizar este archivo al finalizar cada tarea
-   - Mantener README del servidor actualizado
-
-4. TESTING ES CRÍTICO
-   - Testear cada característica antes de marcar como completa
-   - Partidas de prueba con condiciones reales
-
-5. PRIORIZAR FUNCIONALIDAD SOBRE ESTÉTICA
-   - UI del lobby puede ser básica en Fase 1
-   - Mejorar en iteraciones posteriores
-
-================================================================================
-                        🔄 CHANGELOG DE ESTE ROADMAP
-================================================================================
-
-[2025-10-16] v1.2 - Añadida solución de vista espejo (mirror view)
-  - Identificado problema crítico: sprites flipHorizontal harían que player2
-    viera sus propios edificios/convoyes/drones al revés
-  - Solución: Ambos jugadores ven su HQ a la IZQUIERDA (como ajedrez online)
-  - Canvas completo se flippea para player2 (1 transformación simple)
-  - Añadido a Fase 0.3 y 0.4 con detalles de implementación
-  - Input del mouse debe transformarse también
-
-[2025-10-16] v1.1 - Añadida FASE 0 crítica (Refactorización PvP)
-  - Identificado hardcoding masivo de 'ally' vs 'enemy'
-  - 108+ referencias a tipos 'enemy_*' que impiden multijugador
-  - Añadida Fase 0 completa con 8 sub-tareas
-  - Fase 0 es OBLIGATORIA antes de empezar backend
-  - Estimaciones de tiempo eliminadas (a petición del usuario)
-
-[2025-10-16] v1.0 - Roadmap inicial creado
-  - 5 fases definidas
-  - Tareas detalladas para Fase 1-5
-  - Stack tecnológico definido
-  - Criterios de éxito establecidos
-
-================================================================================
-                       📖 APÉNDICE: CÓMO USAR ESTE ARCHIVO
-================================================================================
-
-## ¿Qué es .roadfaz?
-
-`.roadfaz` es tu **hoja de ruta y memoria del proyecto**. Contiene:
-- 🗺️ Roadmap completo dividido en fases
-- 📋 Tareas específicas con checkboxes
-- 📊 Progreso actual del proyecto
-- 🧠 Decisiones de arquitectura tomadas
-- ⚠️ Problemas encontrados y cómo se resolvieron
-
-## 🔄 Flujo de Trabajo
-
-### Al Iniciar una Sesión:
-1. Adjunta `.roadfaz` como @file en Chat
-2. Pide: "Analiza el .roadfaz y dame el estado actual y próximas tareas"
-
-### Durante el Trabajo:
-- Marca tareas completadas: `[X] Tarea completada`
-- Añade notas cuando resuelvas problemas importantes
-
-### Al Finalizar una Sesión:
-Pide en Chat: "Actualiza .roadfaz con progreso de hoy, problemas resueltos y próximos pasos"
-
-### Al Retomar (Nuevo Chat):
-1. Adjunta `.roadfaz` como @file
-2. Pide: "Lee .roadfaz y dame un resumen. ¿Qué tarea debo abordar ahora?"
-
-## ⚡ Comandos Rápidos para Chat
-
-```
-@.roadfaz Dame el estado actual del proyecto
-
-@.roadfaz ¿Qué tarea debo abordar ahora?
-
-@.roadfaz Actualiza el progreso: completé tarea X, problema Y resuelto
-
-@codebase @.roadfaz ¿Estamos alineados con el plan?
-```
-
-## 🎯 Ventajas
-
-- ✅ Continuidad entre sesiones (no pierdes contexto)
-- ✅ Memoria persistente (decisiones documentadas)
-- ✅ Progreso visible (sabes exactamente dónde estás)
-- ✅ Menos repetición (Cursor no re-analiza desde cero)
-
-## 🚨 Reglas
-
-1. **SIEMPRE** adjunta `.roadfaz` al iniciar chat sobre el proyecto
-2. **NUNCA** borres información, solo añade y marca completo
-3. **ACTUALIZA** al menos al final de cada sesión
-4. **VERSIONA** si haces cambios importantes (v1.0, v1.1, etc.)
-
-## 📝 Formato de Actualización
-
-Al final de cada sesión, añade:
-
-```
-================================================================================
-📌 SESIÓN: [FECHA]
-FASE ACTUAL: [Número y nombre]
-
-COMPLETADO:
-  [X] Tarea X - Detalles de implementación
-  
-PROBLEMAS:
-  ⚠️ Problema Y - Cómo se resolvió
-  
-DECISIONES:
-  🎯 Decisión Z - Razones
-  
-PRÓXIMOS PASOS:
-  [ ] Tarea siguiente
-================================================================================
-```
-
-================================================================================
-                            FIN DEL ROADMAP v1.2
-================================================================================
-
-================================================================================
-📌 SESIÓN: 2025-10-16
-FASE COMPLETADA: FASE 0 - REFACTORIZACIÓN PVP (87.5%)
-
-✅ COMPLETADO:
-  [X] 0.1 Análisis y Planificación
-      - 110+ referencias identificadas en 28 archivos
-      - Plan de migración completo (docs/PHASE0_MIGRATION_PLAN.md)
-      - Decisión: Nomenclatura 'player1' / 'player2'
-      
-  [X] 0.2 Unificar Configuración
-      - Eliminados nodos duplicados (enemy_hq, enemy_fob, enemy_front)
-      - Unificadas VALID_ROUTES
-      - Actualizadas funciones helper
-      
-  [X] 0.3 Refactorizar Sistema de Sprites
-      - AssetManager.js actualizado con parámetro team
-      - RenderSystem.js: 17 referencias actualizadas
-      - 8 archivos con team === 'enemy' → 'player2'
-      
-  [X] 0.4 Refactorizar Código Core
-      - MapNode.js, BaseFactory.js, Mission.js actualizados
-      - ConvoyManager.js, InputHandler.js refactorizados
-      
-  [X] 0.5 Refactorizar Sistemas
-      - 11 sistemas actualizados (Territory, Building, Front, etc.)
-      - TutorialConfig.js y TutorialManager.js refactorizados
-      
-  [X] 0.6 Refactorizar IA Enemiga
-      - EnemyAISystem.js: 12 referencias actualizadas
-      - 5 archivos de IA core refactorizados
-      
-  [X] 0.7 Testing de Regresión
-      - Juego testeado completamente ✅
-      - 3 bugs encontrados y arreglados en tiempo real:
-        • TerritorySystem: Frontera aliada incluía frentes enemigos
-        • MapNode: FOBs enemigos usaban sprites azules
-        • ConvoyManager: Permitía enviar camiones a enemigos
-      - Partida completa vs IA sin errores ✅
-
-📊 ESTADÍSTICAS FINALES:
-  - Archivos modificados: ~35
-  - Referencias eliminadas: ~120+
-  - Bugs arreglados: 3
-  - Tiempo de desarrollo: 1 sesión
-  - Regresiones: 0 ✅
-
-🎯 RESULTADO:
-  ✅ Código 100% unificado (sin tipos enemy_*)
-  ✅ Diferenciación por team ('ally' vs 'player2')
-  ✅ Sprites dinámicos según equipo
-  ✅ Singleplayer vs IA completamente funcional
-  ✅ Base sólida para implementar multijugador PvP
-  
-⏳ PENDIENTE:
-  [ ] 0.8 Documentación (parcial - solo esencial)
-  [ ] Vista Espejo (Mirror View) - Para Fase 1 multijugador
-  
-================================================================================
-
-================================================================================
-📌 SESIÓN: 2025-10-16 (Continuación)
-FASE COMPLETADA: FASE 1 - BACKEND Y SINCRONIZACIÓN BÁSICA (100%)
-
-✅ COMPLETADO:
-  [X] 1.1 Configuración del Servidor
-      - package.json creado con dependencias
-      - server.js con Express + Socket.IO
-      - Estructura de carpetas (managers/, game/)
-      
-  [X] 1.2 Sistema de Lobby
-      - RoomManager.js con códigos de 4 caracteres
-      - Eventos: create_room, join_room, get_rooms
-      - UI de lobby en index.html
-      - Event listeners en InputHandler.js
-      
-  [X] 1.3 Sincronización de Estado Inicial
-      - GameStateManager.js creado
-      - Generación de mapa simétrico
-      - Serialización de nodos
-      - Evento game_start con estado completo
-      
-  [X] 1.4 Acciones Básicas
-      - NetworkManager.js en cliente
-      - Eventos: build_request, convoy_request
-      - Validación servidor-side
-      - Broadcast de acciones a ambos clientes
-
-📦 ARCHIVOS CREADOS:
-  Backend (4):
-    - server/package.json
-    - server/server.js
-    - server/managers/RoomManager.js
-    - server/game/GameStateManager.js
-    - server/README.md
-    - server/.gitignore
+# 🔧 PLAN DE MODULARIZACIÓN: GameStateManager
+
+**Archivo actual:** `server/game/GameStateManager.js` (1501 líneas)  
+**Objetivo:** Reducir a ~300 líneas mediante extracción de managers especializados  
+**Fecha:** 2024
+
+---
+
+## 📊 ANÁLISIS DEL ARCHIVO ACTUAL
+
+### Tamaño
+- **Total:** 1501 líneas
+- **Método `update()`:** ~340 líneas (22% del archivo)
+- **Funciones de serialización:** ~200 líneas
+- **Funciones de gestión:** ~500 líneas
+
+### Responsabilidades actuales (demasiadas)
+1. ✅ Gestión de helicópteros
+2. ✅ Serialización de estado
+3. ✅ Optimización de red
+4. ✅ Gestión de razas
+5. ✅ Movimiento de convoyes
+6. ✅ Consumo de supplies
+7. ✅ Sistema de inversiones
+8. ✅ Cálculo de territorio
+9. ✅ Orquestación de sistemas
+
+---
+
+## 🎯 PLAN DE MODULARIZACIÓN (5 FASES)
+
+### **FASE 1: Extraer Managers Existentes** (Ya completado ✅)
+- `BuildHandler` → `server/game/handlers/BuildHandler.js`
+- `ConvoyHandler` → `server/game/handlers/ConvoyHandler.js`
+- `CombatHandler` → `server/game/handlers/CombatHandler.js`
+
+---
+
+### **FASE 2: Crear Managers Especializados**
+
+#### **2.1 HelicopterManager**
+**Archivo:** `server/game/managers/HelicopterManager.js`  
+**Responsabilidad:** Creación, actualización y llegadas de helicópteros
+
+```javascript
+class HelicopterManager {
+    constructor(gameState) {
+        this.gameState = gameState;
+    }
     
-  Frontend (2):
-    - src/systems/NetworkManager.js
-    - GUIA_INSTALACION_MULTIPLAYER.md
+    createHelicopter(team, nodeId) {
+        // Línea 382 de GameStateManager
+    }
     
-  Modificados (2):
-    - index.html (UI de lobby)
-    - src/systems/InputHandler.js (event listeners)
-    - src/Game.js (integración NetworkManager)
-
-🎯 FUNCIONALIDADES IMPLEMENTADAS:
-  ✅ Servidor autoritativo (Node.js + Socket.IO)
-  ✅ Sistema de salas con códigos únicos
-  ✅ Lobby funcional (crear/unirse)
-  ✅ Sincronización de estado inicial
-  ✅ Game loop del servidor a 20 TPS
-  ✅ Construcción de edificios (servidor valida)
-  ✅ Envío de convoyes (servidor autoriza)
-  ✅ Currency pasiva sincronizada
-  ✅ Detección de desconexión
-
-BUGS ENCONTRADOS Y ARREGLADOS:
-  ✅ TypeError: this.startGameCountdown no es función
-  ✅ Falta método getPlayerTeam() en RoomManager
-  ✅ IA enemiga se ejecutaba en multijugador
-  ✅ Lobby no se ocultaba correctamente
-  ✅ Canvas no se mostraba después del countdown
-  ✅ Doble-click en botón "Comenzar Partida"
-  ✅ Game.isMultiplayer no se marcaba correctamente
-
-MEJORAS IMPLEMENTADAS:
-  ✅ Botón "Comenzar Partida" solo visible para host
-  ✅ Countdown visible en UI del lobby
-  ✅ Validación de que solo el host puede iniciar
-  ✅ Protección contra doble-click
-  ✅ IA completamente desactivada en modo multijugador
-
-PRÓXIMO PASO:
-  FASE 2: Sincronización Avanzada (Todos los sistemas del juego)
-================================================================================
-
-================================================================================
-📌 SESIÓN: 2025-10-17
-FASE: POST-MORTEM v1.x + REDISEÑO v2.0
-================================================================================
-
-🔴 CRISIS IDENTIFICADA: Arquitectura v1.x completamente rota
-
-TESTING REALIZADO:
-  ❌ Desync masivo - cada cliente ve partida diferente
-  ❌ Player2 no puede jugar (filtros incorrectos, territorio roto)
-  ❌ Emergencias médicas diferentes en cada pantalla
-  ❌ Posiciones de frentes desincronizadas
-  ❌ FOBs de player2 se autodestruyen
-  ❌ Player2 solo puede atacar sus propias unidades
-
-DIAGNÓSTICO:
-  PROBLEMA RAÍZ: Servidor "semi-autoritativo" (solo valida inputs)
-    - BuildingSystem.placeBuilding() → Servidor autoriza, clientes crean localmente
-    - ConvoyManager.createRoute() → Servidor autoriza, clientes crean localmente
-    - medicalSystem.update() → CADA CLIENTE genera emergencias (RNG diferente)
-    - frontMovement.update() → CADA CLIENTE mueve frentes independientemente
-    - territory.update() → CADA CLIENTE verifica abandono localmente
-    - consumo de supplies → CADA CLIENTE lo simula por separado
-  
-  RESULTADO: Dos partidas PVE completamente independientes jugándose en paralelo
-
-PARCHES INTENTADOS (v1.x):
-  ✅ Arreglados filtros hardcodeados 'ally' → this.game.myTeam
-      - InputHandler.js: Selección de nodos por team
-      - BuildingSystem.js: Validación de objetivos enemigos
-      - TerritorySystem.js: isInAllyTerritory() detecta lado del mapa
-      - ConvoyManager.js: Filtros de team
-      - MedicalEmergencySystem.js: Stats de jugador
-  
-  ⚠️ Parches NO resolvieron el problema fundamental
-      - Solo arreglaron síntomas superficiales
-      - Desync masivo persiste porque cada cliente simula el juego
-
-DECISIÓN CRÍTICA:
-  ❌ DESCARTAR v1.x completa - Arquitectura fundamentalmente incorrecta
-  ✅ REDISEÑAR v2.0 - Servidor autoritativo COMPLETO
-      - Servidor ejecuta TODA la simulación
-      - Clientes solo: inputs → renderizado
-      - Un solo "source of truth"
-
-ROADMAP v2.0 CREADO:
-  ✅ Post-mortem documentado (qué salió mal y por qué)
-  ✅ Estado actual del código analizado
-  ✅ Fase 1 v2.0 rediseñada completamente:
-      - Migrar sistemas de simulación al servidor
-      - Desactivar simulación local en clientes
-      - Sincronización completa del estado cada tick
-      - Testing exhaustivo de sincronización
-  ✅ Fase 2 actualizada (drones, snipers, optimización)
-  ✅ Tracking de progreso realista actualizado
-
-ARCHIVOS MODIFICADOS (v1.x - NO FUNCIONAN):
-  - src/systems/BuildingSystem.js (envía build_request en multiplayer)
-  - src/systems/ConvoyManager.js (envía convoy_request en multiplayer)
-  - src/systems/NetworkManager.js (maneja building_created/convoy_spawned)
-  - src/systems/InputHandler.js (filtros de team corregidos)
-  - src/systems/TerritorySystem.js (normalizeTeamToFrontier, isInAllyTerritory)
-  - src/systems/MedicalEmergencySystem.js (filtro de team)
-
-⚠️ CÓDIGO ACTUAL NO ES USABLE PARA MULTIJUGADOR
-    Requiere implementación completa de Fase 1 v2.0
-
-LECCIONES APRENDIDAS:
-  1. NO hacer servidor "semi-autoritativo" para juegos en tiempo real
-  2. SIEMPRE servidor debe ejecutar simulación completa
-  3. Testing temprano con 2 clientes es CRÍTICO
-  4. Parchar síntomas no resuelve problemas arquitectónicos
-  5. A veces es mejor rehacer que parchar
-
-PRÓXIMO PASO REAL:
-  Implementar Fase 1 v2.0 desde cero:
-    - Crear server/systems/ con versiones servidor
-    - Migrar lógica de simulación
-    - Desactivar simulación en clientes (if !isMultiplayer)
-    - Testing riguroso de sincronización
-
-ESTIMACIÓN:
-  Fase 1 v2.0: ~2-3 sesiones intensivas
-  Fundación crítica - No apresurar
-
-ESTADO: Roadmap v2.0 listo - Código requiere reimplementación completa
-================================================================================
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    SESIÓN 2025-01-17: COMPLETACIÓN FASE 1 v2.0              │
-│                        ✅ ÉXITO TOTAL - SIN DESYNC                          │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-RESUMEN:
-✅ FASE 1 v2.0 COMPLETADA EXITOSAMENTE
-✅ Servidor autoritativo completamente funcional
-✅ 0 desync observable entre jugadores
-✅ Todas las mecánicas básicas funcionando
-
-LOGROS TÉCNICOS:
-
-🎯 ARQUITECTURA SERVIDOR AUTORITATIVO:
-- ✅ GameStateManager.js - Simulación completa en servidor
-- ✅ MedicalSystemServer.js - Emergencias médicas sincronizadas
-- ✅ FrontMovementSystemServer.js - Movimiento de frentes sin superposición
-- ✅ TerritorySystemServer.js - Cálculo de territorio en servidor
-- ✅ ConvoyManager integrado - Camiones y ambulancias funcionando
-
-🎮 SINCRONIZACIÓN PERFECTA:
-- ✅ game_state completo enviado cada 50ms (20 TPS)
-- ✅ Clientes solo renderizan - NO simulan
-- ✅ Ambos jugadores ven exactamente lo mismo
-- ✅ Posiciones, emergencias, convoyes sincronizados
-
-🔧 FUNCIONALIDADES IMPLEMENTADAS:
-- ✅ Movimiento de frentes (velocidad correcta, sin superposición)
-- ✅ Sistema de convoyes (camiones van y regresan)
-- ✅ Ambulancias (20% más rápidas, van y regresan al HQ)
-- ✅ Currency UI (visible, valores correctos, pasivos funcionando)
-- ✅ Construcción (edificios se construyen, barra de progreso visible)
-- ✅ Emergencias médicas (se generan y resuelven correctamente)
-- ✅ Porcentajes de territorio (ambos jugadores ven % en misma posición)
-- ✅ Cuenta atrás (3 segundos incremental: 1, 2, 3, GO!)
-
-🐛 BUGS RESUELTOS:
-- ✅ Frentes moviéndose durante cuenta atrás
-- ✅ Convoyes no moviéndose del spawn
-- ✅ Frentes superponiéndose al empujarse
-- ✅ Ambulancias no regresando al HQ
-- ✅ Currency UI no visible
-- ✅ Barra de construcción no llenándose
-- ✅ Cuenta atrás incorrecta (5s vs 3s)
-- ✅ Player2 viendo % de territorio incorrectos
-
-ARCHIVOS MODIFICADOS:
-- server/game/GameStateManager.js (simulación completa)
-- server/systems/MedicalSystemServer.js (nuevo)
-- server/systems/FrontMovementSystemServer.js (nuevo)
-- server/systems/TerritorySystemServer.js (nuevo)
-- server/server.js (eventos y sincronización)
-- src/Game.js (desactivar simulación local)
-- src/systems/NetworkManager.js (aplicar estado completo)
-- src/systems/TerritorySystem.js (renderizar % correctos)
-- src/systems/BuildingSystem.js (enviar requests al servidor)
-- src/systems/ConvoyManager.js (ambulancias vía servidor)
-- src/entities/Convoy.js (actualizar posiciones desde servidor)
-
-ESTADO FINAL:
-🎉 MULTIPLAYER FUNCIONAL SIN DESYNC
-🎮 AMBOS JUGADORES PUEDEN JUGAR COMPLETAMENTE
-🚀 FUNDACIÓN SÓLIDA PARA FASE 2 v2.0
-
-PRÓXIMO PASO: FASE 2 v2.0 - Funcionalidades Avanzadas
-- Drones y francotiradores al servidor
-- Delta updates y optimizaciones
-
-AJUSTES RECIENTES (2025-10-17):
-✅ Mirror View (player2 ve HQ a la izquierda, sprites/textos compensados)
-✅ Victoria/derrota: empuje activo + colapso de frontera + stats
-✅ Validación territorio: solo construir en área propia
-✅ Abandono edificios fuera de área: 3s gracia + 2s animación
-✅ Velocidad convoyes consistente (ida = vuelta)
-
-PRÓXIMO: [2.1] Drones al servidor
-
-================================================================================
-
-================================================================================
-📌 SESIÓN: 2025-10-17 (Integración Edificios + Completación FASE 2)
-FASE COMPLETADA: FASE 2 - MECÁNICAS AVANZADAS (85%)
-================================================================================
-
-🎯 OBJETIVO DE LA SESIÓN:
-Integrar edificios funcionales y completar TODAS las mecánicas del juego
-en multiplayer (drones, snipers, anti-drones, audio completo).
-
-✅ COMPLETADO EN ESTA SESIÓN:
-
-[EDIFICIOS FUNCIONALES]
-  [X] ⚡ Planta Nuclear: +2$/s pasivo por planta
-  [X] 🚚 Fábrica de Camiones: +1 vehículo HQ + 15 carga a heavy trucks
-  [X] 🔧 Centro de Ingenieros: +50% velocidad convoyes + carreteras visuales
-  [X] 🏥 Hospital de Campaña: Ambulancias con rango 260px
-  [X] Carreteras: Solo para FOBs propios, visibles para ambos jugadores
-  [X] Carreteras: +2 tiles por extremo (efecto de entrada suave)
-
-[2.2 SNIPERS COMPLETOS]
-  [X] Servidor: handleSniperStrike() con efecto wounded 15s
-  [X] Costo sincronizado: 40$ (cliente + servidor)
-  [X] Icono wounded visible con tooltip correcto
-  [X] Eventos: sniper_request → sniper_fired
-  [X] Validación: solo frentes enemigos (team-based)
-
-[2.1 DRONES COMPLETOS]
-  [X] Servidor: DroneSystemServer.js con trayectoria completa
-  [X] Spawn desde extremo del mapa (x=0 o x=1920)
-  [X] Detección de impacto sin vibración (distance <= speed)
-  [X] Destrucción de edificios sincronizada
-  [X] Validación: solo edificios construidos enemigos
-  [X] Fix: hasDroneLauncher() usa myTeam
-
-[2.3 ANTI-DRONES COMPLETOS]
-  [X] Dos rangos: Alerta 220px + Intercepción 160px
-  [X] Sonido característico x2 velocidad al completar construcción
-  [X] Línea roja punteada de detección (visual)
-  [X] Torreta hace fade out al disparar (sin explosión roja)
-  [X] Eventos: antidrone_alert + drone_intercepted
-  [X] Sincronización perfecta de intercepción
-
-[SISTEMA DE AUDIO COMPLETO]
-  [X] Sistema de eventos de sonido en servidor
-  [X] Secuencia de inicio: countdown + engine + infantry (timing perfecto)
-  [X] Sonidos ambientales: clear_shoots (60s) + radio (50s)
-  [X] Sonidos de combate: no_ammo, man_down, enemy_contact
-  [X] Sonidos de logística: truck (2s cd), HQ (3s cd)
-  [X] Música del menú se detiene al iniciar partida
-  [X] Countdown sin gap de silencio
-  [X] Construcción audible para ambos jugadores
-  [X] Paridad completa con singleplayer (100% sonidos migrados)
-
-[PANTALLA VICTORIA/DERROTA]
-  [X] Rediseño con clases CSS del juego
-  [X] Botón usa UIFrame (medium_bton.png)
-  [X] Música de victoria (Victory-March.wav)
-  [X] Derrota mantiene música de batalla
-  [X] Botón funcional (reload para volver al menú)
-  [X] Estadísticas comparativas en grid
-
-[BUGS CRÍTICOS ARREGLADOS]
-  [X] Texto % territorio: posición y colores correctos según perspectiva
-  [X] Tooltips: compensados para mirror view (no invertidos)
-  [X] Countdown: timing exacto 1s por número
-  [X] Drones: eliminación correcta de edificios (filter active !== false)
-  [X] Territorio: validación de frentes activos
-  [X] Comandos de cheat: addCurrency() para testing
-
-📦 ARCHIVOS CREADOS (3):
-  - server/systems/DroneSystemServer.js
-  - docs/EDIFICIOS_FUNCIONALES_TESTING.md
-  - docs/AUDIO_MULTIPLAYER_COMPLETE.md
-
-📝 ARCHIVOS MODIFICADOS (16):
-  - server/game/GameStateManager.js (edificios, drones, sniper, audio)
-  - server/systems/MedicalSystemServer.js (sonido man_down)
-  - server/systems/FrontMovementSystemServer.js (sonidos combat)
-  - server/server.js (eventos sniper, drone, cheat)
-  - src/systems/NetworkManager.js (audio, drones, victoria)
-  - src/systems/BuildingSystem.js (sniper, drones)
-  - src/systems/TerritorySystem.js (porcentajes perspectiva)
-  - src/systems/RenderSystem.js (tooltips compensados)
-  - src/utils/RoadSystem.js (carreteras ambos equipos)
-  - src/Game.js (líneas detección anti-drone)
-  - src/config/nodes.js (sniper cost/targetType)
-  
-📊 ESTADÍSTICAS DE LA SESIÓN:
-  - Líneas de código: ~800+ añadidas
-  - Bugs arreglados: 20+
-  - Sistemas completados: 5 (edificios, drones, snipers, anti-drones, audio)
-  - Tiempo de desarrollo: 1 sesión intensiva
-  - Regresiones: 0
-
-🎯 RESULTADO FINAL:
-
-⭐⭐⭐⭐⭐ MULTIPLAYER COMPLETAMENTE FUNCIONAL
-
-FUNCIONALIDADES:
-  ✅ Lobby y sistema de salas
-  ✅ Sincronización perfecta (0 desync)
-  ✅ Todas las mecánicas del singleplayer funcionan
-  ✅ Edificios funcionales con efectos
-  ✅ Drones + Anti-drones
-  ✅ Snipers con efectos
-  ✅ Sistema de audio completo
-  ✅ Victoria/derrota con música y stats
-  ✅ Mirror view perfecto para player2
-  ✅ Comandos de testing
-
-CALIDAD:
-  ✅ Paridad completa con singleplayer
-  ✅ Experiencia pulida y profesional
-  ✅ Audio inmersivo sincronizado
-  ✅ Efectos visuales consistentes
-  ✅ UI coherente con el resto del juego
-
-⏳ PENDIENTE (OPCIONAL):
-  [ ] 2.5 Delta updates - Optimización de ancho de banda
-  [ ] 2.6 Rate limiting - Enviar solo cuando hay cambios
-  [ ] 2.7 Testing avanzado - Documentación exhaustiva
-
-ESTADO: 🎉 MULTIPLAYER LISTO PARA JUGAR
-  El juego es completamente jugable 1v1 de inicio a fin.
-  Las optimizaciones 2.5 y 2.6 son opcionales (mejoran rendimiento
-  pero no añaden funcionalidad).
-
-PRÓXIMO PASO RECOMENDADO:
-  - Testing exhaustivo con jugadores
-  - Documentar feedback y bugs encontrados
-  - Refinar balance de costos/efectos
-  - Luego decidir: Optimizaciones o FASE 3 (predicción cliente)
-
-================================================================================
-
-================================================================================
-📌 SESIÓN: 2025-01-17 (Optimizaciones Visuales y Fluidez)
-FASE: COMPLETANDO FASE 2 - OPTIMIZACIONES DE RENDIMIENTO
-================================================================================
-
-🎯 OBJETIVO DE LA SESIÓN:
-Resolver problemas de fluidez visual reportados por el usuario:
-- Barrita de construcción con "saltitos" (staccato)
-- Nodos front con movimiento entrecortado (stuttering)
-
-✅ OPTIMIZACIONES IMPLEMENTADAS:
-
-[INTERPOLACIÓN CLIENTE - CONVOYS] ✅ COMPLETADO
-  [X] Convoy.js: Método updateServerProgress() con detección crítica
-  [X] Convoy.js: Interpolación suave en updatePosition() (factor 8.0)
-  [X] NetworkManager.js: Llamada a updateServerProgress() en game_update
-  [X] Game.js: Loop de interpolación en update() multijugador
-  [X] Fix "reaparing convoy bug": Detección cambio returning estado
-  
-[INTERPOLACIÓN CLIENTE - DRONES] ✅ COMPLETADO
-  [X] NetworkManager.js: Almacenar serverX/serverY para drones
-  [X] Game.js: Interpolación suave de posiciones de drones (8.0 factor)
-  [X] Inicialización correcta de propiedades en drone_spawned
-
-[INTERPOLACIÓN CLIENTE - FRONTS] ✅ COMPLETADO
-  [X] MapNode.js: Propiedades de interpolación (serverX, serverY, lastServerUpdate)
-  [X] MapNode.js: Métodos updateServerPosition() y updatePosition()
-  [X] NetworkManager.js: Usar interpolación solo para fronts en multijugador
-  [X] Game.js: Loop de interpolación para todos los nodos con updatePosition()
-
-[RATE LIMITING MEJORADO] ✅ COMPLETADO
-  [X] GameStateManager.js: Reducido threshold construcción de 0.1s → 0.03s
-  [X] Resultado: Barrita construcción 30+ FPS suaves vs 10 FPS anterior
-
-[LATENCIA MEASUREMENT] ✅ COMPLETADO
-  [X] NetworkManager.js: Sistema ping/pong cada 5 segundos
-  [X] server.js: Handler pong para medir RTT
-  [X] Logs de latencia alta automáticos (>200ms warning)
-
-[DELTA UPDATES PARCIALES] ✅ IDENTIFICADO
-  [X] Análisis: hasSignificantChanges() implementado (frecuencia)
-  [X] FALTA: Envío solo diferencias (contenido) vs estado completo
-  [X] Nota: Sistema robusto actual previene bug "eliminación nodos"
-
-PROBLEMAS RESUELTOS:
-  ✅ Barrita construcción: De 10 FPS → 30+ FPS (sin saltitos)
-  ✅ Frentes: Movimiento suave interpolado a 60 FPS cliente
-  ✅ Convoyes: Sin más "reaparecer" al cambiar returning mode
-  ✅ Drones: Movimiento fluido sin teleporting
-
-ARCHIVOS MODIFICADOS:
-  - server/game/GameStateManager.js (construcción más frecuente)
-  - src/entities/MapNode.js (interpolación fronts)
-  - src/entities/Convoy.js (interpolación convoyes + fix bug)
-  - src/systems/NetworkManager.js (ping/latencia + interpolación)
-  - src/Game.js (loops interpolación cliente)
-  - server/server.js (handler ping/pong)
-
-🎯 RESULTADO:
-  ⭐ FLUIDEZ VISUAL PERFECTA
-  ⭐ EXPERIENCIA MULTIPLAYER OPTIMIZADA
-  ⭐ LATENCIA MONITOREADA
-  ⭐ SISTEMA ROBUSTO ANTI-DESYNC
-
-ESTADO: FASE 2 v2.0 COMPLETADA (95%)
-PRÓXIMO: FASE 3 v2.0 - Predicción cliente avanzada
-
-================================================================================
-
-================================================================================
-📌 SESIÓN: 2025-01-17 (Dead Reckoning para Convoyes)
-FASE: FASE 3 - PREDICCIÓN DEL CLIENTE
-================================================================================
-
-🎯 OBJETIVO DE LA SESIÓN:
-Implementar Dead Reckoning para convoyes (trucks, heavy_trucks, ambulancias)
-para reducir tráfico de red y mejorar fluidez durante lag spikes.
-
-✅ IMPLEMENTACIÓN COMPLETADA:
-
-[DEAD RECKONING - CONVOYES] ✅ COMPLETADO
-  [X] Convoy.js: Nuevas propiedades (lastKnownProgress, totalDistance, vehicleSpeed)
-  [X] Convoy.js: Método getVehicleSpeed() sincronizado con servidor (40/50/60 px/s)
-  [X] Convoy.js: Método getTotalDistance() para cálculo de progreso
-  [X] Convoy.js: Método hasEngineerCenterBonus() para bonus +50% velocidad
-  [X] Convoy.js: updatePosition() con Dead Reckoning (>50ms sin updates)
-  [X] Convoy.js: Predicción: lastKnownProgress + (velocidad/distancia) * tiempo
-
-[INICIALIZACIÓN DEAD RECKONING] ✅ COMPLETADO
-  [X] NetworkManager.js: Inicialización lastKnownProgress en convoy_spawned
-  [X] NetworkManager.js: Inicialización lastKnownProgress en ambulance_spawned
-  [X] NetworkManager.js: Llamada getTotalDistance() para inicializar distancia
-  [X] ConvoyManager.js: Pasar referencia game a constructor Convoy
-  [X] Constructor Convoy: Aceptar parámetro game opcional
-
-[OPTIMIZACIÓN SERVIDOR] ✅ COMPLETADO
-  [X] GameStateManager.js: hasConvoySignificantChanges() optimizado (0.1 → 0.15)
-  [X] Reducción de updates durante movimiento constante
-  [X] Cambios críticos (returning) siempre se envían inmediatamente
-
-[LOGGING Y DEBUG] ✅ COMPLETADO
-  [X] Log ocasional de Dead Reckoning (máximo cada 1000ms)
-  [X] Sin spam de console durante uso normal
-
-ARCHIVOS MODIFICADOS:
-  - src/entities/Convoy.js (implementación completa Dead Reckoning)
-  - src/systems/NetworkManager.js (inicialización propiedades)
-  - src/systems/ConvoyManager.js (paso de referencia game)
-  - server/game/GameStateManager.js (threshold optimizado)
-  - .roadfaz (actualizado estado completado)
-
-🎯 BENEFICIOS OBTENIDOS:
-  ⭐ REDUCCIÓN TRÁFICO RED: 33% menos updates de convoyes
-  ⭐ FLUIDEZ LAG SPIKES: Movimiento continuo durante desfases
-  ⭐ PREDICCIÓN PRECISA: Velocidades conocidas + Engineer Center bonus
-  ⭐ EXPERIENCIA PERFECTA: Convoyes se sienten instantáneos
-  ⭐ SIN RIESGOS: No afecta gameplay crítico, solo visual
-
-ESTADO: DEAD RECKONING CONVOYES COMPLETADO ✅
-PRÓXIMO: Dead Reckoning drones/fronts o balance testing
-
-================================================================================
-
-================================================================================
-📌 SESIÓN: 2025-01-17 (Dead Reckoning PURO para Convoyes)
-FASE: FASE 3 - PREDICCIÓN DEL CLIENTE (OPTIMIZACIÓN)
-================================================================================
-
-🎯 OBJETIVO DE LA SESIÓN:
-Implementar Dead Reckoning PURO para convoyes, eliminando la interpolación
-del servidor y manteniendo fluidez total como los drones, SIN teletransportar
-cuando cambia el estado returning.
-
-🐛 PROBLEMA IDENTIFICADO:
-- Convoyes menos fluidos que drones por doble interpolación (progress + posición)
-- Cambio a returning=true causaba teletransporte visual (progress=0)
-- Threshold servidor 0.15 causaba micro-stutters vs drones (interpolación directa)
-
-✅ SOLUCIÓN IMPLEMENTADA:
-1. DEAD RECKONING PURO en Convoy.updatePosition():
-   - Predicción continua basada en velocidad conocida + Engineer Center
-   - Sin interpolación del servidor, solo corrección mínima para grandes desfases
-   - Continuidad visual perfecta durante movimiento
-
-2. MANEJO INTELIGENTE cambio de estado en updateServerProgress():
-   - Detecta cambio returning false→true (inicio vuelta)
-   - Mantiene progress visual actual (≈1.0) para evitar teletransporte
-   - Resetea lastKnownProgress=0 solo para Dead Reckoning del viaje de vuelta
-
-3. CONTINUIDAD VISUAL en updatePosition():
-   - Si returning=true y lastKnownProgress=0 y progress>0.9: continuar desde posición actual
-   - Predicción hacia atrás (progress - velocidad*tiempo) para vuelta suave
-   - Corrección mínima (factor 0.05) solo para discrepancias >0.1
-
-ARCHIVOS MODIFICADOS:
-  - src/entities/Convoy.js (Dead Reckoning puro + continuidad visual)
-
-🎯 BENEFICIOS OBTENIDOS:
-  ⭐ FLUIDEZ TOTAL: Convoyes ahora tan fluidos como drones
-  ⭐ SIN TELETRANSPORTE: Continuidad visual perfecta en cambio de estado
-  ⭐ DEAD RECKONING PURO: Predicción continua sin interpolación servidor
-  ⭐ MANTIENE SEGURIDAD: Servidor sigue siendo autoritativo para entregas
-
-ESTADO: DEAD RECKONING PURO CONVOYES COMPLETADO ✅
-PRÓXIMO: Testing comparativo drones vs convoyes fluidez
-
-================================================================================
-
+    update(dt) {
+        // Línea 413 de GameStateManager
+    }
+    
+    handleArrival(heli, toNode) {
+        // Línea 444 de GameStateManager
+    }
+}
+```
+
+**Métodos a extraer:**
+- `createHelicopter()` (línea 382)
+- `updateHelicopters()` (línea 413)
+- `handleHelicopterArrival()` (línea 444)
+
+**Estimación:** 150 líneas
+
+---
+
+#### **2.2 StateSerializer**
+**Archivo:** `server/game/managers/StateSerializer.js`  
+**Responsabilidad:** Serialización de estado para envío a clientes
+
+```javascript
+class StateSerializer {
+    constructor(gameState) {
+        this.gameState = gameState;
+    }
+    
+    serializeNodes() {
+        // Línea 593
+    }
+    
+    serializeConvoys() {
+        // Línea 689
+    }
+    
+    serializeHelicopters() {
+        // Línea 811
+    }
+    
+    serializeAll() {
+        // Combina todo
+    }
+}
+```
+
+**Métodos a extraer:**
+- `serializeNodes()` (línea 593)
+- `hasNodeSignificantChanges()` (línea 531)
+- `serializeConvoys()` (línea 689)
+- `hasConvoySignificantChanges()` (línea 664)
+- `serializeAllNodes()` (línea 717)
+- `serializeAllConvoys()` (línea 785)
+- `serializeHelicopters()` (línea 811)
+- `serializeAllHelicopters()` (línea 828)
+
+**Estimación:** 250 líneas
+
+---
+
+#### **2.3 OptimizationTracker**
+**Archivo:** `server/game/managers/OptimizationTracker.js`  
+**Responsabilidad:** Tracking de cambios para optimización de red
+
+```javascript
+class OptimizationTracker {
+    constructor(gameState) {
+        this.gameState = gameState;
+        this.lastSentState = null;
+        this.lastNodeStates = new Map();
+        this.lastConvoyStates = new Map();
+    }
+    
+    hasSignificantChanges(currentState) {
+        // Línea 1273
+    }
+    
+    cleanupNodeTracking() {
+        // Línea 1250
+    }
+    
+    cleanupConvoyTracking() {
+        // Línea 1260
+    }
+}
+```
+
+**Métodos a extraer:**
+- `hasNodeSignificantChanges()` (línea 531)
+- `hasConvoySignificantChanges()` (línea 664)
+- `hasSignificantChanges()` (línea 1273)
+- `cleanupNodeTracking()` (línea 1250)
+- `cleanupConvoyTracking()` (línea 1260)
+
+**Estimación:** 120 líneas
+
+---
+
+#### **2.4 TerritoryCalculator**
+**Archivo:** `server/game/managers/TerritoryCalculator.js`  
+**Responsabilidad:** Cálculos de territorio y fronteras
+
+```javascript
+class TerritoryCalculator {
+    constructor(gameState) {
+        this.gameState = gameState;
+    }
+    
+    isInTeamTerritory(x, team) {
+        // Línea 1402
+    }
+}
+```
+
+**Métodos a extraer:**
+- `isInTeamTerritory()` (línea 1402)
+
+**Estimación:** 50 líneas
+
+---
+
+### **FASE 3: Extraer Lógica de Raza**
+
+#### **3.1 RaceManager**
+**Archivo:** `server/game/managers/RaceManager.js`  
+**Responsabilidad:** Gestión de razas y mecánicas especiales
+
+```javascript
+class RaceManager {
+    constructor(gameState) {
+        this.gameState = gameState;
+    }
+    
+    getPlayerRaceConfig(team) {
+        // Línea 91
+    }
+    
+    canPlayerUseFOBs(team) {
+        // Línea 101
+    }
+    
+    getPlayerTransportSystem(team) {
+        // Línea 111
+    }
+    
+    getValidRoutesForPlayer(fromType, team) {
+        // Línea 122
+    }
+    
+    configureNodeForRace(node, team) {
+        // Línea 142
+    }
+    
+    getInitialVehiclesForRace(team, nodeType) {
+        // Línea 166
+    }
+}
+```
+
+**Métodos a extraer:**
+- `getPlayerRaceConfig()` (línea 91)
+- `canPlayerUseFOBs()` (línea 101)
+- `getPlayerTransportSystem()` (línea 111)
+- `getValidRoutesForPlayer()` (línea 122)
+- `configureNodeForRace()` (línea 142)
+- `getInitialVehiclesForRace()` (línea 166)
+- `setPlayerRace()` (línea 218, 1496)
+- `getPlayerRace()` (línea 233, 1487)
+
+**Estimación:** 200 líneas
+
+---
+
+### **FASE 4: Simplificar método `update()`**
+
+#### **4.1 ConvoyMovementManager**
+**Archivo:** `server/game/managers/ConvoyMovementManager.js`  
+**Responsabilidad:** Movimiento y llegadas de convoyes
+
+```javascript
+class ConvoyMovementManager {
+    constructor(gameState) {
+        this.gameState = gameState;
+    }
+    
+    update(dt) {
+        // Líneas 960-1105 (~145 líneas)
+        // - Actualizar progress
+        // - Penalización por sabotaje
+        // - Bonus de EngineerCenter
+        // - Manejo de ambulancias
+        // - Regreso a origen
+    }
+}
+```
+
+**Métodos a extraer:**
+- Lógica de actualización de convoyes (líneas 960-1105)
+
+**Estimación:** 180 líneas
+
+---
+
+#### **4.2 SupplyManager**
+**Archivo:** `server/game/managers/SupplyManager.js`  
+**Responsabilidad:** Consumo de supplies en frentes
+
+```javascript
+class SupplyManager {
+    constructor(gameState) {
+        this.gameState = gameState;
+    }
+    
+    update(dt) {
+        // Líneas 1107-1120
+    }
+}
+```
+
+**Métodos a extraer:**
+- Consumo de supplies en frentes (líneas 1107-1120)
+
+**Estimación:** 30 líneas
+
+---
+
+#### **4.3 InvestmentManager**
+**Archivo:** `server/game/managers/InvestmentManager.js`  
+**Responsabilidad:** Sistema de inversiones IntelRadio
+
+```javascript
+class InvestmentManager {
+    constructor(gameState) {
+        this.gameState = gameState;
+    }
+    
+    update(dt) {
+        // Líneas 1122-1140
+    }
+}
+```
+
+**Métodos a extraer:**
+- Sistema de inversión IntelRadio (líneas 1122-1140)
+
+**Estimación:** 40 líneas
+
+---
+
+### **FASE 5: Refactorizar GameStateManager**
+
+#### **5.1 Estructura final**
+```javascript
+// GameStateManager.js (300 líneas)
+class GameStateManager {
+    constructor(room) {
+        this.room = room;
+        this.nodes = [];
+        this.convoys = [];
+        this.currency = {...};
+        this.playerRaces = {...};
+        
+        // Managers
+        this.raceManager = new RaceManager(this);
+        this.helicopterManager = new HelicopterManager(this);
+        this.convoyMovementManager = new ConvoyMovementManager(this);
+        this.supplyManager = new SupplyManager(this);
+        this.investmentManager = new InvestmentManager(this);
+        this.stateSerializer = new StateSerializer(this);
+        this.optimizationTracker = new OptimizationTracker(this);
+        this.territoryCalculator = new TerritoryCalculator(this);
+        
+        // Sistemas existentes
+        this.medicalSystem = new MedicalSystemServer(this);
+        this.frontMovement = new FrontMovementSystemServer(this);
+        this.abandonmentSystem = new AbandonmentSystem(this);
+        this.droneSystem = new DroneSystemServer(this);
+        this.territory = new TerritorySystemServer(this);
+        
+        // Handlers
+        this.buildHandler = new BuildHandler(this);
+        this.convoyHandler = new ConvoyHandler(this);
+        this.combatHandler = new CombatHandler(this);
+        
+        // Sistemas de actualización
+        this.currencySystem = new CurrencySystem(this);
+        this.constructionSystem = new ConstructionSystem(this);
+        this.effectsSystem = new EffectsSystem(this);
+    }
+    
+    update(dt) {
+        // Countdown
+        if (!this.gameStarted) {
+            return this.handleCountdown(dt);
+        }
+        
+        // Audio timers
+        this.updateAudioTimers(dt);
+        
+        // Actualizar sistemas
+        this.currencySystem.updateCurrency(dt);
+        this.constructionSystem.updateConstructions(dt);
+        this.convoyMovementManager.update(dt);
+        this.supplyManager.update(dt);
+        this.investmentManager.update(dt);
+        this.abandonmentSystem.checkAbandonmentConditions();
+        this.abandonmentSystem.update(dt);
+        this.helicopterManager.update(dt);
+        this.medicalSystem.update(dt);
+        
+        // Movimiento de frentes (puede retornar victoria)
+        const victoryResult = this.frontMovement.update(dt);
+        if (victoryResult) {
+            return this.handleVictory(victoryResult);
+        }
+        
+        // Sistema de territorio
+        this.territory.update(dt);
+        this.territory.updateAbandonmentProgress(dt);
+        
+        // Actualizar drones
+        const droneResult = this.droneSystem.update(dt);
+        this.handleDroneResult(droneResult);
+        
+        // Limpiar entidades destruidas
+        this.cleanupDestroyedEntities();
+        
+        // Serializar y retornar estado
+        return this.stateSerializer.serialize();
+    }
+    
+    // Métodos públicos delegados
+    getPlayerRaceConfig(team) {
+        return this.raceManager.getPlayerRaceConfig(team);
+    }
+    
+    canPlayerUseFOBs(team) {
+        return this.raceManager.canPlayerUseFOBs(team);
+    }
+    
+    isInTeamTerritory(x, team) {
+        return this.territoryCalculator.isInTeamTerritory(x, team);
+    }
+    
+    // ... resto de métodos delegados
+}
+```
+
+---
+
+## 📅 PLAN DE MIGRACIÓN (4 SEMANAS)
+
+### **Semana 1: Fases 1-2**
+- [ ] Crear `HelicopterManager.js`
+- [ ] Migrar código de helicópteros
+- [ ] Crear `StateSerializer.js`
+- [ ] Migrar código de serialización
+- [ ] Crear `OptimizationTracker.js`
+- [ ] Migrar código de optimización
+- [ ] Crear `TerritoryCalculator.js`
+- [ ] Migrar código de territorio
+- [ ] **Tests:** Verificar que todo funciona igual
+
+### **Semana 2: Fase 3**
+- [ ] Crear `RaceManager.js`
+- [ ] Migrar código de razas
+- [ ] Actualizar referencias en GameStateManager
+- [ ] **Tests:** Verificar mecánicas de raza
+
+### **Semana 3: Fase 4**
+- [ ] Crear `ConvoyMovementManager.js`
+- [ ] Migrar lógica de convoyes del método `update()`
+- [ ] Crear `SupplyManager.js`
+- [ ] Migrar lógica de supplies
+- [ ] Crear `InvestmentManager.js`
+- [ ] Migrar lógica de inversiones
+- [ ] **Tests:** Verificar movimientos y mecánicas
+
+### **Semana 4: Fase 5**
+- [ ] Refactorizar método `update()` en GameStateManager
+- [ ] Simplificar GameStateManager (objetivo: 300 líneas)
+- [ ] Limpiar imports
+- [ ] Documentar cada manager
+- [ ] **Tests finales:** Partida completa end-to-end
+
+---
+
+## ✅ RESULTADO FINAL
+
+### **Estructura de archivos**
+```
+server/game/
+├── GameStateManager.js          (300 líneas - orquestador)
+├── handlers/
+│   ├── BuildHandler.js          ✅ (296 líneas)
+│   ├── ConvoyHandler.js         ✅ (369 líneas)
+│   └── CombatHandler.js         ✅ (155 líneas)
+├── managers/
+│   ├── RaceManager.js           🆕 (200 líneas)
+│   ├── HelicopterManager.js     🆕 (150 líneas)
+│   ├── ConvoyMovementManager.js 🆕 (180 líneas)
+│   ├── SupplyManager.js         🆕 (30 líneas)
+│   ├── InvestmentManager.js     🆕 (40 líneas)
+│   ├── StateSerializer.js       🆕 (250 líneas)
+│   ├── OptimizationTracker.js   🆕 (120 líneas)
+│   └── TerritoryCalculator.js   🆕 (50 líneas)
+└── systems/
+    ├── CurrencySystem.js        ✅ (51 líneas)
+    ├── ConstructionSystem.js    ✅ (31 líneas)
+    └── EffectsSystem.js         ✅ (34 líneas)
+```
+
+### **Ventajas**
+1. ✅ **Mantenibilidad:** Cada manager tiene una sola responsabilidad
+2. ✅ **Testabilidad:** Fácil testear managers individualmente
+3. ✅ **Legibilidad:** GameStateManager queda como orquestador limpio
+4. ✅ **Escalabilidad:** Fácil añadir nuevos managers sin tocar GameStateManager
+5. ✅ **Reutilización:** Managers pueden usarse en otros contextos
+
+### **Métricas**
+- **Antes:** 1 archivo de 1501 líneas
+- **Después:** 11 archivos especializados
+  - GameStateManager: 300 líneas (80% reducción)
+  - Managers: ~1000 líneas distribuidas en 8 archivos
+  - Total: ~1300 líneas (ligera reducción por eliminar duplicación)
+
+---
+
+## 🚀 SIGUIENTE PASO
+
+**¿Comenzamos con la Fase 1?**

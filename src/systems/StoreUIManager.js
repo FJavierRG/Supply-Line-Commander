@@ -1,6 +1,7 @@
 // ===== GESTOR DE UI DE TIENDA =====
 
-import { getBuildableNodes, getProjectiles, getNodeConfig } from '../config/nodes.js';
+import { getBuildableNodes, getProjectiles, getNodeConfig, getBuildableNodesByRace, getProjectilesByRace } from '../config/nodes.js';
+import { getDefaultRace } from '../config/races.js';
 
 export class StoreUIManager {
     constructor(assetManager, buildSystem) {
@@ -10,6 +11,12 @@ export class StoreUIManager {
         // Estado de la tienda
         this.isVisible = true; // Visible por defecto
         this.selectedCategory = null; // Sin categoría seleccionada por defecto
+        this.currentRace = getDefaultRace(); // Raza actual (por defecto 'default')
+        
+        // Sistema de hover para tooltips
+        this.hoveredItem = null;
+        this.hoverStartTime = 0;
+        this.hoverDelay = 500; // 500ms antes de mostrar tooltip
         
         // Layout de la UI - esquina superior izquierda, layout vertical
         this.baseResolution = { width: 1920, height: 1080 };
@@ -29,11 +36,12 @@ export class StoreUIManager {
     }
     
     /**
-     * Actualiza las categorías dinámicamente desde la configuración (solo items habilitados)
+     * Actualiza las categorías dinámicamente desde la configuración (filtrado por raza)
      */
     updateCategories() {
-        const buildableNodes = getBuildableNodes();
-        const projectileNodes = getProjectiles();
+        // Usar funciones específicas por raza en lugar de las generales
+        const buildableNodes = getBuildableNodesByRace(this.currentRace);
+        const projectileNodes = getProjectilesByRace(this.currentRace);
         
         this.categories = {
             buildings: {
@@ -184,6 +192,104 @@ export class StoreUIManager {
     }
     
     /**
+     * Renderiza el tooltip de descripción del item
+     */
+    renderTooltip(ctx) {
+        if (!this.hoveredItem) return;
+        
+        const item = this.hoveredItem;
+        const padding = 12;
+        const titleSize = 16;
+        const descSize = 14;
+        const costSize = 14;
+        
+        // Medir texto
+        ctx.font = `bold ${titleSize}px Arial`;
+        const titleWidth = ctx.measureText(item.name).width;
+        
+        ctx.font = `${descSize}px Arial`;
+        const descWidth = ctx.measureText(item.description).width;
+        
+        ctx.font = `${costSize}px Arial`;
+        const costText = `Costo: ${item.cost}$`;
+        const costWidth = ctx.measureText(costText).width;
+        
+        // Calcular dimensiones del tooltip
+        const boxWidth = Math.max(titleWidth, descWidth, costWidth) + padding * 2;
+        const boxHeight = titleSize + 8 + descSize + 8 + costSize + padding * 2;
+        
+        // Posición: debajo del UIFrame de currency
+        // Currency está en x=340, y=40, width=210, height=83
+        // Tooltip debajo: x=340, y=40+83+10=133
+        const tooltipX = 340;
+        const tooltipY = 40 + 83 + 10; // Debajo del currency frame
+        
+        // Fondo del tooltip
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        ctx.fillRect(tooltipX, tooltipY, boxWidth, boxHeight);
+        
+        // Borde
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(tooltipX, tooltipY, boxWidth, boxHeight);
+        
+        // Texto del título
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${titleSize}px Arial`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(item.name, tooltipX + padding, tooltipY + padding);
+        
+        // Texto de descripción
+        ctx.fillStyle = '#cccccc';
+        ctx.font = `${descSize}px Arial`;
+        ctx.fillText(item.description, tooltipX + padding, tooltipY + padding + titleSize + 8);
+        
+        // Texto de costo
+        ctx.fillStyle = '#ffd700';
+        ctx.font = `${costSize}px Arial`;
+        ctx.fillText(costText, tooltipX + padding, tooltipY + padding + titleSize + 8 + descSize + 8);
+        
+        ctx.restore();
+    }
+    
+    /**
+     * Maneja el hover del mouse sobre items de la tienda
+     */
+    handleMouseMove(mouseX, mouseY) {
+        if (!this.isVisible) return;
+        
+        // Buscar item bajo el cursor
+        const hoveredRegion = this.hitRegions.find(region => 
+            region.type === 'item' &&
+            mouseX >= region.x && mouseX <= region.x + region.w &&
+            mouseY >= region.y && mouseY <= region.y + region.h
+        );
+        
+        if (hoveredRegion) {
+            const itemId = hoveredRegion.itemId;
+            const nodeConfig = getNodeConfig(itemId);
+            
+            if (nodeConfig && nodeConfig !== this.hoveredItem) {
+                this.hoveredItem = nodeConfig;
+                this.hoverStartTime = Date.now();
+            }
+        } else {
+            this.hoveredItem = null;
+            this.hoverStartTime = 0;
+        }
+    }
+    
+    /**
+     * Verifica si debe mostrar el tooltip
+     */
+    shouldShowTooltip() {
+        return this.hoveredItem && 
+               (Date.now() - this.hoverStartTime) >= this.hoverDelay;
+    }
+    
+    /**
      * Maneja clicks en la UI
      */
     handleClick(mouseX, mouseY) {
@@ -242,6 +348,11 @@ export class StoreUIManager {
         // Renderizar ventana desplegable si hay categoría seleccionada
         if (this.selectedCategory) {
             this.renderDeployableWindow(ctx);
+        }
+        
+        // Renderizar tooltip si debe mostrarse
+        if (this.shouldShowTooltip()) {
+            this.renderTooltip(ctx);
         }
         
         // DEBUG: Renderizar hitboxes (comentar cuando no sea necesario)
@@ -528,5 +639,26 @@ export class StoreUIManager {
         }
         
         return false;
+    }
+    
+    /**
+     * Establece la raza actual y actualiza las categorías
+     * @param {string} raceId - ID de la raza a establecer
+     */
+    setRace(raceId) {
+        if (this.currentRace !== raceId) {
+            this.currentRace = raceId;
+            this.updateCategories(); // Actualizar categorías con la nueva raza
+            this.selectedCategory = null; // Limpiar selección actual
+            console.log(`🏛️ Tienda actualizada para raza: ${raceId}`);
+        }
+    }
+    
+    /**
+     * Obtiene la raza actual
+     * @returns {string} ID de la raza actual
+     */
+    getCurrentRace() {
+        return this.currentRace;
     }
 }

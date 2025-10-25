@@ -2,6 +2,8 @@
 // Este sistema se ejecuta SOLO en el servidor
 // El cliente solo renderiza las emergencias que el servidor envía
 
+import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
+
 export class MedicalSystemServer {
     constructor(gameState) {
         this.gameState = gameState;
@@ -11,11 +13,16 @@ export class MedicalSystemServer {
         this.emergencyChance = 0.8; // 80% de probabilidad
         this.emergencyDuration = 20000; // 20 segundos para responder
         this.rngSeed = Date.now(); // Seed para RNG sincronizada
+        
+        // Chequeo periódico de hospitales para emergencias existentes
+        this.nextHospitalCheck = 2000; // 2 segundos hasta primer chequeo
+        this.hospitalCheckInterval = 2000; // Verificar cada 2 segundos
     }
 
     reset() {
         this.activeEmergencies.clear();
         this.nextEmergencyCheck = this.emergencyCheckInterval;
+        this.nextHospitalCheck = this.hospitalCheckInterval;
         this.rngSeed = Date.now();
     }
 
@@ -36,6 +43,13 @@ export class MedicalSystemServer {
             if (this.seededRandom() < this.emergencyChance) {
                 this.triggerRandomEmergency();
             }
+        }
+
+        // Chequeo periódico de hospitales para emergencias existentes
+        this.nextHospitalCheck -= deltaTimeMs;
+        if (this.nextHospitalCheck <= 0) {
+            this.nextHospitalCheck = this.hospitalCheckInterval;
+            this.checkHospitalsForActiveEmergencies();
         }
 
         // Actualizar emergencias activas
@@ -111,6 +125,66 @@ export class MedicalSystemServer {
         this.gameState.addSoundEvent('man_down', { frontId: front.id });
         
         console.log(`🚨 Emergencia médica iniciada en frente ${front.id} (${front.team})`);
+        
+        // NOTIFICAR HOSPITALES AUTOMÁTICAMENTE
+        this.notifyNearbyHospitals(front);
+    }
+    
+    /**
+     * Notifica a hospitales cercanos sobre una nueva emergencia médica
+     */
+    notifyNearbyHospitals(front) {
+        const nearbyHospitals = this.gameState.nodes.filter(node => 
+            node.type === 'campaignHospital' &&
+            node.team === front.team &&
+            node.constructed &&
+            !node.isAbandoning &&
+            node.availableVehicles > 0
+        );
+        
+        for (const hospital of nearbyHospitals) {
+            const dx = front.x - hospital.x;
+            const dy = front.y - hospital.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const hospitalRange = SERVER_NODE_CONFIG.ranges.campaignHospital;
+            
+            if (distance <= hospitalRange) {
+                this.triggerHospitalResponse(hospital, front);
+            }
+        }
+    }
+    
+    /**
+     * Hace que un hospital responda automáticamente a una emergencia
+     */
+    triggerHospitalResponse(hospital, front) {
+        // Cooldown para evitar spam (2 segundos)
+        const now = Date.now();
+        if (hospital.lastAutoResponse && (now - hospital.lastAutoResponse) < 2000) {
+            return; // Cooldown activo
+        }
+        
+        // Verificar que siga teniendo vehículo disponible
+        if (hospital.availableVehicles <= 0) {
+            return;
+        }
+        
+        // Verificar que la emergencia siga activa
+        if (!this.activeEmergencies.has(front.id)) {
+            return;
+        }
+        
+        // Usar el sistema existente de ambulancia
+        const result = this.gameState.convoyHandler.handleAmbulance(
+            hospital.team, 
+            hospital.id, 
+            front.id
+        );
+        
+        if (result.success) {
+            hospital.lastAutoResponse = now;
+            console.log(`🏥 Hospital ${hospital.id} respondió automáticamente a emergencia en ${front.id}`);
+        }
     }
 
     /**
@@ -181,6 +255,78 @@ export class MedicalSystemServer {
         }
         
         return emergencies;
+    }
+    
+    /**
+     * Chequea todos los hospitales construidos para ver si hay emergencias activas en su rango
+     */
+    checkHospitalsForActiveEmergencies() {
+        // Solo si hay emergencias activas
+        if (this.activeEmergencies.size === 0) {
+            return;
+        }
+        
+        const hospitals = this.gameState.nodes.filter(node => 
+            node.type === 'campaignHospital' &&
+            node.constructed &&
+            !node.isAbandoning &&
+            node.availableVehicles > 0
+        );
+        
+        // Para cada emergencia activa, buscar hospitales en rango
+        for (const [frontId, emergency] of this.activeEmergencies.entries()) {
+            if (emergency.resolved) continue; // Ya resuelta
+            
+            const front = this.gameState.nodes.find(n => n.id === frontId);
+            if (!front) continue;
+            
+            // Buscar hospitales del mismo equipo en rango
+            const nearbyHospitals = hospitals.filter(hospital => {
+                if (hospital.team !== front.team) return false;
+                
+                const dx = front.x - hospital.x;
+                const dy = front.y - hospital.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const hospitalRange = SERVER_NODE_CONFIG.ranges.campaignHospital;
+                
+                return distance <= hospitalRange;
+            });
+            
+            // Notificar a hospitales cercanos (con cooldown)
+            for (const hospital of nearbyHospitals) {
+                const now = Date.now();
+                if (!hospital.lastAutoResponse || (now - hospital.lastAutoResponse) >= 2000) {
+                    this.triggerHospitalResponse(hospital, front);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Notifica inmediatamente a un hospital recién construido sobre emergencias activas
+     */
+    notifyNewHospital(hospital) {
+        if (!hospital || hospital.type !== 'campaignHospital') return;
+        if (!hospital.constructed || hospital.isAbandoning) return;
+        
+        // Buscar emergencias activas en rango
+        for (const [frontId, emergency] of this.activeEmergencies.entries()) {
+            if (emergency.resolved) continue;
+            
+            const front = this.gameState.nodes.find(n => n.id === frontId);
+            if (!front || front.team !== hospital.team) continue;
+            
+            const dx = front.x - hospital.x;
+            const dy = front.y - hospital.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const hospitalRange = SERVER_NODE_CONFIG.ranges.campaignHospital;
+            
+            if (distance <= hospitalRange) {
+                console.log(`🏥 Hospital ${hospital.id} recién construido detecta emergencia activa en ${front.id}`);
+                this.triggerHospitalResponse(hospital, front);
+                break; // Solo responder a la primera emergencia encontrada
+            }
+        }
     }
 }
 

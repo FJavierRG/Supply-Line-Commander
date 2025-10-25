@@ -780,6 +780,8 @@ export class TutorialManager {
                 this.game.renderer.renderDronePreview(mousePos.x, mousePos.y, this.game.hoveredNode);
             } else if (this.game.buildSystem.sniperMode) {
                 this.game.renderer.renderSniperCursor(mousePos.x, mousePos.y, this.game.hoveredNode);
+            } else if (this.game.buildSystem.fobSabotageMode) {
+                this.game.renderer.renderFobSabotageCursor(mousePos.x, mousePos.y, this.game.hoveredNode);
             } else {
                 const buildingType = this.game.buildSystem.currentBuildingType || 'fob';
                 // Importante: pasar los nodos del tutorial para validaciones de solape/territorio

@@ -9,15 +9,25 @@ import { GAME_CONFIG } from '../config/gameConfig.js';
 import { BuildHandler } from './handlers/BuildHandler.js';
 import { ConvoyHandler } from './handlers/ConvoyHandler.js';
 import { CombatHandler } from './handlers/CombatHandler.js';
+import { HelicopterManager } from './managers/HelicopterManager.js';
+import { StateSerializer } from './managers/StateSerializer.js';
+import { OptimizationTracker } from './managers/OptimizationTracker.js';
+import { TerritoryCalculator } from './managers/TerritoryCalculator.js';
+import { RaceManager } from './managers/RaceManager.js';
+import { ConvoyMovementManager } from './managers/ConvoyMovementManager.js';
+import { SupplyManager } from './managers/SupplyManager.js';
+import { InvestmentManager } from './managers/InvestmentManager.js';
 import { CurrencySystem } from './systems/CurrencySystem.js';
 import { ConstructionSystem } from './systems/ConstructionSystem.js';
 import { EffectsSystem } from './systems/EffectsSystem.js';
+import { AbandonmentSystem } from '../systems/AbandonmentSystem.js';
 
 export class GameStateManager {
     constructor(room) {
         this.room = room;
         this.nodes = [];
         this.convoys = [];
+        this.helicopters = []; // 🆕 NUEVO: Array de helicópteros persistentes
         this.currency = {
             player1: GAME_CONFIG.currency.initial,
             player2: GAME_CONFIG.currency.initial
@@ -25,6 +35,11 @@ export class GameStateManager {
         this.currencyGenerated = {
             player1: GAME_CONFIG.currency.initial,
             player2: GAME_CONFIG.currency.initial
+        };
+        // 🆕 NUEVO: Razas seleccionadas por equipo
+        this.playerRaces = {
+            player1: null,
+            player2: null
         };
         this.gameTime = 0;
         this.tickCounter = 0;
@@ -47,10 +62,21 @@ export class GameStateManager {
         this.convoyHandler = new ConvoyHandler(this);
         this.combatHandler = new CombatHandler(this);
         
+        // Managers especializados
+        this.helicopterManager = new HelicopterManager(this);
+        this.stateSerializer = new StateSerializer(this);
+        this.optimizationTracker = new OptimizationTracker(this);
+        this.territoryCalculator = new TerritoryCalculator(this);
+        this.raceManager = new RaceManager(this);
+        this.convoyMovementManager = new ConvoyMovementManager(this);
+        this.supplyManager = new SupplyManager(this);
+        this.investmentManager = new InvestmentManager(this);
+        
         // Sistemas de actualización
         this.currencySystem = new CurrencySystem(this);
         this.constructionSystem = new ConstructionSystem(this);
         this.effectsSystem = new EffectsSystem(this);
+        this.abandonmentSystem = new AbandonmentSystem(this);
         
         // Sistema de eventos de sonido
         this.soundEvents = [];
@@ -71,6 +97,9 @@ export class GameStateManager {
         this.INITIAL_SYNC_TICKS = 30; // Enviar estado completo los primeros 30 ticks (3 segundos @ 10TPS)
     }
     
+    // ===== FUNCIONES CENTRALIZADAS MODULARES =====
+    
+    
     /**
      * Obtiene el estado inicial del juego
      */
@@ -85,13 +114,16 @@ export class GameStateManager {
         // HQ Jugador 2 (derecha)
         this.nodes.push(this.createNode('hq', 'player2', baseWidth * 0.94, baseHeight * 0.5));
         
-        // FOBs Jugador 1
-        this.nodes.push(this.createNode('fob', 'player1', baseWidth * 0.208, baseHeight * 0.722, 50));
-        this.nodes.push(this.createNode('fob', 'player1', baseWidth * 0.208, baseHeight * 0.259, 50));
+        // 🆕 CENTRALIZADO: FOBs solo para jugadores que pueden usarlos
+        if (this.raceManager.canPlayerUseFOBs('player1')) {
+            this.nodes.push(this.createNode('fob', 'player1', baseWidth * 0.208, baseHeight * 0.722, 50));
+            this.nodes.push(this.createNode('fob', 'player1', baseWidth * 0.208, baseHeight * 0.259, 50));
+        }
         
-        // FOBs Jugador 2
-        this.nodes.push(this.createNode('fob', 'player2', baseWidth * 0.792, baseHeight * 0.722, 50));
-        this.nodes.push(this.createNode('fob', 'player2', baseWidth * 0.792, baseHeight * 0.259, 50));
+        if (this.raceManager.canPlayerUseFOBs('player2')) {
+            this.nodes.push(this.createNode('fob', 'player2', baseWidth * 0.792, baseHeight * 0.722, 50));
+            this.nodes.push(this.createNode('fob', 'player2', baseWidth * 0.792, baseHeight * 0.259, 50));
+        }
         
         // Frentes Jugador 1
         this.nodes.push(this.createNode('front', 'player1', baseWidth * 0.35, baseHeight * 0.722, 100));
@@ -101,12 +133,43 @@ export class GameStateManager {
         this.nodes.push(this.createNode('front', 'player2', baseWidth * 0.65, baseHeight * 0.722, 100));
         this.nodes.push(this.createNode('front', 'player2', baseWidth * 0.65, baseHeight * 0.259, 100));
         
+        // 🆕 NUEVO: Crear helicópteros iniciales para B_Nation
+        const player1Config = this.raceManager.getPlayerRaceConfig('player1');
+        const player2Config = this.raceManager.getPlayerRaceConfig('player2');
+        
+        if (player1Config?.specialMechanics?.transportSystem === 'aerial') {
+            const hqNode = this.nodes.find(n => n.type === 'hq' && n.team === 'player1');
+            if (hqNode) {
+                const heli = this.helicopterManager.createHelicopter('player1', hqNode.id);
+                if (!hqNode.landedHelicopters) hqNode.landedHelicopters = [];
+                hqNode.landedHelicopters.push(heli.id);
+                console.log(`🚁 Helicóptero inicial creado para player1 en HQ ${hqNode.id}`);
+            }
+        }
+        
+        if (player2Config?.specialMechanics?.transportSystem === 'aerial') {
+            const hqNode = this.nodes.find(n => n.type === 'hq' && n.team === 'player2');
+            if (hqNode) {
+                const heli = this.helicopterManager.createHelicopter('player2', hqNode.id);
+                if (!hqNode.landedHelicopters) hqNode.landedHelicopters = [];
+                hqNode.landedHelicopters.push(heli.id);
+                console.log(`🚁 Helicóptero inicial creado para player2 en HQ ${hqNode.id}`);
+            }
+        }
+        
         return {
-            nodes: this.serializeNodes(),
+            nodes: this.stateSerializer.serializeNodes(),
+            helicopters: this.stateSerializer.serializeAllHelicopters(), // Incluir helicópteros
             currency: { ...this.currency },
             duration: this.duration,
             worldWidth: baseWidth,
-            worldHeight: baseHeight
+            worldHeight: baseHeight,
+            // 🆕 CENTRALIZADO: Incluir información de razas en estado inicial
+            playerRaces: { ...this.playerRaces },
+            raceConfigs: {
+                player1: this.raceManager.getPlayerRaceConfig('player1'),
+                player2: this.raceManager.getPlayerRaceConfig('player2')
+            }
         };
     }
     
@@ -124,16 +187,24 @@ export class GameStateManager {
             y,
             active: true,
             constructed: true,
-            isConstructing: false
+            isConstructing: false,
+            landedHelicopters: [] // 🆕 Array para helicópteros aterrizados
         };
+        
+        // 🆕 CENTRALIZADO: Obtener configuración de vehículos según la raza
+        const vehicleConfig = this.raceManager.getInitialVehiclesForRace(team, type);
         
         // Propiedades según tipo
         if (type === 'hq') {
             node.hasSupplies = false;
             node.supplies = null; // Infinitos
-            node.hasVehicles = true;
-            node.maxVehicles = 4;
-            node.availableVehicles = 4;
+            // 🆕 CENTRALIZADO: Usar configuración de vehículos según raza
+            node.hasVehicles = vehicleConfig.hasVehicles;
+            node.maxVehicles = vehicleConfig.hasVehicles ? 4 : 0;
+            node.availableVehicles = vehicleConfig.availableVehicles;
+            node.hasHelicopters = vehicleConfig.hasHelicopters;
+            node.maxHelicopters = vehicleConfig.hasHelicopters ? 1 : 0;
+            node.availableHelicopters = vehicleConfig.availableHelicopters;
             // Sistema médico para ambulancias
             node.hasMedicalSystem = true;
             node.ambulanceAvailable = true;
@@ -142,19 +213,32 @@ export class GameStateManager {
             node.hasSupplies = true;
             node.maxSupplies = 100;
             node.supplies = supplies !== null ? supplies : 0;
-            node.hasVehicles = true;
-            node.maxVehicles = 2;
-            node.availableVehicles = 2;
+            // 🆕 CENTRALIZADO: Usar configuración de vehículos según raza
+            node.hasVehicles = vehicleConfig.hasVehicles;
+            node.maxVehicles = vehicleConfig.hasVehicles ? 2 : 0;
+            node.availableVehicles = vehicleConfig.availableVehicles;
+            node.hasHelicopters = vehicleConfig.hasHelicopters;
+            node.maxHelicopters = vehicleConfig.hasHelicopters ? 1 : 0;
+            node.availableHelicopters = vehicleConfig.availableHelicopters;
         } else if (type === 'front') {
             node.hasSupplies = true;
             node.maxSupplies = 100;
             node.supplies = supplies !== null ? supplies : 100;
             node.consumeRate = 1.6;
             node.maxXReached = x;
+            // 🆕 CENTRALIZADO: Usar configuración de vehículos según raza
+            node.hasVehicles = vehicleConfig.hasVehicles;
+            node.maxVehicles = vehicleConfig.hasVehicles ? 1 : 0;
+            node.availableVehicles = vehicleConfig.availableVehicles;
+            node.hasHelicopters = vehicleConfig.hasHelicopters;
+            node.maxHelicopters = vehicleConfig.hasHelicopters ? 1 : 0;
+            node.availableHelicopters = vehicleConfig.availableHelicopters;
         }
         
-        return node;
+        // 🆕 CENTRALIZADO: Configurar nodo según la raza
+        return this.raceManager.configureNodeForRace(node, team);
     }
+    
     
     /**
      * Añade un evento de sonido a la cola
@@ -179,246 +263,9 @@ export class GameStateManager {
         this.buildHandler.applyBuildingEffects(node);
     }
     
-    /**
-     * Verifica si un nodo tiene cambios significativos desde el último envío
-     */
-    hasNodeSignificantChanges(node) {
-        const lastNodeState = this.lastNodeStates.get(node.id);
-        
-        // Si es la primera vez que vemos este nodo, enviarlo
-        if (!lastNodeState) {
-            return true;
-        }
-        
-        // Cambios críticos que SIEMPRE requieren actualización
-        if (node.constructed !== lastNodeState.constructed ||
-            node.isConstructing !== lastNodeState.isConstructing ||
-            node.active !== lastNodeState.active ||
-            node.isAbandoning !== lastNodeState.isAbandoning) {
-            return true;
-        }
-        
-        // Cambios en posición (crítico para frentes)
-        if (Math.abs(node.x - lastNodeState.x) > 0.1 || 
-            Math.abs(node.y - lastNodeState.y) > 0.1) {
-            return true;
-        }
-        
-        // Cambios significativos en supplies (≥5 unidades)
-        if (node.supplies !== null && lastNodeState.supplies !== null) {
-            if (Math.abs(node.supplies - lastNodeState.supplies) >= 5) {
-                return true;
-            }
-        }
-        
-        // Cambios en vehículos disponibles
-        if (node.availableVehicles !== lastNodeState.availableVehicles) {
-            return true;
-        }
-        
-        // Cambios en ambulance availability
-        if (node.ambulanceAvailable !== lastNodeState.ambulanceAvailable) {
-            return true;
-        }
-        
-        // Construction timer - actualizar más frecuentemente para barrita fluida
-        if (node.isConstructing && node.constructionTimer !== undefined && lastNodeState.constructionTimer !== undefined) {
-            if (Math.abs(node.constructionTimer - lastNodeState.constructionTimer) >= 0.03) {
-                return true; // Actualizar cada ~0.03s para 30+ FPS suaves
-            }
-        }
-        
-        // Cambios en efectos
-        if (node.effects && node.effects.length !== (lastNodeState.effects?.length || 0)) {
-            return true;
-        }
-        
-        return false;
-    }
 
-    /**
-     * Serializa nodos para enviar a cliente - SOLO los que han cambiado significativamente
-     */
-    serializeNodes() {
-        // Filtrar nodos destruidos (active: false) y solo enviar los que han cambiado
-        return this.nodes
-            .filter(node => node.active !== false && this.hasNodeSignificantChanges(node))
-            .map(node => {
-                // Guardar estado actual para próxima comparación
-                this.lastNodeStates.set(node.id, {
-                    x: node.x,
-                    y: node.y,
-                    active: node.active,
-                    constructed: node.constructed,
-                    isConstructing: node.isConstructing,
-                    constructionTimer: node.constructionTimer || 0,
-                    supplies: node.supplies,
-                    availableVehicles: node.availableVehicles,
-                    ambulanceAvailable: node.ambulanceAvailable,
-                    isAbandoning: node.isAbandoning,
-                    effects: node.effects ? [...node.effects] : []
-                });
-                
-                return {
-                    id: node.id,
-                    type: node.type,
-                    team: node.team,
-                    x: node.x,
-                    y: node.y,
-                    active: node.active,
-                    constructed: node.constructed,
-                    isConstructing: node.isConstructing,
-                    constructionTimer: node.constructionTimer || 0,
-                    constructionTime: node.constructionTime || 2,
-                    supplies: node.supplies,
-                    maxSupplies: node.maxSupplies,
-                    availableVehicles: node.availableVehicles,
-                    maxVehicles: node.maxVehicles,
-                    consumeRate: node.consumeRate,
-                    maxXReached: node.maxXReached,
-                    minXReached: node.minXReached,
-                    isAbandoning: node.isAbandoning,
-                    abandonPhase: node.abandonPhase,
-                    effects: node.effects || [],
-                    // Propiedades del sistema médico
-                    hasMedicalSystem: node.hasMedicalSystem || false,
-                    ambulanceAvailable: node.ambulanceAvailable || false,
-                    maxAmbulances: node.maxAmbulances || 0
-                };
-            });
-    }
     
-    /**
-     * Verifica si un convoy tiene cambios significativos desde el último envío
-     * OPTIMIZADO para Dead Reckoning: menos updates durante movimiento constante
-     */
-    hasConvoySignificantChanges(convoy) {
-        const lastConvoyState = this.lastConvoyStates.get(convoy.id);
-        
-        // Si es la primera vez que vemos este convoy, enviarlo
-        if (!lastConvoyState) {
-            return true;
-        }
-        
-        // OPTIMIZACIÓN DEAD RECKONING: Reducir frecuencia de updates durante movimiento
-        // Cambios significativos en progress - aumentado de 0.1 a 0.15 (menos updates)
-        if (Math.abs(convoy.progress - lastConvoyState.progress) >= 0.15) {
-            return true;
-        }
-        
-        // Cambios críticos (siempre se envían inmediatamente)
-        if (convoy.returning !== lastConvoyState.returning) {
-            return true;
-        }
-        
-        return false;
-    }
 
-    /**
-     * Serializa convoyes para enviar a cliente - SOLO los que han cambiado significativamente
-     */
-    serializeConvoys() {
-        return this.convoys
-            .filter(convoy => this.hasConvoySignificantChanges(convoy))
-            .map(convoy => {
-                // Guardar estado actual para próxima comparación
-                this.lastConvoyStates.set(convoy.id, {
-                    progress: convoy.progress,
-                    returning: convoy.returning
-                });
-                
-                return {
-                    id: convoy.id,
-                    fromId: convoy.fromId,
-                    toId: convoy.toId,
-                    team: convoy.team,
-                    vehicleType: convoy.vehicleType,
-                    cargo: convoy.cargo,
-                    progress: convoy.progress,
-                    returning: convoy.returning,
-                    isMedical: convoy.isMedical || false,
-                    targetFrontId: convoy.targetFrontId || null
-                };
-            });
-    }
-
-    /**
-     * Serializa TODOS los nodos para envío inicial (sin filtrado)
-     */
-    serializeAllNodes() {
-        // Filtrar solo nodos destruidos, pero enviar todos los demás sin filtrado de cambios
-        return this.nodes
-            .filter(node => node.active !== false)
-            .map(node => {
-                // Guardar estado para tracking (aunque sea inicial)
-                this.lastNodeStates.set(node.id, {
-                    x: node.x,
-                    y: node.y,
-                    active: node.active,
-                    constructed: node.constructed,
-                    isConstructing: node.isConstructing,
-                    constructionTimer: node.constructionTimer || 0,
-                    supplies: node.supplies,
-                    availableVehicles: node.availableVehicles,
-                    ambulanceAvailable: node.ambulanceAvailable,
-                    isAbandoning: node.isAbandoning,
-                    effects: node.effects ? [...node.effects] : []
-                });
-                
-                return {
-                    id: node.id,
-                    type: node.type,
-                    team: node.team,
-                    x: node.x,
-                    y: node.y,
-                    active: node.active,
-                    constructed: node.constructed,
-                    isConstructing: node.isConstructing,
-                    constructionTimer: node.constructionTimer || 0,
-                    constructionTime: node.constructionTime || 2,
-                    supplies: node.supplies,
-                    maxSupplies: node.maxSupplies,
-                    availableVehicles: node.availableVehicles,
-                    maxVehicles: node.maxVehicles,
-                    consumeRate: node.consumeRate,
-                    maxXReached: node.maxXReached,
-                    minXReached: node.minXReached,
-                    isAbandoning: node.isAbandoning,
-                    abandonPhase: node.abandonPhase,
-                    effects: node.effects || [],
-                    // Propiedades del sistema médico
-                    hasMedicalSystem: node.hasMedicalSystem || false,
-                    ambulanceAvailable: node.ambulanceAvailable || false,
-                    maxAmbulances: node.maxAmbulances || 0
-                };
-            });
-    }
-
-    /**
-     * Serializa TODOS los convoyes para envío inicial (sin filtrado)
-     */
-    serializeAllConvoys() {
-        return this.convoys.map(convoy => {
-            // Guardar estado para tracking (aunque sea inicial)
-            this.lastConvoyStates.set(convoy.id, {
-                progress: convoy.progress,
-                returning: convoy.returning
-            });
-            
-            return {
-                id: convoy.id,
-                fromId: convoy.fromId,
-                toId: convoy.toId,
-                team: convoy.team,
-                vehicleType: convoy.vehicleType,
-                cargo: convoy.cargo,
-                progress: convoy.progress,
-                returning: convoy.returning,
-                isMedical: convoy.isMedical || false,
-                targetFrontId: convoy.targetFrontId || null
-            };
-        });
-    }
     
     /**
      * Maneja solicitud de construcción
@@ -446,6 +293,13 @@ export class GameStateManager {
      */
     handleSniperStrike(playerTeam, targetId) {
         return this.combatHandler.handleSniperStrike(playerTeam, targetId);
+    }
+    
+    /**
+     * Maneja sabotaje de FOB
+     */
+    handleFobSabotage(playerTeam, targetId) {
+        return this.combatHandler.handleFobSabotage(playerTeam, targetId);
     }
     
     /**
@@ -538,130 +392,81 @@ export class GameStateManager {
         this.constructionSystem.updateConstructions(dt);
         
         // === ACTUALIZAR CONVOYES (MOVIMIENTO + LLEGADAS) ===
-        for (let i = this.convoys.length - 1; i >= 0; i--) {
-            const convoy = this.convoys[i];
-            
-            // Calcular velocidad basada en distancia y velocidad del vehículo
-            const fromNode = this.nodes.find(n => n.id === convoy.fromId);
-            const toNode = this.nodes.find(n => n.id === convoy.toId);
-            
-            if (!fromNode || !toNode) {
-                // Nodo no existe, eliminar convoy
-                console.warn(`⚠️ Convoy ${convoy.id} tiene nodo inexistente, eliminando`);
-                this.convoys.splice(i, 1);
-                continue;
-            }
-            
-            // Usar distancia inicial fija (no recalcular cada frame)
-            const distance = convoy.initialDistance || 1; // Fallback a 1 para convoys viejos
-            
-            if (distance < 1) {
-                // Distancia inválida, eliminar convoy
-                console.warn(`⚠️ Convoy ${convoy.id} tiene distancia 0, eliminando`);
-                this.convoys.splice(i, 1);
-                continue;
-            }
-            
-            // Velocidad del vehículo (píxeles por segundo) - IGUAL para ida y vuelta
-            let vehicleSpeed;
-            if (convoy.vehicleType === 'heavy_truck') {
-                vehicleSpeed = 40; // Camión pesado
-            } else if (convoy.vehicleType === 'ambulance') {
-                vehicleSpeed = 60; // Ambulancia: 20% más rápida que truck (50 * 1.2 = 60)
-            } else {
-                vehicleSpeed = 50; // Truck normal
-            }
-            
-            // Bonus de EngineerCenter: +50% velocidad
-            const hasEngineerCenter = this.nodes.some(n => 
-                n.type === 'engineerCenter' && n.team === convoy.team && n.constructed
-            );
-            if (hasEngineerCenter) {
-                vehicleSpeed *= 1.5; // +50% velocidad
-            }
-            
-            // Progress por segundo = velocidad / distancia (usa distancia fija)
-            const progressPerSecond = vehicleSpeed / distance;
-            
-            // Actualizar progress
-            convoy.progress += progressPerSecond * dt;
-            
-            // Llegó al destino
-            if (convoy.progress >= 1) {
-                if (!convoy.returning) {
-                    // === AMBULANCIA: Resolver emergencia e iniciar regreso ===
-                    if (convoy.isMedical) {
-                        this.medicalSystem.resolveEmergency(convoy.targetFrontId);
-                        console.log(`🚑 Ambulancia ${convoy.id} llegó - Emergencia resuelta en ${convoy.targetFrontId} - Regresando al HQ`);
-                        
-                        // Iniciar regreso (igual que convoy normal)
-                        convoy.returning = true;
-                        convoy.progress = 0;
-                        continue;
-                    }
-                    
-                    // === CONVOY NORMAL: Entregar cargo ===
-                    const toNode = this.nodes.find(n => n.id === convoy.toId);
-                    if (toNode && toNode.hasSupplies && toNode.supplies !== null) {
-                        const oldSupplies = toNode.supplies;
-                        toNode.supplies = Math.min(toNode.maxSupplies, toNode.supplies + convoy.cargo);
-                        console.log(`🚛 Convoy ${convoy.id} entregó ${convoy.cargo} suministros a ${toNode.type} ${toNode.id}: ${oldSupplies} → ${toNode.supplies}/${toNode.maxSupplies}`);
-                    } else {
-                        console.log(`⚠️ Convoy ${convoy.id} no pudo entregar cargo a nodo ${convoy.toId}: hasSupplies=${toNode?.hasSupplies}, supplies=${toNode?.supplies}`);
-                    }
-                    
-                    // Iniciar regreso
-                    convoy.returning = true;
-                    convoy.progress = 0;
+        this.convoyMovementManager.update(dt);
+        
+        // === CONSUMO DE SUPPLIES EN FRENTES ===
+        this.supplyManager.update(dt);
+        
+        // === SISTEMA DE INVERSIÓN (intelRadio) ===
+        this.investmentManager.update(dt);
+        
+        // === SISTEMA DE ABANDONO (intelRadio) ===
+        for (const node of this.nodes) {
+            if (node.type === 'intelRadio' && node.isAbandoning) {
+                const now = this.gameTime * 1000; // Convertir a ms
+                const elapsed = now - node.abandonStartTime;
+                
+                // Actualizar fase de abandono (tiempos rápidos para intelRadio)
+                if (elapsed < node.abandonPhase1Duration) {
+                    node.abandonPhase = 1; // Gris claro
+                } else if (elapsed < node.abandonPhase1Duration + node.abandonPhase2Duration) {
+                    node.abandonPhase = 2; // Gris oscuro
                 } else {
-                    // Llegó de vuelta, devolver vehículo/ambulancia
-                    const fromNode = this.nodes.find(n => n.id === convoy.fromId);
-                    
-                    if (convoy.isMedical && fromNode) {
-                        // === AMBULANCIA: Devolver al sistema correspondiente ===
-                        if (fromNode.hasMedicalSystem && fromNode.type === 'hq') {
-                            // HQ: devolver al sistema médico
-                            fromNode.ambulanceAvailable = true;
-                            console.log(`🚑 Ambulancia ${convoy.id} regresó al HQ ${fromNode.team} - Disponible: ${fromNode.ambulanceAvailable}`);
-                        } else if (fromNode.hasVehicles && fromNode.type === 'campaignHospital') {
-                            // Hospital de campaña: devolver vehículo
-                            fromNode.availableVehicles = Math.min(fromNode.maxVehicles, fromNode.availableVehicles + 1);
-                            console.log(`🚑 Ambulancia ${convoy.id} regresó al Hospital ${fromNode.team} - Vehículos disponibles: ${fromNode.availableVehicles}`);
-                        } else {
-                            console.warn(`⚠️ Ambulancia ${convoy.id} intentó regresar pero fromNode no tiene sistema médico/vehículos válido:`, fromNode ? `${fromNode.type} ${fromNode.team} hasMedical=${fromNode.hasMedicalSystem} hasVehicles=${fromNode.hasVehicles}` : 'null');
-                        }
-                    } else if (fromNode && fromNode.hasVehicles) {
-                        // === CONVOY NORMAL: Devolver vehículo ===
-                        fromNode.availableVehicles = Math.min(fromNode.maxVehicles, fromNode.availableVehicles + 1);
-                        console.log(`🚛 Vehículo ${convoy.id} regresó al ${fromNode.type} ${fromNode.team} - Vehículos: ${fromNode.availableVehicles}/${fromNode.maxVehicles}`);
-                    } else {
-                        console.warn(`⚠️ Convoy ${convoy.id} intentó regresar pero fromNode no válido:`, fromNode ? `${fromNode.type} hasVehicles=${fromNode.hasVehicles}` : 'null');
-                    }
-                    
-                    // Eliminar convoy
-                    this.convoys.splice(i, 1);
+                    node.abandonPhase = 3; // Listo para eliminar
                 }
             }
         }
         
-        // === CONSUMO DE SUPPLIES EN FRENTES ===
+        // === 🆕 NUEVO: SISTEMA DE AUTODESTRUCCIÓN (Base Aérea) ===
         for (const node of this.nodes) {
-            if (node.type === 'front' && node.hasSupplies) {
-                const consumeRate = node.consumeRate || 1.6;
-                const beforeSupplies = node.supplies;
-                node.supplies = Math.max(0, node.supplies - consumeRate * dt);
+            if ((node.type === 'aerialBase' || node.isAerialBase) && 
+                node.supplies <= 0 && 
+                node.autoDestroy &&
+                (!node.landedHelicopters || node.landedHelicopters.length === 0) &&
+                !node.isAbandoning) {
                 
-                // DEBUG: Log consumo cada 3 segundos
-                if (!this._lastSupplyLog) this._lastSupplyLog = {};
-                if (!this._lastSupplyLog[node.id] || Date.now() - this._lastSupplyLog[node.id] > 3000) {
-                    const consumed = beforeSupplies - node.supplies;
-                    console.log(`⛽ ${node.team} frente: ${node.supplies.toFixed(1)} supplies (consumió ${consumed.toFixed(2)} en ${dt.toFixed(2)}s @ ${consumeRate}x/s)`);
-                    this._lastSupplyLog[node.id] = Date.now();
+                console.log(`💥 ===== Base Aérea ${node.id} INICIANDO ABANDONO =====`);
+                console.log(`   📊 Estado: supplies=${node.supplies}, landedHelicopters=${node.landedHelicopters?.length || 0}`);
+                console.log(`   ⏱️ gameTime=${this.gameTime}s (${this.gameTime * 1000}ms)`);
+                
+                node.isAbandoning = true;
+                node.abandonStartTime = this.gameTime * 1000; // ms
+                node.abandonPhase = 1;
+                
+                console.log(`   ✅ Configurado: isAbandoning=${node.isAbandoning}, phase=${node.abandonPhase}, abandonStartTime=${node.abandonStartTime}ms`);
+                console.log(`   ⏳ Duraciones: fase1=${node.abandonPhase1Duration}ms, fase2=${node.abandonPhase2Duration}ms, total=${node.abandonPhase1Duration + node.abandonPhase2Duration}ms`);
+            }
+        }
+        
+        // === SISTEMA DE ABANDONO (Base Aérea) ===
+        for (const node of this.nodes) {
+            if ((node.type === 'aerialBase' || node.isAerialBase) && node.isAbandoning) {
+                const now = this.gameTime * 1000; // Convertir a ms
+                const elapsed = now - node.abandonStartTime;
+                
+                // 🔍 DEBUG: Log cada 60 ticks
+                if (this.tickCounter % 60 === 0) {
+                    console.log(`🔍 Base Aérea ${node.id}: elapsed=${elapsed}ms, phase=${node.abandonPhase}, dur1=${node.abandonPhase1Duration}ms, dur2=${node.abandonPhase2Duration}ms`);
+                }
+                
+                // Actualizar fase de abandono (mismos tiempos que intelRadio)
+                if (elapsed < node.abandonPhase1Duration) {
+                    node.abandonPhase = 1; // Gris claro
+                } else if (elapsed < node.abandonPhase1Duration + node.abandonPhase2Duration) {
+                    node.abandonPhase = 2; // Gris oscuro
+                } else {
+                    node.abandonPhase = 3; // Listo para eliminar
+                    if (this.tickCounter % 60 === 0) {
+                        console.log(`💥 Base Aérea ${node.id} LISTA PARA ELIMINAR: elapsed=${elapsed}ms (total=${node.abandonPhase1Duration + node.abandonPhase2Duration}ms)`);
+                    }
                 }
             }
         }
         
         // === SISTEMAS DE SIMULACIÓN ===
+        
+        // Sistema de helicópteros (actualizar helicópteros volando)
+        this.helicopterManager.update(dt);
         
         // Sistema médico (emergencias)
         this.medicalSystem.update(dt);
@@ -693,6 +498,10 @@ export class GameStateManager {
         this.territory.update(dt);
         this.territory.updateAbandonmentProgress(dt);
         
+        // Sistema de abandono (verificar condiciones y actualizar fases)
+        this.abandonmentSystem.checkAbandonmentConditions();
+        this.abandonmentSystem.update(dt);
+        
         // === ACTUALIZAR DRONES (MOVIMIENTO + IMPACTOS + INTERCEPCIONES + ALERTAS) ===
         const droneResult = this.droneSystem.update(dt);
         
@@ -710,14 +519,38 @@ export class GameStateManager {
         }
         
         // Limpiar nodos destruidos del servidor (eliminados del array)
+        let nodesChanged = false;
         if (droneResult.impacts.length > 0 || droneResult.interceptions.length > 0) {
             const beforeCount = this.nodes.length;
             this.nodes = this.nodes.filter(n => n.active !== false);
             
             // Limpiar tracking de nodos eliminados
             if (this.nodes.length < beforeCount) {
-                this.cleanupNodeTracking();
+                this.optimizationTracker.cleanupNodeTracking();
+                nodesChanged = true;
             }
+        }
+        
+        // Limpiar hospitales sin ambulancias
+        const beforeHospitalCount = this.nodes.length;
+        this.nodes = this.nodes.filter(node => {
+            if (node.type === 'campaignHospital' && node.active === false) {
+                console.log(`🏥 Eliminando hospital ${node.id} - sin ambulancias disponibles`);
+                return false;
+            }
+            return true;
+        });
+        
+        if (this.nodes.length < beforeHospitalCount) {
+            this.optimizationTracker.cleanupNodeTracking();
+            nodesChanged = true;
+        }
+        
+        // Limpiar nodos en abandono (centralizado en AbandonmentSystem)
+        const abandonmentNodesChanged = this.abandonmentSystem.cleanup();
+        if (abandonmentNodesChanged) {
+            this.optimizationTracker.cleanupNodeTracking();
+            nodesChanged = true;
         }
         
         // === ACTUALIZAR EFECTOS TEMPORALES ===
@@ -725,120 +558,13 @@ export class GameStateManager {
         
         // === LIMPIAR TRACKING MAPS (cada 60 ticks para optimizar) ===
         if (this.tickCounter % 60 === 0) {
-            this.cleanupConvoyTracking();
+            this.optimizationTracker.cleanupConvoyTracking();
         }
         
         // === PREPARAR ESTADO COMPLETO PARA ENVIAR ===
         return this.getGameState();
     }
     
-    /**
-     * Limpia tracking maps de nodos/convoyes eliminados
-     */
-    cleanupNodeTracking() {
-        const activeNodeIds = new Set(this.nodes.map(n => n.id));
-        // Limpiar tracking de nodos que ya no existen
-        for (const nodeId of this.lastNodeStates.keys()) {
-            if (!activeNodeIds.has(nodeId)) {
-                this.lastNodeStates.delete(nodeId);
-            }
-        }
-    }
-    
-    cleanupConvoyTracking() {
-        const activeConvoyIds = new Set(this.convoys.map(c => c.id));
-        // Limpiar tracking de convoyes que ya no existen
-        for (const convoyId of this.lastConvoyStates.keys()) {
-            if (!activeConvoyIds.has(convoyId)) {
-                this.lastConvoyStates.delete(convoyId);
-            }
-        }
-    }
-    
-    /**
-     * Verifica si hay cambios significativos desde el último envío
-     */
-    hasSignificantChanges(currentState) {
-        // Si es el primer envío, siempre enviar
-        if (!this.lastSentState) {
-            return true;
-        }
-        
-        // Verificar cambios en currency (solo si hay diferencia ≥ $5)
-        const currencyChange = Math.abs(currentState.currency.player1 - this.lastSentState.currency.player1) +
-                             Math.abs(currentState.currency.player2 - this.lastSentState.currency.player2);
-        if (currencyChange >= 5) {
-            return true;
-        }
-        
-        // Verificar cambios en número de nodos
-        if (currentState.nodes.length !== this.lastSentState.nodes.length) {
-            return true;
-        }
-        
-        // Verificar cambios en convoyes
-        if (currentState.convoys.length !== this.lastSentState.convoys.length) {
-            return true;
-        }
-        
-        // Verificar cambios en drones
-        if (currentState.drones.length !== this.lastSentState.drones.length) {
-            return true;
-        }
-        
-        // Verificar cambios en emergencias
-        if (currentState.emergencies.length !== this.lastSentState.emergencies.length) {
-            return true;
-        }
-        
-        // Verificar eventos de sonido
-        if (currentState.soundEvents.length > 0) {
-            return true;
-        }
-        
-        // Verificar cambios específicos en nodos (construction, supplies significativos)
-        for (let i = 0; i < currentState.nodes.length; i++) {
-            const currentNode = currentState.nodes[i];
-            const lastNode = this.lastSentState.nodes[i];
-            
-            if (!lastNode) continue; // Nuevo nodo
-            
-            // Cambios críticos que SIEMPRE requieren actualización
-            if (currentNode.constructed !== lastNode.constructed ||
-                currentNode.isConstructing !== lastNode.isConstructing ||
-                currentNode.active !== lastNode.active) {
-                return true;
-            }
-            
-            // Cambios significativos en supplies (≥5 unidades)
-            if (currentNode.supplies !== null && lastNode.supplies !== null) {
-                const supplyDiff = Math.abs(currentNode.supplies - lastNode.supplies);
-                if (supplyDiff >= 5) {
-                    return true;
-                }
-            }
-            
-            // Cambios en posición (crítico para frentes)
-            if (currentNode.x !== lastNode.x || currentNode.y !== lastNode.y) {
-                return true;
-            }
-        }
-        
-        // Verificar cambios en convoyes (progress significativo)
-        for (let i = 0; i < currentState.convoys.length; i++) {
-            const currentConvoy = currentState.convoys[i];
-            const lastConvoy = this.lastSentState.convoys[i];
-            
-            if (!lastConvoy) continue;
-            
-            // Cambios significativos en progress (≥0.1)
-            if (Math.abs(currentConvoy.progress - lastConvoy.progress) >= 0.1) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
 
     /**
      * Obtiene el estado completo del juego para sincronizar con clientes
@@ -851,8 +577,9 @@ export class GameStateManager {
             tick: this.tickCounter,
             gameTime: this.gameTime,
             // SIEMPRE enviar todos los nodos activos - la optimización está en la frecuencia, no en filtrar nodos
-            nodes: this.serializeAllNodes(),
-            convoys: this.serializeAllConvoys(), // También todos los convoyes
+            nodes: this.stateSerializer.serializeAllNodes(),
+            convoys: this.stateSerializer.serializeAllConvoys(), // También todos los convoyes
+            helicopters: this.stateSerializer.serializeAllHelicopters(), // Helicópteros
             drones: this.droneSystem.getDrones(), // Drones activos con posiciones
             emergencies: this.medicalSystem.getEmergencies(),
             currency: {
@@ -863,12 +590,12 @@ export class GameStateManager {
         };
         
         // Durante sync inicial, siempre enviar. Después, aplicar optimización
-        if (!isInitialSync && !this.hasSignificantChanges(state)) {
+        if (!isInitialSync && !this.optimizationTracker.hasSignificantChanges(state)) {
             return null; // Skip update - no envía nada
         }
         
         // Guardar estado actual como referencia para próxima comparación
-        this.lastSentState = JSON.parse(JSON.stringify(state));
+        this.optimizationTracker.updateLastSentState(JSON.parse(JSON.stringify(state)));
         
         return state;
     }
@@ -883,43 +610,6 @@ export class GameStateManager {
         }
     }
     
-    /**
-     * Verifica si una posición X está dentro del territorio de un equipo
-     */
-    isInTeamTerritory(x, team) {
-        const fronts = this.nodes.filter(n => 
-            n.type === 'front' && 
-            n.team === team && 
-            (n.active === undefined || n.active === true) // Considerar undefined como true
-        );
-        
-        if (fronts.length === 0) {
-            // Sin frentes, permitir construir solo cerca del HQ
-            const hq = this.nodes.find(n => n.type === 'hq' && n.team === team);
-            if (!hq) return false;
-            
-            // Permitir construcción en un radio de 300px del HQ
-            return Math.abs(x - hq.x) <= 300;
-        }
-        
-        // Calcular frontera del equipo
-        const frontierGapPx = 25;
-        let frontier;
-        
-        if (team === 'player1') {
-            // Player1 avanza a la derecha
-            frontier = Math.max(...fronts.map(f => f.x + frontierGapPx));
-            // Player1 puede construir a la izquierda de su frontera
-            const hq = this.nodes.find(n => n.type === 'hq' && n.team === team);
-            return x >= (hq?.x || 0) && x <= frontier;
-        } else {
-            // Player2 avanza a la izquierda
-            frontier = Math.min(...fronts.map(f => f.x - frontierGapPx));
-            // Player2 puede construir a la derecha de su frontera
-            const hq = this.nodes.find(n => n.type === 'hq' && n.team === team);
-            return x <= (hq?.x || 1920) && x >= frontier;
-        }
-    }
     
     /**
      * Obtiene estadísticas de la partida
@@ -965,5 +655,93 @@ export class GameStateManager {
             }
         };
     }
+    
+    // ===== MÉTODOS DELEGADOS A MANAGERS =====
+    
+    /**
+     * Obtiene la configuración de raza del jugador
+     * @param {string} team - Equipo del jugador (player1/player2)
+     * @returns {Object|null} Configuración de la raza
+     */
+    getPlayerRaceConfig(team) {
+        return this.raceManager.getPlayerRaceConfig(team);
+    }
+    
+    /**
+     * Verifica si el jugador puede usar FOBs según su raza
+     * @param {string} team - Equipo del jugador
+     * @returns {boolean} True si puede usar FOBs
+     */
+    canPlayerUseFOBs(team) {
+        return this.raceManager.canPlayerUseFOBs(team);
+    }
+    
+    /**
+     * Obtiene el sistema de transporte del jugador según su raza
+     * @param {string} team - Equipo del jugador
+     * @returns {string} Tipo de sistema de transporte (standard/aerial)
+     */
+    getPlayerTransportSystem(team) {
+        return this.raceManager.getPlayerTransportSystem(team);
+    }
+    
+    /**
+     * Obtiene rutas válidas para una raza específica
+     * @param {string} fromType - Tipo de nodo origen
+     * @param {string} team - Equipo del jugador
+     * @returns {Array} Array de tipos de nodos válidos
+     */
+    getValidRoutesForPlayer(fromType, team) {
+        return this.raceManager.getValidRoutesForPlayer(fromType, team);
+    }
+    
+    /**
+     * Configura un nodo según la raza del jugador
+     * @param {Object} node - Nodo a configurar
+     * @param {string} team - Equipo del jugador
+     * @returns {Object} Nodo configurado
+     */
+    configureNodeForRace(node, team) {
+        return this.raceManager.configureNodeForRace(node, team);
+    }
+    
+    /**
+     * Obtiene vehículos iniciales según la raza del jugador
+     * @param {string} team - Equipo del jugador
+     * @param {string} nodeType - Tipo de nodo
+     * @returns {Object} Configuración de vehículos iniciales
+     */
+    getInitialVehiclesForRace(team, nodeType) {
+        return this.raceManager.getInitialVehiclesForRace(team, nodeType);
+    }
+    
+    /**
+     * Establece la raza de un jugador
+     * @param {string} team - Equipo del jugador
+     * @param {string} raceId - ID de la raza
+     */
+    setPlayerRace(team, raceId) {
+        return this.raceManager.setPlayerRace(team, raceId);
+    }
+    
+    /**
+     * Obtiene la raza de un jugador
+     * @param {string} team - Equipo del jugador
+     * @returns {string|null} ID de la raza
+     */
+    getPlayerRace(team) {
+        return this.raceManager.getPlayerRace(team);
+    }
+    
+    /**
+     * Verifica si una posición X está dentro del territorio de un equipo
+     * @param {number} x - Posición X
+     * @param {string} team - Equipo del jugador
+     * @returns {boolean} True si está en territorio
+     */
+    isInTeamTerritory(x, team) {
+        return this.territoryCalculator.isInTeamTerritory(x, team);
+    }
+    
 }
 

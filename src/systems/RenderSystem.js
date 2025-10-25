@@ -41,7 +41,7 @@ export class RenderSystem {
         this.ctx.scale(-1, 1);
         this.mirrorViewApplied = true;
         
-        console.log('🔄 Mirror View aplicada para player2');
+        // console.log('🔄 Mirror View aplicada para player2'); // Comentado para limpiar consola
     }
     
     /**
@@ -136,6 +136,31 @@ export class RenderSystem {
         if (!node) return;
         if (!node.active && !node.isAbandoning) return;
         
+        // Determinar orientación dinámica basada en equipo
+        // Los edificios deben mirar hacia el centro del mapa (hacia el enemigo)
+        const myTeam = this.game?.myTeam || 'player1';
+        const isMyBuilding = node.team === myTeam;
+        const worldWidth = this.game?.worldWidth || this.width;
+        const centerX = worldWidth / 2;
+        
+        // COMPENSAR MIRROR VIEW: Si la vista está mirroreada, invertir la lógica de orientación
+        let shouldFlipBuilding = false;
+        if (node.type !== 'front') { // Los frentes no se voltean
+            if (isMyBuilding) {
+                // Mi edificio: si está a la izquierda del centro, mirar derecha (no flip)
+                // si está a la derecha del centro, mirar izquierda (flip)
+                shouldFlipBuilding = node.x > centerX;
+            } else {
+                // Edificio enemigo: lógica opuesta
+                shouldFlipBuilding = node.x < centerX;
+            }
+            
+            // COMPENSAR MIRROR VIEW: Si la vista está mirroreada, invertir el flip
+            if (this.mirrorViewApplied) {
+                shouldFlipBuilding = !shouldFlipBuilding;
+            }
+        }
+        
         // Detectar si Mirror View está activo (para compensar el flip)
         // EXCEPCIÓN: Los frentes NO necesitan compensación (ya miran hacia donde deben)
         const needsMirrorCompensation = this.mirrorViewApplied && node.type !== 'front';
@@ -155,6 +180,18 @@ export class RenderSystem {
         let sprite = null;
         let spriteKey = node.spriteKey;
         
+        // 🆕 NUEVO: Obtener raza del nodo
+        let nodeRaceId = null;
+        if (game && game.playerRaces && node.team) {
+            // En multiplayer, node.team puede ser 'player1' o 'player2'
+            // En singleplayer, puede ser 'ally' o 'enemy'
+            let playerKey = node.team;
+            if (node.team === 'ally') playerKey = 'player1';
+            if (node.team === 'enemy') playerKey = 'player2';
+            
+            nodeRaceId = game.playerRaces[playerKey];
+        }
+        
         // Si está en construcción, usar sprite de construcción
         if (node.isConstructing) {
             spriteKey = 'building-construction';
@@ -162,7 +199,7 @@ export class RenderSystem {
         } else {
             // Intentar usar getBaseSprite para nodos base (tiene lógica de estados)
             if (node.category === 'map_node') {
-                sprite = this.assetManager?.getBaseSprite(node.type, false, false, isCritical, hasNoAmmo, node.team);
+                sprite = this.assetManager?.getBaseSprite(node.type, false, false, isCritical, hasNoAmmo, node.team, nodeRaceId);
             } else {
                 // Para edificios construibles, usar spriteKey directamente
                 sprite = this.assetManager.getSprite(spriteKey);
@@ -212,13 +249,13 @@ export class RenderSystem {
                     this.ctx.translate(node.x, node.y);
                     this.ctx.scale(-1, 1); // Compensar el flip global
                     
-                    // Aplicar flip horizontal del nodo si es necesario
-                    if (node.flipHorizontal && !node.isConstructing) {
+                    // Aplicar orientación dinámica del edificio
+                    if (shouldFlipBuilding && !node.isConstructing) {
                         this.ctx.scale(-1, 1);
                     }
                     
                     this.ctx.drawImage(sprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize);
-                } else if (node.flipHorizontal && !node.isConstructing) {
+                } else if (shouldFlipBuilding && !node.isConstructing) {
                     this.ctx.translate(node.x, node.y);
                     this.ctx.scale(-1, 1);
                     this.ctx.drawImage(sprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize);
@@ -237,13 +274,13 @@ export class RenderSystem {
                     this.ctx.translate(node.x, node.y);
                     this.ctx.scale(-1, 1); // Compensar el flip global
                     
-                    // Aplicar flip horizontal del nodo si es necesario
-                    if (node.flipHorizontal && !node.isConstructing) {
+                    // Aplicar orientación dinámica del edificio
+                    if (shouldFlipBuilding && !node.isConstructing) {
                         this.ctx.scale(-1, 1);
                     }
                     
                     this.ctx.drawImage(sprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize);
-                } else if (node.flipHorizontal && !node.isConstructing) {
+                } else if (shouldFlipBuilding && !node.isConstructing) {
                     this.ctx.translate(node.x, node.y);
                     this.ctx.scale(-1, 1);
                     this.ctx.drawImage(sprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize);
@@ -291,8 +328,42 @@ export class RenderSystem {
             this.ctx.strokeRect(barX, barY, barWidth, barHeight);
         }
         
+        // DEBUG: Renderizar hitboxes y áreas de detección (solo en desarrollo)
+        this.renderDebugInfo(node);
+        
         // Renderizar UI específica del nodo
         this.renderNodeUI(node, game, spriteSize, isSelected);
+    }
+    
+    /**
+     * DEBUG: Renderiza información de debug (hitbox verde y área de detección naranja)
+     */
+    renderDebugInfo(node) {
+        // Solo renderizar para edificios construibles y FOBs
+        if (!node.active) return;
+        
+        const config = getNodeConfig(node.type);
+        if (!config) return;
+        
+        // Renderizar hitbox (verde) - radio base
+        this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)'; // Verde
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([]);
+        this.ctx.beginPath();
+        const hitboxRadius = node.hitboxRadius || node.radius;
+        this.ctx.arc(node.x, node.y, hitboxRadius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        
+        // Renderizar área de detección (naranja) - solo si tiene detectionRadius
+        if (config.detectionRadius) {
+            this.ctx.strokeStyle = 'rgba(255, 165, 0, 0.6)'; // Naranja
+            this.ctx.lineWidth = 2;
+            this.ctx.setLineDash([8, 8]);
+            this.ctx.beginPath();
+            this.ctx.arc(node.x, node.y, config.detectionRadius, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.setLineDash([]);
+        }
     }
     
     // ========== COMPATIBILIDAD ==========
@@ -363,6 +434,11 @@ export class RenderSystem {
             }
         }
         
+        // 🆕 NUEVO: Icono de helicóptero para frentes de B_Nation con helicópteros
+        if (node.type === 'front' && this.game.selectedRace === 'B_Nation' && node.availableHelicopters > 0) {
+            this.renderHelicopterIcon(node);
+        }
+        
         // Selector de recursos del HQ
         if ((isSelected || node === game?.hoveredNode) && node.type === 'hq') {
             this.renderResourceSelector(node);
@@ -429,6 +505,21 @@ export class RenderSystem {
             
             vehicleText = `${ambulanceAvailable}/${node.maxAmbulances || 1}`;
             availableCount = ambulanceAvailable;
+        } else if (this.game.selectedRace === 'B_Nation' && node.hasHelicopters) {
+            // Modo B_Nation: mostrar helicópteros
+            const helicopterIconSprite = this.assetManager.getSprite('ui-vehicle-icon'); // Usar el mismo icono por ahora
+            const iconSize = 45;
+            const iconX = node.x + shakeX - 45;
+            const iconY = barY + 26 + shakeY - iconSize / 2 - 3;
+            
+            if (helicopterIconSprite) {
+                this.ctx.drawImage(helicopterIconSprite, iconX, iconY, iconSize, iconSize);
+            }
+            
+            // 🆕 NUEVO: Contar helicópteros aterrizados en lugar de availableHelicopters
+            const landedCount = node.landedHelicopters?.length || 0;
+            vehicleText = `${landedCount}/${node.maxHelicopters}`;
+            availableCount = landedCount;
         } else {
             // Modo normal: mostrar camiones
             const vehicleIconSprite = this.assetManager.getSprite('ui-vehicle-icon');
@@ -514,8 +605,18 @@ export class RenderSystem {
         // Verificar si el frente está en retirada (sin munición)
         const hasNoAmmo = base.type === 'front' && base.hasEffect && base.hasEffect('no_supplies');
         
+        // 🆕 NUEVO: Obtener raza del nodo
+        let nodeRaceId = null;
+        if (game && game.playerRaces && base.team) {
+            let playerKey = base.team;
+            if (base.team === 'ally') playerKey = 'player1';
+            if (base.team === 'enemy') playerKey = 'player2';
+            
+            nodeRaceId = game.playerRaces[playerKey];
+        }
+        
         // Intentar usar sprite si está disponible (SIEMPRE usar sprite normal, no placeholder)
-        const sprite = this.assetManager?.getBaseSprite(base.type, false, false, isCritical, hasNoAmmo);
+        const sprite = this.assetManager?.getBaseSprite(base.type, false, false, isCritical, hasNoAmmo, base.team, nodeRaceId);
         
         if (sprite) {
             // RENDERIZADO CON SPRITE
@@ -1048,7 +1149,46 @@ export class RenderSystem {
         }
     }
     
+    /**
+     * 🗑️ ELIMINADO: renderCargoCapacityBar (obsoleto)
+     * La barra de cargo para helicópteros ahora se renderiza en renderHelicopter()
+     * Los helicópteros ya no son convoys, sino entidades persistentes
+     */
+    
+    renderFallingSprites(sprites) {
+        if (sprites.length === 0) return;
+        
+        for (const sprite of sprites) {
+            if (sprite.alpha < 0.01) continue; // Skip sprites invisibles
+            
+            const spriteImg = this.assetManager?.getSprite(sprite.spriteKey);
+            if (!spriteImg) continue;
+            
+            this.ctx.save();
+            this.ctx.globalAlpha = sprite.alpha;
+            
+            const width = spriteImg.width * sprite.scale;
+            const height = spriteImg.height * sprite.scale;
+            
+            this.ctx.drawImage(
+                spriteImg,
+                sprite.x - width / 2,
+                sprite.y - height / 2,
+                width,
+                height
+            );
+            
+            this.ctx.restore();
+        }
+    }
+    
     renderConvoy(convoy) {
+        // 🆕 SKIP: Los helicópteros ya no se renderizan como convoys
+        // Ahora son entidades persistentes renderizadas en renderHelicopter()
+        if (convoy.vehicleType === 'helicopter') {
+            return;
+        }
+        
         // Si está volviendo, renderizar en blanco y negro semi-transparente
         const isReturning = convoy.returning;
         const vehicleColor = isReturning ? '#888' : convoy.vehicle.color;
@@ -1075,15 +1215,42 @@ export class RenderSystem {
             this.ctx.save();
             this.ctx.translate(convoy.x, convoy.y);
             
-            // Lógica de flip horizontal:
-            // - Aliados: van derecha (normal), vuelven izquierda (flip)
-            // - Enemigos: van izquierda (flip), vuelven derecha (normal)
-            let shouldFlip = isEnemy ? !isReturning : isReturning;
-            
-            // COMPENSAR MIRROR VIEW: Si la vista está mirroreada, invertir el flip
-            if (this.mirrorViewApplied) {
-                shouldFlip = !shouldFlip;
+            // Determinar dirección basada en movimiento hacia el objetivo
+            let shouldFlip = false;
+            if (convoy.target) {
+                const dx = convoy.target.x - convoy.x;
+                
+                // LÓGICA SIMPLIFICADA: Siempre usar la misma lógica independientemente del modo
+                // Si va hacia la izquierda (dx < 0), flip
+                // Si va hacia la derecha (dx > 0), no flip
+                shouldFlip = dx < 0;
+                
+                // DEBUG: Log para convoyes problemáticos
+                if (Math.random() < 0.01) { // Solo 1% de las veces para no spamear
+                    console.log(`🚛 Convoy ${convoy.id}: x=${convoy.x.toFixed(0)}, target.x=${convoy.target.x.toFixed(0)}, dx=${dx.toFixed(0)}, shouldFlip=${shouldFlip}, isEnemy=${isEnemy}, returning=${isReturning}`);
+                }
+            } else {
+                // Fallback: lógica antigua para compatibilidad
+                shouldFlip = isEnemy ? !isReturning : isReturning;
+                
+                // DEBUG: Log para convoyes sin target
+                if (Math.random() < 0.01) {
+                    console.log(`🚛 Convoy ${convoy.id} SIN TARGET: isEnemy=${isEnemy}, returning=${isReturning}, shouldFlip=${shouldFlip}`);
+                }
             }
+            
+            // DEBUG: Log específico para convoyes returning
+            if (isReturning && Math.random() < 0.1) { // 10% para returning para más datos
+                console.log(`🔄 Convoy RETURNING ${convoy.id}: target=${convoy.target ? 'YES' : 'NO'}, x=${convoy.x.toFixed(0)}, target.x=${convoy.target?.x?.toFixed(0) || 'N/A'}, shouldFlip=${shouldFlip}, isEnemy=${isEnemy}`);
+                console.log(`🔄 Convoy RETURNING ${convoy.id}: originBase.x=${convoy.originBase?.x?.toFixed(0) || 'N/A'}, dx=${convoy.target ? (convoy.target.x - convoy.x).toFixed(0) : 'N/A'}`);
+                console.log(`🔄 Convoy RETURNING ${convoy.id}: isMultiplayer=${this.game?.isMultiplayer}, myTeam=${this.game?.myTeam}`);
+            }
+            
+            // COMPENSAR MIRROR VIEW: Si la vista está mirroreada, NO invertir el flip
+            // porque el mundo ya está volteado horizontalmente
+            // if (this.mirrorViewApplied) {
+            //     shouldFlip = !shouldFlip;
+            // }
             
             if (shouldFlip) {
                 this.ctx.scale(-1, 1);
@@ -1106,6 +1273,9 @@ export class RenderSystem {
             this.ctx.restore();
             this.ctx.filter = 'none';
             this.ctx.shadowBlur = 0;
+            
+            // 🆕 NOTA: La barra de cargo para helicópteros ahora se renderiza en renderHelicopter()
+            // Los helicópteros en singleplayer ya no son convoys, sino entidades persistentes
         } else {
             // FALLBACK: RENDERIZADO PLACEHOLDER (código original)
             
@@ -1169,6 +1339,144 @@ export class RenderSystem {
             this.ctx.beginPath();
             this.ctx.moveTo(convoy.x, convoy.y);
             this.ctx.lineTo(convoy.target.x, convoy.target.y);
+            this.ctx.stroke();
+            this.ctx.setLineDash([]);
+        }
+        
+        this.ctx.globalAlpha = 1;
+    }
+    
+    /**
+     * 🆕 NUEVO: Renderizar helicóptero persistente
+     */
+    renderHelicopter(heli) {
+        if (!heli || heli.state !== 'flying') return;
+        
+        // Obtener nodos de origen y destino
+        const fromNode = this.game.nodes.find(n => n.id === heli.currentNodeId);
+        const toNode = this.game.nodes.find(n => n.id === heli.targetNodeId);
+        
+        if (!fromNode || !toNode) return;
+        
+        // Calcular posición basada en el progress (ya interpolado en Game.updateHelicopterPosition)
+        const progress = heli.progress || 0;
+        const x = fromNode.x + (toNode.x - fromNode.x) * progress;
+        const y = fromNode.y + (toNode.y - fromNode.y) * progress;
+        
+        // Determinar si es enemigo
+        const isEnemy = heli.team !== this.game.myTeam;
+        const heliColor = heli.team === 'player1' ? '#4CAF50' : '#FF5722';
+        
+        // 🆕 NUEVO: Animación de aspas - Alternar entre helicopter y helicopter2 cada 30 frames
+        // Usar frame count global para sincronizar todos los helicópteros
+        if (!this._heliFrameCount) this._heliFrameCount = 0;
+        this._heliFrameCount++;
+        
+        const useFrame2 = Math.floor(this._heliFrameCount / 30) % 2 === 1;
+        const spriteKey = useFrame2 ? 'helicopter2' : 'helicopter';
+        const sprite = this.assetManager?.getSprite(spriteKey);
+        
+        if (sprite) {
+            // RENDERIZADO CON SPRITE (sin glow/shadow)
+            this.ctx.save();
+            this.ctx.translate(x, y);
+            
+            // Determinar dirección (izquierda o derecha)
+            const dx = toNode.x - fromNode.x;
+            let shouldFlip = dx < 0; // Si va hacia la izquierda, flip
+            
+            // DEBUG: Log para helicópteros problemáticos
+            if (Math.random() < 0.01) { // Solo 1% de las veces para no spamear
+                console.log(`🚁 Helicóptero ${heli.id}: from=${fromNode.x.toFixed(0)}, to=${toNode.x.toFixed(0)}, dx=${dx.toFixed(0)}, shouldFlip=${shouldFlip}, team=${heli.team}, myTeam=${this.game.myTeam}`);
+            }
+            
+            // COMPENSAR MIRROR VIEW: Si la vista está mirroreada, NO invertir el flip
+            // porque el mundo ya está volteado horizontalmente
+            // if (this.mirrorViewApplied) {
+            //     shouldFlip = !shouldFlip;
+            // }
+            
+            if (shouldFlip) {
+                this.ctx.scale(-1, 1);
+            }
+            
+            // 🆕 NUEVO: Tamaño aumentado +20% (rectangular, +95% + 25% = 2.4375, luego *1.2 = 2.925)
+            const baseSize = 32 * 2.925; // Aumentado de 2.4375 a 2.925 (+20%)
+            const spriteWidth = baseSize * 1.2; // mantener relación de aspecto alargada
+            const spriteHeight = baseSize;
+            
+            this.ctx.drawImage(
+                sprite,
+                -spriteWidth / 2,
+                -spriteHeight / 2,
+                spriteWidth,
+                spriteHeight
+            );
+            
+            this.ctx.restore();
+            
+            // Renderizar barra de cargo capacity
+            const percentage = (heli.cargo / 100) * 100; // cargo ya está en 0-100
+            const barWidth = 40;
+            const barHeight = 6;
+            const barY = y - 40; // Posición más arriba para no tapar el helicóptero
+            
+            // Fondo de la barra (gris oscuro)
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            this.ctx.fillRect(
+                x - barWidth / 2,
+                barY - barHeight / 2,
+                barWidth,
+                barHeight
+            );
+            
+            // Barra de progreso (verde a amarillo a rojo)
+            let barColor;
+            if (percentage > 50) {
+                barColor = '#4ecca3'; // Verde (100-50%)
+            } else if (percentage > 0) {
+                barColor = '#f39c12'; // Amarillo (50-0%)
+            } else {
+                barColor = '#e74c3c'; // Rojo (0%)
+            }
+            
+            this.ctx.fillStyle = barColor;
+            this.ctx.fillRect(
+                x - barWidth / 2,
+                barY - barHeight / 2,
+                (barWidth * percentage) / 100,
+                barHeight
+            );
+            
+            // Borde de la barra
+            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(
+                x - barWidth / 2,
+                barY - barHeight / 2,
+                barWidth,
+                barHeight
+            );
+            
+            // Mostrar porcentaje de cargo
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            this.ctx.font = '10px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText(
+                `${Math.round(percentage)}%`,
+                x,
+                barY - 10
+            );
+        }
+        
+        // Línea al destino - SOLO MOSTRAR PARA HELICÓPTEROS PROPIOS
+        if (!isEnemy) {
+            this.ctx.strokeStyle = heliColor + '40';
+            this.ctx.lineWidth = 2.4;
+            this.ctx.setLineDash([6, 6]);
+            this.ctx.beginPath();
+            this.ctx.moveTo(x, y);
+            this.ctx.lineTo(toNode.x, toNode.y);
             this.ctx.stroke();
             this.ctx.setLineDash([]);
         }
@@ -1348,8 +1656,23 @@ export class RenderSystem {
             this.ctx.save();
             this.ctx.translate(drone.x, drone.y);
             
-            // Voltear drones enemigos horizontalmente
-            if (drone.isEnemy) {
+            // Determinar dirección basada en movimiento hacia el objetivo
+            let shouldFlip = false;
+            if (drone.target) {
+                const dx = drone.target.x - drone.x;
+                shouldFlip = dx < 0; // Si va hacia la izquierda, flip
+            } else {
+                // Fallback: voltear drones enemigos horizontalmente
+                shouldFlip = drone.isEnemy;
+            }
+            
+            // COMPENSAR MIRROR VIEW: Si la vista está mirroreada, NO invertir el flip
+            // porque el mundo ya está volteado horizontalmente
+            // if (this.mirrorViewApplied) {
+            //     shouldFlip = !shouldFlip;
+            // }
+            
+            if (shouldFlip) {
                 this.ctx.scale(-1, 1);
             }
             
@@ -1404,13 +1727,29 @@ export class RenderSystem {
     }
     
     renderBuildPreview(x, y, bases, buildingType = 'fob') {
-        // Verificar si está demasiado cerca de otras bases
-        const minDistance = 80;
+        // Verificar colisiones usando la nueva lógica de detectionRadius
         let tooClose = false;
         
-        for (const base of bases) {
-            const dist = Math.hypot(x - base.x, y - base.y);
-            if (dist < minDistance) {
+        // Combinar bases y nodos para verificar colisiones
+        const allNodes = [...(bases || []), ...(this.game?.nodes || [])];
+        
+        // Obtener configuración del edificio que se está construyendo
+        const config = getNodeConfig(buildingType);
+        const newDetectionRadius = config?.detectionRadius || (config?.radius || 30) * 2.5;
+        
+        for (const node of allNodes) {
+            if (!node.active) continue;
+            
+            const dist = Math.hypot(x - node.x, y - node.y);
+            
+            // Obtener radio de detección del nodo existente
+            const existingConfig = getNodeConfig(node.type);
+            const existingDetectionRadius = existingConfig?.detectionRadius || (existingConfig?.radius || 30) * 2.5;
+            
+            // Verificar colisión: ningún edificio puede estar dentro del área de detección del otro
+            const minSeparation = Math.max(existingDetectionRadius, newDetectionRadius);
+            
+            if (dist < minSeparation) {
                 tooClose = true;
                 break;
             }
@@ -1419,8 +1758,7 @@ export class RenderSystem {
         // Verificar si está dentro del territorio aliado
         const inAllyTerritory = this.game && this.game.territory && this.game.territory.isInAllyTerritory(x, y);
         
-        // Usar configuración del tipo de edificio actual
-        const config = getNodeConfig(buildingType);
+        // Usar configuración del tipo de edificio actual (ya declarada arriba)
         const radius = config ? config.radius : 30;
         
         // Color del preview (rojo si está fuera o muy cerca, verde si es válido)
@@ -1478,16 +1816,15 @@ export class RenderSystem {
         }
         this.ctx.fillText(label, x, y - radius - 10);
         
-        // Círculo de área de construcción prohibida (si está muy cerca)
-        if (tooClose) {
-            this.ctx.strokeStyle = 'rgba(231, 76, 60, 0.3)';
-            this.ctx.lineWidth = 2;
-            this.ctx.setLineDash([5, 5]);
-            this.ctx.beginPath();
-            this.ctx.arc(x, y, minDistance, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.setLineDash([]);
-        }
+        // Círculo de área de detección (naranja) - siempre visible para dev
+        const detectionRadius = config?.detectionRadius || (config?.radius || 30) * 2.5;
+        this.ctx.strokeStyle = 'rgba(255, 165, 0, 0.6)'; // Naranja
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([8, 8]);
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, detectionRadius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
         
         // Mostrar círculo de rango de acción si el edificio tiene rango (solo si es válido)
         if (config.showRangePreview && isValid) {
@@ -1595,6 +1932,65 @@ export class RenderSystem {
         
         // Indicador de objetivo inválido (si no es un frente enemigo)
         const validTarget = hoveredBase && hoveredBase.type === 'front' && hoveredBase.team === 'player2';
+        if (!validTarget) {
+            this.ctx.strokeStyle = '#ff0000';
+            this.ctx.lineWidth = 4;
+            const crossSize = 15;
+            
+            // X roja
+            this.ctx.beginPath();
+            this.ctx.moveTo(x - crossSize, y - crossSize);
+            this.ctx.lineTo(x + crossSize, y + crossSize);
+            this.ctx.moveTo(x + crossSize, y - crossSize);
+            this.ctx.lineTo(x - crossSize, y + crossSize);
+            this.ctx.stroke();
+        }
+    }
+    
+    /**
+     * Renderiza el cursor de Fob Sabotaje
+     */
+    renderFobSabotageCursor(x, y, hoveredBase) {
+        // Renderizar cursor specops_selector usando sprite
+        const sprite = this.assetManager?.getSprite('specops_selector');
+        
+        if (sprite) {
+            // Usar sprite del cursor
+            const size = 80;
+            this.ctx.globalAlpha = 0.9;
+            this.ctx.drawImage(
+                sprite,
+                x - size/2,
+                y - size/2,
+                size,
+                size
+            );
+            this.ctx.globalAlpha = 1.0;
+        } else {
+            // Fallback: renderizar cursor básico
+            const radius = 40;
+            
+            this.ctx.strokeStyle = 'rgba(255, 100, 0, 0.8)';
+            this.ctx.lineWidth = 2;
+            
+            // Círculo externo
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+            this.ctx.stroke();
+            
+            // Flecha hacia abajo
+            this.ctx.beginPath();
+            this.ctx.moveTo(x, y - radius + 10);
+            this.ctx.lineTo(x, y + radius - 10);
+            this.ctx.moveTo(x - 8, y + radius - 20);
+            this.ctx.lineTo(x, y + radius - 10);
+            this.ctx.lineTo(x + 8, y + radius - 20);
+            this.ctx.stroke();
+        }
+        
+        // Indicador de objetivo inválido (si no es una FOB enemiga)
+        const myTeam = this.game?.myTeam || 'player1';
+        const validTarget = hoveredBase && hoveredBase.type === 'fob' && hoveredBase.team !== myTeam;
         if (!validTarget) {
             this.ctx.strokeStyle = '#ff0000';
             this.ctx.lineWidth = 4;
@@ -1890,6 +2286,229 @@ export class RenderSystem {
                 this.ctx.restore();
             }
         }
+        
+        // 🆕 NUEVO: Renderizar helicópteros aterrizados
+        if (node.landedHelicopters && node.landedHelicopters.length > 0 && game.helicopters) {
+            // Compensar Mirror View si está activo
+            if (this.mirrorViewApplied) {
+                this.ctx.save();
+                this.ctx.translate(node.x, node.y);
+                this.ctx.scale(-1, 1);
+                this.ctx.translate(-node.x, -node.y);
+            }
+            
+            // Obtener sprite del helicóptero
+            const helicopterSprite = this.assetManager?.getSprite('ui-chopper-icon');
+            if (helicopterSprite) {
+                const spriteWidth = helicopterSprite.width;
+                const spriteHeight = helicopterSprite.height;
+                const aspectRatio = spriteWidth / spriteHeight;
+                
+                const iconHeight = 32;
+                const iconWidth = iconHeight * aspectRatio;
+                
+                // Posición: a la izquierda del nodo
+                const iconX = node.x - node.radius - iconWidth / 2 - 15;
+                const iconY = node.y;
+                
+                this.ctx.drawImage(
+                    helicopterSprite,
+                    iconX - iconWidth / 2,
+                    iconY - iconHeight / 2,
+                    iconWidth,
+                    iconHeight
+                );
+                
+                // Contador si hay más de 1
+                if (node.landedHelicopters.length > 1) {
+                    this.ctx.fillStyle = '#fff';
+                    this.ctx.font = 'bold 12px monospace';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.strokeStyle = '#000';
+                    this.ctx.lineWidth = 2;
+                    
+                    const textX = iconX;
+                    const textY = iconY + iconHeight / 2 + 15;
+                    
+                    this.ctx.strokeText(`x${node.landedHelicopters.length}`, textX, textY);
+                    this.ctx.fillText(`x${node.landedHelicopters.length}`, textX, textY);
+                }
+                
+                // Renderizar barra de cargo para el helicóptero aterrizdo
+                const heliId = node.landedHelicopters[0];
+                const heli = game.helicopters?.find(h => h.id === heliId);
+                if (heli) {
+                    const percentage = (heli.cargo / 100) * 100; // cargo ya está en 0-100
+                    const barWidth = 30; // Más pequeña para el icono
+                    const barHeight = 4;
+                    const barY = iconY - 20; // Encima del icono
+                    
+                    // Fondo de la barra (gris oscuro)
+                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    this.ctx.fillRect(
+                        iconX - barWidth / 2,
+                        barY - barHeight / 2,
+                        barWidth,
+                        barHeight
+                    );
+                    
+                    // Barra de progreso (verde a amarillo a rojo)
+                    let barColor;
+                    if (percentage > 50) {
+                        barColor = '#4ecca3'; // Verde (100-50%)
+                    } else if (percentage > 0) {
+                        barColor = '#f39c12'; // Amarillo (50-0%)
+                    } else {
+                        barColor = '#e74c3c'; // Rojo (0%)
+                    }
+                    
+                    this.ctx.fillStyle = barColor;
+                    this.ctx.fillRect(
+                        iconX - barWidth / 2,
+                        barY - barHeight / 2,
+                        (barWidth * percentage) / 100,
+                        barHeight
+                    );
+                    
+                    // Borde de la barra
+                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.strokeRect(
+                        iconX - barWidth / 2,
+                        barY - barHeight / 2,
+                        barWidth,
+                        barHeight
+                    );
+                    
+                    // Mostrar porcentaje de cargo (más pequeño)
+                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    this.ctx.font = '8px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText(
+                        `${Math.round(percentage)}%`,
+                        iconX,
+                        barY - 8
+                    );
+                }
+            }
+            
+            // Restaurar Mirror View si está activo
+            if (this.mirrorViewApplied) {
+                this.ctx.restore();
+            }
+        }
+    }
+    
+    // ========== ICONO DE HELICÓPTERO ==========
+    
+    /**
+     * Renderiza el icono de helicóptero para frentes que tienen helicópteros
+     * @param {MapNode} node - Nodo front con helicópteros
+     */
+    renderHelicopterIcon(node) {
+        // Posición del icono: a la izquierda del nodo
+        const iconX = node.x - node.radius - 25; // 25px a la izquierda del borde
+        const iconY = node.y;
+        
+        // Obtener sprite del icono de helicóptero
+        const helicopterSprite = this.assetManager?.getSprite('ui-chopper-icon');
+        if (helicopterSprite) {
+            this.ctx.save();
+            
+            // Calcular dimensiones manteniendo proporciones del sprite original
+            const spriteWidth = helicopterSprite.width;   // 1023px
+            const spriteHeight = helicopterSprite.height; // 386px
+            const aspectRatio = spriteWidth / spriteHeight; // 1023/386 ≈ 2.65
+            
+            // Usar la altura como referencia y calcular el ancho proporcional
+            const iconHeight = 32;
+            const iconWidth = iconHeight * aspectRatio; // 32 * 2.65 ≈ 85px
+            
+            // Dibujar el icono manteniendo proporciones
+            this.ctx.drawImage(
+                helicopterSprite,
+                iconX - iconWidth / 2,
+                iconY - iconHeight / 2,
+                iconWidth,
+                iconHeight
+            );
+            
+            // Dibujar un pequeño indicador de cantidad si hay más de 1
+            if (node.availableHelicopters > 1) {
+                this.ctx.fillStyle = '#fff';
+                this.ctx.font = 'bold 12px monospace';
+                this.ctx.textAlign = 'center';
+                this.ctx.strokeStyle = '#000';
+                this.ctx.lineWidth = 2;
+                
+                const textX = iconX;
+                const textY = iconY + iconHeight / 2 + 15;
+                
+                this.ctx.strokeText(node.availableHelicopters.toString(), textX, textY);
+                this.ctx.fillText(node.availableHelicopters.toString(), textX, textY);
+            }
+            
+            this.ctx.restore();
+        }
+    }
+    
+    /**
+     * 🆕 ELIMINADO: Renderizado de cargo capacity antiguo
+     * Se reimplementará con la nueva arquitectura de helicópteros persistentes
+     */
+    renderCargoCapacityBarForIcon(node, iconX, iconY) {
+        // TODO: Reimplementar con nueva arquitectura
+        const percentage = 0;
+        const barWidth = 30; // Más pequeña para el icono
+        const barHeight = 4;
+        const barY = iconY - 20; // Encima del icono
+        
+        // Fondo de la barra (gris oscuro)
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.ctx.fillRect(
+            iconX - barWidth / 2,
+            barY - barHeight / 2,
+            barWidth,
+            barHeight
+        );
+        
+        // Barra de progreso (verde a amarillo a rojo)
+        let barColor;
+        if (percentage > 50) {
+            barColor = '#4ecca3'; // Verde (100-50%)
+        } else if (percentage > 0) {
+            barColor = '#f39c12'; // Amarillo (50-0%)
+        } else {
+            barColor = '#e74c3c'; // Rojo (0%)
+        }
+        
+        this.ctx.fillStyle = barColor;
+        this.ctx.fillRect(
+            iconX - barWidth / 2,
+            barY - barHeight / 2,
+            (barWidth * percentage) / 100,
+            barHeight
+        );
+        
+        // Borde de la barra
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(
+            iconX - barWidth / 2,
+            barY - barHeight / 2,
+            barWidth,
+            barHeight
+        );
+        
+        // Mostrar porcentaje de cargo (más pequeño)
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        this.ctx.font = '8px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(
+            `${Math.round(percentage)}%`,
+            iconX,
+            barY - 8
+        );
     }
     
 }

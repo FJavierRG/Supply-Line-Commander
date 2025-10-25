@@ -1,6 +1,7 @@
 // ===== CLASE BASE: MISIÓN =====
 import { MapNode } from '../entities/MapNode.js';
 import { GAME_CONFIG } from '../config/constants.js';
+import { canRaceUseFOBs } from '../config/races.js';
 
 /**
  * Clase base para todas las misiones.
@@ -45,9 +46,10 @@ export class Mission {
      * @param {number} canvasWidth - Ancho del canvas
      * @param {number} canvasHeight - Alto del canvas
      * @param {Object} baseFactory - Factory para crear bases con upgrades
+     * @param {string} playerRace - Raza del jugador para generar mapa apropiado
      * @returns {Base[]} Array de bases generadas
      */
-    generateBases(canvasWidth, canvasHeight, baseFactory) {
+    generateBases(canvasWidth, canvasHeight, baseFactory, playerRace = 'default') {
         const bases = [];
         const margin = 100;
         
@@ -55,11 +57,13 @@ export class Mission {
         const hq = this.generateHQ(canvasWidth, canvasHeight, margin, baseFactory);
         bases.push(hq);
         
-        // 2. Generar FOBs según configuración
-        this.nodesConfig.fobs.forEach(fobConfig => {
-            const fob = this.generateNode('fob', fobConfig, canvasWidth, canvasHeight, margin, baseFactory);
-            bases.push(fob);
-        });
+        // 2. 🆕 NUEVO: Generar FOBs solo si la raza los permite
+        if (this.shouldGenerateFOBs(playerRace)) {
+            this.nodesConfig.fobs.forEach(fobConfig => {
+                const fob = this.generateNode('fob', fobConfig, canvasWidth, canvasHeight, margin, baseFactory);
+                bases.push(fob);
+            });
+        }
         
         // 3. Generar Frentes según configuración
         this.nodesConfig.fronts.forEach(frontConfig => {
@@ -157,5 +161,10 @@ export class Mission {
             objectives: this.objectives,
             duration: this.duration
         };
+    }
+    
+    // 🆕 NUEVO: Verificar si debe generar FOBs según la raza
+    shouldGenerateFOBs(raceId) {
+        return canRaceUseFOBs(raceId);
     }
 }

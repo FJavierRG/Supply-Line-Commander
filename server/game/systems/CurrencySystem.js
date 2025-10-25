@@ -38,13 +38,13 @@ export class CurrencySystem {
         this.gameState.currencyGenerated.player1 += p1Generated;
         this.gameState.currencyGenerated.player2 += p2Generated;
         
-        // DEBUG: Log currency cada 5 segundos
-        if (!this._lastCurrencyLog || Date.now() - this._lastCurrencyLog > 5000) {
-            const p1Bonus = player1Plants > 0 ? ` (+${player1Plants * nuclearBonus}/s plantas)` : '';
-            const p2Bonus = player2Plants > 0 ? ` (+${player2Plants * nuclearBonus}/s plantas)` : '';
-            console.log(`💰 Currency: P1=${this.gameState.currency.player1.toFixed(1)}$${p1Bonus} | P2=${this.gameState.currency.player2.toFixed(1)}$${p2Bonus}`);
-            this._lastCurrencyLog = Date.now();
-        }
+        // DEBUG: Log currency cada 5 segundos (COMENTADO - reduce spam)
+        // if (!this._lastCurrencyLog || Date.now() - this._lastCurrencyLog > 5000) {
+        //     const p1Bonus = player1Plants > 0 ? ` (+${player1Plants * nuclearBonus}/s plantas)` : '';
+        //     const p2Bonus = player2Plants > 0 ? ` (+${player2Plants * nuclearBonus}/s plantas)` : '';
+        //     console.log(`💰 Currency: P1=${this.gameState.currency.player1.toFixed(1)}$${p1Bonus} | P2=${this.gameState.currency.player2.toFixed(1)}$${p2Bonus}`);
+        //     this._lastCurrencyLog = Date.now();
+        // }
     }
 }
 

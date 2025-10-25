@@ -132,14 +132,14 @@ export class FrontMovementSystemServer {
             }
         }
         
-        // DEBUG: Log movimiento cada 2 segundos
-        if (!this._lastFrontLog) this._lastFrontLog = {};
-        if (!this._lastFrontLog[front.id] || Date.now() - this._lastFrontLog[front.id] > 2000) {
-            const dirStr = direction === 1 ? '→' : '←';
-            const enemyDist = nearestEnemy ? Math.abs(front.x - nearestEnemy.x).toFixed(0) : 'N/A';
-            console.log(`🎯 ${front.team} frente ${dirStr} x=${front.x.toFixed(0)} | ${reason} | dist=${enemyDist}px | col=${inCollision}`);
-            this._lastFrontLog[front.id] = Date.now();
-        }
+        // DEBUG: Log movimiento cada 2 segundos (COMENTADO - reduce spam)
+        // if (!this._lastFrontLog) this._lastFrontLog = {};
+        // if (!this._lastFrontLog[front.id] || Date.now() - this._lastFrontLog[front.id] > 2000) {
+        //     const dirStr = direction === 1 ? '→' : '←';
+        //     const enemyDist = nearestEnemy ? Math.abs(front.x - nearestEnemy.x).toFixed(0) : 'N/A';
+        //     console.log(`🎯 ${front.team} frente ${dirStr} x=${front.x.toFixed(0)} | ${reason} | dist=${enemyDist}px | col=${inCollision}`);
+        //     this._lastFrontLog[front.id] = Date.now();
+        // }
         
         // Aplicar movimiento
         front.x += movement;
@@ -277,12 +277,12 @@ export class FrontMovementSystemServer {
         }
         
         // CONDICIÓN 2: VICTORIA PASIVA - La frontera enemiga retrocede hasta las líneas de victoria
-        // DEBUG: Log cada 5 segundos
-        if (!this._lastFrontierLog || Date.now() - this._lastFrontierLog > 5000) {
-            console.log(`🔍 Fronteras: P1=${player1Frontier?.toFixed(0) || 'null'} (HQ=${player1HQ.x.toFixed(0)}) | P2=${player2Frontier?.toFixed(0) || 'null'} (HQ=${player2HQ.x.toFixed(0)})`);
-            console.log(`🔍 Líneas victoria: Izquierda=${(victoryLineLeft).toFixed(0)}px (${(GAME_CONFIG.match.victoryLineLeft * 100)}%) | Derecha=${(victoryLineRight).toFixed(0)}px (${(GAME_CONFIG.match.victoryLineRight * 100)}%)`);
-            this._lastFrontierLog = Date.now();
-        }
+        // DEBUG: Log cada 5 segundos (COMENTADO - reduce spam)
+        // if (!this._lastFrontierLog || Date.now() - this._lastFrontierLog > 5000) {
+        //     console.log(`🔍 Fronteras: P1=${player1Frontier?.toFixed(0) || 'null'} (HQ=${player1HQ.x.toFixed(0)}) | P2=${player2Frontier?.toFixed(0) || 'null'} (HQ=${player2HQ.x.toFixed(0)})`);
+        //     console.log(`🔍 Líneas victoria: Izquierda=${(victoryLineLeft).toFixed(0)}px (${(GAME_CONFIG.match.victoryLineLeft * 100)}%) | Derecha=${(victoryLineRight).toFixed(0)}px (${(GAME_CONFIG.match.victoryLineRight * 100)}%)`);
+        //     this._lastFrontierLog = Date.now();
+        // }
         
         // DERROTA PLAYER1: Su frontera retrocede hasta la línea del 15% (victoria para player2)
         if (player1Frontier !== null && player1Frontier <= victoryLineLeft) {

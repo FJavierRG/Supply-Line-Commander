@@ -230,6 +230,11 @@ export class InputHandler {
             return; // Click manejado por la Store UI
         }
         
+        // Verificar si el click está en la pantalla de selección de raza
+        if (this.game.raceSelection && this.game.raceSelection.handleClick(x, y)) {
+            return; // Click manejado por la selección de raza
+        }
+        
         // Convertir coordenadas de pantalla a mundo (cámara siempre activa)
         const worldPos = this.game.camera.screenToWorld(x, y);
         x = worldPos.x;
@@ -339,6 +344,15 @@ export class InputHandler {
             return;
         }
         
+        // Modo fobSabotage: sabotear FOB enemiga
+        if (this.game.buildSystem.fobSabotageMode) {
+            const clickedBase = this.getBaseAt(x, y);
+            if (clickedBase) {
+                this.game.buildSystem.executeFobSabotage(clickedBase);
+            }
+            return;
+        }
+        
         // Detectar clic en selector de recursos del HQ - VERIFICAR ANTES DE getBaseAt
         // Porque los botones están FUERA del círculo del HQ
         let hq;
@@ -392,8 +406,13 @@ export class InputHandler {
                     return;
                 }
                 
-                // No permitir seleccionar frentes ni nodos enemigos
-                if (clickedBase.type === 'front' || clickedBase.team !== this.game.myTeam) {
+                // No permitir seleccionar frentes (excepto si son de B_Nation) ni nodos enemigos
+                if (clickedBase.type === 'front') {
+                    // Solo permitir seleccionar frentes si son de B_Nation y tienen helicópteros disponibles
+                    if (this.game.selectedRace !== 'B_Nation' || !clickedBase.hasAvailableHelicopter()) {
+                        return;
+                    }
+                } else if (clickedBase.team !== this.game.myTeam) {
                     return;
                 }
                 
@@ -410,11 +429,21 @@ export class InputHandler {
                 
                 // Intentar seleccionar una base
                 // Para HQ en modo médico, verificar ambulancia; sino verificar vehículos normales
-                const hasVehicle = (clickedBase.type === 'hq' && clickedBase.selectedResourceType === 'medical')
-                    ? clickedBase.hasAmbulanceAvailable()
-                    : clickedBase.hasAvailableVehicle();
+                // Para frentes con helicópteros, verificar helicópteros disponibles
+                let hasVehicle = false;
+                if (clickedBase.type === 'hq' && clickedBase.selectedResourceType === 'medical') {
+                    hasVehicle = clickedBase.hasAmbulanceAvailable();
+                } else if (clickedBase.type === 'hq' && this.game.selectedRace === 'B_Nation' && clickedBase.hasHelicopters) {
+                    // HQ de B_Nation: verificar helicópteros disponibles
+                    hasVehicle = clickedBase.hasAvailableHelicopter();
+                    console.log(`🚁 DEBUG HQ: hasHelicopters=${clickedBase.hasHelicopters}, availableHelicopters=${clickedBase.availableHelicopters}, hasVehicle=${hasVehicle}`);
+                } else if (clickedBase.type === 'front' && this.game.selectedRace === 'B_Nation') {
+                    hasVehicle = clickedBase.hasAvailableHelicopter();
+                } else {
+                    hasVehicle = clickedBase.hasAvailableVehicle();
+                }
                 
-                if (clickedBase.maxVehicles > 0 && !hasVehicle) {
+                if ((clickedBase.maxVehicles > 0 || (clickedBase.type === 'front' && this.game.selectedRace === 'B_Nation')) && !hasVehicle) {
                     // No tiene vehículos: mostrar feedback visual
                     this.showNoVehiclesFeedback(clickedBase);
                 } else {
@@ -739,6 +768,11 @@ export class InputHandler {
         this.mouseX = transformed.x;
         this.mouseY = transformed.y;
         
+        // Delegar hover a la tienda si está visible
+        if (this.game.storeUI && this.game.storeUI.isVisible) {
+            this.game.storeUI.handleMouseMove(this.mouseX, this.mouseY);
+        }
+        
         // Delegar al editor si está en modo editor
         if (this.game.state === 'editor') {
             if (this.game.mapEditor && this.game.mapEditor.active) {
@@ -931,7 +965,8 @@ export class InputHandler {
             const hitboxMultiplier = (node.type === 'hq' || node.type === 'fob') ? 1.4 : 1.2;
             
             const dist = Math.hypot(x - node.x, y - node.y);
-            if (dist < node.radius * hitboxMultiplier) {
+            const effectiveHitboxRadius = (node.hitboxRadius || node.radius) * hitboxMultiplier;
+            if (dist < effectiveHitboxRadius) {
                 return node;
             }
         }
@@ -1008,6 +1043,11 @@ export class InputHandler {
             if (this.game.buildSystem.sniperMode) {
                 this.game.buildSystem.exitSniperMode();
                 console.log('🚫 Modo francotirador cancelado (click derecho)');
+                return;
+            }
+            if (this.game.buildSystem.fobSabotageMode) {
+                this.game.buildSystem.exitFobSabotageMode();
+                console.log('🚫 Modo sabotaje FOB cancelado (click derecho)');
                 return;
             }
         }

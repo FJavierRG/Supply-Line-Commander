@@ -19,6 +19,10 @@ export class AssetManager {
             'base-enemy-front-no-ammo': 'assets/sprites/bases/front_enemy_no_ammo.png',
             'base-enemy-fob': 'assets/sprites/bases/fob_enemy.png',
             'base-enemy-hq': 'assets/sprites/bases/hq_enemy.png',
+            // 🆕 NUEVO: Sprites específicos de B_Nation
+            'base-B_Nation-front': 'assets/sprites/bases/B_nation_front.png',
+            'base-B_Nation-front-no-ammo': 'assets/sprites/bases/B_nation_front_no_ammo.png',
+            'base-B_Nation-hq': 'assets/sprites/bases/specops_hq.png',
             
             // Edificios construibles
             'building-anti-drone': 'assets/sprites/buildings/anti_drone_weapon.png',
@@ -31,6 +35,8 @@ export class AssetManager {
             'building-construction': 'assets/sprites/buildings/construccion.png',
             // Placeholder para Centro de Ingenieros (reutiliza construcción hasta tener arte)
             'building-engineer-center': 'assets/sprites/buildings/engineer_center.png',
+            'building-intel-radio': 'assets/sprites/buildings/intel_radio.png',
+            'building-aerial-base': 'assets/sprites/buildings/aerial_base.png',
 
             // Carreteras (4 variantes)
             'road-1': 'assets/sprites/buildings/carretera1.png',
@@ -43,9 +49,11 @@ export class AssetManager {
             'truck': 'assets/sprites/vehicles/truck.png',
             'tank': 'assets/sprites/vehicles/tank.png',
             'helicopter': 'assets/sprites/vehicles/chopper.png',
+            'helicopter2': 'assets/sprites/vehicles/chopper2.png',  // 🆕 NUEVO: Segundo frame para animación
             'ambulance': 'assets/sprites/vehicles/ambulance.png',
             'vehicle-drone': 'assets/sprites/vehicles/drone.png',
             'vehicle-sniper_shoot_icon': 'assets/sprites/vehicles/sniper_shoot_icon.png',
+            'specops_unit': 'assets/sprites/vehicles/specops_unit.png',
             
             // UI (solo los que se usan)
             'ui-supply-icon': 'assets/sprites/ui/resources.png',
@@ -58,12 +66,19 @@ export class AssetManager {
             'ui-emergency-medic': 'assets/sprites/ui/emergency_medic.png',
             'ui-vehicle-icon': 'assets/sprites/ui/vehicle_resource_icon.png',
             'ui-medic-vehicle-icon': 'assets/sprites/ui/medic_vehicle_resource_icon.png',
+            'ui-chopper-icon': 'assets/sprites/ui/chopper_icon.png',
+            
+            // Sprite del cursor para Fob Sabotaje
+            'specops_selector': 'assets/sprites/ui/specops_selector.png',
             
             // Nueva UI de tienda
             'ui-store-main': 'assets/sprites/ui/UIFrames/store_main_window.png',
             'ui-store-deployable': 'assets/sprites/ui/UIFrames/store_desplegable.png',
             'ui-button-background': 'assets/sprites/ui/UIFrames/bton_background.png',
             'ui-currency-background': 'assets/sprites/ui/UIFrames/currency_bton.png',
+            
+            // UI de menús principales
+            'ui-menu-button': 'assets/sprites/ui/UIFrames/medium_bton.png',
             
             // Tiles del background (desde map/)
             'map-floor1': 'assets/sprites/map/floor1.png',
@@ -295,11 +310,37 @@ export class AssetManager {
      * @param {boolean} isHovered - Si está con hover
      * @param {boolean} isCritical - Si está crítica (solo front)
      * @param {boolean} hasNoAmmo - Si no tiene munición (solo front)
-     * @param {string} team - Equipo del nodo ('ally', 'player2')
+     * @param {string} team - Equipo del nodo ('ally', 'player2', 'player1')
+     * @param {string} raceId - ID de la raza (opcional, e.g., 'B_Nation')
      * @returns {Image|null}
      */
-    getBaseSprite(type, isSelected = false, isHovered = false, isCritical = false, hasNoAmmo = false, team = 'ally') {
-        // Determinar prefijo según equipo
+    getBaseSprite(type, isSelected = false, isHovered = false, isCritical = false, hasNoAmmo = false, team = 'ally', raceId = null) {
+        // 🆕 NUEVO: Sprites específicos de raza para B_Nation
+        
+        // HQ de B_Nation
+        if (type === 'hq' && raceId === 'B_Nation') {
+            return this.getSprite('base-B_Nation-hq');
+        }
+        
+        // Fronts de B_Nation
+        if (type === 'front' && raceId === 'B_Nation') {
+            // Front crítico tiene prioridad (B_Nation no tiene crítico específico aún)
+            if (isCritical) {
+                const sprite = this.getSprite('base-front-critical');
+                if (sprite) return sprite;
+            }
+            
+            // Front sin munición para B_Nation
+            if (hasNoAmmo) {
+                const sprite = this.getSprite('base-B_Nation-front-no-ammo');
+                if (sprite) return sprite;
+            }
+            
+            // Front normal de B_Nation
+            return this.getSprite('base-B_Nation-front');
+        }
+        
+        // Determinar prefijo según equipo (lógica original)
         const prefix = team === 'player2' ? 'base-enemy-' : 'base-';
         
         // Front crítico tiene prioridad
@@ -335,6 +376,14 @@ export class AssetManager {
      */
     getVehicleSprite(vehicleType, isReturning = false) {
         const suffix = isReturning ? '-returning' : '';
+        
+        // 🆕 NUEVO: Animación para choppers (3 veces por segundo = cada 333ms)
+        if (vehicleType === 'helicopter' || vehicleType === 'helicopter') {
+            const animationTime = Date.now() % 666; // 666ms = 3 veces por segundo
+            const frame = animationTime < 333 ? 'helicopter' : 'helicopter2';
+            return this.getSprite(`${frame}${suffix}`);
+        }
+        
         return this.getSprite(`${vehicleType}${suffix}`);
     }
 }
