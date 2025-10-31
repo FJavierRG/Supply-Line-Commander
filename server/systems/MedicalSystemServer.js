@@ -202,38 +202,41 @@ export class MedicalSystemServer {
     }
 
     /**
-     * Aplicar penalización por no responder a tiempo
+     * Aplicar penalización por no responder a tiempo usando configuración del servidor
      */
     applyPenalty(front) {
-        // Guardar consumo original
-        const originalConsumeRate = front.consumeRate || 1.6;
+        // Obtener configuración del efecto wounded del servidor
+        const woundedConfig = SERVER_NODE_CONFIG.temporaryEffects.wounded;
         
-        // Duplicar consumo (+100%)
-        front.consumeRate = originalConsumeRate * 2;
+        // Guardar consumo original usando configuración del servidor
+        const originalConsumeRate = front.consumeRate || SERVER_NODE_CONFIG.gameplay.front.consumeRate;
         
-        // Añadir efecto "wounded" (15 segundos)
+        // Aplicar multiplicador usando configuración del servidor
+        front.consumeRate = originalConsumeRate * woundedConfig.consumeMultiplier;
+        
+        // Añadir efecto "wounded" usando configuración del servidor
         if (!front.effects) front.effects = [];
         
         front.effects.push({
             type: 'wounded',
-            icon: 'ui-wounded',
-            tooltip: 'Heridos: +100% consumo de suministros',
+            icon: woundedConfig.icon,
+            tooltip: woundedConfig.tooltip,
             startTime: Date.now(),
-            duration: 15000,
-            expiresAt: Date.now() + 15000,
+            duration: woundedConfig.duration * 1000, // Convertir a ms
+            expiresAt: Date.now() + (woundedConfig.duration * 1000),
             originalConsumeRate
         });
         
-        // Programar expiración del efecto
+        // Programar expiración del efecto usando configuración del servidor
         setTimeout(() => {
             front.consumeRate = originalConsumeRate;
             if (front.effects) {
                 front.effects = front.effects.filter(e => e.type !== 'wounded' || e.startTime !== front.effects[0].startTime);
             }
             console.log(`✅ Efecto wounded expirado en frente ${front.id}`);
-        }, 15000);
+        }, woundedConfig.duration * 1000);
         
-        console.log(`⚠️ Penalización aplicada al frente ${front.id}: consumo x2 por 15 segundos`);
+        console.log(`⚠️ Penalización aplicada al frente ${front.id}: consumo x${woundedConfig.consumeMultiplier} por ${woundedConfig.duration} segundos`);
     }
 
     /**

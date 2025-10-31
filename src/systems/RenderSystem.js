@@ -143,27 +143,76 @@ export class RenderSystem {
         const worldWidth = this.game?.worldWidth || this.width;
         const centerX = worldWidth / 2;
         
+        // 🆕 NUEVO: Obtener raza del nodo antes de determinar el volteo
+        let nodeRaceId = null;
+        if (game && game.playerRaces && node.team) {
+            // En multiplayer, node.team puede ser 'player1' o 'player2'
+            // En singleplayer, puede ser 'ally' o 'enemy'
+            let playerKey = node.team;
+            if (node.team === 'ally') playerKey = 'player1';
+            if (node.team === 'enemy') playerKey = 'player2';
+            
+            nodeRaceId = game.playerRaces[playerKey];
+        }
+        
+        // Determinar si el sprite necesita volteo adicional por ser enemigo
+        // Los sprites de A_Nation enemigos ya vienen volteados (base-enemy-*)
+        // Los sprites de otras naciones (como B_Nation) necesitan volteo manual porque
+        // no tienen versión enemiga volteada en los archivos
+        // NOTA: Los frentes también necesitan volteo cuando son de naciones específicas y son enemigos
+        const isEnemy = !isMyBuilding;
+        const usesRaceSpecificSprite = nodeRaceId && nodeRaceId !== 'A_Nation';
+        const needsEnemyFlip = isEnemy && usesRaceSpecificSprite;
+        
         // COMPENSAR MIRROR VIEW: Si la vista está mirroreada, invertir la lógica de orientación
         let shouldFlipBuilding = false;
-        if (node.type !== 'front') { // Los frentes no se voltean
+        // Los frentes tienen lógica simple: propios miran derecha, enemigos miran izquierda
+        if (node.type === 'front') {
+            // 🎯 Lógica simple para frentes:
+            // - Frentes propios → miran hacia la derecha (no flip = false)
+            // - Frentes enemigos → miran hacia la izquierda (flip = true)
+            // 
+            // Con mirror view (player2): el mundo está volteado, así que:
+            // - Frentes propios → deben voltearse para verse mirando derecha después del volteo global
+            // - Frentes enemigos → NO deben voltearse para verse mirando izquierda después del volteo global
+            if (this.mirrorViewApplied) {
+                // Con mirror view: invertir la lógica
+                shouldFlipBuilding = !isEnemy; // Propios se voltean, enemigos no
+            } else {
+                // Sin mirror view: lógica normal
+                shouldFlipBuilding = isEnemy; // Enemigos se voltean, propios no
+            }
+        } else {
+            // Otros edificios: lógica basada en posición
             if (isMyBuilding) {
                 // Mi edificio: si está a la izquierda del centro, mirar derecha (no flip)
                 // si está a la derecha del centro, mirar izquierda (flip)
                 shouldFlipBuilding = node.x > centerX;
             } else {
-                // Edificio enemigo: lógica opuesta
+                // Edificio enemigo: lógica basada en posición
+                // Los edificios enemigos deben mirar hacia el centro (hacia el jugador)
                 shouldFlipBuilding = node.x < centerX;
-            }
-            
-            // COMPENSAR MIRROR VIEW: Si la vista está mirroreada, invertir el flip
-            if (this.mirrorViewApplied) {
-                shouldFlipBuilding = !shouldFlipBuilding;
+                
+                // Si el sprite necesita volteo adicional por ser enemigo (naciones específicas),
+                // aplicar volteo adicional para compensar que estos sprites no tienen versión enemiga volteada
+                if (needsEnemyFlip) {
+                    // Los sprites de naciones específicas (como B_Nation) no tienen versión enemiga volteada,
+                    // por lo que necesitan volteo adicional para que miren hacia el jugador
+                    // Invertir la lógica de posición para estos sprites
+                    shouldFlipBuilding = node.x > centerX;
+                }
             }
         }
         
         // Detectar si Mirror View está activo (para compensar el flip)
-        // EXCEPCIÓN: Los frentes NO necesitan compensación (ya miran hacia donde deben)
+        // Los frentes ya tienen su lógica de volteo aplicada arriba, no necesitan compensación adicional
         const needsMirrorCompensation = this.mirrorViewApplied && node.type !== 'front';
+        
+        // COMPENSAR MIRROR VIEW: Solo para edificios (no frentes)
+        // Los frentes ya tienen su lógica de volteo aplicada arriba
+        if (this.mirrorViewApplied && node.type !== 'front') {
+            shouldFlipBuilding = !shouldFlipBuilding;
+        }
         
         // Todos los nodos se renderizan igual, la única diferencia es el sprite que usan
         const isCritical = node.isCritical ? node.isCritical() : false;
@@ -179,18 +228,6 @@ export class RenderSystem {
         // Obtener sprite
         let sprite = null;
         let spriteKey = node.spriteKey;
-        
-        // 🆕 NUEVO: Obtener raza del nodo
-        let nodeRaceId = null;
-        if (game && game.playerRaces && node.team) {
-            // En multiplayer, node.team puede ser 'player1' o 'player2'
-            // En singleplayer, puede ser 'ally' o 'enemy'
-            let playerKey = node.team;
-            if (node.team === 'ally') playerKey = 'player1';
-            if (node.team === 'enemy') playerKey = 'player2';
-            
-            nodeRaceId = game.playerRaces[playerKey];
-        }
         
         // Si está en construcción, usar sprite de construcción
         if (node.isConstructing) {
@@ -229,6 +266,25 @@ export class RenderSystem {
             spriteSize *= node.sizeMultiplier;
         }
         
+        // 🆕 NUEVO: Mantener relación de aspecto del sprite para evitar estiramientos
+        let spriteWidth = spriteSize;
+        let spriteHeight = spriteSize;
+        if (sprite && sprite.width && sprite.height) {
+            const aspectRatio = sprite.width / sprite.height;
+            // Si el sprite no es cuadrado, mantener su relación de aspecto
+            if (Math.abs(aspectRatio - 1) > 0.1) { // Si la diferencia es > 10%
+                if (aspectRatio > 1) {
+                    // Sprite más ancho que alto
+                    spriteWidth = spriteSize * aspectRatio;
+                    spriteHeight = spriteSize;
+                } else {
+                    // Sprite más alto que ancho
+                    spriteWidth = spriteSize;
+                    spriteHeight = spriteSize / aspectRatio;
+                }
+            }
+        }
+        
         // Renderizar sprite
         if (sprite) {
             // Aplicar filtro de grises si el FOB está abandonando
@@ -249,23 +305,52 @@ export class RenderSystem {
                     this.ctx.translate(node.x, node.y);
                     this.ctx.scale(-1, 1); // Compensar el flip global
                     
-                    // Aplicar orientación dinámica del edificio
-                    if (shouldFlipBuilding && !node.isConstructing) {
+                    // Aplicar orientación dinámica del edificio o del frente
+                    if (shouldFlipBuilding) {
                         this.ctx.scale(-1, 1);
                     }
                     
-                    this.ctx.drawImage(sprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize);
-                } else if (shouldFlipBuilding && !node.isConstructing) {
+                    this.ctx.drawImage(sprite, -spriteWidth/2, -spriteHeight/2, spriteWidth, spriteHeight);
+                } else if (shouldFlipBuilding) {
                     this.ctx.translate(node.x, node.y);
                     this.ctx.scale(-1, 1);
-                    this.ctx.drawImage(sprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize);
+                    this.ctx.drawImage(sprite, -spriteWidth/2, -spriteHeight/2, spriteWidth, spriteHeight);
                 } else {
-                    this.ctx.drawImage(sprite, node.x - spriteSize/2, node.y - spriteSize/2, spriteSize, spriteSize);
+                    this.ctx.drawImage(sprite, node.x - spriteWidth/2, node.y - spriteHeight/2, spriteWidth, spriteHeight);
                 }
                 
                 this.ctx.filter = 'none'; // Resetear filtro
                 this.ctx.restore();
-            } else {
+            } 
+            // 🆕 NUEVO: Aplicar filtro de grises si el edificio está deshabilitado
+            else if (node.disabled) {
+                this.ctx.save();
+                // Gris completo para edificios deshabilitados
+                this.ctx.filter = 'grayscale(100%) brightness(0.6)';
+                
+                // Compensar Mirror View si está activo
+                if (needsMirrorCompensation) {
+                    this.ctx.translate(node.x, node.y);
+                    this.ctx.scale(-1, 1); // Compensar el flip global
+                    
+                    // Aplicar orientación dinámica del edificio o del frente
+                    if (shouldFlipBuilding) {
+                        this.ctx.scale(-1, 1);
+                    }
+                    
+                    this.ctx.drawImage(sprite, -spriteWidth/2, -spriteHeight/2, spriteWidth, spriteHeight);
+                } else if (shouldFlipBuilding) {
+                    this.ctx.translate(node.x, node.y);
+                    this.ctx.scale(-1, 1);
+                    this.ctx.drawImage(sprite, -spriteWidth/2, -spriteHeight/2, spriteWidth, spriteHeight);
+                } else {
+                    this.ctx.drawImage(sprite, node.x - spriteWidth/2, node.y - spriteHeight/2, spriteWidth, spriteHeight);
+                }
+                
+                this.ctx.filter = 'none'; // Resetear filtro
+                this.ctx.restore();
+            } 
+            else {
                 // Renderizado normal sin filtro
                 this.ctx.save();
                 
@@ -274,18 +359,18 @@ export class RenderSystem {
                     this.ctx.translate(node.x, node.y);
                     this.ctx.scale(-1, 1); // Compensar el flip global
                     
-                    // Aplicar orientación dinámica del edificio
-                    if (shouldFlipBuilding && !node.isConstructing) {
+                    // Aplicar orientación dinámica del edificio o del frente
+                    if (shouldFlipBuilding) {
                         this.ctx.scale(-1, 1);
                     }
                     
-                    this.ctx.drawImage(sprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize);
-                } else if (shouldFlipBuilding && !node.isConstructing) {
+                    this.ctx.drawImage(sprite, -spriteWidth/2, -spriteHeight/2, spriteWidth, spriteHeight);
+                } else if (shouldFlipBuilding) {
                     this.ctx.translate(node.x, node.y);
                     this.ctx.scale(-1, 1);
-                    this.ctx.drawImage(sprite, -spriteSize/2, -spriteSize/2, spriteSize, spriteSize);
+                    this.ctx.drawImage(sprite, -spriteWidth/2, -spriteHeight/2, spriteWidth, spriteHeight);
                 } else {
-                    this.ctx.drawImage(sprite, node.x - spriteSize/2, node.y - spriteSize/2, spriteSize, spriteSize);
+                    this.ctx.drawImage(sprite, node.x - spriteWidth/2, node.y - spriteHeight/2, spriteWidth, spriteHeight);
                 }
                 
                 this.ctx.restore();
@@ -314,10 +399,10 @@ export class RenderSystem {
         // Barra de construcción
         if (node.isConstructing && node.getConstructionProgress) {
             const progress = node.getConstructionProgress();
-            const barWidth = spriteSize * 0.8;
+            const barWidth = Math.max(spriteWidth, spriteHeight) * 0.8;
             const barHeight = 8;
             const barX = node.x - barWidth / 2;
-            const barY = node.y + spriteSize / 2 + 10;
+            const barY = node.y + Math.max(spriteWidth, spriteHeight) / 2 + 10;
             
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
             this.ctx.fillRect(barX, barY, barWidth, barHeight);
@@ -328,8 +413,10 @@ export class RenderSystem {
             this.ctx.strokeRect(barX, barY, barWidth, barHeight);
         }
         
-        // DEBUG: Renderizar hitboxes y áreas de detección (solo en desarrollo)
-        this.renderDebugInfo(node);
+        // DEBUG: Renderizar hitboxes y áreas de detección (solo si está activo el modo debug visual)
+        if (game && game.debugVisualMode) {
+            this.renderDebugInfo(node);
+        }
         
         // Renderizar UI específica del nodo
         this.renderNodeUI(node, game, spriteSize, isSelected);
@@ -867,7 +954,14 @@ export class RenderSystem {
     }
     
     renderSupplyBar(base) {
-        const barWidth = base.radius * 2;
+        // 🆕 NUEVO: Ancho de barra específico para base aérea (más pequeño)
+        let barWidth;
+        if (base.type === 'aerialBase' || base.isAerialBase) {
+            barWidth = 50; // Ancho fijo más pequeño para base aérea
+        } else {
+            barWidth = base.radius * 2;
+        }
+        
         const barHeight = 9;  // +50%
         const barX = base.x - barWidth / 2;
         const barY = base.y + base.radius + 20;  // Bajado 25% más (16 * 1.25 = 20)
@@ -1107,16 +1201,37 @@ export class RenderSystem {
         
         // Renderizar por grupos de color (máxima eficiencia)
         for (const [color, colorTexts] of textsByColor) {
+            // 🆕 NUEVO: Configurar estilo según el tipo de texto
+            const isDisabledText = colorTexts.some(t => t.text === 'Disabled');
+            const fontSize = isDisabledText ? 'bold 18px Arial' : 'bold 16px Arial';
+            this.ctx.font = fontSize;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            
             this.ctx.fillStyle = color;
             
             for (const text of colorTexts) {
                 this.ctx.globalAlpha = text.alpha;
-                this.ctx.fillText(text.text, text.x, text.y);
+                
+                // 🆕 NUEVO: Sombra negra para textos "Disabled" para mejor legibilidad
+                if (isDisabledText) {
+                    this.ctx.save();
+                    // Contorno negro (stroke) para mejor legibilidad
+                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.strokeText(text.text, text.x, text.y);
+                    // Texto principal en rojo
+                    this.ctx.fillText(text.text, text.x, text.y);
+                    this.ctx.restore();
+                } else {
+                    this.ctx.fillText(text.text, text.x, text.y);
+                }
             }
         }
         
-        // Resetear alpha
+        // Resetear alpha y font
         this.ctx.globalAlpha = 1;
+        this.ctx.font = 'bold 32px Arial'; // Restaurar font por defecto
     }
     
     /**
@@ -1191,8 +1306,8 @@ export class RenderSystem {
         
         // Si está volviendo, renderizar en blanco y negro semi-transparente
         const isReturning = convoy.returning;
-        const vehicleColor = isReturning ? '#888' : convoy.vehicle.color;
-        const opacity = isReturning ? 0.48 : 1; // 20% menos transparencia (de 0.28 a 0.48)
+        const vehicleColor = isReturning ? '#888' : (convoy.vehicle?.color || '#4CAF50'); // Fallback a verde si no hay color
+        const opacity = isReturning ? 0.8 : 1; // 80% opacidad para convoyes que regresan (más visible)
         
         // Detectar si es un convoy enemigo (origen es nodo enemigo)
         const myTeam = this.game?.myTeam || 'ally';
@@ -1217,34 +1332,23 @@ export class RenderSystem {
             
             // Determinar dirección basada en movimiento hacia el objetivo
             let shouldFlip = false;
-            if (convoy.target) {
-                const dx = convoy.target.x - convoy.x;
+            
+            // Obtener nodo destino según estado (yendo o regresando)
+            const destinationNode = convoy.returning ? convoy.fromBase : convoy.toBase;
+            
+            if (destinationNode) {
+                const dx = destinationNode.x - convoy.x;
                 
                 // LÓGICA SIMPLIFICADA: Siempre usar la misma lógica independientemente del modo
                 // Si va hacia la izquierda (dx < 0), flip
                 // Si va hacia la derecha (dx > 0), no flip
                 shouldFlip = dx < 0;
-                
-                // DEBUG: Log para convoyes problemáticos
-                if (Math.random() < 0.01) { // Solo 1% de las veces para no spamear
-                    console.log(`🚛 Convoy ${convoy.id}: x=${convoy.x.toFixed(0)}, target.x=${convoy.target.x.toFixed(0)}, dx=${dx.toFixed(0)}, shouldFlip=${shouldFlip}, isEnemy=${isEnemy}, returning=${isReturning}`);
-                }
             } else {
                 // Fallback: lógica antigua para compatibilidad
                 shouldFlip = isEnemy ? !isReturning : isReturning;
-                
-                // DEBUG: Log para convoyes sin target
-                if (Math.random() < 0.01) {
-                    console.log(`🚛 Convoy ${convoy.id} SIN TARGET: isEnemy=${isEnemy}, returning=${isReturning}, shouldFlip=${shouldFlip}`);
-                }
             }
             
-            // DEBUG: Log específico para convoyes returning
-            if (isReturning && Math.random() < 0.1) { // 10% para returning para más datos
-                console.log(`🔄 Convoy RETURNING ${convoy.id}: target=${convoy.target ? 'YES' : 'NO'}, x=${convoy.x.toFixed(0)}, target.x=${convoy.target?.x?.toFixed(0) || 'N/A'}, shouldFlip=${shouldFlip}, isEnemy=${isEnemy}`);
-                console.log(`🔄 Convoy RETURNING ${convoy.id}: originBase.x=${convoy.originBase?.x?.toFixed(0) || 'N/A'}, dx=${convoy.target ? (convoy.target.x - convoy.x).toFixed(0) : 'N/A'}`);
-                console.log(`🔄 Convoy RETURNING ${convoy.id}: isMultiplayer=${this.game?.isMultiplayer}, myTeam=${this.game?.myTeam}`);
-            }
+            // DEBUG: Log desactivado - spam excesivo en consola
             
             // COMPENSAR MIRROR VIEW: Si la vista está mirroreada, NO invertir el flip
             // porque el mundo ya está volteado horizontalmente
@@ -1332,15 +1436,20 @@ export class RenderSystem {
         }
         
         // Línea al destino - SOLO MOSTRAR PARA CONVOYES PROPIOS (no enemigos)
-        if (!isEnemy) {
-            this.ctx.strokeStyle = vehicleColor + (isReturning ? '20' : '40');
-            this.ctx.lineWidth = isReturning ? 1.2 : 2.4;
-            this.ctx.setLineDash([6, 6]);
-            this.ctx.beginPath();
-            this.ctx.moveTo(convoy.x, convoy.y);
-            this.ctx.lineTo(convoy.target.x, convoy.target.y);
-            this.ctx.stroke();
-            this.ctx.setLineDash([]);
+        // Y solo si está activo el modo debug visual (F1)
+        if (!isEnemy && this.game && this.game.debugVisualMode) {
+            const destinationNode = convoy.returning ? convoy.fromBase : convoy.toBase;
+            
+            if (destinationNode) {
+                this.ctx.strokeStyle = vehicleColor + (isReturning ? '20' : '40');
+                this.ctx.lineWidth = isReturning ? 1.2 : 2.4;
+                this.ctx.setLineDash([6, 6]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(convoy.x, convoy.y);
+                this.ctx.lineTo(destinationNode.x, destinationNode.y);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+            }
         }
         
         this.ctx.globalAlpha = 1;
@@ -1735,34 +1844,81 @@ export class RenderSystem {
         
         // Obtener configuración del edificio que se está construyendo
         const config = getNodeConfig(buildingType);
-        const newDetectionRadius = config?.detectionRadius || (config?.radius || 30) * 2.5;
         
-        for (const node of allNodes) {
-            if (!node.active) continue;
+        // 🆕 NUEVO: El comando ignora límites de detección (solo verifica colisión física básica)
+        const isCommando = buildingType === 'specopsCommando';
+        
+        if (isCommando) {
+            // Solo verificar colisión física básica (no áreas de detección)
+            for (const node of allNodes) {
+                if (!node.active) continue;
+                
+                const dist = Math.hypot(x - node.x, y - node.y);
+                const existingConfig = getNodeConfig(node.type);
+                const existingRadius = existingConfig?.radius || 30;
+                const newRadius = config?.radius || 25;
+                const minSeparation = existingRadius + newRadius; // Solo colisión física
+                
+                if (dist < minSeparation) {
+                    tooClose = true;
+                    break;
+                }
+            }
             
-            const dist = Math.hypot(x - node.x, y - node.y);
+            // 🆕 NUEVO: Verificar si hay torres de vigilancia enemigas cerca
+            const myTeam = this.game?.myTeam || 'player1';
+            const enemyTowers = allNodes.filter(n => 
+                (n.type === 'vigilanceTower' || n.isVigilanceTower) &&
+                n.team !== myTeam &&
+                n.active &&
+                n.constructed &&
+                !n.isAbandoning
+            );
             
-            // Obtener radio de detección del nodo existente
-            const existingConfig = getNodeConfig(node.type);
-            const existingDetectionRadius = existingConfig?.detectionRadius || (existingConfig?.radius || 30) * 2.5;
+            for (const tower of enemyTowers) {
+                const towerConfig = getNodeConfig(tower.type);
+                const detectionRadius = towerConfig?.detectionRadius || tower.detectionRadius || 140;
+                const dist = Math.hypot(x - tower.x, y - tower.y);
+                
+                if (dist <= detectionRadius) {
+                    tooClose = true;
+                    break;
+                }
+            }
+        } else {
+            // Lógica normal de detección para otros edificios
+            const newDetectionRadius = config?.detectionRadius || (config?.radius || 30) * 2.5;
             
-            // Verificar colisión: ningún edificio puede estar dentro del área de detección del otro
-            const minSeparation = Math.max(existingDetectionRadius, newDetectionRadius);
-            
-            if (dist < minSeparation) {
-                tooClose = true;
-                break;
+            for (const node of allNodes) {
+                if (!node.active) continue;
+                
+                const dist = Math.hypot(x - node.x, y - node.y);
+                
+                // Obtener radio de detección del nodo existente
+                const existingConfig = getNodeConfig(node.type);
+                const existingDetectionRadius = existingConfig?.detectionRadius || (existingConfig?.radius || 30) * 2.5;
+                
+                // Verificar colisión: ningún edificio puede estar dentro del área de detección del otro
+                const minSeparation = Math.max(existingDetectionRadius, newDetectionRadius);
+                
+                if (dist < minSeparation) {
+                    tooClose = true;
+                    break;
+                }
             }
         }
         
-        // Verificar si está dentro del territorio aliado
+        // Verificar si está dentro del territorio aliado (o enemigo para comando)
         const inAllyTerritory = this.game && this.game.territory && this.game.territory.isInAllyTerritory(x, y);
+        const inEnemyTerritory = this.game && this.game.territory && !inAllyTerritory;
         
         // Usar configuración del tipo de edificio actual (ya declarada arriba)
         const radius = config ? config.radius : 30;
         
         // Color del preview (rojo si está fuera o muy cerca, verde si es válido)
-        const isValid = !tooClose && inAllyTerritory;
+        // Para comando: válido si está en territorio enemigo y no muy cerca
+        // Para otros: válido si está en territorio aliado y no muy cerca
+        const isValid = isCommando ? (!tooClose && inEnemyTerritory) : (!tooClose && inAllyTerritory);
         const previewColor = isValid ? 'rgba(52, 152, 219, 0.5)' : 'rgba(231, 76, 60, 0.5)';
         const borderColor = isValid ? '#3498db' : '#e74c3c';
         
@@ -1811,7 +1967,9 @@ export class RenderSystem {
         let label = config.name || buildingType.toUpperCase();
         if (tooClose) {
             label = '⚠️ MUY CERCA';
-        } else if (!inAllyTerritory) {
+        } else if (isCommando && !inEnemyTerritory) {
+            label = '⚠️ DEBE SER EN TERRITORIO ENEMIGO';
+        } else if (!isCommando && !inAllyTerritory) {
             label = '⚠️ FUERA DE TERRITORIO';
         }
         this.ctx.fillText(label, x, y - radius - 10);
@@ -1854,13 +2012,17 @@ export class RenderSystem {
     renderDronePreview(x, y, hoveredBase) {
         const radius = 30;
         
-        // Verificar si el objetivo es válido (misma lógica que BuildingSystem.launchDrone)
-        const validTarget = hoveredBase && (
-            (hoveredBase.type === 'fob' && hoveredBase.team === 'player2') || 
-            (hoveredBase.type === 'nuclearPlant' && hoveredBase.team === 'player2') ||
-            (hoveredBase.type === 'antiDrone' && hoveredBase.team === 'player2') ||
-            (hoveredBase.type === 'hospital' && hoveredBase.team === 'player2')
-        );
+        // 🎯 NUEVO: Usar configuración del servidor para validar objetivos
+        let validTarget = false;
+        if (hoveredBase && hoveredBase.team !== this.game?.myTeam) {
+            // Obtener validTargets desde la configuración del servidor
+            const validTargets = this.game?.serverBuildingConfig?.actions?.droneLaunch?.validTargets || 
+                                 ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase'];
+            validTarget = validTargets.includes(hoveredBase.type) && 
+                         hoveredBase.constructed && 
+                         !hoveredBase.isConstructing && 
+                         !hoveredBase.isAbandoning;
+        }
         
         // Círculo vacío con borde blanco punteado
         this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
@@ -1995,6 +2157,75 @@ export class RenderSystem {
             this.ctx.strokeStyle = '#ff0000';
             this.ctx.lineWidth = 4;
             const crossSize = 15;
+            
+            // X roja
+            this.ctx.beginPath();
+            this.ctx.moveTo(x - crossSize, y - crossSize);
+            this.ctx.lineTo(x + crossSize, y + crossSize);
+            this.ctx.moveTo(x + crossSize, y - crossSize);
+            this.ctx.lineTo(x - crossSize, y + crossSize);
+            this.ctx.stroke();
+        }
+    }
+    
+    /**
+     * Renderiza el cursor de Comando Especial Operativo
+     * 🆕 NUEVO
+     */
+    renderCommandoCursor(x, y, hoveredBase) {
+        // Renderizar cursor specops_observer usando sprite
+        const sprite = this.assetManager?.getSprite('specops_observer');
+        
+        if (sprite) {
+            // Usar sprite del cursor
+            const size = 80;
+            this.ctx.globalAlpha = 0.9;
+            this.ctx.drawImage(
+                sprite,
+                x - size/2,
+                y - size/2,
+                size,
+                size
+            );
+            this.ctx.globalAlpha = 1.0;
+        } else {
+            // Fallback: círculo con símbolo
+            this.ctx.strokeStyle = '#9b59b6';
+            this.ctx.fillStyle = 'rgba(155, 89, 182, 0.2)';
+            this.ctx.lineWidth = 3;
+            
+            const radius = 30;
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+        }
+        
+        // Renderizar área de efecto (radio de 200px)
+        const detectionRadius = 200;
+        this.ctx.strokeStyle = '#e74c3c';
+        this.ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([5, 5]);
+        
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, detectionRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        this.ctx.setLineDash([]);
+        
+        // Indicador de territorio enemigo necesario
+        // En territorio enemigo: verde, en territorio propio: rojo
+        const myTeam = this.game?.myTeam || 'player1';
+        const isInEnemyTerritory = this.game?.territoryCalculator?.isInTeamTerritory ? 
+            !this.game.territoryCalculator.isInTeamTerritory(x, myTeam) : true; // Fallback: permitir por defecto
+        
+        if (!isInEnemyTerritory) {
+            // No está en territorio enemigo
+            this.ctx.strokeStyle = '#ff0000';
+            this.ctx.lineWidth = 4;
+            const crossSize = 20;
             
             // X roja
             this.ctx.beginPath();
@@ -2334,11 +2565,15 @@ export class RenderSystem {
                     this.ctx.fillText(`x${node.landedHelicopters.length}`, textX, textY);
                 }
                 
-                // Renderizar barra de cargo para el helicóptero aterrizdo
+                // Renderizar barra de cargo para el helicóptero aterrizado
                 const heliId = node.landedHelicopters[0];
                 const heli = game.helicopters?.find(h => h.id === heliId);
                 if (heli) {
-                    const percentage = (heli.cargo / 100) * 100; // cargo ya está en 0-100
+                    // 🎯 CORREGIR: Manejar cargo undefined/null y calcular porcentaje correctamente
+                    // cargo ya está en 0-100 según el servidor
+                    const cargo = heli.cargo ?? 0; // Si es undefined/null, usar 0
+                    const percentage = Math.max(0, Math.min(100, cargo)); // Asegurar rango 0-100
+                    
                     const barWidth = 30; // Más pequeña para el icono
                     const barHeight = 4;
                     const barY = iconY - 20; // Encima del icono

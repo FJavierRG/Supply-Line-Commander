@@ -15,22 +15,22 @@ export const NODE_CONFIG = {
         
         // Propiedades
         radius: 50,
-        hitboxRadius: 60, // +20% hitbox (50 * 1.2)
-        canBeDestroyed: false,
-        needsConstruction: false,
-        cost: null,
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost: Definido por el servidor (autoridad)
         
         // Sistema de suministros
-        hasSupplies: false, // HQ tiene suministros infinitos
-        maxSupplies: null,
+        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
+        // maxSupplies: Definido por el servidor (autoridad)
         
         // Sistema de vehículos
-        hasVehicles: true,
-        maxVehicles: 4,
+        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
+        // maxVehicles: Definido por el servidor (autoridad)
         
         // Sistema médico
-        hasMedicalSystem: true,
-        maxAmbulances: 1,
+        // hasMedicalSystem: Definido por el servidor (autoridad - ANTI-HACK)
+        // maxAmbulances: Definido por el servidor (autoridad)
         
         // Renderizado
         shadowColor: '#3498db'
@@ -38,26 +38,26 @@ export const NODE_CONFIG = {
     
     fob: {
         id: 'fob',
-        name: 'FOB (Base Avanzada)',
-        description: 'Base de operaciones avanzada. Genera y envía convoyes al frente.',
+        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'base-fob',
         category: 'buildable', // Puede construirse Y aparecer en el mapa
-        enabled: true, // ✅ HABILITADO
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         
         radius: 40, // Tamaño visual del sprite
-        hitboxRadius: 48, // +20% hitbox (40 * 1.2)
-        detectionRadius: 140, // Valor original (sin +15%)
-        canBeDestroyed: true,
-        needsConstruction: true,
-        cost: 130, // ⚖️ BALANCEADO (era 150)
-        constructionTime: 2,
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
         
-        hasSupplies: true,
-        maxSupplies: 100,
+        // Sistema de suministros
+        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
+        // maxSupplies: Definido por el servidor (autoridad)
         
-        hasVehicles: true,
-        maxVehicles: 2,
+        // Sistema de vehículos
+        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
+        // maxVehicles: Definido por el servidor (autoridad)
         
         shadowColor: '#2ecc71'
     },
@@ -71,21 +71,23 @@ export const NODE_CONFIG = {
         
         
         radius: 35, // Tamaño visual del sprite
-        hitboxRadius: 42, // +20% hitbox (35 * 1.2)
-        canBeDestroyed: true,
-        needsConstruction: false,
-        cost: null,
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost: Definido por el servidor (autoridad)
         
-        hasSupplies: true,
-        maxSupplies: 100,
-        consumeRate: 1.6, // 👈 BALANCEO: Consumo por segundo
+        // Sistema de suministros
+        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
+        // maxSupplies: Definido por el servidor (autoridad)
+        // consumeRate: Definido por el servidor (autoridad)
         
-        hasVehicles: false,
-        maxVehicles: 0,
+        // Sistema de vehículos
+        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
+        // maxVehicles: Definido por el servidor (autoridad)
         
         // 🆕 NUEVO: Sistema de helicópteros para segunda nación
-        hasHelicopters: false, // Se activará dinámicamente para militaryBasic
-        maxHelicopters: 1,
+        // hasHelicopters: Definido por el servidor (autoridad - ANTI-HACK)
+        // maxHelicopters: Definido por el servidor (autoridad)
         
         shadowColor: '#e67e22'
     },
@@ -93,236 +95,249 @@ export const NODE_CONFIG = {
     // ========== EDIFICIOS CONSTRUIBLES ==========
     antiDrone: {
         id: 'antiDrone',
-        name: 'Anti-Dron',
-        description: 'Defensa contra drones enemigos. Tiene un solo proyectil.',
+        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-anti-drone',
         category: 'buildable',
-        enabled: true, // ✅ HABILITADO
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         // Sistema de razas
         
         radius: 30, // Tamaño visual del sprite
-        hitboxRadius: 36, // +20% hitbox (30 * 1.2)
-        detectionRadius: 120, // Valor original (sin +15%)
-        canBeDestroyed: true,
-        needsConstruction: true,
-        cost: 115, //
-        constructionTime: 2,
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
         sizeMultiplier: 0.85,
         
         // Propiedades específicas anti-drone
-        detectionRange: 160,
-        alertRange: 220,
-        cooldownTime: 3000,
-        isConsumable: true,
-        showRangePreview: true
+        // detectionRange, alertRange, cooldownTime: Definidos por el servidor (autoridad)
+        // isConsumable, showRangePreview: Definidos por el servidor (autoridad - ANTI-HACK)
     },
     
     droneLauncher: {
         id: 'droneLauncher',
-        name: 'Lanzadera de Drones',
-        description: 'Desbloquea el uso de drones bomba.',
+        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-drone-launcher',
         category: 'buildable',
-        enabled: true,
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         // Sistema de razas
         
         radius: 30, // Tamaño visual del sprite
-        hitboxRadius: 36, // +20% hitbox (30 * 1.2)
-        detectionRadius: 120, // Valor original (sin +15%)
-        canBeDestroyed: true,
-        needsConstruction: true,
-        cost: 100,
-        constructionTime: 3,
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
         sizeMultiplier: 0.9
     },
     
     razorNet: {
         id: 'razorNet',
-        name: 'Red de Alambre',
-        description: 'Ralentiza el avance enemigo',
+        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-razor-net',
         category: 'buildable',
-        enabled: false, // ⚠️ DESACTIVADO - Cambia a true para habilitar
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         // Sistema de razas
         
         radius: 25, // Tamaño visual del sprite
-        hitboxRadius: 30, // +20% hitbox (25 * 1.2)
-        detectionRadius: 100, // Valor original calculado
-        canBeDestroyed: true,
-        needsConstruction: true,
-        cost: 100,
-        constructionTime: 2
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
     },
     
     truckFactory: {
         id: 'truckFactory',
-        name: 'Fábrica de Camiones',
-        description: 'Añade +1 vehículo al HQ y +15 de capacidad de carga a camiones pesados.',
+        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-truck-factory',
         category: 'buildable',
-        enabled: true, // ✅ ACTIVADO
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         // Sistema de razas
         
         radius: 35, // Tamaño visual del sprite
-        hitboxRadius: 42, // +20% hitbox (35 * 1.2)
-        detectionRadius: 130, // Valor original (sin +15%)
-        canBeDestroyed: true,
-        needsConstruction: true,
-        cost: 100, // ⚖️ BALANCEADO
-        constructionTime: 2,
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
         
         // Efectos:
-        effect: 'increaseHQVehicles',
-        vehicleBonus: 1,              // +1 vehículo al HQ
-        heavyTruckCapacityBonus: 15   // +15 capacidad a camiones pesados
+        // effect, vehicleBonus, heavyTruckCapacityBonus: Definidos por el servidor (autoridad)
     },
     
     engineerCenter: {
         id: 'engineerCenter',
-        name: 'Centro de Ingenieros',
-        description: 'Asfalta los caminos del HQ a las FOBs aumentando +50% la velocidad de los camiones pesados.',
+        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-engineer-center',
         category: 'buildable',
-        enabled: true,
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         // Sistema de razas
         
         radius: 35, // Tamaño visual del sprite
-        hitboxRadius: 42, // +20% hitbox (35 * 1.2)
-        detectionRadius: 130, // Valor original (sin +15%)
-        canBeDestroyed: true,
-        needsConstruction: true,
-        cost: 100,
-        constructionTime: 3
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
     },
     
     nuclearPlant: {
         id: 'nuclearPlant',
-        name: 'Planta Nuclear',
-        description: 'Aumenta la generación pasiva de recursos en +2/s por cada planta construida.',
+        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-nuclear-plant',
         category: 'buildable',
-        enabled: true, // ✅ HABILITADO
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         // Sistema de razas
         
         radius: 40, // Tamaño visual del sprite
-        hitboxRadius: 48, // +20% hitbox (40 * 1.2)
-        detectionRadius: 161, // +15% (140 * 1.15)
-        canBeDestroyed: true,
-        needsConstruction: true,
-        cost: 200, // ⚖️ BALANCEADO
-        constructionTime: 2,
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
         
-        passiveIncomeBonus: 2
+        // passiveIncomeBonus: Definido por el servidor (autoridad)
     },
     
     machineNest: {
         id: 'machineNest',
-        name: 'Nido de Ametralladoras',
-        description: 'Torreta defensiva contra frentes enemigos. Tiene un solo proyectil.',
+        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-machine-nest',
         category: 'buildable',
-        enabled: false, // ⚠️ DESACTIVADO - Cambia a true para habilitar
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         // Sistema de razas
         
         radius: 30, // Tamaño visual del sprite
-        hitboxRadius: 36, // +20% hitbox (30 * 1.2)
-        detectionRadius: 138, // +15% (120 base calculado: 120 * 1.15)
-        canBeDestroyed: true,
-        needsConstruction: true,
-        cost: 250,
-        constructionTime: 2,
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
         sizeMultiplier: 1.15,
         flipHorizontal: true
     },
     
     campaignHospital: {
         id: 'campaignHospital',
-        name: 'Hospital de Campaña',
-        description: 'Envía vehículos médicos a frentes aliados. Tiene rango limitado.',
+        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-campaign-hospital',
         category: 'buildable',
-        enabled: false, // ✅ HABILITADO
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         // Sistema de razas
         
         radius: 35, // Tamaño visual del sprite
-        hitboxRadius: 42, // +20% hitbox (35 * 1.2)
-        detectionRadius: 130, // Valor original (sin +15%)
-        canBeDestroyed: true,
-        needsConstruction: true,
-        cost: 100, // ⚖️ BALANCEADO
-        constructionTime: 2,
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
         sizeMultiplier: 0.8, // Reducir sprite 20%
         
         // Hospital NO tiene suministros, solo ambulancias
-        hasSupplies: false,
+        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
         
-        maxVehicles: 1,
-        actionRange: 260, // Ampliado 30% (era 200)
-        canDispatchMedical: true,
-        showRangePreview: true
+        // maxVehicles: Definido por el servidor (autoridad)
+        // actionRange: Definido por el servidor (autoridad)
+        // canDispatchMedical: Definido por el servidor (autoridad - ANTI-HACK)
+        // showRangePreview: Definido por el servidor (autoridad - ANTI-HACK)
     },
     
     intelRadio: {
         id: 'intelRadio',
-        name: 'Radio Inteligencia',
-        description: 'Inversión temporal. Después de 12 segundos devuelve el coste (50$) más 50$ de beneficio.',
+        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-intel-radio', // Sprite específico para intelRadio
         category: 'buildable',
-        enabled: true, // ✅ HABILITADO
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         // Sistema de razas
         
         radius: 30, // Tamaño visual del sprite
-        hitboxRadius: 36, // +20% hitbox (30 * 1.2)
-        detectionRadius: 120, // Valor original (sin +15%)
-        canBeDestroyed: true,
-        needsConstruction: true,
-        cost: 50, // Coste de inversión
-        constructionTime: 1, // Construcción rápida
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
         
         // Propiedades de inversión
-        investmentTime: 12, // Tiempo en segundos antes de pagar
-        investmentReturn: 100, // Total a pagar (coste + beneficio)
+        // investmentTime, investmentReturn: Definidos por el servidor (autoridad)
         
-        hasSupplies: false, // No genera suministros
-        hasVehicles: false // No maneja vehículos
+        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
+        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
+    },
+    
+    intelCenter: {
+        id: 'intelCenter',
+        // name y description: Definidos por el servidor (autoridad)
+        spriteKey: 'building-intel-center', // 🆕 Sprite del centro de inteligencia
+        category: 'buildable',
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
+        
+        // Sistema de razas
+        
+        radius: 35, // Tamaño visual del sprite
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
     },
     
     aerialBase: {
         id: 'aerialBase',
-        name: 'Base Aérea',
-        description: 'Punto de recarga para helicópteros. Suministra hasta 200 de cargo. Se destruye cuando se agota.',
+        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-aerial-base',
         category: 'buildable', // ✅ RESTAURADO: Para que aparezca en la tienda
-        enabled: true, // ✅ HABILITADO
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         radius: 40, // Tamaño visual del sprite
-        hitboxRadius: 48, // +20% hitbox (40 * 1.2)
-        detectionRadius: 130,
-        canBeDestroyed: true,
-        needsConstruction: true,
-        cost: 150, // Coste de construcción
-        constructionTime: 3, // Tiempo de construcción
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
         sizeMultiplier: 0.66, // 🆕 AUMENTADO: 50% más grande (0.44 * 1.5 = 0.66)
         
         // Sistema de suministros (para recarga de helicópteros)
-        hasSupplies: true,
-        maxSupplies: 200, // Capacidad máxima de cargo
+        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
+        // maxSupplies: Definido por el servidor (autoridad)
         
         // No maneja vehículos tradicionales
-        hasVehicles: false,
+        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
         
         // Propiedades especiales
         isAerialBase: true, // Flag para identificación
         autoDestroy: true // Se destruye cuando supplies llega a 0
+    },
+    
+    vigilanceTower: {
+        id: 'vigilanceTower',
+        // name y description: Definidos por el servidor (autoridad)
+        spriteKey: 'building-vigilance-tower',
+        category: 'buildable',
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
+        
+        radius: 35, // Tamaño visual del sprite
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
+        
+        // No maneja suministros ni vehículos
+        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
+        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
+        
+        // Propiedades especiales
+        isVigilanceTower: true // Flag para identificación
     },
     
     // ========== PROYECTILES ==========
@@ -332,78 +347,197 @@ export const NODE_CONFIG = {
         description: 'Destruye un objetivo enemigo. Puede ser interceptado por Anti-Drones. Requiere tener una lanzadera en el campo.',
         spriteKey: 'vehicle-drone',
         category: 'projectile',
-        enabled: true, // ✅ HABILITADO
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         // Sistema de razas
         
         radius: 0,
-        canBeDestroyed: false,
-        needsConstruction: false,
-        cost: 150, //  BALANCEADO
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost: Definido por el servidor (autoridad)
         sizeMultiplier: 1.15
     },
     
     sniperStrike: {
         id: 'sniperStrike',
-        name: 'Disparo de Francotirador',
-        description: 'Ordena un ataque de francotirador a un frente enemigo. Causa el efecto wounded durante 15 segundos.',
+        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'vehicle-sniper_shoot_icon',
         category: 'projectile',
-        enabled: true, // ✅ HABILITADO
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         // Sistema de razas
         
         radius: 0,
-        canBeDestroyed: false,
-        needsConstruction: false,
-        cost: 40, // Sincronizado con servidor
-        cursorSprite: 'sniper',
-        targetType: 'front', // Cualquier frente (validación de team en runtime)
-        effectDuration: 15, // Duración del efecto wounded en segundos
-        spottedSoundCooldown: 7 // Cooldown del sonido sniper_spotted
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost: Definido por el servidor (autoridad)
+        // cursorSprite, targetType: Definidos por el servidor (autoridad - ANTI-HACK)
+        // effectDuration, spottedSoundCooldown: Definidos por el servidor (autoridad)
     },
     
     fobSabotage: {
         id: 'fobSabotage',
-        name: 'Fob Sabotaje',
-        description: 'Sabotear una FOB enemiga aplicando una penalización del 50% de velocidad a los siguientes 3 camiones que envíe.',
+        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'specops_unit', // Sprite del consumible
         category: 'projectile',
-        enabled: true, // ✅ HABILITADO
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         // Sistema de razas
         
         radius: 0,
-        canBeDestroyed: false,
-        needsConstruction: false,
-        cost: 40, // Balanceado
-        cursorSprite: 'specops_selector', // Sprite del cursor
-        targetType: 'fob', // Solo FOBs (validación de team en runtime)
-        speedPenalty: 0.5, // 50% de penalización
-        truckCount: 3, // Número de camiones afectados
-        effectIcon: 'ui-no-supplies' // Icono temporal para mostrar el efecto
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost: Definido por el servidor (autoridad)
+        // cursorSprite, targetType: Definidos por el servidor (autoridad - ANTI-HACK)
+        // speedPenalty, truckCount: Definidos por el servidor (autoridad)
+        // effectIcon: Definido por el servidor (autoridad - ANTI-HACK)
+    },
+    
+    specopsCommando: {
+        id: 'specopsCommando',
+        // name y description: Definidos por el servidor (autoridad)
+        spriteKey: 'specops_observer', // 🆕 NUEVO: Sprite del comando especial operativo
+        category: 'projectile',
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
+        
+        // Sistema de razas
+        
+        radius: 25, // 🆕 Radio físico del comando
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost: Definido por el servidor (autoridad)
+        // cursorSprite, targetType: Definidos por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad)
     }
 };
 
 /**
  * Obtiene la configuración de un nodo por ID
+ * SIEMPRE usa configuración del servidor (tanto en singleplayer como multiplayer)
  */
 export function getNodeConfig(nodeId) {
-    return NODE_CONFIG[nodeId] || null;
+    const config = NODE_CONFIG[nodeId] || null;
+    
+    // Si no hay configuración del servidor, devolver configuración local básica
+    if (!window.game?.serverBuildingConfig) {
+        return config;
+    }
+    
+    // Usar configuración del servidor (tanto en singleplayer como multiplayer)
+    const serverConfig = window.game.serverBuildingConfig;
+    
+    if (config && serverConfig) {
+        // Crear una copia de la configuración local
+        const hybridConfig = { ...config };
+        
+        // Sobrescribir con valores del servidor
+        if (serverConfig.costs && serverConfig.costs[nodeId] !== undefined) {
+            hybridConfig.cost = serverConfig.costs[nodeId];
+        }
+        
+        if (serverConfig.buildTimes && serverConfig.buildTimes[nodeId] !== undefined) {
+            hybridConfig.constructionTime = serverConfig.buildTimes[nodeId];
+        }
+        
+        if (serverConfig.descriptions && serverConfig.descriptions[nodeId]) {
+            hybridConfig.name = serverConfig.descriptions[nodeId].name;
+            hybridConfig.description = serverConfig.descriptions[nodeId].description;
+        }
+        
+        if (serverConfig.capacities && serverConfig.capacities[nodeId]) {
+            const capacities = serverConfig.capacities[nodeId];
+            Object.keys(capacities).forEach(key => {
+                hybridConfig[key] = capacities[key];
+            });
+        }
+        
+        if (serverConfig.gameplay && serverConfig.gameplay[nodeId]) {
+            const gameplay = serverConfig.gameplay[nodeId];
+            Object.keys(gameplay).forEach(key => {
+                hybridConfig[key] = gameplay[key];
+            });
+        }
+        
+        if (serverConfig.detectionRadii && serverConfig.detectionRadii[nodeId] !== undefined) {
+            hybridConfig.detectionRadius = serverConfig.detectionRadii[nodeId];
+        }
+        
+        if (serverConfig.security && serverConfig.security[nodeId]) {
+            const security = serverConfig.security[nodeId];
+            Object.keys(security).forEach(key => {
+                hybridConfig[key] = security[key];
+            });
+        }
+        
+        if (serverConfig.behavior && serverConfig.behavior.enabled) {
+            // 🆕 NUEVO: enabled viene de behavior.enabled
+            const enabledValue = serverConfig.behavior.enabled[nodeId];
+            if (enabledValue !== undefined) {
+                hybridConfig.enabled = enabledValue;
+            }
+        }
+        
+        if (serverConfig.behavior && serverConfig.behavior.behavior) {
+            const behavior = serverConfig.behavior.behavior[nodeId];
+            if (behavior) {
+                Object.keys(behavior).forEach(key => {
+                    hybridConfig[key] = behavior[key];
+                });
+            }
+        }
+        
+        return hybridConfig;
+    }
+    
+    return config;
 }
 
 /**
  * Obtiene todos los nodos construibles (buildings) HABILITADOS
+ * Compatible con servidor como autoridad: enabled puede venir del servidor
  */
 export function getBuildableNodes() {
-    return Object.values(NODE_CONFIG).filter(n => n.category === 'buildable' && n.enabled !== false);
+    const allNodes = Object.values(NODE_CONFIG).filter(n => n.category === 'buildable');
+    
+    // 🆕 NUEVO: Verificar enabled desde configuración del servidor si está disponible
+    if (window.game?.serverBuildingConfig?.behavior?.enabled) {
+        const serverEnabled = window.game.serverBuildingConfig.behavior.enabled;
+        return allNodes.filter(n => {
+            // Si el servidor tiene configuración de enabled, usarla
+            if (serverEnabled.hasOwnProperty(n.id)) {
+                return serverEnabled[n.id] === true;
+            }
+            // Si no está en el servidor, usar configuración local
+            return (n.enabled === undefined || n.enabled !== false);
+        });
+    }
+    
+    // Fallback: usar configuración local
+    return allNodes.filter(n => (n.enabled === undefined || n.enabled !== false));
 }
 
 /**
  * Obtiene todos los proyectiles HABILITADOS
+ * Compatible con servidor como autoridad: enabled puede venir del servidor
  */
 export function getProjectiles() {
-    return Object.values(NODE_CONFIG).filter(n => n.category === 'projectile' && n.enabled !== false);
+    const allNodes = Object.values(NODE_CONFIG).filter(n => n.category === 'projectile');
+    
+    // 🆕 NUEVO: Verificar enabled desde configuración del servidor si está disponible
+    if (window.game?.serverBuildingConfig?.behavior?.enabled) {
+        const serverEnabled = window.game.serverBuildingConfig.behavior.enabled;
+        return allNodes.filter(n => {
+            // Si el servidor tiene configuración de enabled, usarla
+            if (serverEnabled.hasOwnProperty(n.id)) {
+                return serverEnabled[n.id] === true;
+            }
+            // Si no está en el servidor, usar configuración local
+            return (n.enabled === undefined || n.enabled !== false);
+        });
+    }
+    
+    // Fallback: usar configuración local
+    return allNodes.filter(n => (n.enabled === undefined || n.enabled !== false));
 }
 
 /**
@@ -414,56 +548,35 @@ export function getMapNodes() {
 }
 
 /**
- * ⚠️ DEPRECATED: Usar filtrado por team en lugar de categoría
- * Mantener para compatibilidad temporal durante migración
- */
-export function getEnemyNodes() {
-    console.warn('⚠️ getEnemyNodes() está deprecated. Usar filtrado por team.');
-    return []; // Ya no hay nodos con category 'enemy'
-}
-
-/**
  * Obtiene todos los nodos aliados HABILITADOS (para el Arsenal)
+ * Compatible con servidor como autoridad: enabled puede venir del servidor
  */
 export function getAllyNodes() {
     return Object.values(NODE_CONFIG).filter(n => 
-        (n.category === 'map_node' || n.category === 'buildable') && n.enabled !== false
-    );
-}
-
-/**
- * Obtiene configuración de nodos que pueden ser usados por cualquier equipo
- * (para crear instancias con diferentes teams)
- */
-export function getTeamCapableNodes() {
-    return Object.values(NODE_CONFIG).filter(n => 
-        n.category === 'map_node' || n.category === 'buildable'
-    );
-}
-
-/**
- * Obtiene todos los nodos disponibles para una raza específica
- * @param {string} raceId - ID de la raza
- * @returns {Array} Array con los nodos disponibles para la raza
- */
-export function getNodesByRace(raceId) {
-    return Object.values(NODE_CONFIG).filter(n => 
-        n.races && n.races.includes(raceId)
+        (n.category === 'map_node' || n.category === 'buildable') && 
+        (n.enabled === undefined || n.enabled !== false)
     );
 }
 
 /**
  * Obtiene todos los edificios construibles disponibles para una raza específica
+ * Compatible con servidor como autoridad: enabled puede venir del servidor
  * @param {string} raceId - ID de la raza
  * @returns {Array} Array con los edificios construibles disponibles para la raza
  */
+/**
+ * Obtiene los nodos construibles para una raza específica (SOLO VISUAL - FALLBACK)
+ * ⚠️ DEPRECATED: La lógica real está en el servidor (autoridad - ANTI-HACK)
+ * @param {string} raceId - ID de la raza
+ * @returns {Array} Array con los nodos construibles (fallback seguro)
+ */
 export function getBuildableNodesByRace(raceId) {
-    const raceConfig = getRaceConfig(raceId);
-    
-    if (!raceConfig) return [];
-    
-    return raceConfig.buildings.map(buildingId => NODE_CONFIG[buildingId])
-        .filter(node => node && node.category === 'buildable' && node.enabled !== false);
+    // ⚠️ DEPRECATED: raceConfig.buildings movido al servidor
+    // Usar fallback seguro: todos los edificios construibles por defecto
+    // La validación real se hace en el servidor
+    return Object.values(NODE_CONFIG)
+        .filter(node => node.category === 'buildable' && 
+                (node.enabled === undefined || node.enabled !== false));
 }
 
 /**
@@ -471,13 +584,18 @@ export function getBuildableNodesByRace(raceId) {
  * @param {string} raceId - ID de la raza
  * @returns {Array} Array con los proyectiles disponibles para la raza
  */
+/**
+ * Obtiene los proyectiles/consumibles para una raza específica (SOLO VISUAL - FALLBACK)
+ * ⚠️ DEPRECATED: La lógica real está en el servidor (autoridad - ANTI-HACK)
+ * @param {string} raceId - ID de la raza
+ * @returns {Array} Array con los proyectiles (fallback seguro)
+ */
 export function getProjectilesByRace(raceId) {
-    const raceConfig = getRaceConfig(raceId);
-    
-    if (!raceConfig) return [];
-    
-    return raceConfig.consumables.map(consumableId => NODE_CONFIG[consumableId])
-        .filter(node => node && node.category === 'projectile');
+    // ⚠️ DEPRECATED: raceConfig.consumables movido al servidor
+    // Usar fallback seguro: todos los proyectiles por defecto
+    // La validación real se hace en el servidor
+    return Object.values(NODE_CONFIG)
+        .filter(node => node.category === 'projectile');
 }
 
 /**
@@ -486,13 +604,18 @@ export function getProjectilesByRace(raceId) {
  * @param {string} raceId - ID de la raza
  * @returns {boolean} true si el nodo está disponible para la raza
  */
+/**
+ * Verifica si un nodo está disponible para una raza específica (SOLO VISUAL - FALLBACK)
+ * ⚠️ DEPRECATED: La lógica real está en el servidor (autoridad - ANTI-HACK)
+ * @param {string} nodeId - ID del nodo
+ * @param {string} raceId - ID de la raza
+ * @returns {boolean} true si el nodo está disponible (fallback seguro)
+ */
 export function isNodeAvailableForRace(nodeId, raceId) {
-    const raceConfig = getRaceConfig(raceId);
-    
-    if (!raceConfig) return false;
-    
-    // Verificar si está en buildings o consumibles
-    return raceConfig.buildings.includes(nodeId) || raceConfig.consumables.includes(nodeId);
+    // ⚠️ DEPRECATED: raceConfig.buildings y raceConfig.consumables movidos al servidor
+    // Usar fallback seguro: asumir que todos los nodos están disponibles
+    // La validación real se hace en el servidor
+    return true;
 }
 
 

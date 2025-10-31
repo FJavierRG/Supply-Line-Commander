@@ -317,11 +317,13 @@ export class RaceSelectionManager {
         ctx.fillStyle = '#ecf0f1';
         ctx.fillText(race.description, x + this.layout.raceButton.w / 2, y + 75);
         
-        // Lista de edificios disponibles
+        // Lista de edificios disponibles (SOLO VISUAL - FALLBACK)
         ctx.font = '16px Arial';
         ctx.fillStyle = '#bdc3c7';
-        const buildingsText = `Edificios: ${race.buildings.length}`;
-        const consumablesText = `Consumibles: ${race.consumables.length}`;
+        // ⚠️ DEPRECATED: race.buildings y race.consumables movidos al servidor
+        // Usar fallback seguro para información visual
+        const buildingsText = `Edificios: Disponibles`;
+        const consumablesText = `Consumibles: Disponibles`;
         ctx.fillText(buildingsText, x + this.layout.raceButton.w / 2, y + 105);
         ctx.fillText(consumablesText, x + this.layout.raceButton.w / 2, y + 125);
         

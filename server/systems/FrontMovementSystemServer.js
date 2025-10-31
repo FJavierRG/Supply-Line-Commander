@@ -4,21 +4,19 @@
 
 import { GAME_CONFIG } from '../config/gameConfig.js';
 
-// Configuración de movimiento
-const MOVEMENT_CONFIG = {
-    advanceSpeed: 8,   // Píxeles por segundo
-    retreatSpeed: 8,   // Píxeles por segundo (igual que avance para evitar superposición)
+// Configuración específica del sistema (no duplicada con gameConfig.js)
+const SYSTEM_CONFIG = {
     frontRadius: 40,
     frontierGapPx: 25,
-    neutralZoneGapPx: 25,
-    pixelsPerCurrency: 10
+    neutralZoneGapPx: 25
 };
 
 export class FrontMovementSystemServer {
     constructor(gameState) {
         this.gameState = gameState;
-        this.advanceSpeed = MOVEMENT_CONFIG.advanceSpeed;
-        this.retreatSpeed = MOVEMENT_CONFIG.retreatSpeed;
+        // Usar configuración centralizada del servidor
+        this.advanceSpeed = GAME_CONFIG.frontMovement.advanceSpeed;
+        this.retreatSpeed = GAME_CONFIG.frontMovement.retreatSpeed;
         
         // Acumuladores de currency por avance
         this.pendingCurrencyPixels = {
@@ -27,7 +25,7 @@ export class FrontMovementSystemServer {
         };
         
         // Calcular rango de colisión
-        this.collisionRange = MOVEMENT_CONFIG.frontRadius + MOVEMENT_CONFIG.frontierGapPx + MOVEMENT_CONFIG.neutralZoneGapPx;
+        this.collisionRange = SYSTEM_CONFIG.frontRadius + SYSTEM_CONFIG.frontierGapPx + SYSTEM_CONFIG.neutralZoneGapPx;
         
         // Flags para sonidos únicos por frente
         this.noAmmoSoundPlayed = new Set(); // IDs de frentes que ya reprodujeron no_ammo
@@ -190,8 +188,8 @@ export class FrontMovementSystemServer {
      * Verifica si dos frentes están en rango de colisión
      */
     areInCollisionRange(front1, front2, direction) {
-        const frontRadius = MOVEMENT_CONFIG.frontRadius;
-        const gap = MOVEMENT_CONFIG.frontierGapPx;
+        const frontRadius = SYSTEM_CONFIG.frontRadius;
+        const gap = SYSTEM_CONFIG.frontierGapPx;
         
         // Calcular posiciones de fronteras
         let frontier1X, frontier2X;
@@ -210,7 +208,7 @@ export class FrontMovementSystemServer {
         const frontierDistance = Math.abs(frontier2X - frontier1X);
         
         // En rango si están a menos de neutralZoneGapPx
-        return frontierDistance <= MOVEMENT_CONFIG.neutralZoneGapPx;
+        return frontierDistance <= SYSTEM_CONFIG.neutralZoneGapPx;
     }
 
     /**
@@ -223,11 +221,11 @@ export class FrontMovementSystemServer {
         this.pendingCurrencyPixels[team] += pixelsGained;
         
         // Convertir a currency (solo parte entera)
-        const currencyToAward = Math.floor(this.pendingCurrencyPixels[team] / MOVEMENT_CONFIG.pixelsPerCurrency);
+        const currencyToAward = Math.floor(this.pendingCurrencyPixels[team] / GAME_CONFIG.currency.pixelsPerCurrency);
         
         if (currencyToAward > 0) {
             this.gameState.currency[team] += currencyToAward;
-            this.pendingCurrencyPixels[team] -= currencyToAward * MOVEMENT_CONFIG.pixelsPerCurrency;
+            this.pendingCurrencyPixels[team] -= currencyToAward * GAME_CONFIG.currency.pixelsPerCurrency;
             
             // Log solo cada 50$ para no spamear
             if (currencyToAward >= 50) {

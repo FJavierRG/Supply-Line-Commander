@@ -1,6 +1,7 @@
 // ===== HANDLER DE CONSTRUCCIÓN =====
 import { v4 as uuidv4 } from 'uuid';
 import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
+import { getServerRaceBuildings } from '../../config/raceConfig.js';
 
 export class BuildHandler {
     constructor(gameState) {
@@ -8,9 +9,89 @@ export class BuildHandler {
     }
     
     /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene costos de edificios
+     */
+    getBuildingCosts() {
+        return { ...SERVER_NODE_CONFIG.costs };
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene tiempos de construcción
+     */
+    getBuildingTimes() {
+        return { ...SERVER_NODE_CONFIG.buildTimes };
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene efectos de edificios
+     */
+    getBuildingEffects() {
+        return { ...SERVER_NODE_CONFIG.effects };
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene descripciones de edificios
+     */
+    getBuildingDescriptions() {
+        return { ...SERVER_NODE_CONFIG.descriptions };
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene capacidades dinámicas
+     */
+    getBuildingCapacities() {
+        return { ...SERVER_NODE_CONFIG.capacities };
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene bonuses de edificios
+     */
+    getBuildingBonuses() {
+        return { ...SERVER_NODE_CONFIG.bonuses };
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene propiedades de gameplay
+     */
+    getGameplayProperties() {
+        return { ...SERVER_NODE_CONFIG.gameplay };
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene radios de detección (CRÍTICO PARA SEGURIDAD)
+     */
+    getDetectionRadii() {
+        return { ...SERVER_NODE_CONFIG.detectionRadius };
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene propiedades de seguridad (ANTI-HACK)
+     */
+    getSecurityProperties() {
+        return { ...SERVER_NODE_CONFIG.security };
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene propiedades de comportamiento críticas
+     */
+    getBehaviorProperties() {
+        return {
+            enabled: SERVER_NODE_CONFIG.gameplay.enabled,
+            behavior: SERVER_NODE_CONFIG.gameplay.behavior
+        };
+    }
+    
+    /**
      * Maneja solicitud de construcción
      */
     handleBuild(playerTeam, buildingType, x, y) {
+        // 🆕 NUEVO: Verificar si el edificio está habilitado
+        const enabled = SERVER_NODE_CONFIG.gameplay.enabled[buildingType];
+        if (enabled === false) {
+            console.log(`🚫 Construcción rechazada: ${buildingType} está deshabilitado`);
+            return { success: false, reason: 'Edificio deshabilitado' };
+        }
+        
         // Obtener costo del edificio desde configuración
         const cost = SERVER_NODE_CONFIG.costs[buildingType];
         if (!cost) {
@@ -104,6 +185,12 @@ export class BuildHandler {
                     console.log(`💰 intelRadio ${node.id} iniciando inversión - ${node.investmentTime}s para obtener ${node.investmentReturn}$`);
                 }
                 break;
+                
+            case 'vigilanceTower':
+                // 🆕 NUEVO: Eliminar comandos enemigos dentro del área cuando se completa la construcción
+                this.eliminateEnemyCommandosInRange(node);
+                console.log(`🗼 Torre de Vigilancia ${node.id} completada - protegiendo área de ${node.detectionRadius || 140}px`);
+                break;
         }
     }
     
@@ -184,6 +271,26 @@ export class BuildHandler {
             node.abandonPhase = 0;
             node.abandonPhase1Duration = 500; // 0.5 segundos (rápido)
             node.abandonPhase2Duration = 500; // 0.5 segundos (rápido)
+        } else if (type === 'specopsCommando') {
+            // 🆕 NUEVO: Propiedades del comando especial operativo
+            const commandoConfig = SERVER_NODE_CONFIG.specialNodes?.specopsCommando || {};
+            node.isCommando = true;
+            node.detectionRadius = commandoConfig.detectionRadius || 200;
+            node.health = commandoConfig.health || 50;
+            node.maxHealth = commandoConfig.health || 50;
+            node.hasSupplies = false;
+            node.hasVehicles = false;
+            node.constructed = true; // No necesita construcción
+            node.isConstructing = false;
+        } else if (type === 'vigilanceTower') {
+            // 🆕 NUEVO: Torre de Vigilancia - counterea comandos
+            node.isVigilanceTower = true;
+            node.detectionRadius = SERVER_NODE_CONFIG.detectionRadius.vigilanceTower || 140;
+            node.hasSupplies = false;
+            node.hasVehicles = false;
+            
+            // Eliminar comandos enemigos dentro del área de detección
+            this.eliminateEnemyCommandosInRange(node);
         }
         
         // Debug log para FOBs
@@ -192,6 +299,42 @@ export class BuildHandler {
         }
         
         return node;
+    }
+    
+    /**
+     * 🆕 NUEVO: Elimina comandos enemigos dentro del área de detección de la torre
+     * @param {Object} tower - Nodo de la torre de vigilancia
+     */
+    eliminateEnemyCommandosInRange(tower) {
+        const detectionRadius = tower.detectionRadius || 140;
+        const towerTeam = tower.team;
+        
+        // Buscar comandos enemigos dentro del área
+        const enemyCommandos = this.gameState.nodes.filter(node => 
+            node.isCommando &&
+            node.team !== towerTeam &&
+            node.active &&
+            node.constructed &&
+            !node.isAbandoning
+        );
+        
+        const eliminated = [];
+        for (const commando of enemyCommandos) {
+            const dist = Math.hypot(commando.x - tower.x, commando.y - tower.y);
+            
+            if (dist <= detectionRadius) {
+                // Eliminar el comando
+                commando.active = false;
+                commando.isAbandoning = true;
+                eliminated.push(commando.id);
+                
+                console.log(`🗑️ Torre de Vigilancia ${tower.id} eliminó comando enemigo ${commando.id} en (${commando.x.toFixed(0)}, ${commando.y.toFixed(0)})`);
+            }
+        }
+        
+        if (eliminated.length > 0) {
+            console.log(`🗑️ Torre de Vigilancia ${tower.id} eliminó ${eliminated.length} comando(s) enemigo(s)`);
+        }
     }
     
     /**
@@ -229,8 +372,35 @@ export class BuildHandler {
     
     /**
      * Verifica si una ubicación es válida para construir (sin colisiones)
+     * @param {number} x - Posición X
+     * @param {number} y - Posición Y
+     * @param {string} buildingType - Tipo de edificio
+     * @param {Object} options - Opciones adicionales
+     * @param {boolean} options.ignoreDetectionLimits - Si es true, ignora límites de detección (para specopsCommando)
+     * @param {boolean} options.allowEnemyTerritory - Si es true, permite construir en territorio enemigo
+     * @returns {boolean} True si la ubicación es válida
      */
-    isValidLocation(x, y, buildingType) {
+    isValidLocation(x, y, buildingType, options = {}) {
+        const { ignoreDetectionLimits = false, allowEnemyTerritory = false } = options;
+        
+        // Si ignoreDetectionLimits está activado, solo verificar colisiones físicas básicas (no áreas de detección)
+        if (ignoreDetectionLimits) {
+            // Solo verificar que no haya otro nodo exactamente en la misma posición
+            for (const node of this.gameState.nodes) {
+                if (!node.active) continue;
+                
+                const dist = Math.hypot(x - node.x, y - node.y);
+                const minSeparation = (SERVER_NODE_CONFIG.radius[buildingType] || 25) + 
+                                    (SERVER_NODE_CONFIG.radius[node.type] || 30);
+                
+                if (dist < minSeparation) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        // Lógica normal de detección
         // Obtener radio de detección del edificio que se está construyendo
         const newDetectionRadius = SERVER_NODE_CONFIG.detectionRadius[buildingType] || 
                                  (SERVER_NODE_CONFIG.radius[buildingType] || 30) * 2.5;
@@ -258,6 +428,7 @@ export class BuildHandler {
     
     /**
      * Verifica si una raza puede construir un tipo de edificio específico
+     * 🎯 CORREGIDO: Usa configuración centralizada de raceConfig (SERVIDOR COMO AUTORIDAD)
      * @param {string} raceId - ID de la raza
      * @param {string} buildingType - Tipo de edificio
      * @returns {boolean} True si puede construir, false si no
@@ -268,26 +439,16 @@ export class BuildHandler {
             return true;
         }
         
-        // Configuración de edificios permitidos por raza
-        const raceBuildingConfig = {
-            'A_Nation': {
-                // A_Nation puede construir todos los edificios
-                allowed: ['fob', 'antiDrone', 'droneLauncher', 'nuclearPlant', 'truckFactory', 'engineerCenter', 'intelRadio', 'campaignHospital']
-            },
-            'B_Nation': {
-                // B_Nation NO puede construir FOBs, pero sí Base Aérea
-                allowed: ['antiDrone', 'droneLauncher', 'nuclearPlant', 'truckFactory', 'engineerCenter', 'intelRadio', 'campaignHospital', 'aerialBase']
-            }
-        };
+        // 🎯 USAR CONFIGURACIÓN CENTRALIZADA: Obtener edificios disponibles desde raceConfig
+        const availableBuildings = getServerRaceBuildings(raceId);
         
-        const config = raceBuildingConfig[raceId];
-        if (!config) {
-            console.log(`⚠️ Configuración de raza no encontrada: ${raceId}`);
+        if (!availableBuildings || availableBuildings.length === 0) {
+            console.log(`⚠️ Configuración de raza no encontrada o sin edificios: ${raceId}`);
             return true; // Fallback: permitir construcción
         }
         
-        const canBuild = config.allowed.includes(buildingType);
-        console.log(`🏗️ ${raceId} intenta construir ${buildingType}: ${canBuild ? 'PERMITIDO' : 'DENEGADO'}`);
+        const canBuild = availableBuildings.includes(buildingType);
+        console.log(`🏗️ ${raceId} intenta construir ${buildingType}: ${canBuild ? 'PERMITIDO' : 'DENEGADO'} (disponibles: ${availableBuildings.join(', ')})`);
         
         return canBuild;
     }

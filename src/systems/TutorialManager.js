@@ -1,9 +1,10 @@
 // ===== TUTORIAL MANAGER: INSTANCIA AISLADA DEL JUEGO PARA TUTORIAL =====
 import { TUTORIAL_MAP, TUTORIAL_STEPS } from './TutorialConfig.js';
-import { MapNode } from '../entities/MapNode.js';
-import { Convoy } from '../entities/Convoy.js';
+import { VisualNode } from '../entities/visualNode.js';
+import { Convoy } from '../entities/convoy.js';
 import { VEHICLE_TYPES, GAME_CONFIG } from '../config/constants.js';
 import { BackgroundTileSystem } from './BackgroundTileSystem.js';
+import { getNodeConfig } from '../config/nodes.js';
 
 /**
  * TutorialManager - Maneja una instancia completamente aislada del juego para el tutorial
@@ -210,14 +211,17 @@ export class TutorialManager {
         TUTORIAL_MAP.nodes.forEach((nodeData, index) => {
             console.log(`🔧 Creando nodo ${index + 1}:`, nodeData);
             
-            const node = this.game.baseFactory.createBase(
+            const config = getNodeConfig(nodeData.type);
+            const node = new VisualNode(
                 nodeData.x,
                 nodeData.y,
                 nodeData.type,
                 {
+                    ...config,
                     team: nodeData.team,
                     supplies: nodeData.supplies || undefined
-                }
+                },
+                null
             );
             
             if (node) {
@@ -756,13 +760,8 @@ export class TutorialManager {
         
         // Renderizar preview de ruta (si hay nodo seleccionado y hover)
         if (this.game.selectedNode && this.game.hoveredNode && this.game.selectedNode !== this.game.hoveredNode) {
-            const VALID_ROUTES = {
-                hq: ['fob', 'front'],
-                fob: ['fob', 'front']
-                // Ya no hay rutas enemy_*, todos usan las mismas rutas
-            };
-            
-            const validTargets = VALID_ROUTES[this.game.selectedNode.type] || [];
+            // Usar configuración del servidor para rutas válidas
+            const validTargets = this.game.serverBuildingConfig?.routes?.valid?.[this.game.selectedNode.type] || [];
             const isValidRoute = validTargets.includes(this.game.hoveredNode.type);
             
             if (isValidRoute) {
@@ -782,6 +781,9 @@ export class TutorialManager {
                 this.game.renderer.renderSniperCursor(mousePos.x, mousePos.y, this.game.hoveredNode);
             } else if (this.game.buildSystem.fobSabotageMode) {
                 this.game.renderer.renderFobSabotageCursor(mousePos.x, mousePos.y, this.game.hoveredNode);
+            } else if (this.game.buildSystem.commandoMode) {
+                // Preview del comando: usar preview normal de construcción
+                this.game.renderer.renderBuildPreview(mousePos.x, mousePos.y, this.tutorialNodes, 'specopsCommando');
             } else {
                 const buildingType = this.game.buildSystem.currentBuildingType || 'fob';
                 // Importante: pasar los nodos del tutorial para validaciones de solape/territorio

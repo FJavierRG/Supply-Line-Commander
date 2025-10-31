@@ -1,5 +1,4 @@
 // ===== GESTOR DE CURRENCY =====
-import { FOB_CURRENCY_CONFIG } from '../config/constants.js';
 
 export class CurrencyManager {
     constructor(game = null) {
@@ -23,7 +22,8 @@ export class CurrencyManager {
     updatePassiveCurrency(dt) {
         // Calcular bonus de plantas nucleares
         const nuclearBonus = this.getNuclearPlantBonus();
-        const totalRate = FOB_CURRENCY_CONFIG.passiveRate + nuclearBonus;
+        const passiveRate = this.game?.serverBuildingConfig?.currency?.passiveRate || 3;
+        const totalRate = passiveRate + nuclearBonus;
         
         this.passiveCurrencyAccumulator += dt * totalRate;
         

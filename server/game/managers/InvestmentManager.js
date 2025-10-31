@@ -10,7 +10,11 @@ export class InvestmentManager {
      */
     update(dt) {
         for (const node of this.gameState.nodes) {
-            if (node.type === 'intelRadio' && node.investmentStarted && node.constructed && !node.investmentCompleted) {
+            if (node.type === 'intelRadio' && 
+                node.investmentStarted && 
+                node.constructed && 
+                !node.investmentCompleted &&
+                !node.disabled) { // 🆕 NUEVO: No procesar inversión si está disabled
                 node.investmentTimer = (node.investmentTimer || 0) + dt;
                 
                 if (node.investmentTimer >= node.investmentTime) {
@@ -23,10 +27,9 @@ export class InvestmentManager {
                         console.log(`💰 intelRadio ${node.id} pagó ${node.investmentReturn}$ a ${node.team} (inversión completada)`);
                     }
                     
-                    // Marcar para eliminación (sistema de abandono)
-                    node.isAbandoning = true;
-                    node.abandonStartTime = this.gameState.gameTime * 1000; // Convertir a ms para consistencia
-                    node.abandonPhase = 1;
+                    // 🆕 FIX: NO iniciar abandono aquí - dejar que AbandonmentSystem lo maneje
+                    // El AbandonmentSystem.checkAbandonmentConditions() detectará investmentCompleted = true
+                    // y llamará startAbandonment() correctamente con los tiempos configurados
                 }
             }
         }

@@ -16,13 +16,19 @@ export class CurrencySystem {
         let player1Income = GAME_CONFIG.currency.passiveRate;
         let player2Income = GAME_CONFIG.currency.passiveRate;
         
-        // Bonus de Plantas Nucleares
+        // Bonus de Plantas Nucleares (solo si no están disabled)
         const nuclearBonus = SERVER_NODE_CONFIG.effects.nuclearPlant.incomeBonus;
         const player1Plants = this.gameState.nodes.filter(n => 
-            n.type === 'nuclearPlant' && n.team === 'player1' && n.constructed
+            n.type === 'nuclearPlant' && 
+            n.team === 'player1' && 
+            n.constructed &&
+            !n.disabled // 🆕 NUEVO: No aplicar bonus si está disabled
         ).length;
         const player2Plants = this.gameState.nodes.filter(n => 
-            n.type === 'nuclearPlant' && n.team === 'player2' && n.constructed
+            n.type === 'nuclearPlant' && 
+            n.team === 'player2' && 
+            n.constructed &&
+            !n.disabled // 🆕 NUEVO: No aplicar bonus si está disabled
         ).length;
         
         player1Income += player1Plants * nuclearBonus;

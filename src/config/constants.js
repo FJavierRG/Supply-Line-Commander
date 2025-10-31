@@ -15,26 +15,22 @@ export const GAME_CONFIG = {
 export const VEHICLE_TYPES = {
     heavy_truck: {
         name: 'Camión Pesado',
-        capacity: 15,  // Cantidad de suministros por viaje
-        speed: 1,      // 50% de velocidad original (HQ → FOB - Lento)
+        // capacity y speed: Definidos por el servidor (autoridad - ANTI-HACK)
         color: '#4ecca3'
     },
     truck: {
         name: 'Camión',
-        capacity: 15,  // Cantidad de suministros por viaje
-        speed: 2,    // 125% de velocidad original (FOB → Frente - Rápido)
+        // capacity y speed: Definidos por el servidor (autoridad - ANTI-HACK)
         color: '#4ecca3'
     },
     helicopter: {
         name: 'Helicóptero de Emergencia',
-        capacity: 100,  // 🆕 ACTUALIZADO: Capacidad total inicial
-        speed: 2,      // Más rápido que camión
+        // capacity y speed: Definidos por el servidor (autoridad - ANTI-HACK)
         color: '#f39c12'  // Amarillo/naranja
     },
     ambulance: {
         name: 'Ambulancia',
-        capacity: 0,   // No transporta suministros, solo misiones médicas
-        speed: 2,    // Velocidad estándar
+        // capacity y speed: Definidos por el servidor (autoridad - ANTI-HACK)
         color: '#ff3333'  // Rojo brillante
     }
 };
@@ -47,32 +43,3 @@ export const BASE_CONFIG = {
     }
 };
 
-// VALID_ROUTES: Define qué tipos de nodos pueden enviar convoyes a qué otros tipos
-// ⚠️ Ahora unificado: todos los equipos usan las mismas rutas lógicas
-// La validación de team se hace en ConvoyManager (no puede enviar a nodos del equipo contrario)
-export const VALID_ROUTES = {
-    'hq': ['fob'],
-    'fob': ['front', 'fob'],
-    'front': []          // Los frentes solo reciben, nunca envían
-};
-
-// 🆕 NUEVO: Rutas especiales por raza
-export const RACE_SPECIAL_ROUTES = {
-    B_Nation: {
-        'hq': ['front', 'aerialBase'],           // HQ → Front o Base Aérea
-        'front': ['hq', 'front', 'aerialBase'], // Front → HQ, Front o Base Aérea
-        'aerialBase': ['hq', 'front']           // 🆕 NUEVO: Base Aérea → HQ o Front
-    }
-};
-
-export const FRONT_MOVEMENT_CONFIG = {
-    advanceSpeed: 3,    // Velocidad de avance (px/s) cuando tiene recursos
-    retreatSpeed: 3     // Velocidad de retroceso (px/s) cuando NO tiene recursos
-};
-
-export const FOB_CURRENCY_CONFIG = {
-    pixelsPerCurrency: 2,           // Cada X pixels de avance del frente = 1 currency
-    currencyName: 'Terreno Ganado', // Nombre de la currency
-    passiveRate: 3                  // Currency ganada pasivamente por segundo
-    // NOTA: Los costos de edificios están en src/config/nodes.js (sistema unificado)
-};

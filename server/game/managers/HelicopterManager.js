@@ -1,5 +1,5 @@
 // ===== MANAGER DE HELICÓPTEROS =====
-import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
+import { GAME_CONFIG } from '../../config/gameConfig.js';
 
 export class HelicopterManager {
     constructor(gameState) {
@@ -16,6 +16,11 @@ export class HelicopterManager {
         // Generar ID simple sin uuid (para evitar async)
         const helicopterId = `heli_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         
+        // 🆕 NUEVO: Verificar si el nodo es HQ para cargar inicialmente
+        const node = this.gameState.nodes.find(n => n.id === nodeId);
+        const heliConfig = GAME_CONFIG.vehicles.helicopter;
+        const initialCargo = (node && node.type === 'hq') ? heliConfig.baseCapacity : 0;
+        
         const helicopter = {
             id: helicopterId,
             team: team,
@@ -24,7 +29,7 @@ export class HelicopterManager {
             state: 'landed',  // 'landed' o 'flying'
             
             // Cargo
-            cargo: 0,  // Suministros actuales (0-100)
+            cargo: initialCargo,  // 🆕 Carga completa si está en HQ, 0 si no
             
             // Posición
             currentNodeId: nodeId,  // Donde está aterrizado
@@ -34,7 +39,12 @@ export class HelicopterManager {
         };
         
         this.gameState.helicopters.push(helicopter);
-        console.log(`🚁 Helicóptero ${helicopter.id} creado para ${team} en nodo ${nodeId}`);
+        
+        if (initialCargo > 0) {
+            console.log(`🚁 Helicóptero ${helicopter.id} creado para ${team} en HQ ${nodeId} con carga completa (${initialCargo})`);
+        } else {
+            console.log(`🚁 Helicóptero ${helicopter.id} creado para ${team} en nodo ${nodeId} sin carga`);
+        }
         
         return helicopter;
     }
@@ -44,7 +54,9 @@ export class HelicopterManager {
      * @param {number} dt - Delta time en segundos
      */
     update(dt) {
-        const heliConfig = SERVER_NODE_CONFIG.vehicles.helicopter;
+        // 🎯 CORREGIR: Usar misma fuente de velocidad que convoyes (convoy.vehicleSpeeds)
+        // Los convoyes usan GAME_CONFIG.convoy.vehicleSpeeds, el helicóptero debe usar lo mismo
+        const vehicleSpeed = GAME_CONFIG.convoy.vehicleSpeeds.helicopter || 80;
         
         for (let i = this.gameState.helicopters.length - 1; i >= 0; i--) {
             const heli = this.gameState.helicopters[i];
@@ -57,8 +69,7 @@ export class HelicopterManager {
                 continue;
             }
             
-            // Calcular velocidad y actualizar progress
-            const vehicleSpeed = heliConfig.speed;
+            // Calcular velocidad y actualizar progress (igual que convoyes)
             const progressPerSecond = vehicleSpeed / heli.initialDistance;
             heli.progress += progressPerSecond * dt;
             
@@ -75,7 +86,7 @@ export class HelicopterManager {
      * @param {Object} toNode - Nodo de destino
      */
     handleArrival(heli, toNode) {
-        const heliConfig = SERVER_NODE_CONFIG.vehicles.helicopter;
+        const heliConfig = GAME_CONFIG.vehicles.helicopter;
         
         if (toNode.type === 'front') {
             // Entregar suministros si tiene suficiente cargo

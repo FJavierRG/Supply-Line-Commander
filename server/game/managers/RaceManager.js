@@ -1,6 +1,13 @@
 // ===== MANAGER DE RAZAS =====
-import { getRaceConfig, getRaceTransportSystem, canRaceUseFOBs } from '../../../src/config/races.js';
-import { VALID_ROUTES, RACE_SPECIAL_ROUTES } from '../../../src/config/constants.js';
+import { 
+    getServerRaceConfig, 
+    getServerRaceTransportSystem, 
+    canServerRaceUseFOBs,
+    getServerInitialVehiclesForRace,
+    getServerRaceBuildings,
+    getServerRaceConsumables
+} from '../../config/raceConfig.js';
+import { GAME_CONFIG } from '../../config/gameConfig.js';
 
 export class RaceManager {
     constructor(gameState) {
@@ -14,7 +21,10 @@ export class RaceManager {
      */
     getPlayerRaceConfig(team) {
         const raceId = this.gameState.playerRaces[team];
-        return getRaceConfig(raceId);
+        if (!raceId) return null;
+        
+        // 🆕 SERVIDOR COMO AUTORIDAD: Usar configuración del servidor
+        return getServerRaceConfig(raceId);
     }
     
     /**
@@ -24,7 +34,7 @@ export class RaceManager {
      */
     canPlayerUseFOBs(team) {
         const raceConfig = this.getPlayerRaceConfig(team);
-        return raceConfig ? canRaceUseFOBs(raceConfig.id) : true; // Fallback a true para compatibilidad
+        return raceConfig ? canServerRaceUseFOBs(raceConfig.id) : true; // Fallback a true para compatibilidad
     }
     
     /**
@@ -34,7 +44,7 @@ export class RaceManager {
      */
     getPlayerTransportSystem(team) {
         const raceConfig = this.getPlayerRaceConfig(team);
-        return raceConfig ? getRaceTransportSystem(raceConfig.id) : 'standard'; // Fallback a standard
+        return raceConfig ? getServerRaceTransportSystem(raceConfig.id) : 'standard'; // Fallback a standard
     }
     
     /**
@@ -46,15 +56,15 @@ export class RaceManager {
     getValidRoutesForPlayer(fromType, team) {
         const raceConfig = this.getPlayerRaceConfig(team);
         
-        if (!raceConfig) return VALID_ROUTES[fromType] || [];
+        if (!raceConfig) return GAME_CONFIG.routes.valid[fromType] || [];
         
         // Si la raza tiene rutas especiales (aerial), usarlas
         if (raceConfig.specialMechanics?.transportSystem === 'aerial') {
-            return RACE_SPECIAL_ROUTES[raceConfig.id]?.[fromType] || VALID_ROUTES[fromType] || [];
+            return GAME_CONFIG.routes.raceSpecial[raceConfig.id]?.[fromType] || GAME_CONFIG.routes.valid[fromType] || [];
         }
         
         // Si no, usar rutas normales
-        return VALID_ROUTES[fromType] || [];
+        return GAME_CONFIG.routes.valid[fromType] || [];
     }
     
     /**
@@ -82,7 +92,7 @@ export class RaceManager {
     }
     
     /**
-     * Obtiene vehículos iniciales según la raza del jugador
+     * Obtiene vehículos iniciales según la raza del jugador (SERVIDOR COMO AUTORIDAD)
      * @param {string} team - Equipo del jugador
      * @param {string} nodeType - Tipo de nodo
      * @returns {Object} Configuración de vehículos iniciales
@@ -90,12 +100,8 @@ export class RaceManager {
     getInitialVehiclesForRace(team, nodeType) {
         const raceConfig = this.getPlayerRaceConfig(team);
         
-        console.log(`🚁 DEBUG: getInitialVehiclesForRace(${team}, ${nodeType})`);
-        console.log(`🚁 DEBUG: raceConfig:`, raceConfig);
-        
         if (!raceConfig) {
             // Fallback a configuración tradicional
-            console.log(`🚁 DEBUG: No raceConfig, usando fallback tradicional`);
             return {
                 hasVehicles: nodeType === 'hq',
                 availableVehicles: nodeType === 'hq' ? 2 : 0,
@@ -104,34 +110,8 @@ export class RaceManager {
             };
         }
         
-        if (raceConfig.specialMechanics?.transportSystem === 'aerial') {
-            // Sistema aéreo: Helicópteros en lugar de camiones
-            console.log(`🚁 DEBUG: Sistema aéreo detectado para ${team}`);
-            return {
-                hasVehicles: false,
-                availableVehicles: 0,
-                hasHelicopters: nodeType === 'hq',
-                availableHelicopters: nodeType === 'hq' ? 1 : 0
-            };
-        }
-        
-        if (raceConfig.specialMechanics?.transportSystem === 'standard') {
-            // Sistema tradicional: Camiones según tipo de nodo
-            return {
-                hasVehicles: nodeType === 'hq' || nodeType === 'fob',
-                availableVehicles: nodeType === 'hq' ? 4 : (nodeType === 'fob' ? 2 : 0),
-                hasHelicopters: false,
-                availableHelicopters: 0
-            };
-        }
-        
-        // Sistema tradicional (fallback)
-        return {
-            hasVehicles: nodeType === 'hq',
-            availableVehicles: nodeType === 'hq' ? 2 : 0,
-            hasHelicopters: false,
-            availableHelicopters: 0
-        };
+        // 🆕 SERVIDOR COMO AUTORIDAD: Usar configuración centralizada del servidor
+        return getServerInitialVehiclesForRace(raceConfig.id, nodeType);
     }
     
     /**

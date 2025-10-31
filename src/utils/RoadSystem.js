@@ -88,7 +88,7 @@ export class RoadSystem {
             }
         }
         
-        console.log(`🛣️ Total segmentos de carretera: ${this.segments.length}`);
+        // Log desactivado: spam excesivo en consola
     }
     
     buildRoad(from, to) {

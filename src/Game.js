@@ -1,5 +1,6 @@
 // ===== CONTROLADOR PRINCIPAL DEL JUEGO =====
-import { MapNode } from './entities/MapNode.js';
+import { VisualNode } from './entities/visualNode.js';
+import { interpolatePosition, interpolateProgress, interpolateValue } from './utils/InterpolationUtils.js';
 import { RenderSystem } from './systems/RenderSystem.js';
 import { UIManager } from './systems/UIManager.js';
 import { AudioManager } from './systems/AudioManager.js';
@@ -14,7 +15,6 @@ import { AntiDroneSystem } from './systems/AntiDroneSystem.js';
 import { FrontMovementSystem } from './systems/FrontMovementSystem.js';
 import { TerritorySystem } from './systems/TerritorySystem.js';
 import { BackgroundTileSystem } from './systems/BackgroundTileSystem.js';
-import { BaseFactory } from './factories/BaseFactory.js';
 import { CameraController } from './systems/CameraController.js';
 import { LoadingScreenManager } from './systems/LoadingScreenManager.js';
 import { CurrencyManager } from './systems/CurrencyManager.js';
@@ -28,8 +28,9 @@ import { TutorialSystem } from './systems/TutorialSystem.js';
 import { TutorialManager } from './systems/TutorialManager.js';
 import { NetworkManager } from './systems/NetworkManager.js';
 import { RaceSelectionManager } from './systems/RaceSelectionManager.js';
-import { Mission20 } from './missions/Mission20.js';
-import { GAME_CONFIG, VALID_ROUTES, FOB_CURRENCY_CONFIG } from './config/constants.js';
+import { GAME_CONFIG } from './config/constants.js';
+// ELIMINADO: MAP_CONFIG, calculateAbsolutePosition - Ya no se genera el mapa en el cliente
+import { getNodeConfig } from './config/nodes.js';
 
 // === CONFIGURACIÓN DE SISTEMA DE IA ===
 // 'legacy' = EnemyAISystem (umbrales fijos + RNG)
@@ -51,9 +52,8 @@ export class Game {
         this.currency = new CurrencyManager(this);
         this.particleSystem = new ParticleSystem(this);
         this.roadSystem = new RoadSystem(this);
-        this.baseFactory = new BaseFactory(this);
         this.buildSystem = new BuildingSystem(this);
-        this.storeUI = new StoreUIManager(this.assetManager, this.buildSystem);
+        this.storeUI = new StoreUIManager(this.assetManager, this.buildSystem, this);
         this.options = new OptionsManager(this.audio);
         this.arsenal = new ArsenalManager(this.assetManager);
         this.convoyManager = new ConvoyManager(this);
@@ -90,9 +90,15 @@ export class Game {
         this.isMultiplayer = false;
         this.myTeam = 'ally'; // Por defecto en singleplayer
         
+        // 🆕 SERVIDOR COMO AUTORIDAD: Configuración de edificios para singleplayer
+        this.serverBuildingConfig = null;
+        
         // Configurar canvas
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
+        
+        // 🆕 SERVIDOR COMO AUTORIDAD: Inicializar configuración de edificios para singleplayer
+        this.initializeSingleplayerBuildingConfig();
         
         // Estado del juego
         this.state = 'menu'; // menu, playing, paused, editor
@@ -102,6 +108,7 @@ export class Game {
         this.paused = false;
         this.missionStarted = false;
         this.debugMode = false; // Modo debug para sistemas
+        this.debugVisualMode = false; // Modo debug visual (F1) - hitboxes, rangos, vectores
         this.debugEnemyBuildMode = false; // Modo debug para colocar edificios enemigos
         this.debugEnemyDroneMode = false; // Modo debug para lanzar drones enemigos
         this.debugEnemySniperMode = false; // Modo debug para lanzar sniper enemigo
@@ -124,8 +131,7 @@ export class Game {
             emergenciesFailed: 0
         };
         
-        // Misión actual (siempre Mission20)
-        this.currentMission = new Mission20();
+        // 🆕 SIMPLIFICADO: Ya no hay clases Mission, se usa mapGenerator directamente
         
         // Entidades - ARRAY UNIFICADO
         this.nodes = []; // Todos los nodos del mapa (bases, edificios, etc)
@@ -153,6 +159,11 @@ export class Game {
     onRaceSelected(raceId) {
         this.selectedRace = raceId;
         console.log(`🏛️ Raza seleccionada: ${raceId}`);
+        
+        // 🎯 NUEVO: Establecer myTeam en singleplayer
+        if (!this.isMultiplayer) {
+            this.myTeam = 'player1';
+        }
         
         // Actualizar sistemas con la nueva raza
         this.storeUI.setRace(raceId);
@@ -293,8 +304,8 @@ export class Game {
         this.camera.setWorldSize(this.worldWidth, this.worldHeight);
         this.ui.hideElement('camera-slider-container');
         
-        // 🆕 NUEVO: Generar nodos desde la misión actual pasando la raza actual
-        this.nodes = this.currentMission.generateBases(this.worldWidth, this.worldHeight, this.baseFactory, this.selectedRace);
+        // ELIMINADO: generateBases - Ahora el servidor genera el mapa inicial
+        this.nodes = [];
         
         // 🆕 NUEVO: Crear helicóptero inicial si la raza es B_Nation
         if (this.selectedRace === 'B_Nation') {
@@ -344,74 +355,9 @@ export class Game {
         console.log(`🚁 SINGLEPLAYER: Helicóptero ${heli.id} creado en HQ`);
     }
     
-    /**
-     * 🆕 NUEVO: Actualiza helicópteros en singleplayer (simula servidor)
-     */
-    updateHelicopters(dt) {
-        for (const heli of this.helicopters) {
-            if (heli.state === 'flying') {
-                // Actualizar progreso
-                const fromNode = this.nodes.find(n => n.id === heli.currentNodeId);
-                const toNode = this.nodes.find(n => n.id === heli.targetNodeId);
-                
-                if (!fromNode || !toNode) continue;
-                
-                // Velocidad: 150 px/s (debe coincidir con serverNodes.js)
-                const speed = 150;
-                const progressIncrement = (speed * dt) / heli.initialDistance;
-                heli.progress += progressIncrement;
-                
-                // Llegó al destino
-                if (heli.progress >= 1.0) {
-                    heli.progress = 1.0;
-                    this.handleHelicopterArrival(heli, toNode);
-                }
-            }
-        }
-    }
-    
-    /**
-     * 🆕 NUEVO: Maneja la llegada del helicóptero a un nodo
-     */
-    handleHelicopterArrival(heli, toNode) {
-        // Entregar o recargar suministros
-        if (toNode.type === 'front') {
-            // Entregar suministros al Front
-            const deliveryAmount = 50;
-            if (heli.cargo >= deliveryAmount) {
-                toNode.supplies = Math.min(toNode.maxSupplies, toNode.supplies + deliveryAmount);
-                heli.cargo -= deliveryAmount;
-                console.log(`🚁 SINGLEPLAYER: Helicóptero entregó ${deliveryAmount} suministros a Front`);
-            }
-        } else if (toNode.type === 'hq') {
-            // Recargar en HQ (infinito)
-            heli.cargo = 100;
-            console.log(`🚁 SINGLEPLAYER: Helicóptero recargó en HQ (cargo: ${heli.cargo})`);
-        } else if (toNode.type === 'aerialBase' || toNode.isAerialBase) {
-            // 🆕 NUEVO: Recargar en Base Aérea
-            const neededCargo = 100 - heli.cargo; // Cuánto necesita el helicóptero
-            const availableCargo = toNode.supplies || 0; // Cuánto tiene la base
-            
-            // Recargar lo que sea posible
-            const rechargeAmount = Math.min(neededCargo, availableCargo);
-            heli.cargo += rechargeAmount;
-            toNode.supplies -= rechargeAmount;
-            
-            console.log(`🚁 SINGLEPLAYER: Helicóptero recargó ${rechargeAmount} en Base Aérea (cargo: ${heli.cargo}, base restante: ${toNode.supplies})`);
-        }
-        
-        // Aterrizar
-        heli.state = 'landed';
-        heli.currentNodeId = toNode.id;
-        heli.targetNodeId = null;
-        heli.progress = null;
-        heli.initialDistance = null;
-        
-        // Agregar a la lista de helicópteros aterrizados del nodo
-        if (!toNode.landedHelicopters.includes(heli.id)) {
-            toNode.landedHelicopters.push(heli.id);
-        }
-    }
+    // ELIMINADO: generateBases() y shouldGenerateFOBs()
+    // El servidor ahora genera el mapa inicial (GameStateManager.getInitialState)
+    // El cliente recibe los nodos ya generados vía NetworkManager.loadInitialState
     
     /**
      * 🆕 NUEVO: Despega un helicóptero desde un nodo hacia otro (singleplayer)
@@ -487,8 +433,7 @@ export class Game {
         
         console.log(`🚁 SINGLEPLAYER: Helicóptero despegó de ${fromNode.type} hacia ${toNode.type}`);
         
-        // Reproducir sonido
-        this.audio.playChopperSound();
+        // El sonido se reproduce mediante el evento de sonido 'chopper' del servidor
         
         return true;
     }
@@ -557,7 +502,7 @@ export class Game {
             // CRÍTICO: Actualizar SOLO posiciones visuales de convoyes con interpolación suave
             // El progress viene del servidor, pero necesitamos interpolar suavemente entre frames
             for (const convoy of this.convoyManager.convoys) {
-                convoy.updatePosition(dt); // Interpolación suave basada en dt
+                convoy.update(dt); // Llama al método update() que maneja la interpolación
             }
             
             // 🆕 NUEVO: Actualizar helicópteros con interpolación suave (igual que convoys)
@@ -576,160 +521,22 @@ export class Game {
                 }
             }
             
-            // Interpolación suave de drones (posiciones desde servidor)
+            // Interpolación suave de drones (usando sistema centralizado)
             for (const drone of this.droneSystem.getDrones()) {
-                if (drone.serverX !== undefined && drone.serverY !== undefined) {
-                    // Interpolar hacia posición objetivo del servidor
-                    const dx = drone.serverX - drone.x;
-                    const dy = drone.serverY - drone.y;
-                    const distance = Math.hypot(dx, dy);
-                    
-                    if (distance > 1) { // Solo interpolar si hay diferencia significativa
-                        const interpolationSpeed = 8.0; // Mismo factor que convoyes
-                        const moveX = dx * interpolationSpeed * dt;
-                        const moveY = dy * interpolationSpeed * dt;
-                        
-                        drone.x += moveX;
-                        drone.y += moveY;
-                    } else {
-                        // Si está muy cerca, usar posición exacta del servidor
-                        drone.x = drone.serverX;
-                        drone.y = drone.serverY;
-                    }
-                }
+                interpolatePosition(drone, dt, { 
+                    speed: 8.0,
+                    threshold: 1.0,
+                    snapThreshold: 0.1
+                });
             }
             
             // CRÍTICO: NO ejecutar simulación en multijugador
             return;
         }
         
-        // === SINGLEPLAYER: SIMULACIÓN COMPLETA LOCAL ===
-        
-        // Actualizar cuenta atrás si está activa
-        if (this.countdown > 0) {
-            this.countdown -= dt;
-            if (this.countdown <= 0) {
-                this.countdown = 0;
-                this.missionStarted = true;
-                this.matchStats.startTime = Date.now();
-                this.ui.hideElement('timer-display');
-                this.audio.startBattleMusic();
-                
-                // Activar sistema de IA cuando empiece la misión
-                if (this.aiDirector && this.aiSystemMode !== 'legacy') {
-                    this.aiDirector.activate();
-                }
-            }
-        }
-        
-        // Actualizar AudioManager (sonidos ambientales)
-        if (this.missionStarted) {
-            this.audio.update(dt);
-        }
-        
-        // Actualizar todos los nodos
-        if (this.missionStarted) {
-            this.nodes.forEach(node => {
-                node.update(dt);
-                if (node.noVehiclesShake) {
-                    node.noVehiclesShakeTime = (node.noVehiclesShakeTime || 0) + dt;
-                }
-            });
-            
-            // Generar currency pasiva
-            this.currency.updatePassiveCurrency(dt);
-            
-            // Actualizar sistema médico
-            this.medicalSystem.update(dt * 1000); // Convertir a milisegundos
-            
-            // Actualizar movimiento de frentes
-            this.frontMovement.update(dt * 1000); // Convertir a milisegundos
-            
-            // Actualizar convoyes
-            this.convoyManager.update(dt);
-            
-            // 🆕 NUEVO: Actualizar helicópteros (singleplayer)
-            if (this.selectedRace === 'B_Nation') {
-                this.updateHelicopters(dt);
-            }
-            
-            // Actualizar drones
-            this.droneSystem.update(dt);
-            
-            // Actualizar sistema anti-drones
-            this.antiDroneSystem.update(dt);
-            
-            // Actualizar territorio (detección de edificios fuera de territorio)
-            this.territory.update(dt);
-            
-            // Actualizar sistema de carreteras (reacciona a cambios de FOBs/centro)
-            if (this.roadSystem) {
-                this.roadSystem.update();
-            }
-            
-            // Eliminar edificios que han completado el proceso de abandono
-            for (let i = this.nodes.length - 1; i >= 0; i--) {
-                const node = this.nodes[i];
-                if (node.isAbandoning && node.abandonPhase === 3) {
-                    console.log(`❌ ${node.name} #${node.id} (${node.type}) eliminado por abandono`);
-                    this.nodes.splice(i, 1);
-                }
-            }
-            
-            // Eliminar hospitales sin ambulancias
-            for (let i = this.nodes.length - 1; i >= 0; i--) {
-                const node = this.nodes[i];
-                if (node.type === 'campaignHospital' && !node.active) {
-                    console.log(`🏥 ${node.name} #${node.id} eliminado - sin ambulancias disponibles`);
-                    this.nodes.splice(i, 1);
-                }
-            }
-            
-            // 🆕 NUEVO: Iniciar abandono de bases aéreas agotadas sin helicópteros
-            for (let i = this.nodes.length - 1; i >= 0; i--) {
-                const node = this.nodes[i];
-                if ((node.type === 'aerialBase' || node.isAerialBase)) {
-                    // Solo log cada 60 frames (1 segundo) para evitar spam
-                    if (this.frameCount % 60 === 0) {
-                        console.log(`🔍 DEBUG Base Aérea #${node.id}: supplies=${node.supplies}, autoDestroy=${node.autoDestroy}, landedHelicopters=${node.landedHelicopters?.length || 0}, isAbandoning=${node.isAbandoning}`);
-                    }
-                    
-                    if (node.supplies <= 0 && 
-                        node.autoDestroy && 
-                        (!node.landedHelicopters || node.landedHelicopters.length === 0) &&
-                        !node.isAbandoning) {
-                        console.log(`💥 Base Aérea #${node.id} agotada y vacía - iniciando abandono`);
-                        node.isAbandoning = true;
-                        node.abandonStartTime = Date.now();
-                        node.abandonPhase = 1;
-                    }
-                }
-            }
-            
-            // Actualizar IA enemiga (solo en singleplayer)
-            if (this.aiSystemMode === 'hybrid' && this.aiDirector) {
-                // Modo híbrido: AIDirector toma decisiones, EnemyAISystem ejecuta
-                
-                // 1. Generar currency (solo EnemyAISystem tiene updateCurrency)
-                this.enemyAI.updateCurrency(dt);
-                
-                // 2. Sincronizar currency de enemyAI a AIDirector
-                this.aiDirector.currency = this.enemyAI.currency;
-                
-                // 3. AIDirector toma decisiones (ejecuta acciones via enemyAI)
-                this.aiDirector.update(dt);
-                
-                // 4. ¡CRÍTICO! Sincronizar de vuelta para reflejar gastos
-                this.aiDirector.currency = this.enemyAI.currency;
-                
-            } else if (this.aiSystemMode === 'modular' && this.aiDirector) {
-                // Modo modular: Solo AIDirector (futuro)
-                this.aiDirector.update(dt);
-            } else {
-                // Modo legacy: Solo EnemyAISystem
-                this.enemyAI.update(dt);
-            }
-        }
+        // === MODO OBSOLETO: Este código ya no se usa ===
+        // Todo el juego ahora funciona con servidor autoritativo (incluso vs IA)
+        console.warn('⚠️ Código de simulación local ejecutándose - esto no debería pasar');
         
         // Actualizar partículas y UI
         this.particleSystem.update(dt);
@@ -904,41 +711,40 @@ export class Game {
     }
     
     /**
-     * 🆕 NUEVO: Actualiza la posición del helicóptero con interpolación suave
-     * (Mismo sistema que los convoys)
+     * Actualiza la posición del helicóptero usando interpolación suave (igual que convoyes)
+     * 🎯 REUTILIZA: Sistema modular de interpolación de convoyes
      */
     updateHelicopterPosition(heli, dt) {
         if (!heli.initialDistance || heli.initialDistance <= 0) return;
         
-        // Inicializar datos de interpolación si no existen
-        if (!heli.lastServerUpdate) {
-            heli.lastServerUpdate = Date.now();
-            heli.lastKnownProgress = heli.progress || 0;
+        // Inicializar progress si no existe
+        if (heli.progress === undefined || heli.progress === null) {
+            heli.progress = 0;
+        }
+        
+        // Inicializar serverProgress si no existe (target del servidor)
+        if (heli.serverProgress === undefined || heli.serverProgress === null) {
             heli.serverProgress = heli.progress || 0;
         }
         
-        // Calcular tiempo desde último update del servidor
-        const timeSinceUpdate = (Date.now() - heli.lastServerUpdate) / 1000;
+        // 🎯 USAR SISTEMA MODULAR: Interpolación suave igual que convoyes
+        // Usar wrapper temporal para que interpolateValue modifique el valor correctamente
+        const progressWrapper = {
+            current: heli.progress,
+            target: heli.serverProgress
+        };
         
-        // Velocidad del helicóptero (debe coincidir con servidor)
-        const heliSpeed = 150; // px/s
+        interpolateValue(progressWrapper, dt, {
+            adaptiveSpeeds: {
+                large: 15.0,  // Gran diferencia: interpolar rápidamente
+                medium: 8.0,   // Diferencia media: velocidad normal
+                small: 5.0     // Diferencia pequeña: muy suave
+            },
+            threshold: 0.001
+        });
         
-        // Progress por segundo = velocidad / distancia total
-        const progressPerSecond = heliSpeed / heli.initialDistance;
-        
-        // PREDICCIÓN: Calcular dónde debería estar ahora basado en último estado conocido
-        const predictedProgress = heli.lastKnownProgress + (progressPerSecond * timeSinceUpdate);
-        
-        // Aplicar progress predicho continuamente
-        heli.progress = Math.max(0, Math.min(1.0, predictedProgress));
-        
-        // Corrección mínima solo si el servidor está muy desincronizado
-        const serverDifference = Math.abs(heli.serverProgress - predictedProgress);
-        if (timeSinceUpdate < 0.1 && serverDifference > 0.1) {
-            // Corrección muy suave solo para grandes discrepancias
-            const correctionFactor = 0.05;
-            heli.progress += (heli.serverProgress - heli.progress) * correctionFactor;
-        }
+        // Actualizar progress desde el wrapper
+        heli.progress = Math.max(0, Math.min(1.0, progressWrapper.current));
     }
     
     
@@ -999,7 +805,12 @@ export class Game {
         });
         
         // Renderizar convoyes
-        this.convoyManager.getConvoys().forEach(convoy => this.renderer.renderConvoy(convoy));
+        const convoys = this.convoyManager.getConvoys();
+        if (convoys.length > 0 && !this._convoyRenderLogged) {
+            console.log(`🚚 Renderizando ${convoys.length} convoyes`);
+            this._convoyRenderLogged = true;
+        }
+        convoys.forEach(convoy => this.renderer.renderConvoy(convoy));
         
         // 🆕 NUEVO: Renderizar helicópteros
         if (this.helicopters && this.helicopters.length > 0) {
@@ -1047,8 +858,8 @@ export class Game {
         
         // Preview de ruta (solo si la ruta es válida)
         if (this.selectedNode && this.hoveredNode && this.selectedNode !== this.hoveredNode) {
-            // Verificar si la ruta es válida según VALID_ROUTES
-            const validTargets = VALID_ROUTES[this.selectedNode.type] || [];
+            // Verificar si la ruta es válida según configuración del servidor
+            const validTargets = this.serverBuildingConfig?.routes?.valid?.[this.selectedNode.type] || [];
             const isValidRoute = validTargets.includes(this.hoveredNode.type);
             
             if (isValidRoute) {
@@ -1069,6 +880,9 @@ export class Game {
             } else if (this.buildSystem.fobSabotageMode) {
                 // Preview del sabotaje: cursor specops_selector
                 this.renderer.renderFobSabotageCursor(mousePos.x, mousePos.y, this.hoveredNode);
+            } else if (this.buildSystem.commandoMode) {
+                // Preview del comando: usar preview normal de construcción
+                this.renderer.renderBuildPreview(mousePos.x, mousePos.y, this.nodes, 'specopsCommando');
             } else {
                 // Preview del edificio actual
                 const buildingType = this.buildSystem.currentBuildingType || 'fob';
@@ -1200,6 +1014,7 @@ export class Game {
         
         // Desactivar modos debug
         this.debugMode = false;
+        this.debugVisualMode = false;
         this.debugEnemyBuildMode = false;
         this.debugEnemyDroneMode = false;
         this.debugEnemySniperMode = false;
@@ -1249,58 +1064,8 @@ export class Game {
         console.log(`🤖 IA inicializada con dificultad: ${this.aiDifficulty}`);
     }
     
-    /**
-     * Cambia la dificultad de la IA
-     */
-    setAIDifficulty(difficulty) {
-        this.aiDifficulty = difficulty;
-        console.log(`🤖 Dificultad IA cambiada a: ${difficulty}`);
-    }
-    
-    startGameFromMenu() {
-        // Verificar que los assets estén listos antes de continuar
-        if (!this.assetManager.allLoaded) {
-            console.log('⚠️ Esperando a que terminen de cargar los assets...');
-            return;
-        }
-        
-        // Mostrar pantalla de selección de raza en lugar de iniciar directamente
-        this.ui.hideMainMenu();
-        this.raceSelection.show();
-        
-        // CRÍTICO: Asegurar que el gameLoop esté ejecutándose
-        if (!this._gameLoopRunning) {
-            this._gameLoopRunning = true;
-            this.lastTime = Date.now();
-            this.gameLoop();
-            console.log('🔄 GameLoop iniciado para pantalla de selección de raza');
-        }
-    }
-    
-    /**
-     * 🆕 NUEVO: Callback llamado cuando el usuario selecciona una raza en singleplayer
-     */
-    onRaceSelected(raceId) {
-        console.log(`🏛️ Raza seleccionada en singleplayer: ${raceId}`);
-        this.selectedRace = raceId;
-        
-        // 🆕 NUEVO: Inicializar playerRaces para singleplayer
-        // player1 = el jugador, player2 = la IA (A_Nation por defecto)
-        this.playerRaces = {
-            player1: raceId,
-            player2: 'A_Nation' // La IA siempre usa A_Nation por ahora
-        };
-        
-        console.log('🏛️ playerRaces inicializado:', this.playerRaces);
-        
-        // Actualizar la tienda con la raza seleccionada
-        if (this.storeUI) {
-            this.storeUI.setRace(raceId);
-        }
-        
-        // Iniciar la misión
-        this.startMission();
-    }
+    // ELIMINADO: setAIDifficulty, startGameFromMenu, onRaceSelected
+    // Ahora todo se maneja desde el lobby unificado con servidor autoritativo
     
     /**
      * Inicia el tutorial desde el menú principal
@@ -1402,14 +1167,17 @@ export class Game {
         tutorialMap.nodes.forEach((nodeData, index) => {
             console.log(`🔧 Creando nodo ${index + 1}:`, nodeData);
             
-            const node = this.baseFactory.createBase(
+            const config = getNodeConfig(nodeData.type);
+            const node = new VisualNode(
                 nodeData.x, 
                 nodeData.y, 
                 nodeData.type,
                 {
+                    ...config,
                     team: nodeData.team,
                     supplies: nodeData.supplies || undefined
-                }
+                },
+                this
             );
             
             if (node) {
@@ -1430,7 +1198,7 @@ export class Game {
     
     getGameState() {
         // Calcular rate de currency (base + bonus de plantas nucleares)
-        const baseRate = FOB_CURRENCY_CONFIG.passiveRate;
+        const baseRate = this.serverBuildingConfig?.currency?.passiveRate || 3;
         const nuclearBonus = this.currency.getNuclearPlantBonus();
         const totalRate = baseRate + nuclearBonus;
         
@@ -1463,6 +1231,363 @@ export class Game {
     }
     
     /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Maneja solicitud de construcción en singleplayer
+     * Esta es la lógica autoritativa que debería estar en el servidor
+     * @param {string} buildingId - ID del edificio a construir
+     * @param {number} x - Posición X
+     * @param {number} y - Posición Y
+     */
+    handleBuildRequest(buildingId, x, y) {
+        console.log(`🏗️ Pseudo-servidor: Procesando construcción de ${buildingId} en (${x}, ${y})`);
+        
+        // 🆕 NUEVO: Verificar si el edificio está habilitado
+        const enabled = this.serverBuildingConfig?.behavior?.enabled?.[buildingId];
+        if (enabled === false) {
+            console.log(`🚫 Pseudo-servidor: ${buildingId} está deshabilitado`);
+            return;
+        }
+        
+        // Obtener costo desde configuración autoritativa del servidor
+        const cost = this.serverBuildingConfig?.costs?.[buildingId];
+        if (!cost) {
+            console.error(`❌ Pseudo-servidor: Tipo de edificio inválido: ${buildingId}`);
+            return;
+        }
+        
+        // Validar currency (AUTORITATIVA)
+        if (!this.canAffordBuilding(buildingId)) {
+            console.log(`❌ Pseudo-servidor: Currency insuficiente (Necesitas: ${cost}, Tienes: ${this.getMissionCurrency()})`);
+            return;
+        }
+        
+        // 🆕 NUEVO: El comando se puede construir en territorio enemigo (ignorando validación de territorio aliado)
+        const isCommando = buildingId === 'specopsCommando';
+        
+        if (!isCommando) {
+            // Validar territorio (AUTORITATIVA) - solo para edificios normales
+            if (!this.territory.isInAllyTerritory(x, y)) {
+                console.log(`❌ Pseudo-servidor: Fuera de territorio`);
+                return;
+            }
+            
+            // Validar colisiones (AUTORITATIVA) - solo para edificios normales
+            if (!this.buildSystem.isValidLocation(x, y, buildingId)) {
+                console.log(`❌ Pseudo-servidor: Muy cerca de otro edificio`);
+                return;
+            }
+        } else {
+            // Para el comando: validar que esté en territorio ENEMIGO y que no esté muy cerca físicamente
+            if (this.territory.isInAllyTerritory(x, y)) {
+                console.log(`❌ Pseudo-servidor: El comando solo puede desplegarse en territorio enemigo`);
+                return;
+            }
+            
+            // 🆕 NUEVO: Validar que no haya torres de vigilancia enemigas cerca
+            const myTeam = this.myTeam || 'ally';
+            const enemyTowers = this.nodes.filter(n => 
+                (n.type === 'vigilanceTower' || n.isVigilanceTower) &&
+                n.team !== myTeam &&
+                n.active &&
+                n.constructed &&
+                !n.isAbandoning
+            );
+            
+            for (const tower of enemyTowers) {
+                const towerConfig = getNodeConfig(tower.type);
+                const detectionRadius = towerConfig?.detectionRadius || tower.detectionRadius || 140;
+                const dist = Math.hypot(x - tower.x, y - tower.y);
+                
+                if (dist <= detectionRadius) {
+                    console.log(`❌ Pseudo-servidor: Hay una torre de vigilancia enemiga cerca - no se puede desplegar el comando`);
+                    return;
+                }
+            }
+            
+            // Validar colisiones físicas básicas (no límites de detección)
+            const allNodes = [...this.game.bases, ...this.game.nodes];
+            for (const node of allNodes) {
+                if (!node.active) continue;
+                const dist = Math.hypot(x - node.x, y - node.y);
+                const minSeparation = 25 + (node.radius || 30); // Solo colisión física básica
+                if (dist < minSeparation) {
+                    console.log(`❌ Pseudo-servidor: Muy cerca de otro edificio`);
+                    return;
+                }
+            }
+        }
+        
+        // Descontar currency (AUTORITATIVA)
+        if (!this.spendMissionCurrency(cost)) {
+            console.error(`❌ Pseudo-servidor: Error al gastar currency`);
+            return;
+        }
+        
+        // Obtener configuración del nodo
+        const buildingConfig = getNodeConfig(buildingId);
+        if (!buildingConfig) {
+            console.error(`❌ Pseudo-servidor: Configuración no encontrada`);
+            return;
+        }
+        
+        // Crear nodo (AUTORITATIVA)
+        const newNode = new VisualNode(x, y, buildingId, {
+            ...buildingConfig,
+            isConstructed: true,
+            // 🆕 NUEVO: Para el comando, cambiar category a 'buildable' para que se renderice como edificio
+            category: isCommando ? 'buildable' : buildingConfig.category,
+            // 🆕 NUEVO: Establecer team del comando
+            team: isCommando ? (this.myTeam || 'ally') : (buildingConfig.team || 'ally')
+        }, this);
+        
+        // 🆕 NUEVO: Para el comando, establecer propiedades especiales
+        if (isCommando && newNode) {
+            newNode.isCommando = true;
+            newNode.detectionRadius = 200; // Área de efecto
+            newNode.team = this.myTeam || 'ally';
+        }
+        
+        if (newNode) {
+            // Tutorial: Agregar al array de nodos del tutorial
+            if (this.state === 'tutorial' && this.tutorialManager?.tutorialNodes) {
+                this.tutorialManager.tutorialNodes.push(newNode);
+                
+                // Tutorial: Hardcodear FOB con 0 suministros
+                if (buildingId === 'fob') {
+                    newNode.supplies = 0;
+                    console.log('🎓 Tutorial: FOB construido con 0 suministros');
+                }
+            } else {
+                this.nodes.push(newNode);
+            }
+            
+            // Tutorial: Detectar si construyó un FOB
+            if (buildingId === 'fob' && this.tutorialManager?.isTutorialActive) {
+                this.tutorialManager.notifyAction('fob_built', { buildingId });
+            }
+            
+            // Notificar a la IA enemiga
+            if (buildingConfig.id === 'antiDrone' || 
+                buildingConfig.id === 'nuclearPlant' || 
+                buildingConfig.id === 'intelRadio' ||
+                buildingConfig.id === 'campaignHospital') {
+                if (this.enemyAI) {
+                    this.enemyAI.registerPlayerAction(buildingConfig.id, { x, y });
+                }
+                if (this.aiDirector && this.aiSystemMode !== 'legacy') {
+                    this.aiDirector.onPlayerAction(buildingConfig.id, { x, y });
+                }
+            }
+        }
+        
+        // Reproducir sonido
+        this.audio.playPlaceBuildingSound();
+        
+        // Incrementar contador
+        this.matchStats.buildingsBuilt++;
+        
+        console.log(`✅ Pseudo-servidor: ${buildingConfig.name} construido exitosamente en (${x.toFixed(0)}, ${y.toFixed(0)})`);
+    }
+    
+    /**
+     * Verifica si se puede pagar un edificio
+     */
+    canAffordBuilding(buildingId) {
+        const cost = this.serverBuildingConfig?.costs?.[buildingId] || 0;
+        return this.getMissionCurrency() >= cost;
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Maneja solicitud de drone
+     * @param {Object} targetBase - Base objetivo del drone
+     */
+    handleDroneRequest(targetBase) {
+        console.log(`💣 Pseudo-servidor: Procesando drone hacia ${targetBase.id}`);
+        
+        // Validar objetivo
+        const validTargetTypes = ['fob', 'nuclearPlant', 'intelRadio', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelCenter', 'aerialBase'];
+        const isEnemyTarget = targetBase.team !== this.myTeam && validTargetTypes.includes(targetBase.type);
+        
+        if (!isEnemyTarget) {
+            if (targetBase.type === 'hq') {
+                console.log('❌ Pseudo-servidor: No puedes atacar HQs');
+            } else if (targetBase.type === 'front') {
+                console.log('❌ Pseudo-servidor: No puedes atacar frentes');
+            } else if (targetBase.team === this.myTeam) {
+                console.log('❌ Pseudo-servidor: No puedes atacar tus propias bases');
+            } else {
+                console.log('❌ Pseudo-servidor: Objetivo no válido');
+            }
+            return;
+        }
+        
+        // Validar currency
+        const droneCost = this.serverBuildingConfig?.costs?.drone || 0;
+        if (!this.canAffordBuilding('drone')) {
+            console.log(`❌ Pseudo-servidor: Currency insuficiente`);
+            return;
+        }
+        
+        // Descontar currency
+        if (!this.spendMissionCurrency(droneCost)) {
+            console.error(`❌ Pseudo-servidor: Error al gastar currency`);
+            return;
+        }
+        
+        // Lanzar drone desde el borde izquierdo
+        const droneStartX = 0;
+        const droneStartY = targetBase.y;
+        
+        this.droneSystem.launchDrone(droneStartX, droneStartY, targetBase);
+        this.matchStats.dronesLaunched++;
+        
+        console.log(`✅ Pseudo-servidor: Dron lanzado exitosamente`);
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Maneja solicitud de sniper
+     * @param {Object} targetFront - Frente objetivo del sniper
+     */
+    handleSniperRequest(targetFront) {
+        console.log(`🎯 Pseudo-servidor: Procesando sniper hacia ${targetFront.id}`);
+        
+        // Validar objetivo
+        const isEnemyFront = targetFront.team !== this.myTeam && targetFront.type === 'front';
+        
+        if (!isEnemyFront) {
+            console.log('❌ Pseudo-servidor: Solo puedes atacar frentes enemigos');
+            return;
+        }
+        
+        // Validar currency
+        const sniperCost = this.serverBuildingConfig?.costs?.sniperStrike || 0;
+        if (!this.canAffordBuilding('sniperStrike')) {
+            console.log(`❌ Pseudo-servidor: Currency insuficiente`);
+            return;
+        }
+        
+        // Descontar currency
+        if (!this.spendMissionCurrency(sniperCost)) {
+            console.error(`❌ Pseudo-servidor: Error al gastar currency`);
+            return;
+        }
+        
+        // Reproducir sonido
+        this.audio.sounds.sniperShoot.play();
+        
+        // Aplicar efecto "wounded"
+        if (this.medicalSystem) {
+            this.medicalSystem.applyPenalty(targetFront);
+            this.matchStats.snipersLaunched++;
+        }
+        
+        // Crear efecto visual
+        this.particleSystem.createFloatingSprite(targetFront.x, targetFront.y - 40, 'ui-sniper-kill');
+        
+        console.log(`✅ Pseudo-servidor: Sniper ejecutado exitosamente`);
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Maneja solicitud de sabotaje FOB
+     * @param {Object} targetFOB - FOB objetivo del sabotaje
+     */
+    handleFobSabotageRequest(targetFOB) {
+        console.log(`⚡ Pseudo-servidor: Procesando sabotaje FOB ${targetFOB.id}`);
+        
+        // Validar objetivo
+        const isEnemyFOB = targetFOB.team !== this.myTeam && targetFOB.type === 'fob';
+        
+        if (!isEnemyFOB) {
+            console.log('❌ Pseudo-servidor: Solo puedes sabotear FOBs enemigas');
+            return;
+        }
+        
+        // Validar currency
+        if (!this.canAffordBuilding('fobSabotage')) {
+            console.log(`❌ Pseudo-servidor: Currency insuficiente`);
+            return;
+        }
+        
+        // Obtener configuración
+        const fobSabotageConfig = getNodeConfig('fobSabotage');
+        if (!fobSabotageConfig) {
+            console.error('❌ Pseudo-servidor: Configuración no encontrada');
+            return;
+        }
+        
+        // Descontar currency
+        if (!this.spendMissionCurrency(fobSabotageConfig.cost)) {
+            console.error(`❌ Pseudo-servidor: Error al gastar currency`);
+            return;
+        }
+        
+        // Aplicar efecto sabotaje
+        targetFOB.addEffect({
+            type: 'fobSabotage',
+            speedPenalty: fobSabotageConfig.speedPenalty,
+            truckCount: fobSabotageConfig.truckCount,
+            icon: fobSabotageConfig.effectIcon,
+            tooltip: `Saboteada: -50% velocidad en los siguientes ${fobSabotageConfig.truckCount} camiones`
+        });
+        
+        this.matchStats.snipersLaunched++; // Usar este contador temporalmente
+        
+        // Efecto visual
+        if (this.particleSystem.createFallingSprite) {
+            this.particleSystem.createFallingSprite(
+                targetFOB.x,
+                targetFOB.y - 80,
+                'specops_unit',
+                0.08
+            );
+        }
+        
+        // Sonido
+        if (this.audio && this.audio.playChopperSound) {
+            this.audio.playChopperSound();
+        }
+        
+        console.log(`✅ Pseudo-servidor: FOB sabotajeada exitosamente`);
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Maneja solicitud de despliegue de comando especial operativo
+     * @param {number} x - Posición X donde desplegar
+     * @param {number} y - Posición Y donde desplegar
+     */
+    handleCommandoDeployRequest(x, y) {
+        console.log(`🎖️ Pseudo-servidor: Procesando despliegue de comando en (${x.toFixed(0)}, ${y.toFixed(0)})`);
+        
+        // Validar currency
+        if (!this.canAffordBuilding('specopsCommando')) {
+            console.log(`❌ Pseudo-servidor: Currency insuficiente`);
+            return;
+        }
+        
+        // Obtener configuración
+        const commandoConfig = getNodeConfig('specopsCommando');
+        if (!commandoConfig) {
+            console.error('❌ Pseudo-servidor: Configuración no encontrada');
+            return;
+        }
+        
+        // Descontar currency
+        if (!this.spendMissionCurrency(commandoConfig.cost || 200)) {
+            console.error(`❌ Pseudo-servidor: Error al gastar currency`);
+            return;
+        }
+        
+        // Crear nodo del comando (similar a construir un edificio)
+        this.handleBuildRequest('specopsCommando', x, y);
+        
+        // Sonido de despliegue de comando
+        if (this.audio && this.audio.playCommandoDeploySound) {
+            this.audio.playCommandoDeploySound();
+        }
+        
+        console.log(`✅ Pseudo-servidor: Comando desplegado exitosamente`);
+    }
+    
+    /**
      * Calcula el bonus de vehículos del HQ basado en Truck Factories construidas
      * @param {string} team - 'ally' o 'enemy'
      * @returns {number} Número de vehículos adicionales
@@ -1473,7 +1598,8 @@ export class Game {
             n.team === team && 
             n.constructed && 
             !n.isConstructing &&
-            n.active
+            n.active &&
+            !n.disabled // 🆕 NUEVO: No contar truckFactories disabled
         );
         return truckFactories.length; // +1 vehículo por cada fábrica
     }
@@ -1706,5 +1832,110 @@ export class Game {
         if (btn) {
             btn.onclick = () => this.returnToMenuFromGame();
         }
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Inicializar configuración de edificios para singleplayer
+     */
+    initializeSingleplayerBuildingConfig() {
+        // Importar la configuración del servidor directamente
+        import('../server/config/serverNodes.js').then(module => {
+            const { SERVER_NODE_CONFIG } = module;
+            
+            // Usar la configuración real del servidor
+            this.serverBuildingConfig = {
+                costs: SERVER_NODE_CONFIG.costs,
+                buildTimes: SERVER_NODE_CONFIG.buildTimes,
+                descriptions: SERVER_NODE_CONFIG.descriptions,
+                capacities: SERVER_NODE_CONFIG.capacities,
+                gameplay: SERVER_NODE_CONFIG.gameplay,
+                detectionRadii: SERVER_NODE_CONFIG.detectionRadius,
+                security: SERVER_NODE_CONFIG.security,
+                behavior: {
+                    enabled: SERVER_NODE_CONFIG.gameplay.enabled,
+                    behavior: SERVER_NODE_CONFIG.gameplay.behavior
+                },
+                // 🆕 AGREGAR: Configuración de rutas y currency desde gameConfig
+                routes: {
+                    valid: {
+                        'hq': ['fob'],
+                        'fob': ['front', 'fob'],
+                        'front': []
+                    },
+                    raceSpecial: {
+                        B_Nation: {
+                            'hq': ['front', 'aerialBase'],
+                            'front': ['hq', 'front', 'aerialBase'],
+                            'aerialBase': ['hq', 'front']
+                        }
+                    }
+                },
+                currency: {
+                    passiveRate: 3,
+                    pixelsPerCurrency: 2,
+                    currencyName: 'Terreno Ganado'
+                },
+                frontMovement: {
+                    advanceSpeed: 3,
+                    retreatSpeed: 3
+                },
+                vehicles: {
+                    // ⚠️ LEGACY: speed no se usa en multijugador (servidor autoritativo)
+                    // Solo se mantiene para compatibilidad con código legacy
+                    heavy_truck: { capacity: 15 },
+                    truck: { capacity: 15 },
+                    helicopter: { capacity: 100 },
+                    ambulance: { capacity: 0 }
+                }
+            };
+            
+            console.log('🏗️ Configuración de edificios inicializada para singleplayer desde servidor');
+        }).catch(error => {
+            console.error('❌ Error cargando configuración del servidor:', error);
+            
+            // Fallback: usar configuración básica si falla la importación
+            this.serverBuildingConfig = {
+                costs: { fob: 120, antiDrone: 115, droneLauncher: 100 },
+                buildTimes: { fob: 4, antiDrone: 4.5, droneLauncher: 2 },
+                descriptions: {},
+                capacities: {},
+                gameplay: {},
+                detectionRadii: {},
+                security: {},
+                behavior: { enabled: {}, behavior: {} },
+                // 🆕 AGREGAR: Configuración básica de rutas y currency
+                routes: {
+                    valid: {
+                        'hq': ['fob'],
+                        'fob': ['front', 'fob'],
+                        'front': []
+                    },
+                    raceSpecial: {
+                        B_Nation: {
+                            'hq': ['front', 'aerialBase'],
+                            'front': ['hq', 'front', 'aerialBase'],
+                            'aerialBase': ['hq', 'front']
+                        }
+                    }
+                },
+                currency: {
+                    passiveRate: 3,
+                    pixelsPerCurrency: 2,
+                    currencyName: 'Terreno Ganado'
+                },
+                frontMovement: {
+                    advanceSpeed: 3,
+                    retreatSpeed: 3
+                },
+                vehicles: {
+                    // ⚠️ LEGACY: speed no se usa en multijugador (servidor autoritativo)
+                    // Solo se mantiene para compatibilidad con código legacy
+                    heavy_truck: { capacity: 15 },
+                    truck: { capacity: 15 },
+                    helicopter: { capacity: 100 },
+                    ambulance: { capacity: 0 }
+                }
+            };
+        });
     }
 }

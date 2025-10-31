@@ -4,9 +4,10 @@ import { getBuildableNodes, getProjectiles, getNodeConfig, getBuildableNodesByRa
 import { getDefaultRace } from '../config/races.js';
 
 export class StoreUIManager {
-    constructor(assetManager, buildSystem) {
+    constructor(assetManager, buildSystem, game = null) {
         this.assetManager = assetManager;
         this.buildSystem = buildSystem;
+        this.game = game; // 🆕 NUEVO: Acceso al juego para obtener configuración del servidor
         
         // Estado de la tienda
         this.isVisible = true; // Visible por defecto
@@ -37,11 +38,79 @@ export class StoreUIManager {
     
     /**
      * Actualiza las categorías dinámicamente desde la configuración (filtrado por raza)
+     * 🎯 CORREGIDO: Usa configuración del servidor cuando esté disponible
      */
     updateCategories() {
-        // Usar funciones específicas por raza en lugar de las generales
-        const buildableNodes = getBuildableNodesByRace(this.currentRace);
-        const projectileNodes = getProjectilesByRace(this.currentRace);
+        // 🎯 SERVIDOR COMO AUTORIDAD: Usar configuración del servidor cuando esté disponible
+        let buildableNodes = [];
+        let projectileNodes = [];
+        
+        // Determinar team (multijugador usa myTeam, singleplayer usa 'player1')
+        const team = this.game?.myTeam || 'player1';
+        
+        // Verificar que existe la configuración del servidor
+        if (!this.game || !this.game.raceConfigs || !this.game.raceConfigs[team]) {
+            // 🎯 FALLBACK TEMPORAL: Si no hay configuración del servidor aún, usar configuración local basada en currentRace
+            // Esto puede pasar durante la inicialización antes de que llegue raceConfigs del servidor
+            // console.warn(`⚠️ No hay configuración del servidor para team ${team} aún, usando fallback temporal basado en currentRace: ${this.currentRace}`); // Log removido
+            
+            const allBuildableNodes = getBuildableNodes();
+            const allProjectiles = getProjectiles();
+            
+            // Fallback temporal basado en currentRace
+            if (this.currentRace === 'A_Nation') {
+                buildableNodes = allBuildableNodes.filter(n => 
+                    ['fob', 'antiDrone', 'droneLauncher', 'truckFactory', 'engineerCenter', 'nuclearPlant', 'campaignHospital', 'intelRadio', 'aerialBase', 'vigilanceTower'].includes(n.id)
+                );
+                projectileNodes = allProjectiles.filter(n => 
+                    ['drone', 'sniperStrike'].includes(n.id)
+                );
+            } else if (this.currentRace === 'B_Nation') {
+                buildableNodes = allBuildableNodes.filter(n => 
+                    ['intelRadio', 'intelCenter', 'campaignHospital', 'aerialBase', 'antiDrone', 'vigilanceTower'].includes(n.id)
+                );
+                projectileNodes = allProjectiles.filter(n => 
+                    ['fobSabotage', 'sniperStrike', 'specopsCommando'].includes(n.id)
+                );
+            } else {
+                // Fallback genérico: mostrar todos (no debería pasar)
+                console.error(`❌ Raza desconocida en fallback: ${this.currentRace}`);
+                buildableNodes = allBuildableNodes;
+                projectileNodes = allProjectiles;
+            }
+        } else {
+            // Usar configuración del servidor (SERVIDOR COMO AUTORIDAD)
+            const myRaceConfig = this.game.raceConfigs[team];
+            if (!myRaceConfig || !myRaceConfig.buildings || !myRaceConfig.consumables) {
+                console.error(`❌ ERROR CRÍTICO: Configuración de raza incompleta para team ${team}:`, myRaceConfig);
+                // No mostrar nada hasta que llegue la configuración completa
+                this.categories = {
+                    buildings: { name: 'Edificios', icon: 'hammer_wrench', items: [] },
+                    vehicles: { name: 'Vehículos', icon: 'wheel', items: [] }
+                };
+                this.hitRegions = [];
+                return;
+            }
+            
+            const availableBuildings = myRaceConfig.buildings || [];
+            const availableConsumables = myRaceConfig.consumables || [];
+            
+            // Obtener todos los nodos construibles y filtrar por los disponibles
+            const allBuildableNodes = getBuildableNodes();
+            buildableNodes = allBuildableNodes.filter(node => 
+                availableBuildings.includes(node.id)
+            );
+            
+            // Obtener todos los proyectiles y filtrar por los disponibles
+            const allProjectiles = getProjectiles();
+            projectileNodes = allProjectiles.filter(node => 
+                availableConsumables.includes(node.id)
+            );
+            
+            console.log(`🏛️ Tienda filtrada por servidor (team: ${team}) - Edificios disponibles: ${availableBuildings.join(', ')}, Consumibles: ${availableConsumables.join(', ')}`);
+        }
+        
+        // console.log(`🏛️ Edificios mostrados en tienda: ${buildableNodes.map(n => n.id).join(', ')}`); // Log removido
         
         this.categories = {
             buildings: {
@@ -56,8 +125,40 @@ export class StoreUIManager {
             }
         };
         
+        // console.log(`🏛️ CATEGORÍAS FINALES - Edificios (${this.categories.buildings.items.length}): ${this.categories.buildings.items.join(', ')}, Consumibles (${this.categories.vehicles.items.length}): ${this.categories.vehicles.items.join(', ')}`); // Log removido
+        
         // Hitboxes para interacción
         this.hitRegions = [];
+    }
+    
+    /**
+     * 🆕 Crea configuración de raza para singleplayer desde el servidor
+     */
+    async createSingleplayerRaceConfig(raceId) {
+        try {
+            // Importar configuración del servidor
+            const raceConfigModule = await import('../../server/config/raceConfig.js');
+            const { getServerRaceConfig } = raceConfigModule;
+            
+            const raceConfig = getServerRaceConfig(raceId);
+            if (raceConfig) {
+                // Crear raceConfigs en el formato esperado
+                if (!this.game.raceConfigs) {
+                    this.game.raceConfigs = {};
+                }
+                
+                // En singleplayer, el jugador es 'player1'
+                this.game.raceConfigs['player1'] = raceConfig;
+                this.game.myTeam = 'player1'; // Asegurar que myTeam esté establecido
+                
+                console.log(`🏛️ Configuración de raza creada para singleplayer: ${raceId}`, raceConfig);
+                
+                // Actualizar categorías después de crear la configuración
+                this.updateCategories();
+            }
+        } catch (error) {
+            console.error(`❌ Error creando configuración de raza para singleplayer:`, error);
+        }
     }
     
     /**
@@ -107,6 +208,11 @@ export class StoreUIManager {
     selectCategory(categoryId) {
         if (this.categories[categoryId]) {
             this.selectedCategory = categoryId;
+            // 🎯 NUEVO: Forzar actualización de categorías antes de mostrar items
+            // Esto asegura que las categorías estén actualizadas con la raza correcta
+            this.updateCategories();
+            this.updateHitRegions(); // Actualizar hitboxes
+            console.log(`🏛️ Categoría seleccionada: ${categoryId} - Items: ${this.categories[categoryId]?.items?.join(', ') || 'NINGUNO'}`);
         }
     }
     
@@ -315,6 +421,12 @@ export class StoreUIManager {
                 // Verificar si el dron está bloqueado
                 if (itemId === 'drone' && !this.buildSystem.hasDroneLauncher()) {
                     console.log('⚠️ Necesitas construir una Lanzadera de Drones primero');
+                    return true; // Consumir el click pero no activar
+                }
+                
+                // Verificar si el comando está bloqueado
+                if (itemId === 'specopsCommando' && !this.buildSystem.hasIntelCenter()) {
+                    console.log('⚠️ Necesitas construir un Centro de Inteligencia primero');
                     return true; // Consumir el click pero no activar
                 }
                 
@@ -533,6 +645,9 @@ export class StoreUIManager {
         // Verificar si el dron está bloqueado (requiere lanzadera)
         const isDroneLocked = itemId === 'drone' && !this.buildSystem.hasDroneLauncher();
         
+        // Verificar si el comando está bloqueado (requiere centro de inteligencia)
+        const isCommandoLocked = itemId === 'specopsCommando' && !this.buildSystem.hasIntelCenter();
+        
         // Fondo del botón usando el sprite bton_background
         const buttonBg = this.assetManager.getSprite('ui-button-background');
         
@@ -559,7 +674,8 @@ export class StoreUIManager {
             const iconY = y + (size - iconSize) / 2 - 8; // Ajustado para el precio
             
             // Si está bloqueado, renderizar en gris
-            if (isDroneLocked) {
+            const isLocked = isDroneLocked || isCommandoLocked;
+            if (isLocked) {
                 ctx.save();
                 ctx.globalAlpha = 0.4;
                 ctx.filter = 'grayscale(100%)';
@@ -567,16 +683,16 @@ export class StoreUIManager {
             
             ctx.drawImage(sprite, iconX, iconY, iconSize, iconSize);
             
-            if (isDroneLocked) {
+            if (isLocked) {
                 ctx.restore();
             }
         }
         
         // Verificar si se puede permitir (solo si no está bloqueado)
-        const canAfford = !isDroneLocked && this.buildSystem.canAffordBuilding(itemId);
+        const canAfford = !isDroneLocked && !isCommandoLocked && this.buildSystem.canAffordBuilding(itemId);
         
         // Precio (más legible) - color rojo si no se puede permitir, gris si está bloqueado
-        if (isDroneLocked) {
+        if (isDroneLocked || isCommandoLocked) {
             ctx.fillStyle = '#888888';
         } else {
             ctx.fillStyle = canAfford ? '#ffffff' : '#ff4444';
@@ -605,6 +721,21 @@ export class StoreUIManager {
             ctx.lineWidth = 2;
             
             const lockText = 'Necesita lanzadera';
+            const lockY = y + size + 2;
+            
+            ctx.strokeText(lockText, priceX, lockY);
+            ctx.fillText(lockText, priceX, lockY);
+        }
+        
+        if (isCommandoLocked) {
+            ctx.fillStyle = '#ff6666';
+            ctx.font = 'bold 9px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            
+            const lockText = 'Necesita centro';
             const lockY = y + size + 2;
             
             ctx.strokeText(lockText, priceX, lockY);
@@ -648,9 +779,28 @@ export class StoreUIManager {
     setRace(raceId) {
         if (this.currentRace !== raceId) {
             this.currentRace = raceId;
-            this.updateCategories(); // Actualizar categorías con la nueva raza
+            
+            // 🎯 NUEVO: En singleplayer, crear configuración desde el servidor si no existe
+            if (this.game && (!this.game.isMultiplayer || this.game.isMultiplayer === false)) {
+                if (!this.game.raceConfigs || !this.game.raceConfigs['player1']) {
+                    this.createSingleplayerRaceConfig(raceId).then(() => {
+                        // Actualizar categorías después de crear la configuración
+                        this.updateCategories();
+                    });
+                } else {
+                    // Ya existe configuración, solo actualizar
+                    this.updateCategories();
+                }
+            } else {
+                // Multijugador: solo actualizar categorías
+                this.updateCategories();
+            }
+            
             this.selectedCategory = null; // Limpiar selección actual
-            console.log(`🏛️ Tienda actualizada para raza: ${raceId}`);
+            // console.log(`🏛️ Tienda actualizada para raza: ${raceId}`); // Log removido
+        } else {
+            // Misma raza, pero forzar actualización por si cambió la configuración
+            this.updateCategories();
         }
     }
     

@@ -1,9 +1,23 @@
 // ===== SISTEMA DE ABANDONO =====
 // Inicia abandono -> fases -> eliminación
 
+import { GAME_CONFIG } from '../config/gameConfig.js';
+
 export class AbandonmentSystem {
     constructor(gameState) {
         this.gameState = gameState;
+    }
+    
+    /**
+     * Obtiene los tiempos de abandono para un tipo específico de nodo
+     */
+    getAbandonmentTimes(nodeType) {
+        // Usar tiempos específicos si existen, sino usar los por defecto
+        const specificTimes = GAME_CONFIG.abandonment[nodeType];
+        if (specificTimes) {
+            return specificTimes;
+        }
+        return GAME_CONFIG.abandonment.default;
     }
     
     /**
@@ -17,9 +31,11 @@ export class AbandonmentSystem {
                 continue;
             }
             
-            // 1. ABANDONO POR TERRITORIO (prioridad alta - afecta a TODOS los nodos excepto HQ y front)
+            // 1. ABANDONO POR TERRITORIO (prioridad alta - afecta a TODOS los nodos excepto HQ, front y specopsCommando)
             // Después del tiempo de gracia (outOfTerritoryTimer >= 3s), iniciar abandono
-            if (node.outOfTerritoryTimer !== null && 
+            // 🆕 Excluir specopsCommando: está diseñado para desplegarse en territorio enemigo
+            if (node.type !== 'specopsCommando' &&
+                node.outOfTerritoryTimer !== null && 
                 node.outOfTerritoryTimer !== undefined &&
                 node.outOfTerritoryTimer >= 3.0) {
                 // Tiempo de gracia completado -> iniciar abandono
@@ -58,18 +74,36 @@ export class AbandonmentSystem {
             return; // Ya está abandonando
         }
         
+        // Obtener tiempos específicos para este tipo de nodo
+        const times = this.getAbandonmentTimes(node.type);
+        
         node.isAbandoning = true;
         node.abandonPhase = 1;
         node.abandonStartTime = this.gameState.gameTime * 1000; // ms
         
-        console.log(`💥 ${node.type} ${node.id} INICIANDO ABANDONO`);
+        // 🆕 NUEVO: Marcar si el abandono fue causado por territorio
+        // Si tiene outOfTerritoryTimer, guardar que fue por territorio antes de resetearlo
+        // Si no tiene outOfTerritoryTimer, marcar que NO fue por territorio
+        if (node.outOfTerritoryTimer !== null && node.outOfTerritoryTimer !== undefined) {
+            node.abandonmentCause = 'territory'; // Fue causado por territorio
+            node.outOfTerritoryTimer = null; // Resetear timer después de guardar la causa
+        } else {
+            node.abandonmentCause = 'auto'; // Fue causado por abandono automático (investmentCompleted, supplies, etc)
+        }
+        
+        // Almacenar tiempos específicos en el nodo para referencia
+        node.abandonPhase1Duration = times.phase1Duration;
+        node.abandonPhase2Duration = times.phase2Duration;
+        
+        console.log(`💥 ${node.type} ${node.id} INICIANDO ABANDONO (causa: ${node.abandonmentCause})`);
+        console.log(`   ⏳ Tiempos: fase1=${times.phase1Duration}ms, fase2=${times.phase2Duration}ms`);
     }
     
     /**
-     * Actualiza las fases de abandono
-     * Fase 1: 0-2000ms (gris claro)
-     * Fase 2: 2000-5000ms (gris oscuro)
-     * Fase 3: >5000ms (eliminar)
+     * Actualiza las fases de abandono usando configuración del servidor
+     * Fase 1: 0-phase1Duration (gris claro)
+     * Fase 2: phase1Duration-phase1Duration+phase2Duration (gris oscuro)
+     * Fase 3: >phase1Duration+phase2Duration (eliminar)
      */
     update(dt) {
         for (const node of this.gameState.nodes) {
@@ -80,10 +114,16 @@ export class AbandonmentSystem {
             const now = this.gameState.gameTime * 1000; // ms
             const elapsed = now - (node.abandonStartTime || now);
             
-            // Actualizar fase
-            if (elapsed < 2000) {
+            // Obtener tiempos específicos para este nodo
+            const times = this.getAbandonmentTimes(node.type);
+            const phase1Duration = times.phase1Duration;
+            const phase2Duration = times.phase2Duration;
+            const totalDuration = phase1Duration + phase2Duration;
+            
+            // Actualizar fase usando configuración del servidor
+            if (elapsed < phase1Duration) {
                 node.abandonPhase = 1; // Gris claro
-            } else if (elapsed < 5000) {
+            } else if (elapsed < totalDuration) {
                 node.abandonPhase = 2; // Gris oscuro
             } else {
                 node.abandonPhase = 3; // Listo para eliminar
@@ -115,13 +155,24 @@ export class AbandonmentSystem {
     
     /**
      * Reset abandono (para cuando un edificio vuelve a territorio)
+     * 🆕 FIX: Solo resetear si el abandono fue causado por territorio
+     * NO resetear si el abandono fue por otras razones (investmentCompleted, supplies agotados)
      */
     resetAbandonment(node) {
         if (node.isAbandoning) {
+            // 🆕 FIX: Solo resetear si el abandono fue causado por territorio
+            // NO resetear si fue por abandono automático (investmentCompleted, supplies, etc)
+            if (node.abandonmentCause !== 'territory') {
+                // El abandono fue por otra razón (investmentCompleted, supplies, etc)
+                // NO resetear - dejar que complete el proceso
+                return;
+            }
+            
             console.log(`✅ ${node.type} ${node.id} - reseteando abandono`);
             node.isAbandoning = false;
             node.abandonPhase = 0;
             node.abandonStartTime = null;
+            node.abandonmentCause = null;
             node.outOfTerritoryTimer = null;
         }
     }

@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { RoomManager } from './game/managers/RoomManager.js';
 import { GameStateManager } from './game/GameStateManager.js';
+import { AISystem } from './game/managers/AISystem.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -301,6 +302,140 @@ io.on('connection', (socket) => {
     });
     
     /**
+     * Añadir IA al slot player2
+     */
+    socket.on('add_ai_player', (data) => {
+        const { race, difficulty } = data;
+        const roomId = Array.from(socket.rooms).find(r => r !== socket.id);
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room) throw new Error('Sala no encontrada');
+            
+            // Verificar que sea el host (player1)
+            const player = room.players.find(p => p.id === socket.id);
+            if (!player || player.team !== 'player1') {
+                throw new Error('Solo el host puede añadir IA');
+            }
+            
+            // Verificar que no haya player2 humano
+            if (room.players.length === 2) {
+                throw new Error('Ya hay un jugador en el slot 2');
+            }
+            
+            // 🐛 FIX: Mapear IDs de raza del cliente al servidor
+            const raceMapping = {
+                'nationA': 'A_Nation',
+                'nationB': 'B_Nation',
+                'A': 'A_Nation',
+                'B': 'B_Nation'
+            };
+            const mappedRace = raceMapping[race] || race;
+            
+            // Añadir IA como player2
+            room.aiPlayer = {
+                isAI: true,
+                race: mappedRace,
+                difficulty: difficulty,
+                team: 'player2',
+                name: `IA (${difficulty})`,
+                ready: true,
+                selectedRace: mappedRace
+            };
+            
+            console.log(`🤖 IA añadida a sala ${roomId}: ${mappedRace} (${difficulty})`);
+            
+            // Notificar a todos en la sala
+            io.to(roomId).emit('ai_player_added', {
+                race: race,
+                difficulty: difficulty
+            });
+            
+            // Actualizar lobby
+            broadcastLobbyUpdate(roomId);
+            
+        } catch (error) {
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
+    /**
+     * Actualizar configuración de IA
+     */
+    socket.on('update_ai_player', (data) => {
+        const { race, difficulty } = data;
+        const roomId = Array.from(socket.rooms).find(r => r !== socket.id);
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room) throw new Error('Sala no encontrada');
+            
+            // Verificar que sea el host (player1)
+            const player = room.players.find(p => p.id === socket.id);
+            if (!player || player.team !== 'player1') {
+                throw new Error('Solo el host puede actualizar IA');
+            }
+            
+            // Verificar que haya IA
+            if (!room.aiPlayer) {
+                throw new Error('No hay IA para actualizar');
+            }
+            
+            // Actualizar IA
+            room.aiPlayer.race = race;
+            room.aiPlayer.difficulty = difficulty;
+            room.aiPlayer.selectedRace = race;
+            room.aiPlayer.name = `IA (${difficulty})`;
+            
+            console.log(`🤖 IA actualizada en sala ${roomId}: ${race} (${difficulty})`);
+            
+            // Notificar a todos en la sala
+            io.to(roomId).emit('ai_player_updated', {
+                race: race,
+                difficulty: difficulty
+            });
+            
+            // Actualizar lobby
+            broadcastLobbyUpdate(roomId);
+            
+        } catch (error) {
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
+    /**
+     * Quitar IA del slot player2
+     */
+    socket.on('remove_ai_player', () => {
+        const roomId = Array.from(socket.rooms).find(r => r !== socket.id);
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room) throw new Error('Sala no encontrada');
+            
+            // Verificar que sea el host (player1)
+            const player = room.players.find(p => p.id === socket.id);
+            if (!player || player.team !== 'player1') {
+                throw new Error('Solo el host puede quitar IA');
+            }
+            
+            // Quitar IA
+            room.aiPlayer = null;
+            
+            console.log(`🤖 IA eliminada de sala ${roomId}`);
+            
+            // Notificar a todos en la sala
+            io.to(roomId).emit('ai_player_removed');
+            
+            // Actualizar lobby
+            broadcastLobbyUpdate(roomId);
+            
+        } catch (error) {
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
+    /**
      * Host inicia la partida manualmente
      */
     socket.on('start_game', (data) => {
@@ -316,9 +451,12 @@ io.on('connection', (socket) => {
                 throw new Error('Solo el host puede iniciar la partida');
             }
             
-            // Verificar que haya 2 jugadores
-            if (room.players.length !== 2) {
-                throw new Error('Se necesitan 2 jugadores para iniciar');
+            // 🆕 NUEVO: Verificar que haya 2 jugadores O 1 jugador + IA
+            const hasPlayer2 = room.players.length === 2;
+            const hasAI = room.aiPlayer !== null && room.aiPlayer !== undefined;
+            
+            if (!hasPlayer2 && !hasAI) {
+                throw new Error('Se necesita un oponente (jugador o IA) para iniciar');
             }
             
             // Verificar que todos estén ready
@@ -330,8 +468,16 @@ io.on('connection', (socket) => {
             const player1 = room.players.find(p => p.team === 'player1');
             const player2 = room.players.find(p => p.team === 'player2');
             
-            if (!player1.selectedRace || !player2.selectedRace) {
-                throw new Error('Ambos jugadores deben seleccionar una raza');
+            // Si hay IA, su raza ya está seleccionada
+            if (hasAI) {
+                if (!player1.selectedRace) {
+                    throw new Error('Debes seleccionar una raza');
+                }
+            } else {
+                // Si son 2 jugadores humanos
+                if (!player1.selectedRace || !player2.selectedRace) {
+                    throw new Error('Ambos jugadores deben seleccionar una raza');
+                }
             }
             
             // Iniciar countdown
@@ -523,6 +669,39 @@ io.on('connection', (socket) => {
     });
     
     /**
+     * 🆕 NUEVO: Despliegue de comando especial operativo
+     */
+    socket.on('commando_deploy_request', (data) => {
+        const { roomId, x, y } = data;
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room || !room.gameState) throw new Error('Partida no iniciada');
+            
+            const playerTeam = roomManager.getPlayerTeam(roomId, socket.id);
+            const result = room.gameState.handleCommandoDeploy(playerTeam, x, y);
+            
+            if (result.success) {
+                // Broadcast a todos
+                io.to(roomId).emit('commando_deployed', {
+                    commandoId: result.commando.id,
+                    team: playerTeam,
+                    x: result.commando.x,
+                    y: result.commando.y,
+                    detectionRadius: result.commando.detectionRadius
+                });
+                
+                console.log(`🎖️ Comando desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)})`);
+            } else {
+                socket.emit('commando_deploy_failed', { reason: result.reason });
+                console.log(`⚠️ Despliegue de comando rechazado: ${result.reason}`);
+            }
+        } catch (error) {
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
+    /**
      * CHEAT: Dar currency (solo para testing)
      */
     socket.on('cheat_add_currency', (data) => {
@@ -635,9 +814,18 @@ function broadcastLobbyUpdate(roomId) {
             name: p.name,
             team: p.team,
             ready: p.ready,
-            selectedRace: p.selectedRace, // ✅ AGREGAR CAMPO FALTANTE
+            selectedRace: p.selectedRace,
             isHost: room.players[0].id === p.id
-        }))
+        })),
+        // 🤖 NUEVO: Incluir información de IA si existe
+        aiPlayer: room.aiPlayer ? {
+            isAI: true,
+            name: room.aiPlayer.name,
+            race: room.aiPlayer.race,
+            difficulty: room.aiPlayer.difficulty,
+            team: 'player2',
+            ready: true
+        } : null
     };
     
     io.to(roomId).emit('lobby_update', lobbyData);
@@ -681,13 +869,29 @@ function startGame(roomId) {
         const player1 = room.players.find(p => p.team === 'player1');
         const player2 = room.players.find(p => p.team === 'player2');
         
+        // 🤖 NUEVO: Si hay IA, usar sus datos
+        const hasAI = room.aiPlayer !== null && room.aiPlayer !== undefined;
+        
         if (player1.selectedRace) {
             gameState.setPlayerRace('player1', player1.selectedRace);
             console.log(`🏛️ Raza establecida para player1: ${player1.selectedRace}`);
         }
-        if (player2.selectedRace) {
+        
+        if (hasAI) {
+            // IA en player2
+            gameState.setPlayerRace('player2', room.aiPlayer.race);
+            console.log(`🤖 Raza establecida para IA (player2): ${room.aiPlayer.race} (${room.aiPlayer.difficulty})`);
+            room.hasAI = true;
+            room.aiDifficulty = room.aiPlayer.difficulty;
+        } else if (player2 && player2.selectedRace) {
+            // Jugador humano en player2
             gameState.setPlayerRace('player2', player2.selectedRace);
             console.log(`🏛️ Raza establecida para player2: ${player2.selectedRace}`);
+        }
+        
+        // 🤖 NUEVO: Inicializar AISystem con io y roomId para simular eventos de jugador
+        if (hasAI) {
+            gameState.aiSystem = new AISystem(gameState, io, roomId);
         }
         
         // 🆕 CENTRALIZADO: Ahora crear estado inicial con las razas ya configuradas

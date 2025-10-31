@@ -2,8 +2,8 @@
 // Sistema modular basado en reglas para controlar las acciones del enemigo
 // Completamente aislado del resto de sistemas
 
-import { FOB_CURRENCY_CONFIG } from '../config/constants.js';
 import { getNodeConfig } from '../config/nodes.js';
+import { VisualNode } from '../entities/visualNode.js';
 
 export class EnemyAISystem {
     constructor(game, difficulty = 'medium') {
@@ -280,7 +280,8 @@ export class EnemyAISystem {
         
         const nuclearBonus = enemyNuclearPlants.length * 2;
         const aiAdvantageRate = 1/3; // +1$ cada 3s (0.33$/s) para compensar limitaciones de IA
-        const totalRate = FOB_CURRENCY_CONFIG.passiveRate + nuclearBonus + aiAdvantageRate;
+        const passiveRate = this.game?.serverBuildingConfig?.currency?.passiveRate || 3;
+        const totalRate = passiveRate + nuclearBonus + aiAdvantageRate;
         
         this.currencyAccumulator += dt * totalRate;
         
@@ -555,11 +556,13 @@ export class EnemyAISystem {
         }
         
         // Colocar anti-drone en el objetivo del dron del jugador
-        const antiDrone = this.game.baseFactory.createBase(
+        const config = getNodeConfig('antiDrone');
+        const antiDrone = new VisualNode(
             targetNode.x + Math.random() * 80 - 50, // Pequeña variación para no ser exacto
             targetNode.y + Math.random() * 60 - 40,
             'antiDrone',
-            { isConstructed: true, team: 'player2' }
+            { ...config, isConstructed: true, team: 'player2' },
+            this.game
         );
         
         if (antiDrone) {
@@ -597,11 +600,13 @@ export class EnemyAISystem {
         const typeToUse = buildingType === 'antiDrone' ? 'enemy_antiDrone' : buildingType;
         
         // Crear edificio enemigo
-        const building = this.game.baseFactory.createBase(
+        const nodeConfig = getNodeConfig(typeToUse);
+        const building = new VisualNode(
             mirrorX,
             mirrorY,
             typeToUse,
-            { isConstructed: true, team: 'player2' }
+            { ...nodeConfig, isConstructed: true, team: 'player2' },
+            this.game
         );
         
         if (building) {
@@ -751,11 +756,13 @@ export class EnemyAISystem {
         }
         
         // Crear FOB enemigo de emergencia
-        const fob = this.game.baseFactory.createBase(
+        const config = getNodeConfig('fob');
+        const fob = new VisualNode(
             posX,
             posY,
             'fob',
-            { isConstructed: true, startingSuppliesPercent: 0.5, team: 'player2' } // Empieza con 50% recursos
+            { ...config, isConstructed: true, startingSuppliesPercent: 0.5, team: 'player2' }, // Empieza con 50% recursos
+            this.game
         );
         
         if (fob) {
@@ -1103,11 +1110,13 @@ export class EnemyAISystem {
         }
         
         // Crear lanzadera enemiga
-        const launcher = this.game.baseFactory.createBase(mirrorX, mirrorY, 'droneLauncher', {
+        const config = getNodeConfig('droneLauncher');
+        const launcher = new VisualNode(mirrorX, mirrorY, 'droneLauncher', {
+            ...config,
             isEnemy: true,
             team: 'player2',
             isConstructed: true  // Construida inmediatamente
-        });
+        }, this.game);
         
         if (launcher) {
             // ¡CRÍTICO! Agregar a nodes para que sea detectada
@@ -1209,7 +1218,9 @@ export class EnemyAISystem {
             (n.type === 'fob' || 
              n.type === 'nuclearPlant' || 
              n.type === 'intelRadio' ||
-             n.type === 'campaignHospital') &&
+             n.type === 'campaignHospital' ||
+             n.type === 'intelCenter' ||
+             n.type === 'aerialBase') &&
             n.team === 'ally' &&
             n.constructed &&
             !n.isAbandoning
@@ -1441,11 +1452,13 @@ export class EnemyAISystem {
         }
         
         // Crear FOB enemigo
-        const fob = this.game.baseFactory.createBase(
+        const config = getNodeConfig('fob');
+        const fob = new VisualNode(
             posX,
             posY,
             'fob',
-            { isConstructed: true, startingSuppliesPercent: 0.5, team: 'player2' } // Empieza con 50% recursos
+            { ...config, isConstructed: true, startingSuppliesPercent: 0.5, team: 'player2' }, // Empieza con 50% recursos
+            this.game
         );
         
         if (fob) {
@@ -1474,11 +1487,13 @@ export class EnemyAISystem {
         const posY = enemyHQ.y + Math.sin(angle) * distance;
         
         // Crear Planta Nuclear enemiga
-        const plant = this.game.baseFactory.createBase(
+        const config = getNodeConfig('nuclearPlant');
+        const plant = new VisualNode(
             posX,
             posY,
             'nuclearPlant',
-            { isConstructed: true, team: 'player2' }
+            { ...config, isConstructed: true, team: 'player2' },
+            this.game
         );
         
         if (plant) {
@@ -2000,11 +2015,13 @@ export class EnemyAISystem {
         const maxY = this.game.worldHeight - 100;
         const y = minY + Math.random() * (maxY - minY);
         
-        // Crear la Truck Factory enemiga usando BaseFactory
-        const truckFactory = this.game.baseFactory.createBase(x, y, 'truckFactory', {
+        // Crear la Truck Factory enemiga usando VisualNode
+        const config = getNodeConfig('truckFactory');
+        const truckFactory = new VisualNode(x, y, 'truckFactory', {
+            ...config,
             team: 'player2',
             isConstructed: false // Se crea sin construcción para que se ejecute la lógica
-        });
+        }, this.game);
         
         if (truckFactory) {
             // Marcar como construida para evitar tiempo de construcción

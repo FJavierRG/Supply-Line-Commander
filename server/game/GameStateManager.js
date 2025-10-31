@@ -17,10 +17,13 @@ import { RaceManager } from './managers/RaceManager.js';
 import { ConvoyMovementManager } from './managers/ConvoyMovementManager.js';
 import { SupplyManager } from './managers/SupplyManager.js';
 import { InvestmentManager } from './managers/InvestmentManager.js';
+import { AISystem } from './managers/AISystem.js';
 import { CurrencySystem } from './systems/CurrencySystem.js';
 import { ConstructionSystem } from './systems/ConstructionSystem.js';
 import { EffectsSystem } from './systems/EffectsSystem.js';
 import { AbandonmentSystem } from '../systems/AbandonmentSystem.js';
+import { CommandoSystem } from '../systems/CommandoSystem.js';
+import { MAP_CONFIG, calculateAbsolutePosition } from '../utils/mapGenerator.js';
 
 export class GameStateManager {
     constructor(room) {
@@ -71,12 +74,15 @@ export class GameStateManager {
         this.convoyMovementManager = new ConvoyMovementManager(this);
         this.supplyManager = new SupplyManager(this);
         this.investmentManager = new InvestmentManager(this);
+        // AISystem se inicializa después con io y roomId
+        this.aiSystem = null;
         
         // Sistemas de actualización
         this.currencySystem = new CurrencySystem(this);
         this.constructionSystem = new ConstructionSystem(this);
         this.effectsSystem = new EffectsSystem(this);
         this.abandonmentSystem = new AbandonmentSystem(this);
+        this.commandoSystem = new CommandoSystem(this); // 🆕 NUEVO: Sistema de comandos
         
         // Sistema de eventos de sonido
         this.soundEvents = [];
@@ -102,36 +108,77 @@ export class GameStateManager {
     
     /**
      * Obtiene el estado inicial del juego
+     * 🆕 USO: Ahora usa configuración compartida del generador de mapas
      */
     getInitialState() {
-        // Generar mapa simétrico (misma estructura que Mission20)
-        const baseWidth = 1920;
-        const baseHeight = 1080;
+        // 🆕 USAR CONFIGURACIÓN COMPARTIDA DEL GENERADOR DE MAPAS
+        const baseWidth = MAP_CONFIG.width;
+        const baseHeight = MAP_CONFIG.height;
         
-        // HQ Jugador 1 (izquierda)
-        this.nodes.push(this.createNode('hq', 'player1', baseWidth * 0.06, baseHeight * 0.5));
+        // 1. Generar HQ Jugador 1 (izquierda)
+        const hq1Pos = calculateAbsolutePosition(
+            MAP_CONFIG.hq.player1.xPercent,
+            MAP_CONFIG.hq.player1.yPercent,
+            baseWidth,
+            baseHeight
+        );
+        this.nodes.push(this.createNode('hq', 'player1', hq1Pos.x, hq1Pos.y));
         
-        // HQ Jugador 2 (derecha)
-        this.nodes.push(this.createNode('hq', 'player2', baseWidth * 0.94, baseHeight * 0.5));
+        // 2. Generar HQ Jugador 2 (derecha)
+        const hq2Pos = calculateAbsolutePosition(
+            MAP_CONFIG.hq.player2.xPercent,
+            MAP_CONFIG.hq.player2.yPercent,
+            baseWidth,
+            baseHeight
+        );
+        this.nodes.push(this.createNode('hq', 'player2', hq2Pos.x, hq2Pos.y));
         
-        // 🆕 CENTRALIZADO: FOBs solo para jugadores que pueden usarlos
+        // 3. 🆕 CENTRALIZADO: FOBs solo para jugadores que pueden usarlos
         if (this.raceManager.canPlayerUseFOBs('player1')) {
-            this.nodes.push(this.createNode('fob', 'player1', baseWidth * 0.208, baseHeight * 0.722, 50));
-            this.nodes.push(this.createNode('fob', 'player1', baseWidth * 0.208, baseHeight * 0.259, 50));
+            MAP_CONFIG.fobs.player1.forEach(fobPos => {
+                const absPos = calculateAbsolutePosition(
+                    fobPos.xPercent,
+                    fobPos.yPercent,
+                    baseWidth,
+                    baseHeight
+                );
+                this.nodes.push(this.createNode('fob', 'player1', absPos.x, absPos.y, 50));
+            });
         }
         
         if (this.raceManager.canPlayerUseFOBs('player2')) {
-            this.nodes.push(this.createNode('fob', 'player2', baseWidth * 0.792, baseHeight * 0.722, 50));
-            this.nodes.push(this.createNode('fob', 'player2', baseWidth * 0.792, baseHeight * 0.259, 50));
+            MAP_CONFIG.fobs.player2.forEach(fobPos => {
+                const absPos = calculateAbsolutePosition(
+                    fobPos.xPercent,
+                    fobPos.yPercent,
+                    baseWidth,
+                    baseHeight
+                );
+                this.nodes.push(this.createNode('fob', 'player2', absPos.x, absPos.y, 50));
+            });
         }
         
-        // Frentes Jugador 1
-        this.nodes.push(this.createNode('front', 'player1', baseWidth * 0.35, baseHeight * 0.722, 100));
-        this.nodes.push(this.createNode('front', 'player1', baseWidth * 0.35, baseHeight * 0.259, 100));
+        // 4. Generar Frentes Jugador 1
+        MAP_CONFIG.fronts.player1.forEach(frontPos => {
+            const absPos = calculateAbsolutePosition(
+                frontPos.xPercent,
+                frontPos.yPercent,
+                baseWidth,
+                baseHeight
+            );
+            this.nodes.push(this.createNode('front', 'player1', absPos.x, absPos.y, 100));
+        });
         
-        // Frentes Jugador 2
-        this.nodes.push(this.createNode('front', 'player2', baseWidth * 0.65, baseHeight * 0.722, 100));
-        this.nodes.push(this.createNode('front', 'player2', baseWidth * 0.65, baseHeight * 0.259, 100));
+        // 5. Generar Frentes Jugador 2
+        MAP_CONFIG.fronts.player2.forEach(frontPos => {
+            const absPos = calculateAbsolutePosition(
+                frontPos.xPercent,
+                frontPos.yPercent,
+                baseWidth,
+                baseHeight
+            );
+            this.nodes.push(this.createNode('front', 'player2', absPos.x, absPos.y, 100));
+        });
         
         // 🆕 NUEVO: Crear helicópteros iniciales para B_Nation
         const player1Config = this.raceManager.getPlayerRaceConfig('player1');
@@ -169,6 +216,19 @@ export class GameStateManager {
             raceConfigs: {
                 player1: this.raceManager.getPlayerRaceConfig('player1'),
                 player2: this.raceManager.getPlayerRaceConfig('player2')
+            },
+            // 🆕 SERVIDOR COMO AUTORIDAD: Configuración de edificios
+            buildingConfig: {
+                costs: this.buildHandler.getBuildingCosts(),
+                buildTimes: this.buildHandler.getBuildingTimes(),
+                effects: this.buildHandler.getBuildingEffects(),
+                descriptions: this.buildHandler.getBuildingDescriptions(),
+                capacities: this.buildHandler.getBuildingCapacities(),
+                bonuses: this.buildHandler.getBuildingBonuses(),
+                gameplay: this.buildHandler.getGameplayProperties(),
+                detectionRadii: this.buildHandler.getDetectionRadii(),
+                security: this.buildHandler.getSecurityProperties(),
+                behavior: this.buildHandler.getBehaviorProperties()
             }
         };
     }
@@ -310,6 +370,14 @@ export class GameStateManager {
     }
     
     /**
+     * Maneja despliegue de comando especial operativo
+     * 🆕 NUEVO
+     */
+    handleCommandoDeploy(playerTeam, x, y) {
+        return this.combatHandler.handleCommandoDeploy(playerTeam, x, y);
+    }
+    
+    /**
      * Inicia el loop de actualización del juego
      */
     startGameLoop(updateCallback, victoryCallback = null) {
@@ -400,67 +468,16 @@ export class GameStateManager {
         // === SISTEMA DE INVERSIÓN (intelRadio) ===
         this.investmentManager.update(dt);
         
-        // === SISTEMA DE ABANDONO (intelRadio) ===
-        for (const node of this.nodes) {
-            if (node.type === 'intelRadio' && node.isAbandoning) {
-                const now = this.gameTime * 1000; // Convertir a ms
-                const elapsed = now - node.abandonStartTime;
-                
-                // Actualizar fase de abandono (tiempos rápidos para intelRadio)
-                if (elapsed < node.abandonPhase1Duration) {
-                    node.abandonPhase = 1; // Gris claro
-                } else if (elapsed < node.abandonPhase1Duration + node.abandonPhase2Duration) {
-                    node.abandonPhase = 2; // Gris oscuro
-                } else {
-                    node.abandonPhase = 3; // Listo para eliminar
-                }
-            }
-        }
+        // === SISTEMA DE ABANDONO (centralizado) ===
+        this.abandonmentSystem.checkAbandonmentConditions();
+        this.abandonmentSystem.update(dt);
         
-        // === 🆕 NUEVO: SISTEMA DE AUTODESTRUCCIÓN (Base Aérea) ===
-        for (const node of this.nodes) {
-            if ((node.type === 'aerialBase' || node.isAerialBase) && 
-                node.supplies <= 0 && 
-                node.autoDestroy &&
-                (!node.landedHelicopters || node.landedHelicopters.length === 0) &&
-                !node.isAbandoning) {
-                
-                console.log(`💥 ===== Base Aérea ${node.id} INICIANDO ABANDONO =====`);
-                console.log(`   📊 Estado: supplies=${node.supplies}, landedHelicopters=${node.landedHelicopters?.length || 0}`);
-                console.log(`   ⏱️ gameTime=${this.gameTime}s (${this.gameTime * 1000}ms)`);
-                
-                node.isAbandoning = true;
-                node.abandonStartTime = this.gameTime * 1000; // ms
-                node.abandonPhase = 1;
-                
-                console.log(`   ✅ Configurado: isAbandoning=${node.isAbandoning}, phase=${node.abandonPhase}, abandonStartTime=${node.abandonStartTime}ms`);
-                console.log(`   ⏳ Duraciones: fase1=${node.abandonPhase1Duration}ms, fase2=${node.abandonPhase2Duration}ms, total=${node.abandonPhase1Duration + node.abandonPhase2Duration}ms`);
-            }
-        }
+        // === SISTEMA DE COMANDOS ESPECIALES OPERATIVOS ===
+        this.commandoSystem.update(dt);
         
-        // === SISTEMA DE ABANDONO (Base Aérea) ===
-        for (const node of this.nodes) {
-            if ((node.type === 'aerialBase' || node.isAerialBase) && node.isAbandoning) {
-                const now = this.gameTime * 1000; // Convertir a ms
-                const elapsed = now - node.abandonStartTime;
-                
-                // 🔍 DEBUG: Log cada 60 ticks
-                if (this.tickCounter % 60 === 0) {
-                    console.log(`🔍 Base Aérea ${node.id}: elapsed=${elapsed}ms, phase=${node.abandonPhase}, dur1=${node.abandonPhase1Duration}ms, dur2=${node.abandonPhase2Duration}ms`);
-                }
-                
-                // Actualizar fase de abandono (mismos tiempos que intelRadio)
-                if (elapsed < node.abandonPhase1Duration) {
-                    node.abandonPhase = 1; // Gris claro
-                } else if (elapsed < node.abandonPhase1Duration + node.abandonPhase2Duration) {
-                    node.abandonPhase = 2; // Gris oscuro
-                } else {
-                    node.abandonPhase = 3; // Listo para eliminar
-                    if (this.tickCounter % 60 === 0) {
-                        console.log(`💥 Base Aérea ${node.id} LISTA PARA ELIMINAR: elapsed=${elapsed}ms (total=${node.abandonPhase1Duration + node.abandonPhase2Duration}ms)`);
-                    }
-                }
-            }
+        // === SISTEMA DE IA (solo si hay IA en la partida) ===
+        if (this.room?.hasAI) {
+            this.aiSystem.update(dt);
         }
         
         // === SISTEMAS DE SIMULACIÓN ===
@@ -498,8 +515,8 @@ export class GameStateManager {
         this.territory.update(dt);
         this.territory.updateAbandonmentProgress(dt);
         
-        // Sistema de abandono (verificar condiciones y actualizar fases)
-        this.abandonmentSystem.checkAbandonmentConditions();
+        // 🆕 FIX: Removido checkAbandonmentConditions() duplicado - ya se llama arriba
+        // Solo actualizar fases de abandono (el update ya maneja las fases)
         this.abandonmentSystem.update(dt);
         
         // === ACTUALIZAR DRONES (MOVIMIENTO + IMPACTOS + INTERCEPCIONES + ALERTAS) ===

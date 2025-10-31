@@ -1,5 +1,6 @@
 // ===== MANAGER DE MOVIMIENTO DE CONVOYES =====
 import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
+import { GAME_CONFIG } from '../../config/gameConfig.js';
 
 export class ConvoyMovementManager {
     constructor(gameState) {
@@ -63,13 +64,8 @@ export class ConvoyMovementManager {
      * @returns {number} Velocidad en píxeles por segundo
      */
     getVehicleSpeed(vehicleType) {
-        if (vehicleType === 'heavy_truck') {
-            return 40; // Camión pesado
-        } else if (vehicleType === 'ambulance') {
-            return 60; // Ambulancia: 20% más rápida que truck (50 * 1.2 = 60)
-        } else {
-            return 50; // Truck normal
-        }
+        // 🆕 SERVIDOR COMO AUTORIDAD: Usar configuración centralizada
+        return GAME_CONFIG.convoy.vehicleSpeeds[vehicleType] || GAME_CONFIG.convoy.vehicleSpeeds.truck;
     }
     
     /**
@@ -83,7 +79,8 @@ export class ConvoyMovementManager {
         if (!convoy.sabotagePenaltyApplied && fromNode && fromNode.effects) {
             const sabotageEffect = fromNode.effects.find(e => e.type === 'fobSabotage');
             if (sabotageEffect && sabotageEffect.truckCount > 0) {
-                vehicleSpeed *= 0.5; // 50% de penalización
+                // 🆕 SERVIDOR COMO AUTORIDAD: Usar configuración centralizada
+                vehicleSpeed *= GAME_CONFIG.convoy.penalties.sabotage;
                 convoy.sabotagePenaltyApplied = true; // Marcar como aplicado
                 
                 // Consumir un camión del contador
@@ -107,10 +104,17 @@ export class ConvoyMovementManager {
      */
     applyEngineerCenterBonus(convoy, vehicleSpeed) {
         const hasEngineerCenter = this.gameState.nodes.some(n => 
-            n.type === 'engineerCenter' && n.team === convoy.team && n.constructed
+            n.type === 'engineerCenter' && 
+            n.team === convoy.team && 
+            n.constructed &&
+            !n.disabled // 🆕 NUEVO: No aplicar bonus si está disabled
         );
         if (hasEngineerCenter) {
-            vehicleSpeed *= 1.5; // +50% velocidad
+            // 🆕 SERVIDOR COMO AUTORIDAD: Usar configuración centralizada
+            const bonusConfig = GAME_CONFIG.convoy.bonuses.engineerCenter;
+            if (bonusConfig.affectedVehicles.includes(convoy.vehicleType)) {
+                vehicleSpeed *= bonusConfig.speedMultiplier;
+            }
         }
         return vehicleSpeed;
     }
@@ -123,6 +127,9 @@ export class ConvoyMovementManager {
      * @param {number} convoyIndex - Índice del convoy en el array
      */
     handleConvoyArrival(convoy, fromNode, toNode, convoyIndex) {
+        // DEBUG: Log desactivado
+        // console.log(`🎯 handleConvoyArrival: convoy=${convoy.id}, cargo=${convoy.cargo}, returning=${convoy.returning}`);
+        
         if (!convoy.returning) {
             // === AMBULANCIA: Resolver emergencia ===
             if (convoy.isMedical) {
@@ -133,8 +140,7 @@ export class ConvoyMovementManager {
                     // HQ: regresar ambulancia
                     console.log(`🚑 Ambulancia ${convoy.id} llegó - Emergencia resuelta en ${convoy.targetFrontId} - Regresando al HQ`);
                     convoy.returning = true;
-                    convoy.progress = 0;
-                    convoy.target = convoy.originBase; // Actualizar target para el regreso
+                    convoy.progress = 0; // RESETEAR progress para el viaje de vuelta
                     return;
                 } else if (fromNode && fromNode.type === 'campaignHospital') {
                     // Hospital: consumir ambulancia - NO regresar
@@ -157,8 +163,8 @@ export class ConvoyMovementManager {
             
             // Iniciar regreso
             convoy.returning = true;
-            convoy.progress = 0;
-            convoy.target = convoy.originBase; // Actualizar target para el regreso
+            convoy.progress = 0; // RESETEAR progress para el viaje de vuelta
+            // NO cambiar fromId/toId - el cliente los interpreta según returning=true
         } else {
             // Llegó de vuelta, devolver vehículo/ambulancia
             this.returnVehicle(convoy, fromNode, convoyIndex);

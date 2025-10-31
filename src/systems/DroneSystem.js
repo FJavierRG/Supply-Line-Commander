@@ -69,6 +69,11 @@ export class DroneSystem {
      * Actualiza todos los drones activos
      */
     update(dt) {
+        // En multijugador, el servidor maneja toda la lógica de drones
+        if (this.game.isMultiplayer) {
+            return;
+        }
+        
         for (let i = this.drones.length - 1; i >= 0; i--) {
             const drone = this.drones[i];
             

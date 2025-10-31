@@ -524,6 +524,11 @@ export class TerritorySystem {
      * @param {number} dt - Delta time en segundos
      */
     update(dt) {
+        // En multijugador, el servidor maneja toda la lógica de territorio
+        if (this.game.isMultiplayer) {
+            return;
+        }
+        
         // Verificar FOBs fuera de territorio cada segundo
         this.checkAbandonmentTimer += dt;
         if (this.checkAbandonmentTimer >= this.checkAbandonmentInterval) {
@@ -545,7 +550,8 @@ export class TerritorySystem {
             n.constructed && 
             !n.isAbandoning &&
             n.type !== 'drone' && // Excluir proyectiles
-            n.type !== 'sniperStrike'
+            n.type !== 'sniperStrike' &&
+            n.type !== 'specopsCommando' // 🆕 Excluir comando - puede estar en territorio enemigo
         );
         
         for (const building of allyBuildings) {
@@ -561,7 +567,8 @@ export class TerritorySystem {
             n.constructed &&
             !n.isAbandoning &&
             n.type !== 'drone' && // Excluir proyectiles
-            n.type !== 'sniperStrike'
+            n.type !== 'sniperStrike' &&
+            n.type !== 'specopsCommando' // 🆕 Excluir comando - puede estar en territorio enemigo
         );
         
         for (const building of enemyBuildings) {

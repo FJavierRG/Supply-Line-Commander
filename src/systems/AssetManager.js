@@ -36,7 +36,9 @@ export class AssetManager {
             // Placeholder para Centro de Ingenieros (reutiliza construcción hasta tener arte)
             'building-engineer-center': 'assets/sprites/buildings/engineer_center.png',
             'building-intel-radio': 'assets/sprites/buildings/intel_radio.png',
+            'building-intel-center': 'assets/sprites/buildings/intel_center.png', // 🆕 Centro de Inteligencia
             'building-aerial-base': 'assets/sprites/buildings/aerial_base.png',
+            'building-vigilance-tower': 'assets/sprites/buildings/vigilance_tower.png', // 🆕 Torre de Vigilancia
 
             // Carreteras (4 variantes)
             'road-1': 'assets/sprites/buildings/carretera1.png',
@@ -70,6 +72,7 @@ export class AssetManager {
             
             // Sprite del cursor para Fob Sabotaje
             'specops_selector': 'assets/sprites/ui/specops_selector.png',
+            'specops_observer': 'assets/sprites/buildings/specops_observer.png', // 🆕 NUEVO: Sprite del comando especial operativo
             
             // Nueva UI de tienda
             'ui-store-main': 'assets/sprites/ui/UIFrames/store_main_window.png',

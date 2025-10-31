@@ -1,8 +1,11 @@
 // ===== HANDLER DE CONVOYES Y AMBULANCIAS =====
 import { v4 as uuidv4 } from 'uuid';
-import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
-import { getRaceConfig, getRaceTransportSystem, canRaceUseFOBs } from '../../../src/config/races.js';
-import { VALID_ROUTES, RACE_SPECIAL_ROUTES } from '../../../src/config/constants.js';
+import { GAME_CONFIG } from '../../config/gameConfig.js';
+import { 
+    getServerRaceConfig, 
+    getServerRaceTransportSystem, 
+    canServerRaceUseFOBs 
+} from '../../config/raceConfig.js';
 
 export class ConvoyHandler {
     constructor(gameState) {
@@ -18,7 +21,7 @@ export class ConvoyHandler {
      */
     getPlayerRaceConfig(playerTeam) {
         const raceId = this.gameState.playerRaces[playerTeam];
-        return getRaceConfig(raceId);
+        return getServerRaceConfig(raceId);
     }
     
     /**
@@ -28,15 +31,15 @@ export class ConvoyHandler {
      * @returns {Array} Array de tipos de nodos válidos
      */
     getValidRoutesForRace(fromType, raceConfig) {
-        if (!raceConfig) return VALID_ROUTES[fromType] || [];
+        if (!raceConfig) return GAME_CONFIG.routes.valid[fromType] || [];
         
         // Si la raza tiene rutas especiales (aerial), usarlas
         if (raceConfig.specialMechanics?.transportSystem === 'aerial') {
-            return RACE_SPECIAL_ROUTES[raceConfig.id]?.[fromType] || VALID_ROUTES[fromType] || [];
+            return GAME_CONFIG.routes.raceSpecial[raceConfig.id]?.[fromType] || GAME_CONFIG.routes.valid[fromType] || [];
         }
         
         // Si no, usar rutas normales
-        return VALID_ROUTES[fromType] || [];
+        return GAME_CONFIG.routes.valid[fromType] || [];
     }
     
     /**
@@ -96,6 +99,11 @@ export class ConvoyHandler {
             return { success: false, reason: 'Nodos no encontrados' };
         }
         
+        // 🆕 NUEVO: Validar que el nodo origen no esté disabled
+        if (fromNode.disabled) {
+            return { success: false, reason: 'Nodo origen deshabilitado' };
+        }
+        
         // Validar que ambos sean del mismo equipo
         if (fromNode.team !== playerTeam || toNode.team !== playerTeam) {
             return { success: false, reason: 'No puedes enviar a nodos enemigos' };
@@ -141,33 +149,43 @@ export class ConvoyHandler {
         if (cargoSystem.type === 'aerial') {
             // Sistema aéreo: Solo carga cuando sale del HQ
             if (fromNode.type === 'hq') {
-                const capacity = SERVER_NODE_CONFIG.vehicles[vehicleType].baseCapacity;
+                const capacity = GAME_CONFIG.vehicles[vehicleType].capacity;
                 suppliesToTransport = Math.min(capacity, fromNode.supplies);
                 fromNode.supplies -= suppliesToTransport;
             }
             // Si sale de un Front, no transporta suministros
         } else {
             // Sistema tradicional: Carga normal
-            let capacity = SERVER_NODE_CONFIG.vehicles[vehicleType].baseCapacity;
+            let capacity = GAME_CONFIG.vehicles[vehicleType].capacity;
             
-            // Bonus de TruckFactory (solo para heavy_truck)
+            // Bonus de TruckFactory (solo para heavy_truck, solo si no están disabled)
             if (vehicleType === 'heavy_truck') {
                 const truckFactories = this.gameState.nodes.filter(n => 
-                    n.type === 'truckFactory' && n.team === playerTeam && n.constructed
+                    n.type === 'truckFactory' && 
+                    n.team === playerTeam && 
+                    n.constructed &&
+                    !n.disabled // 🆕 NUEVO: No aplicar bonus si está disabled
                 ).length;
                 
                 if (truckFactories > 0) {
-                    const bonusPerFactory = SERVER_NODE_CONFIG.effects.truckFactory.capacityBonus;
+                    // Usar configuración de GAME_CONFIG (correcta)
+                    const bonusPerFactory = GAME_CONFIG.convoy.bonuses.truckFactory.capacityBonus;
                     capacity += truckFactories * bonusPerFactory;
-                    console.log(`🚚 Heavy truck con ${truckFactories} fábrica(s): capacidad = ${capacity}`);
                 }
             }
             
-            suppliesToTransport = Math.min(capacity, fromNode.supplies);
-            
-            // Quitar suministros del nodo origen
-            if (fromNode.hasSupplies) {
-                fromNode.supplies -= suppliesToTransport;
+            // 🆕 CRÍTICO: HQ no tiene suministros variables - los heavy_trucks salen "llenos por defecto"
+            if (fromNode.type === 'hq') {
+                // HQ: cargo = capacity (sin quitar suministros del HQ)
+                suppliesToTransport = capacity;
+            } else {
+                // Otros nodos (FOB): cargar normalmente desde supplies
+                suppliesToTransport = Math.min(capacity, fromNode.supplies);
+                
+                // Quitar suministros del nodo origen
+                if (fromNode.hasSupplies) {
+                    fromNode.supplies -= suppliesToTransport;
+                }
             }
         }
         
@@ -210,7 +228,7 @@ export class ConvoyHandler {
      * @returns {Object} Resultado del despegue
      */
     handleHelicopterDispatch(playerTeam, fromNode, toNode) {
-        const heliConfig = SERVER_NODE_CONFIG.vehicles.helicopter;
+        const heliConfig = GAME_CONFIG.vehicles.helicopter;
         
         // Buscar helicóptero en el nodo
         const heliId = fromNode.landedHelicopters[0];
@@ -220,20 +238,14 @@ export class ConvoyHandler {
             return { success: false, reason: 'No se encontró el helicóptero' };
         }
         
-        // Cargar suministros si sale del HQ (ANTES de validar cargo)
-        if (fromNode.type === 'hq') {
-            // HQ tiene suministros infinitos (supplies = null)
-            heli.cargo = heliConfig.baseCapacity;
-            console.log(`🚁 Helicóptero ${heli.id} cargó ${heli.cargo} suministros del HQ (infinitos)`);
-        }
-        
-        // 🆕 NUEVO: Validar Base Aérea - solo acepta helicópteros no llenos
+        // 🆕 CAMBIO: Ya NO cargamos al despegar - la carga se hace al aterrizar en HQ
+        // Validar Base Aérea - solo acepta helicópteros no llenos
         const isAerialBase = toNode.type === 'aerialBase' || toNode.isAerialBase;
         if (isAerialBase && heli.cargo >= heliConfig.baseCapacity) {
             return { success: false, reason: 'El helicóptero ya está lleno - no necesita recargar' };
         }
         
-        // Validar cargo según destino (DESPUÉS de cargar)
+        // Validar cargo según destino
         if (toNode.type === 'front' && heli.cargo < heliConfig.deliveryAmount) {
             return { success: false, reason: `Sin suficientes suministros (necesita ${heliConfig.deliveryAmount}, tiene ${heli.cargo})` };
         }
@@ -242,20 +254,25 @@ export class ConvoyHandler {
             return { success: false, reason: 'El helicóptero aún tiene suministros - no necesita recargar' };
         }
         
+        // CRÍTICO: Actualizar currentNodeId ANTES de cambiar el estado a 'flying'
+        // Esto evita que el cliente renderice el helicóptero en el destino antes de empezar a moverse
+        // (igual que con convoyes: fromId y toId se establecen antes de crear el convoy)
+        heli.currentNodeId = fromNode.id; // Mantener origen hasta que llegue al destino
+        
         // Cambiar estado a volando
         heli.state = 'flying';
         heli.targetNodeId = toNode.id;
         heli.progress = 0;
         
-        // Calcular distancia
+        // Calcular distancia (usar currentNodeId como origen)
         const dx = toNode.x - fromNode.x;
         const dy = toNode.y - fromNode.y;
         heli.initialDistance = Math.sqrt(dx * dx + dy * dy);
         
-        // Remover del nodo origen
+        // Remover del nodo origen (DESPUÉS de establecer currentNodeId)
         fromNode.landedHelicopters = fromNode.landedHelicopters.filter(id => id !== heliId);
         
-        console.log(`🚁 Helicóptero ${heli.id} despegó de ${fromNode.type} ${fromNode.id} hacia ${toNode.type} ${toNode.id} (cargo: ${heli.cargo})`);
+        console.log(`🚁 Helicóptero ${heli.id} despegó de ${fromNode.type} ${fromNode.id} hacia ${toNode.type} ${toNode.id} (cargo actual: ${heli.cargo})`);
         
         // Sonidos
         if (fromNode.type === 'hq') {
@@ -275,6 +292,11 @@ export class ConvoyHandler {
         
         if (!fromNode || !toNode) {
             return { success: false, reason: 'Nodos no encontrados' };
+        }
+        
+        // 🆕 NUEVO: Validar que el nodo origen no esté disabled
+        if (fromNode.disabled) {
+            return { success: false, reason: 'Origen deshabilitado' };
         }
         
         // Validar origen (HQ o Campaign Hospital)

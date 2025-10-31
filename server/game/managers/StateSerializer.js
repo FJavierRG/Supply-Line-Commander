@@ -63,6 +63,11 @@ export class StateSerializer {
             return true;
         }
         
+        // Cambios en estado disabled (crítico para efectos de comando)
+        if (node.disabled !== lastNodeState.disabled) {
+            return true;
+        }
+        
         return false;
     }
     
@@ -90,7 +95,8 @@ export class StateSerializer {
                     isAbandoning: node.isAbandoning,
                     abandonPhase: node.abandonPhase,
                     abandonStartTime: node.abandonStartTime || 0, // Timestamp para calcular tiempo transcurrido
-                    effects: node.effects ? [...node.effects] : []
+                    effects: node.effects ? [...node.effects] : [],
+                    disabled: node.disabled || false // 🆕 NUEVO: Estado disabled
                 });
                 
                 return {
@@ -131,7 +137,8 @@ export class StateSerializer {
                     investmentStarted: node.investmentStarted || false,
                     investmentCompleted: node.investmentCompleted || false,
                     abandonPhase1Duration: node.abandonPhase1Duration || 2000,
-                    abandonPhase2Duration: node.abandonPhase2Duration || 3000
+                    abandonPhase2Duration: node.abandonPhase2Duration || 3000,
+                    disabled: node.disabled || false // 🆕 NUEVO: Estado disabled (genérico)
                 };
             });
     }
@@ -149,8 +156,8 @@ export class StateSerializer {
         }
         
         // OPTIMIZACIÓN DEAD RECKONING: Reducir frecuencia de updates durante movimiento
-        // Cambios significativos en progress - aumentado de 0.1 a 0.15 (menos updates)
-        if (Math.abs(convoy.progress - lastConvoyState.progress) >= 0.15) {
+        // Cambios significativos en progress - aumentado a 0.25 para máxima fluidez (muchos menos updates)
+        if (Math.abs(convoy.progress - lastConvoyState.progress) >= 0.25) {
             return true;
         }
         
@@ -212,7 +219,8 @@ export class StateSerializer {
                     availableHelicopters: node.availableHelicopters || 0,
                     ambulanceAvailable: node.ambulanceAvailable,
                     isAbandoning: node.isAbandoning,
-                    effects: node.effects ? [...node.effects] : []
+                    effects: node.effects ? [...node.effects] : [],
+                    disabled: node.disabled || false // 🆕 NUEVO: Estado disabled
                 });
                 
                 return {
@@ -253,7 +261,8 @@ export class StateSerializer {
                     investmentStarted: node.investmentStarted || false,
                     investmentCompleted: node.investmentCompleted || false,
                     abandonPhase1Duration: node.abandonPhase1Duration || 2000,
-                    abandonPhase2Duration: node.abandonPhase2Duration || 3000
+                    abandonPhase2Duration: node.abandonPhase2Duration || 3000,
+                    disabled: node.disabled || false // 🆕 NUEVO: Estado disabled (genérico)
                 };
             });
     }

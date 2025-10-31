@@ -1,5 +1,5 @@
 // ===== SISTEMA DE MOVIMIENTO DE FRENTES =====
-import { FRONT_MOVEMENT_CONFIG, FOB_CURRENCY_CONFIG, BASE_CONFIG } from '../config/constants.js';
+import { BASE_CONFIG } from '../config/constants.js';
 
 // Configuración de colisión entre frentes
 const COLLISION_CONFIG = {
@@ -11,9 +11,9 @@ export class FrontMovementSystem {
     constructor(game) {
         this.game = game;
         
-        // Velocidades configurables (píxeles por segundo)
-        this.advanceSpeed = FRONT_MOVEMENT_CONFIG.advanceSpeed;
-        this.retreatSpeed = FRONT_MOVEMENT_CONFIG.retreatSpeed;
+        // Velocidades configurables (píxeles por segundo) - desde configuración del servidor
+        this.advanceSpeed = this.game.serverBuildingConfig?.frontMovement?.advanceSpeed || 3;
+        this.retreatSpeed = this.game.serverBuildingConfig?.frontMovement?.retreatSpeed || 3;
         
         // Trackeo de avance para currency
         this.totalPixelsGainedThisLevel = 0;
@@ -34,6 +34,11 @@ export class FrontMovementSystem {
      * @param {number} deltaTime - Tiempo transcurrido en milisegundos
      */
     update(deltaTime) {
+        // En multijugador, el servidor maneja todo el movimiento de frentes
+        if (this.game.isMultiplayer) {
+            return;
+        }
+        
         const myTeam = this.game.myTeam || 'ally';
         const allyFronts = this.game.bases.filter(b => b.type === 'front' && b.team === myTeam);
         const enemyFronts = this.game.bases.filter(b => b.type === 'front' && b.team !== myTeam && b.type === 'front');
@@ -215,11 +220,12 @@ export class FrontMovementSystem {
         this.totalPixelsGainedThisLevel += pixelsGained;
         
         // Convertir pixels acumulados a currency (solo la parte entera)
-        const currencyToAward = Math.floor(this.pendingCurrencyPixels / FOB_CURRENCY_CONFIG.pixelsPerCurrency);
+        const pixelsPerCurrency = this.game.serverBuildingConfig?.currency?.pixelsPerCurrency || 2;
+        const currencyToAward = Math.floor(this.pendingCurrencyPixels / pixelsPerCurrency);
         
         if (currencyToAward > 0) {
             this.game.addMissionCurrency(currencyToAward);
-            this.pendingCurrencyPixels -= currencyToAward * FOB_CURRENCY_CONFIG.pixelsPerCurrency;
+            this.pendingCurrencyPixels -= currencyToAward * pixelsPerCurrency;
             
             // Log cuando se otorga currency
             // Currency ganada (silencioso para no spamear consola)
@@ -238,11 +244,12 @@ export class FrontMovementSystem {
         this.pendingEnemyCurrencyPixels += pixelsGained;
         
         // Convertir pixels acumulados a currency (solo la parte entera)
-        const currencyToAward = Math.floor(this.pendingEnemyCurrencyPixels / FOB_CURRENCY_CONFIG.pixelsPerCurrency);
+        const pixelsPerCurrency = this.game.serverBuildingConfig?.currency?.pixelsPerCurrency || 2;
+        const currencyToAward = Math.floor(this.pendingEnemyCurrencyPixels / pixelsPerCurrency);
         
         if (currencyToAward > 0) {
             this.game.enemyAI.addCurrency(currencyToAward);
-            this.pendingEnemyCurrencyPixels -= currencyToAward * FOB_CURRENCY_CONFIG.pixelsPerCurrency;
+            this.pendingEnemyCurrencyPixels -= currencyToAward * pixelsPerCurrency;
             
             // Log solo cada 50$ de avance para no spamear
             if (currencyToAward >= 50) {

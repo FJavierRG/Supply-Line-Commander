@@ -1,6 +1,8 @@
 // ===== GESTOR DE RED - Cliente Socket.IO =====
 import { BackgroundTileSystem } from './BackgroundTileSystem.js';
-import { Convoy } from '../entities/Convoy.js';
+import { Convoy } from '../entities/convoy.js';
+import { VisualNode } from '../entities/visualNode.js';
+import { getNodeConfig } from '../config/nodes.js';
 
 export class NetworkManager {
     constructor(game) {
@@ -24,16 +26,13 @@ export class NetworkManager {
                            window.location.hostname === '';
         
         if (isLocalhost) {
-        this.serverUrl = 'http://localhost:3000';
+            this.serverUrl = 'http://localhost:3000';
         } else {
             // Usar el mismo servidor desde donde se cargó la página
             this.serverUrl = window.location.origin;
         }
         
-        console.log('🌐 Server URL detectada:', this.serverUrl);
-        console.log('🌐 Hostname actual:', window.location.hostname);
-        console.log('🌐 Protocolo actual:', window.location.protocol);
-        console.log('🌐 Origen actual:', window.location.origin);
+        // Logs de debug removidos para reducir spam en consola
         this.isMultiplayer = false;
     }
     
@@ -73,12 +72,12 @@ export class NetworkManager {
         });
         
         this.socket.on('connect', () => {
-            console.log('✅ Conectado al servidor:', this.socket.id);
+            // console.log('✅ Conectado al servidor:', this.socket.id); // Log removido
             this.connected = true;
         });
         
         this.socket.on('disconnect', () => {
-            console.log('❌ Desconectado del servidor');
+            // console.log('❌ Desconectado del servidor'); // Log removido
             this.connected = false;
         });
         
@@ -96,9 +95,7 @@ export class NetworkManager {
         // Ping/pong para medir latencia
         this.socket.on('pong', (timestamp) => {
             this.ping = Date.now() - timestamp;
-            if (this.ping > 200) {
-                console.log(`⚠️ Ping alto: ${this.ping}ms`);
-            }
+            // Log removido - solo mantener si ping es muy alto (crítico)
         });
         
         // === EVENTOS DE LOBBY ===
@@ -132,6 +129,21 @@ export class NetworkManager {
         this.socket.on('lobby_update', (data) => {
             console.log('🔄 Actualización del lobby:', data);
             this.updateLobbyUI(data);
+        });
+        
+        this.socket.on('ai_player_added', (data) => {
+            console.log('🤖 IA añadida:', data);
+            // La UI se actualiza con lobby_update
+        });
+        
+        this.socket.on('ai_player_updated', (data) => {
+            console.log('🤖 IA actualizada:', data);
+            // La UI se actualiza con lobby_update
+        });
+        
+        this.socket.on('ai_player_removed', () => {
+            console.log('🤖 IA eliminada');
+            // La UI se actualiza con lobby_update
         });
         
         this.socket.on('kicked_from_room', (data) => {
@@ -184,8 +196,8 @@ export class NetworkManager {
         });
         
         this.socket.on('game_start', (data) => {
-            console.log('🎮 Partida iniciada! Mi equipo:', data.myTeam);
-            console.log('🏛️ Datos recibidos del servidor:', data);
+            // console.log('🎮 Partida iniciada! Mi equipo:', data.myTeam); // Log removido
+            // console.log('🏛️ Datos recibidos del servidor:', data); // Log removido
             this.isMultiplayer = true;
             this.myTeam = data.myTeam;
             this.opponentTeam = data.opponentTeam;
@@ -193,30 +205,44 @@ export class NetworkManager {
             // Asignar team al juego
             this.game.myTeam = this.myTeam;
             
-            // 🆕 NUEVO: Establecer raza seleccionada desde el servidor
-            if (data.selectedRace) {
-                this.game.selectedRace = data.selectedRace;
-                console.log('🏛️ Raza establecida desde servidor:', data.selectedRace);
-                console.log('🏛️ this.game.selectedRace ahora es:', this.game.selectedRace);
-                
-                // 🆕 NUEVO: Actualizar la tienda con la nueva raza
-                if (this.game.storeUI) {
-                    this.game.storeUI.setRace(data.selectedRace);
-                    console.log('🏛️ Tienda actualizada con raza:', data.selectedRace);
-                }
-            } else {
-                console.log('❌ No se recibió selectedRace del servidor');
-            }
-            
-            // 🆕 CENTRALIZADO: Sincronizar información de razas del estado inicial
+            // 🆕 CENTRALIZADO: Sincronizar información de razas del estado inicial PRIMERO
             if (data.initialState && data.initialState.playerRaces) {
-                console.log('🏛️ Información de razas recibida:', data.initialState.playerRaces);
+                // console.log('🏛️ Información de razas recibida:', data.initialState.playerRaces); // Log removido
                 this.game.playerRaces = data.initialState.playerRaces;
             }
             
             if (data.initialState && data.initialState.raceConfigs) {
-                console.log('🏛️ Configuraciones de razas recibidas:', data.initialState.raceConfigs);
+                // console.log('🏛️ Configuraciones de razas recibidas:', data.initialState.raceConfigs); // Log removido
                 this.game.raceConfigs = data.initialState.raceConfigs;
+            }
+            
+            // 🆕 NUEVO: Establecer raza seleccionada desde el servidor
+            if (data.selectedRace) {
+                this.game.selectedRace = data.selectedRace;
+                // console.log('🏛️ Raza establecida desde servidor:', data.selectedRace); // Log removido
+                // console.log('🏛️ this.game.selectedRace ahora es:', this.game.selectedRace); // Log removido
+            } else {
+                // 🎯 CRÍTICO: Si no hay selectedRace pero hay playerRaces, usar la raza del playerRaces
+                if (this.game.playerRaces && this.game.playerRaces[this.myTeam]) {
+                    const raceFromPlayerRaces = this.game.playerRaces[this.myTeam];
+                    // console.log(`🏛️ No hay selectedRace, usando raceFromPlayerRaces: ${raceFromPlayerRaces}`); // Log removido
+                    this.game.selectedRace = raceFromPlayerRaces;
+                } else {
+                    console.error('❌ No se recibió selectedRace del servidor y no hay playerRaces');
+                }
+            }
+            
+            // 🎯 NUEVO: Actualizar tienda después de establecer la raza
+            if (this.game.storeUI) {
+                if (this.game.selectedRace) {
+                    this.game.storeUI.setRace(this.game.selectedRace);
+                    // console.log('🏛️ Tienda actualizada con raza:', this.game.selectedRace); // Log removido
+                }
+                // Actualizar categorías directamente con la configuración del servidor
+                if (this.game.raceConfigs) {
+                    this.game.storeUI.updateCategories();
+                    // console.log('🏛️ Tienda actualizada con configuración del servidor'); // Log removido
+                }
             }
             
             // CRÍTICO: Desactivar tutorial ANTES de cargar estado
@@ -227,11 +253,11 @@ export class NetworkManager {
                 if (this.game.state === 'tutorial') {
                     this.game.state = 'menu';
                 }
-                console.log('📚 TutorialManager.active = false');
+                // console.log('📚 TutorialManager.active = false'); // Log removido
             }
             if (this.game.tutorialSystem) {
                 this.game.tutorialSystem.enabled = false;
-                console.log('📚 TutorialSystem desactivado');
+                // console.log('📚 TutorialSystem desactivado'); // Log removido
             }
             
             // Cargar estado inicial
@@ -280,20 +306,20 @@ export class NetworkManager {
             if (!this.game._gameLoopRunning) {
                 this.game._gameLoopRunning = true;
                 this.game.gameLoop();
-                console.log('🔄 Game loop iniciado');
+                // console.log('🔄 Game loop iniciado'); // Log removido
             }
             
             // Debug: Verificar estado del juego
-            console.log('✅ Juego multijugador iniciado correctamente');
-            console.log('📊 Estado:', {
-                state: this.game.state,
-                nodes: this.game.nodes.length,
-                myTeam: this.game.myTeam,
-                isMultiplayer: this.game.isMultiplayer,
-                worldWidth: this.game.worldWidth,
-                worldHeight: this.game.worldHeight,
-                backgroundTiles: !!this.game.backgroundTiles
-            });
+            // console.log('✅ Juego multijugador iniciado correctamente'); // Log removido
+            // console.log('📊 Estado:', { // Log removido
+            //     state: this.game.state,
+            //     nodes: this.game.nodes.length,
+            //     myTeam: this.game.myTeam,
+            //     isMultiplayer: this.game.isMultiplayer,
+            //     worldWidth: this.game.worldWidth,
+            //     worldHeight: this.game.worldHeight,
+            //     backgroundTiles: !!this.game.backgroundTiles
+            // });
             
             // Verificar que los assets estén completamente cargados
             const assetsLoaded = this.game.assetManager.isReady();
@@ -302,18 +328,18 @@ export class NetworkManager {
             // Verificar también que todos los assets estén realmente disponibles
             const allAssetsReady = assetsLoaded && criticalAssetsLoaded;
             
-            console.log('🖼️ Verificación de assets:', {
-                allLoaded: assetsLoaded,
-                criticalLoaded: criticalAssetsLoaded,
-                allReady: allAssetsReady,
-                progress: this.game.assetManager.getProgress()
-            });
+            // console.log('🖼️ Verificación de assets:', { // Log removido
+            //     allLoaded: assetsLoaded,
+            //     criticalLoaded: criticalAssetsLoaded,
+            //     allReady: allAssetsReady,
+            //     progress: this.game.assetManager.getProgress()
+            // });
             
             // Si no están completamente listos, esperar
             if (!allAssetsReady) {
-                console.log('⏳ Esperando a que carguen completamente los assets...');
+                // console.log('⏳ Esperando a que carguen completamente los assets...'); // Log removido
                 this.waitForCriticalAssets().then(() => {
-                    console.log('✅ Assets completamente cargados, iniciando partida...');
+                    // console.log('✅ Assets completamente cargados, iniciando partida...'); // Log removido
                     this.finishGameStart();
                 });
                 return;
@@ -328,12 +354,12 @@ export class NetworkManager {
         });
         
         this.socket.on('game_over', (data) => {
-            console.log('🏆 Partida terminada:', data);
+            // console.log('🏆 Partida terminada:', data); // Log removido
             this.handleGameOver(data);
         });
         
         this.socket.on('building_created', (data) => {
-            console.log('🏗️ Edificio creado por servidor:', data.type, 'equipo:', data.team, 'en', data.x, data.y);
+            // console.log('🏗️ Edificio creado por servidor:', data.type, 'equipo:', data.team, 'en', data.x, data.y); // Log removido
             
             // Verificar que no exista ya (evitar duplicados)
             const exists = this.game.nodes.find(n => n.id === data.nodeId);
@@ -343,14 +369,17 @@ export class NetworkManager {
             }
             
             // Crear el nodo en el cliente (servidor ya validó y autorizó)
-            const newNode = this.game.baseFactory.createBase(
+            const config = getNodeConfig(data.type);
+            const newNode = new VisualNode(
                 data.x,
                 data.y,
                 data.type,
                 {
+                    ...config,
                     team: data.team,
                     isConstructed: false // CRÍTICO: Empieza en construcción
-                }
+                },
+                this.game
             );
             
             if (newNode) {
@@ -368,7 +397,7 @@ export class NetworkManager {
                 
                 this.game.nodes.push(newNode);
                 
-                console.log(`✅ Edificio ${data.type} creado localmente con ID ${data.nodeId} (en construcción)`);
+                // console.log(`✅ Edificio ${data.type} creado localmente con ID ${data.nodeId} (en construcción)`); // Log removido
                 
                 // CRÍTICO: Reproducir sonido para AMBOS jugadores (en multiplayer nadie lo reproduce localmente)
                     this.game.audio.playPlaceBuildingSound();
@@ -378,7 +407,7 @@ export class NetworkManager {
         });
         
         this.socket.on('convoy_spawned', (data) => {
-            console.log('🚁 CONVOY_SPAWNED recibido:', data);
+            // console.log('🚁 CONVOY_SPAWNED recibido:', data); // Log removido
             // Buscar los nodos
             const fromNode = this.game.nodes.find(n => n.id === data.fromId);
             const toNode = this.game.nodes.find(n => n.id === data.toId);
@@ -396,21 +425,23 @@ export class NetworkManager {
             }
             
             // Crear convoy localmente
+            // ⚠️ LEGACY: speed no se usa - solo se necesita para compatibilidad con vehicle object
+            // El movimiento real viene del servidor (progress autoritativo)
             const VEHICLE_TYPES = {
                 'truck': {
                     capacity: 15,
-                    speed: 50,
-                    spritePath: 'vehicles/convoy.png'
+                    spritePath: 'vehicles/convoy.png',
+                    color: '#4CAF50' // Solo para renderizado visual
                 },
                 'heavy_truck': {
                     capacity: 25,
-                    speed: 40,
-                    spritePath: 'vehicles/convoy_heavy.png'
+                    spritePath: 'vehicles/convoy_heavy.png',
+                    color: '#4CAF50' // Solo para renderizado visual
                 },
                 'helicopter': {
                     capacity: 100,
-                    speed: 3,
-                    spritePath: 'vehicles/chopper.png'
+                    spritePath: 'vehicles/chopper.png',
+                    color: '#4CAF50' // Solo para renderizado visual (aunque helicópteros no se renderizan como convoyes)
                 }
             };
             
@@ -425,43 +456,36 @@ export class NetworkManager {
             const convoy = new Convoy(fromNode, toNode, vehicle, data.vehicleType, cargo, this.game);
             convoy.id = data.convoyId; // CRÍTICO: Usar ID del servidor
             
-            // Inicializar sistema de interpolación suave y Dead Reckoning
-            convoy.lastServerUpdate = Date.now();
-            convoy.serverProgress = 0;
-            convoy.lastServerReturning = false;
-            convoy.lastKnownProgress = 0;
-            
-            // Calcular distancia total para Dead Reckoning
-            convoy.getTotalDistance(); // Esto inicializa totalDistance
+            // CRÍTICO: Actualizar posición visual inicial
+            convoy.updateVisualPosition();
             
             this.game.convoyManager.convoys.push(convoy);
             
+            // console.log(`✅ Convoy ${convoy.id} añadido. Total convoys: ${this.game.convoyManager.convoys.length}`); // Log removido
+            // console.log(`📍 Convoy position: x=${convoy.x}, y=${convoy.y}, progress=${convoy.progress}`); // Log removido
+            
             // Reproducir sonido solo si NO es de mi equipo - usar volumen reducido para enemigos
             if (data.team !== this.myTeam) {
-                this.game.audio.playEnemyTruckSound(); // Sonido del enemigo con volumen reducido 25%
+                this.game.audio.playEnemyTruckSound(); // Sonido del enemigo con volumen reducido 44% (56% del original)
             }
         });
         
         // 🆕 NUEVO: Evento de helicóptero despachado
         this.socket.on('helicopter_dispatched', (data) => {
-            console.log('🚁 HELICOPTER_DISPATCHED recibido:', data);
+            // console.log('🚁 HELICOPTER_DISPATCHED recibido:', data); // Log removido
             
             // El helicóptero ya está sincronizado por el game_state
-            // Solo necesitamos reproducir sonido si es del enemigo
-            if (data.team !== this.myTeam) {
-                // TODO: Agregar sonido específico de helicóptero enemigo
-                console.log('🚁 Helicóptero enemigo despachado');
-            }
+            // El sonido se reproduce mediante el evento de sonido 'chopper' del servidor
         });
         
         // 🆕 NUEVO: Evento de convoy/helicóptero fallido
         this.socket.on('convoy_failed', (data) => {
-            console.log('⚠️ CONVOY_FAILED:', data.reason);
+            // console.log('⚠️ CONVOY_FAILED:', data.reason); // Log removido (mantener solo si es crítico)
             // TODO: Mostrar mensaje visual al usuario (cuando se implemente showMessage en UIManager)
         });
         
         this.socket.on('ambulance_spawned', (data) => {
-            // console.log(`🚑 Ambulancia autorizada por servidor: ${data.fromId} → ${data.toId}`);
+            // console.log(`🚑 Ambulancia autorizada por servidor: ${data.fromId} → ${data.toId}`); // Log removido
             
             // Buscar los nodos
             const fromNode = this.game.nodes.find(n => n.id === data.fromId);
@@ -480,11 +504,13 @@ export class NetworkManager {
             }
             
             // Crear ambulancia localmente
+            // ⚠️ LEGACY: speed no se usa - solo se necesita para compatibilidad con vehicle object
+            // El movimiento real viene del servidor (progress autoritativo)
             const VEHICLE_TYPES = {
                 'ambulance': {
                     capacity: 0,
-                    speed: 60,
-                    spritePath: 'vehicles/ambulance.png'
+                    spritePath: 'vehicles/ambulance.png',
+                    color: '#FF5722' // Solo para renderizado visual
                 }
             };
             
@@ -500,21 +526,13 @@ export class NetworkManager {
             convoy.targetFrontId = data.targetFrontId;
             
             // Inicializar sistema de interpolación suave y Dead Reckoning
-            convoy.lastServerUpdate = Date.now();
-            convoy.serverProgress = 0;
-            convoy.lastServerReturning = false;
-            convoy.lastKnownProgress = 0;
-            
-            // Calcular distancia total para Dead Reckoning
-            convoy.getTotalDistance(); // Esto inicializa totalDistance
-            
             this.game.convoyManager.convoys.push(convoy);
             
-            console.log(`✅ Ambulancia ${data.convoyId} creada localmente`);
+            // console.log(`✅ Ambulancia ${data.convoyId} creada localmente`); // Log removido
             
             // Reproducir sonido solo si NO es de mi equipo - usar volumen reducido para enemigos
             if (data.team !== this.myTeam) {
-                this.game.audio.playEnemyTruckSound(); // Sonido del enemigo con volumen reducido 25%
+                this.game.audio.playEnemyTruckSound(); // Sonido del enemigo con volumen reducido 44% (56% del original)
             }
         });
         
@@ -522,7 +540,7 @@ export class NetworkManager {
          * Manejo de disparo de francotirador
          */
         this.socket.on('sniper_fired', (data) => {
-            console.log(`🎯 Sniper disparado por ${data.shooterId} → frente ${data.targetId}`);
+            // console.log(`🎯 Sniper disparado por ${data.shooterId} → frente ${data.targetId}`); // Log removido
             
             // Buscar el frente objetivo
             const targetFront = this.game.nodes.find(n => n.id === data.targetId);
@@ -538,7 +556,7 @@ export class NetworkManager {
                     'ui-sniper-kill'
                 );
                 
-                console.log(`✅ Efectos visuales de sniper aplicados`);
+                // console.log(`✅ Efectos visuales de sniper aplicados`); // Log removido
             } else {
                 console.warn(`⚠️ Frente objetivo ${data.targetId} no encontrado`);
             }
@@ -548,7 +566,7 @@ export class NetworkManager {
          * Manejo de sabotaje de FOB
          */
         this.socket.on('fob_sabotage_fired', (data) => {
-            console.log(`⚡ FOB sabotajeada por ${data.saboteurId} → FOB ${data.targetId}`);
+            // console.log(`⚡ FOB sabotajeada por ${data.saboteurId} → FOB ${data.targetId}`); // Log removido
             
             // Buscar la FOB objetivo
             const targetFOB = this.game.nodes.find(n => n.id === data.targetId);
@@ -569,33 +587,93 @@ export class NetworkManager {
                     this.game.audio.playChopperSound();
                 }
                 
-                console.log(`✅ FOB ${data.targetId} saboteada - efectos aplicados`);
+                // console.log(`✅ FOB ${data.targetId} saboteada - efectos aplicados`); // Log removido
             } else {
                 console.warn(`⚠️ FOB objetivo ${data.targetId} no encontrada`);
             }
         });
         
         this.socket.on('fob_sabotage_failed', (data) => {
-            console.log(`⚠️ Sabotaje de FOB falló: ${data.reason}`);
+            // console.log(`⚠️ Sabotaje de FOB falló: ${data.reason}`); // Log removido
+        });
+        
+        /**
+         * 🆕 NUEVO: Manejo de despliegue de comando especial operativo
+         */
+        this.socket.on('commando_deployed', (data) => {
+            // console.log(`🎖️ Comando desplegado por ${data.team} en (${data.x.toFixed(0)}, ${data.y.toFixed(0)})`); // Log removido
+            
+            // Verificar que no exista ya (evitar duplicados)
+            const exists = this.game.nodes.find(n => n.id === data.commandoId);
+            if (exists) {
+                console.warn(`⚠️ Nodo ${data.commandoId} ya existe, ignorando commando_deployed`);
+                return;
+            }
+            
+            // Crear el nodo del comando en el cliente (ya construido, no necesita construcción)
+            const config = getNodeConfig('specopsCommando');
+            const newNode = new VisualNode(
+                data.x,
+                data.y,
+                'specopsCommando',
+                {
+                    ...config,
+                    team: data.team,
+                    isConstructed: true // Ya está construido
+                },
+                this.game
+            );
+            
+            if (newNode) {
+                // Sobrescribir ID y estado desde el servidor
+                newNode.id = data.commandoId;
+                newNode.constructed = true;
+                newNode.isConstructing = false;
+                newNode.active = true;
+                newNode.detectionRadius = data.detectionRadius || 200;
+                newNode.isCommando = true;
+                
+                // Inicializar propiedades de interpolación para multijugador
+                if (newNode.updateServerPosition) {
+                    newNode.updateServerPosition(data.x, data.y);
+                }
+                
+                this.game.nodes.push(newNode);
+                
+                // console.log(`✅ Comando ${data.commandoId} creado localmente en (${data.x.toFixed(0)}, ${data.y.toFixed(0)})`); // Log removido
+                
+                // Sonido de despliegue de comando
+                if (this.game.audio && this.game.audio.playCommandoDeploySound) {
+                    this.game.audio.playCommandoDeploySound();
+                }
+            }
+        });
+        
+        /**
+         * 🆕 NUEVO: Manejo de fallo de despliegue de comando
+         */
+        this.socket.on('commando_deploy_failed', (data) => {
+            // console.log(`⚠️ Despliegue de comando falló: ${data.reason}`); // Log removido
+            // TODO: Mostrar mensaje visual al usuario cuando se implemente showMessage en UIManager
         });
         
         /**
          * Manejo de lanzamiento de dron
          */
         this.socket.on('drone_launched', (data) => {
-            console.log(`💣 Dron lanzado por ${data.team}: ${data.droneId} → ${data.targetId}`);
+            // console.log(`💣 Dron lanzado por ${data.team}: ${data.droneId} → ${data.targetId}`); // Log removido
             
             // El servidor ya lo tiene en el estado, solo reproducir sonido
             this.game.audio.playDroneSound(data.droneId);
             
-            console.log(`✅ Dron ${data.droneId} lanzado - servidor simula trayectoria`);
+            // console.log(`✅ Dron ${data.droneId} lanzado - servidor simula trayectoria`); // Log removido
         });
         
         /**
          * Manejo de impacto de dron
          */
         this.socket.on('drone_impact', (impact) => {
-            console.log(`💥 Dron ${impact.droneId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`);
+            // console.log(`💥 Dron ${impact.droneId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`); // Log removido
             
             // Detener sonido del dron
             this.game.audio.stopDroneSound(impact.droneId);
@@ -612,14 +690,14 @@ export class NetworkManager {
             // Crear marca de impacto permanente (cráter grande)
             this.game.particleSystem.createImpactMark(impact.x, impact.y, 'impact_icon', 1.2);
             
-            console.log(`✅ Efectos de explosión de dron aplicados`);
+            // console.log(`✅ Efectos de explosión de dron aplicados`); // Log removido
         });
         
         /**
          * Manejo de alerta de anti-drone (dron detectado en rango de 220px)
          */
         this.socket.on('antidrone_alert', (alert) => {
-            console.log(`🚨 Anti-drone ${alert.antiDroneId} detectó dron ${alert.droneId} (alerta)`);
+            // console.log(`🚨 Anti-drone ${alert.antiDroneId} detectó dron ${alert.droneId} (alerta)`); // Log removido
             
             // Reproducir sonido de ataque anti-drone (alerta)
             this.game.audio.playAntiDroneAttackSound();
@@ -629,7 +707,7 @@ export class NetworkManager {
          * Manejo de intercepción de dron por anti-drone
          */
         this.socket.on('drone_intercepted', (interception) => {
-            console.log(`🎯 Anti-drone ${interception.antiDroneId} interceptó dron ${interception.droneId}`);
+            // console.log(`🎯 Anti-drone ${interception.antiDroneId} interceptó dron ${interception.droneId}`); // Log removido
             
             // Detener sonido del dron
             this.game.audio.stopDroneSound(interception.droneId);
@@ -1027,6 +1105,22 @@ export class NetworkManager {
     }
     
     /**
+     * Solicita despliegue de comando especial operativo al servidor
+     * 🆕 NUEVO
+     */
+    requestCommandoDeploy(x, y) {
+        if (!this.isMultiplayer || !this.roomId) return;
+        
+        console.log(`🎖️ Enviando commando_deploy_request: x=${x.toFixed(0)}, y=${y.toFixed(0)}`);
+        
+        this.socket.emit('commando_deploy_request', {
+            roomId: this.roomId,
+            x,
+            y
+        });
+    }
+    
+    /**
      * CHEAT: Añade currency al jugador (solo para testing)
      */
     addCurrency(amount = 500) {
@@ -1068,14 +1162,17 @@ export class NetworkManager {
         
         // Crear nodos desde datos del servidor
         initialState.nodes.forEach(nodeData => {
-            const node = this.game.baseFactory.createBase(
+            const config = getNodeConfig(nodeData.type);
+            const node = new VisualNode(
                 nodeData.x,
                 nodeData.y,
                 nodeData.type,
                 {
+                    ...config,
                     team: nodeData.team,
                     isConstructed: false // Ya construidos
-                }
+                },
+                this.game
             );
             
             // Sobrescribir ID con el del servidor
@@ -1092,6 +1189,11 @@ export class NetworkManager {
             }
             if (nodeData.investmentCompleted !== undefined) {
                 node.investmentCompleted = nodeData.investmentCompleted;
+            }
+            
+            // 🆕 NUEVO: Sincronizar estado disabled (genérico)
+            if (nodeData.disabled !== undefined) {
+                node.disabled = nodeData.disabled;
             }
             
             // Inicializar propiedades de interpolación para multijugador
@@ -1134,6 +1236,15 @@ export class NetworkManager {
         this.game.territory.initializeAllyFrontier();
         this.game.territory.initializeEnemyFrontier();
         
+        // 🆕 SERVIDOR COMO AUTORIDAD: Cargar configuración de edificios
+        if (initialState.buildingConfig) {
+            console.log('🏗️ Configuración de edificios recibida del servidor:', initialState.buildingConfig);
+            this.game.serverBuildingConfig = initialState.buildingConfig;
+            
+            // Actualizar configuración local con valores del servidor
+            this.updateLocalBuildingConfig(initialState.buildingConfig);
+        }
+        
         console.log(`✅ Estado inicial cargado. Nodos: ${this.game.nodes.length}`);
     }
     
@@ -1159,8 +1270,12 @@ export class NetworkManager {
                 if (!heli) {
                     // Crear nuevo helicóptero
                     heli = { ...heliData };
+                    // 🎯 ASEGURAR: cargo siempre tiene un valor válido
+                    if (heli.cargo === undefined || heli.cargo === null) {
+                        heli.cargo = 0;
+                    }
                     this.game.helicopters.push(heli);
-                    console.log(`🚁 CLIENTE: Helicóptero ${heli.id} creado (team: ${heli.team})`);
+                    console.log(`🚁 CLIENTE: Helicóptero ${heli.id} creado (team: ${heli.team}, cargo: ${heli.cargo})`);
                     
                     // Inicializar datos de interpolación
                     heli.lastServerUpdate = Date.now();
@@ -1169,16 +1284,30 @@ export class NetworkManager {
                 } else {
                     // Actualizar helicóptero existente
                     // CRÍTICO: NO sobrescribir progress directamente (igual que convoys)
+                    const wasLanded = heli.state === 'landed';
+                    const isNowFlying = heliData.state === 'flying';
+                    
                     heli.state = heliData.state;
-                    heli.cargo = heliData.cargo;
+                    // 🎯 ASEGURAR: cargo siempre tiene un valor válido
+                    heli.cargo = heliData.cargo ?? heli.cargo ?? 0;
                     heli.currentNodeId = heliData.currentNodeId;
                     heli.targetNodeId = heliData.targetNodeId;
                     heli.initialDistance = heliData.initialDistance;
-                    // NO actualizar heli.progress - lo maneja updateHelicopterPosition()
                     
-                    // Actualizar referencias del servidor para interpolación (igual que convoys)
-                    heli.serverProgress = heliData.progress;
-                    heli.lastKnownProgress = heliData.progress;
+                    // CRÍTICO: Si cambió de 'landed' a 'flying', resetear progress a 0
+                    // Esto evita el salto visual cuando el helicóptero empieza a volar
+                    if (wasLanded && isNowFlying) {
+                        heli.progress = 0;
+                        heli.serverProgress = 0;
+                        heli.lastKnownProgress = 0;
+                    }
+                    
+                    // NO actualizar heli.progress directamente - lo maneja updateHelicopterPosition()
+                    // Solo actualizar serverProgress si no acabamos de resetearlo
+                    if (!(wasLanded && isNowFlying)) {
+                        heli.serverProgress = heliData.progress;
+                        heli.lastKnownProgress = heliData.progress;
+                    }
                     heli.lastServerUpdate = Date.now();
                 }
             });
@@ -1318,6 +1447,24 @@ export class NetworkManager {
                     if (nodeData.investmentCompleted !== undefined) {
                         node.investmentCompleted = nodeData.investmentCompleted;
                     }
+                    
+                    // 🆕 NUEVO: Actualizar estado disabled (genérico)
+                    if (nodeData.disabled !== undefined) {
+                        const wasDisabled = node.disabled || false;
+                        const isNowDisabled = nodeData.disabled;
+                        node.disabled = isNowDisabled;
+                        
+                        // 🆕 NUEVO: Crear floating text cuando un nodo se deshabilita
+                        if (!wasDisabled && isNowDisabled) {
+                            // Nodo se acaba de deshabilitar
+                            this.game.particleSystem.createFloatingText(
+                                node.x,
+                                node.y - 30, // Un poco arriba del nodo
+                                'Disabled',
+                                '#ff0000' // Rojo
+                            );
+                        }
+                    }
                 } else {
                     // Nodo nuevo del servidor (construcción autorizada)
                     // Ya debería haber sido creado por building_created
@@ -1346,6 +1493,11 @@ export class NetworkManager {
                 const convoy = this.game.convoyManager.convoys.find(c => c.id === convoyData.id);
                 
                 if (convoy) {
+                    // DEBUG: Log desactivado - reduce spam en consola
+                    // if (Math.random() < 0.1 && convoyData.progress > 0) { // 10% de las veces
+                    //     console.log(`🔄 Actualizando convoy ${convoyData.id}: progress=${convoyData.progress.toFixed(2)}, returning=${convoyData.returning}`);
+                    // }
+                    
                     // CRÍTICO: Actualizar progress desde el servidor con interpolación suave
                     if (convoy.updateServerProgress) {
                         convoy.updateServerProgress(convoyData.progress, convoyData.returning);
@@ -1486,15 +1638,25 @@ export class NetworkManager {
             case 'truck_dispatch':
                 // Convoy despachado - usar volumen reducido si es del enemigo
                 if (event.team && event.team !== this.myTeam) {
-                    this.game.audio.playEnemyTruckSound(); // Sonido del enemigo con volumen reducido 25%
+                    this.game.audio.playEnemyTruckSound(); // Sonido del enemigo con volumen reducido 44% (56% del original)
                 } else {
                     this.game.audio.playTruckSound(); // Sonido normal para camiones del jugador
                 }
                 break;
                 
             case 'hq_dispatch':
-                // HQ enviando suministros
-                this.game.audio.playHQSound(); // Tiene cooldown 3s interno
+                // HQ enviando suministros - solo reproducir si es del propio jugador
+                if (event.team && event.team === this.myTeam) {
+                    this.game.audio.playHQSound(); // Tiene cooldown 3s interno
+                }
+                // Si es del enemigo, no reproducir sonido (solo feedback visual)
+                break;
+                
+            case 'chopper':
+                // Helicóptero despachado - reproducir sonido con volumen 0.5
+                if (this.game.audio && this.game.audio.playChopperSound) {
+                    this.game.audio.playChopperSound(0.5);
+                }
                 break;
         }
     }
@@ -1626,6 +1788,31 @@ export class NetworkManager {
             playersList.appendChild(playerCard);
         });
         
+        // 🤖 NUEVO: Mostrar/ocultar slot de IA según corresponda
+        const aiSlot = document.getElementById('ai-slot');
+        const aiSlotEmpty = document.getElementById('ai-slot-empty');
+        const aiSlotConfig = document.getElementById('ai-slot-config');
+        
+        if (data.aiPlayer) {
+            // Hay IA: mostrar configuración
+            if (aiSlotEmpty) aiSlotEmpty.style.display = 'none';
+            if (aiSlotConfig) {
+                aiSlotConfig.style.display = 'block';
+                // Actualizar selectores
+                const raceSelect = document.getElementById('ai-race-select');
+                const difficultySelect = document.getElementById('ai-difficulty-select');
+                if (raceSelect) raceSelect.value = data.aiPlayer.race;
+                if (difficultySelect) difficultySelect.value = data.aiPlayer.difficulty;
+            }
+        } else if (data.players.length < 2 && this.myTeam === 'player1') {
+            // No hay IA y soy host: mostrar botón para añadir
+            if (aiSlotEmpty) aiSlotEmpty.style.display = 'block';
+            if (aiSlotConfig) aiSlotConfig.style.display = 'none';
+        } else {
+            // No hay IA y no soy host, o hay player2: ocultar slot
+            if (aiSlot) aiSlot.style.display = data.players.length === 2 ? 'none' : 'block';
+        }
+        
         // Actualizar mi estado de ready basado en los datos del servidor
         const myPlayer = data.players.find(p => p.id === this.socket.id);
         if (myPlayer) {
@@ -1641,12 +1828,26 @@ export class NetworkManager {
         // Actualizar botón de inicio (solo visible para host si todos están ready Y han seleccionado nación)
         const startBtn = document.getElementById('start-multiplayer-game-btn');
         if (startBtn && this.myTeam === 'player1') {
-            const allReady = data.players.length === 2 && data.players.every(p => p.ready);
-            const allHaveRace = data.players.every(p => p.selectedRace);
+            // 🤖 NUEVO: Verificar si hay 2 jugadores humanos O 1 jugador + IA
+            const hasPlayer2 = data.players.length === 2;
+            const hasAI = data.aiPlayer !== null && data.aiPlayer !== undefined;
+            const hasOpponent = hasPlayer2 || hasAI;
+            
+            // Verificar que todos estén ready
+            const allPlayersReady = data.players.every(p => p.ready);
+            const aiReady = hasAI ? true : true; // IA siempre está lista
+            const allReady = allPlayersReady && aiReady;
+            
+            // Verificar que todos tengan raza seleccionada
+            const allPlayersHaveRace = data.players.every(p => p.selectedRace);
+            const aiHasRace = hasAI ? (data.aiPlayer.race !== null) : true;
+            const allHaveRace = allPlayersHaveRace && aiHasRace;
             
             console.log('🔍 DEBUG Botón Inicio:', {
                 myTeam: this.myTeam,
                 playersCount: data.players.length,
+                hasAI,
+                hasOpponent,
                 allReady,
                 allHaveRace,
                 players: data.players.map(p => ({ 
@@ -1655,10 +1856,11 @@ export class NetworkManager {
                     selectedRace: p.selectedRace,
                     team: p.team,
                     id: p.id
-                }))
+                })),
+                aiPlayer: data.aiPlayer
             });
             
-            startBtn.style.display = (allReady && allHaveRace) ? 'block' : 'none';
+            startBtn.style.display = (hasOpponent && allReady && allHaveRace) ? 'block' : 'none';
         }
         
         // Configurar event listeners para los selects de raza
@@ -2350,6 +2552,159 @@ export class NetworkManager {
     }
 
     /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Actualiza configuración local con valores del servidor
+     */
+    updateLocalBuildingConfig(serverConfig) {
+        // Importar configuración local para modificarla
+        import('../config/nodes.js').then(module => {
+            const { NODE_CONFIG } = module;
+            
+            // Actualizar costos con valores del servidor
+            if (serverConfig.costs) {
+                Object.keys(serverConfig.costs).forEach(buildingType => {
+                    if (NODE_CONFIG[buildingType]) {
+                        NODE_CONFIG[buildingType].cost = serverConfig.costs[buildingType];
+                        console.log(`💰 ${buildingType}: costo actualizado a ${serverConfig.costs[buildingType]}$`);
+                    }
+                });
+            }
+            
+            // Actualizar tiempos de construcción con valores del servidor
+            if (serverConfig.buildTimes) {
+                Object.keys(serverConfig.buildTimes).forEach(buildingType => {
+                    if (NODE_CONFIG[buildingType]) {
+                        NODE_CONFIG[buildingType].constructionTime = serverConfig.buildTimes[buildingType];
+                        console.log(`⏱️ ${buildingType}: tiempo de construcción actualizado a ${serverConfig.buildTimes[buildingType]}s`);
+                    }
+                });
+            }
+            
+            // 🆕 SERVIDOR COMO AUTORIDAD: Actualizar descripciones con valores del servidor
+            if (serverConfig.descriptions) {
+                Object.keys(serverConfig.descriptions).forEach(buildingType => {
+                    if (NODE_CONFIG[buildingType]) {
+                        NODE_CONFIG[buildingType].name = serverConfig.descriptions[buildingType].name;
+                        NODE_CONFIG[buildingType].description = serverConfig.descriptions[buildingType].description;
+                        console.log(`📝 ${buildingType}: descripción actualizada desde servidor`);
+                    }
+                });
+            }
+            
+            // 🆕 SERVIDOR COMO AUTORIDAD: Actualizar capacidades con valores del servidor
+            if (serverConfig.capacities) {
+                Object.keys(serverConfig.capacities).forEach(nodeType => {
+                    if (NODE_CONFIG[nodeType]) {
+                        const capacities = serverConfig.capacities[nodeType];
+                        Object.keys(capacities).forEach(capacityKey => {
+                            NODE_CONFIG[nodeType][capacityKey] = capacities[capacityKey];
+                            console.log(`📊 ${nodeType}: ${capacityKey} actualizado a ${capacities[capacityKey]}`);
+                        });
+                    }
+                });
+            }
+            
+            // 🆕 SERVIDOR COMO AUTORIDAD: Actualizar bonuses de edificios
+            if (serverConfig.bonuses) {
+                Object.keys(serverConfig.bonuses).forEach(nodeType => {
+                    if (NODE_CONFIG[nodeType]) {
+                        const bonuses = serverConfig.bonuses[nodeType];
+                        Object.keys(bonuses).forEach(bonusKey => {
+                            NODE_CONFIG[nodeType][bonusKey] = bonuses[bonusKey];
+                            console.log(`🎁 ${nodeType}: ${bonusKey} actualizado a ${bonuses[bonusKey]} (ANTI-HACK)`);
+                        });
+                    }
+                });
+            }
+            
+            // 🆕 SERVIDOR COMO AUTORIDAD: Actualizar propiedades de gameplay con valores del servidor
+            if (serverConfig.gameplay) {
+                Object.keys(serverConfig.gameplay).forEach(nodeType => {
+                    if (NODE_CONFIG[nodeType]) {
+                        const gameplay = serverConfig.gameplay[nodeType];
+                        Object.keys(gameplay).forEach(gameplayKey => {
+                            NODE_CONFIG[nodeType][gameplayKey] = gameplay[gameplayKey];
+                            console.log(`🎮 ${nodeType}: ${gameplayKey} actualizado a ${gameplay[gameplayKey]}`);
+                        });
+                    }
+                });
+            }
+            
+            // 🆕 SERVIDOR COMO AUTORIDAD: Actualizar radios de detección (CRÍTICO PARA SEGURIDAD)
+            if (serverConfig.detectionRadii) {
+                Object.keys(serverConfig.detectionRadii).forEach(nodeType => {
+                    if (NODE_CONFIG[nodeType]) {
+                        NODE_CONFIG[nodeType].detectionRadius = serverConfig.detectionRadii[nodeType];
+                        console.log(`🛡️ ${nodeType}: detectionRadius actualizado a ${serverConfig.detectionRadii[nodeType]} (SEGURIDAD)`);
+                    }
+                });
+            }
+            
+            // 🆕 SERVIDOR COMO AUTORIDAD: Actualizar propiedades de seguridad (ANTI-HACK)
+            if (serverConfig.security) {
+                // Actualizar hitboxRadius
+                if (serverConfig.security.hitboxRadius) {
+                    Object.keys(serverConfig.security.hitboxRadius).forEach(nodeType => {
+                        if (NODE_CONFIG[nodeType]) {
+                            NODE_CONFIG[nodeType].hitboxRadius = serverConfig.security.hitboxRadius[nodeType];
+                            console.log(`🎯 ${nodeType}: hitboxRadius actualizado a ${serverConfig.security.hitboxRadius[nodeType]} (ANTI-HACK)`);
+                        }
+                    });
+                }
+                
+                // Actualizar needsConstruction
+                if (serverConfig.security.needsConstruction) {
+                    Object.keys(serverConfig.security.needsConstruction).forEach(nodeType => {
+                        if (NODE_CONFIG[nodeType]) {
+                            NODE_CONFIG[nodeType].needsConstruction = serverConfig.security.needsConstruction[nodeType];
+                            console.log(`🏗️ ${nodeType}: needsConstruction actualizado a ${serverConfig.security.needsConstruction[nodeType]} (ANTI-HACK)`);
+                        }
+                    });
+                }
+                
+                // Actualizar canBeDestroyed
+                if (serverConfig.security.canBeDestroyed) {
+                    Object.keys(serverConfig.security.canBeDestroyed).forEach(nodeType => {
+                        if (NODE_CONFIG[nodeType]) {
+                            NODE_CONFIG[nodeType].canBeDestroyed = serverConfig.security.canBeDestroyed[nodeType];
+                            console.log(`💥 ${nodeType}: canBeDestroyed actualizado a ${serverConfig.security.canBeDestroyed[nodeType]} (ANTI-HACK)`);
+                        }
+                    });
+                }
+            }
+            
+            // 🆕 SERVIDOR COMO AUTORIDAD: Actualizar propiedades de comportamiento críticas
+            if (serverConfig.behavior) {
+                // Actualizar enabled
+                if (serverConfig.behavior.enabled) {
+                    Object.keys(serverConfig.behavior.enabled).forEach(nodeType => {
+                        if (NODE_CONFIG[nodeType]) {
+                            NODE_CONFIG[nodeType].enabled = serverConfig.behavior.enabled[nodeType];
+                            console.log(`🔧 ${nodeType}: enabled actualizado a ${serverConfig.behavior.enabled[nodeType]} (ANTI-HACK)`);
+                        }
+                    });
+                }
+                
+                // Actualizar propiedades de comportamiento específicas
+                if (serverConfig.behavior.behavior) {
+                    Object.keys(serverConfig.behavior.behavior).forEach(nodeType => {
+                        if (NODE_CONFIG[nodeType]) {
+                            const behaviorProps = serverConfig.behavior.behavior[nodeType];
+                            Object.keys(behaviorProps).forEach(propKey => {
+                                NODE_CONFIG[nodeType][propKey] = behaviorProps[propKey];
+                                console.log(`🎮 ${nodeType}: ${propKey} actualizado a ${behaviorProps[propKey]} (ANTI-HACK)`);
+                            });
+                        }
+                    });
+                }
+            }
+            
+            console.log('✅ Configuración local actualizada con valores del servidor');
+        }).catch(error => {
+            console.error('❌ Error actualizando configuración local:', error);
+        });
+    }
+    
+    /**
      * Desconectar del servidor
      */
     disconnect() {
@@ -2360,4 +2715,5 @@ export class NetworkManager {
         }
     }
 }
+
 

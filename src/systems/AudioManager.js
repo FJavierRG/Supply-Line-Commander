@@ -49,7 +49,8 @@ export class AudioManager {
             antiDroneAttack: 0.3, // Sonido de alerta de ataque anti-drone (-25% de 0.4)
             sniperSpotted: 0.84, // Sonido de francotirador detectando objetivo (+110%)
             chopper: 0.2, // Sonido de chopper (muy reducido, era demasiado alto)
-            whisper: 0.9 // Sonido de whisper para specops (+30%: 0.3 * 1.3 = 0.39)
+            whisper: 0.9, // Sonido de whisper para specops (+30%: 0.3 * 1.3 = 0.39)
+            commando: 0.6 // Sonido de despliegue de comando (+20% respecto a 0.5)
         };
         
         this.loadSounds();
@@ -113,6 +114,10 @@ export class AudioManager {
         
         // Sonido de whisper para specops
         this.sounds.whisper = this.createAudio(SOUNDS_BASE_URL + 'specops_whisper.wav', this.volumes.whisper, false);
+        
+        // Sonidos de despliegue de comando
+        this.sounds.commando1 = this.createAudio(SOUNDS_BASE_URL + 'commando1.wav', this.volumes.commando, false);
+        this.sounds.commando2 = this.createAudio(SOUNDS_BASE_URL + 'commando2.wav', this.volumes.commando, false);
         
         // Música de menú - PRUEBA: cargar con fetch para verificar que funciona
         const mainThemeUrl = SOUNDS_BASE_URL + 'main_theme.wav';
@@ -285,7 +290,7 @@ export class AudioManager {
     }
     
     /**
-     * Reproduce sonido de camión del enemigo (con cooldown de 2s y volumen reducido 25%)
+     * Reproduce sonido de camión del enemigo (con cooldown de 2s y volumen reducido 50% respecto al original)
      */
     playEnemyTruckSound() {
         const now = Date.now();
@@ -293,9 +298,9 @@ export class AudioManager {
         
         if (timeSinceLastSound >= this.truckCooldown) {
             if (this.sounds.truck) {
-                // Reducir volumen 25% para camiones del enemigo
+                // Reducir volumen 50% para camiones del enemigo (era 70%, ahora 56% = 70% * 80%)
                 const originalVolume = this.sounds.truck.volume;
-                const enemyVolume = originalVolume * 0.75; // 25% más bajo
+                const enemyVolume = originalVolume * 0.56; // 56% del volumen original (reducido 20% adicional)
                 
                 this.sounds.truck.volume = enemyVolume;
                 this.sounds.truck.currentTime = 0;
@@ -681,13 +686,14 @@ export class AudioManager {
     
     /**
      * Reproduce sonido de chopper con velocidad x1.25 y fadeout al 50% final
+     * @param {number} volume - Volumen opcional (por defecto usa el volumen configurado)
      */
-    playChopperSound() {
+    playChopperSound(volume = null) {
         if (this.sounds.chopper) {
             const audio = this.sounds.chopper.cloneNode(true);
             audio.playbackRate = 1.25; // Velocidad x1.25 como solicitado
             audio.currentTime = 0;
-            audio.volume = this.volumes.chopper; // Establecer volumen inicial
+            audio.volume = volume !== null ? volume : this.volumes.chopper; // Usar volumen proporcionado o el configurado
             
             // Aplicar fadeout al 50% final del clip
             audio.addEventListener('loadedmetadata', () => {
@@ -699,10 +705,12 @@ export class AudioManager {
                         const currentTime = audio.currentTime;
                         if (currentTime >= fadeStartTime) {
                             const fadeProgress = (currentTime - fadeStartTime) / fadeDuration;
-                            audio.volume = Math.max(0, this.volumes.chopper * (1 - fadeProgress));
+                            const baseVolume = volume !== null ? volume : this.volumes.chopper;
+                            audio.volume = Math.max(0, baseVolume * (1 - fadeProgress));
                         } else {
                             // Mantener volumen inicial antes del fadeout
-                            audio.volume = this.volumes.chopper;
+                            const baseVolume = volume !== null ? volume : this.volumes.chopper;
+                            audio.volume = baseVolume;
                         }
                     };
                     
@@ -739,6 +747,32 @@ export class AudioManager {
                 this.lastWhisperSound = now;
             }
         }
+    }
+    
+    /**
+     * Reproduce la secuencia de sonidos de despliegue de comando
+     * Reproduce commando1 seguido de commando2 cuando termine el primero
+     */
+    playCommandoDeploySound() {
+        if (!this.sounds.commando1 || !this.sounds.commando2) {
+            console.warn('⚠️ Sonidos de comando no cargados');
+            return;
+        }
+        
+        // Reproducir commando1
+        const commando1 = this.sounds.commando1.cloneNode(true);
+        commando1.volume = this.volumes.commando;
+        commando1.currentTime = 0;
+        
+        // Cuando termine commando1, reproducir commando2
+        commando1.addEventListener('ended', () => {
+            const commando2 = this.sounds.commando2.cloneNode(true);
+            commando2.volume = this.volumes.commando;
+            commando2.currentTime = 0;
+            commando2.play().catch(e => console.log('Error reproduciendo commando2:', e));
+        });
+        
+        commando1.play().catch(e => console.log('Error reproduciendo commando1:', e));
     }
     
     /**

@@ -1,218 +1,141 @@
-// ===== ENTIDAD: CONVOY =====
+// ===== ENTIDAD: CONVOY - SOLO VISUAL (SERVIDOR AUTORITATIVO) =====
+// El cliente SOLO renderiza la posición basándose en datos del servidor
 
 export class Convoy {
     constructor(fromBase, toBase, vehicle, vehicleType, cargo, game = null) {
-        // 🆕 NUEVO: ID único para el convoy
         this.id = `convoy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         
         this.x = fromBase.x;
         this.y = fromBase.y;
-        this.originBase = fromBase; // Base de origen (para volver)
-        this.target = toBase;
+        this.fromBase = fromBase; // Base de origen (NUNCA cambia)
+        this.toBase = toBase; // Destino (NUNCA cambia)
+        
         this.vehicle = vehicle;
         this.vehicleType = vehicleType;
         this.cargo = cargo;
         this.arrived = false;
-        this.returning = false; // Si está volviendo a la base de origen
-        this.progress = 0; // 0-1 para sincronización con servidor
+        this.returning = false; // Si está volviendo (se renderiza en gris - dato del servidor)
+        this.progress = 0; // 0 a 1 (visual - interpolado)
+        this.targetProgress = 0; // Progress objetivo del servidor (autoritativo)
+        this.isMoving = true; // Si el convoy está en movimiento (predicción cliente)
         
-        // Interpolación suave para multijugador
-        this.serverProgress = 0; // Progress que viene del servidor
-        this.lastServerUpdate = 0; // Timestamp del último update del servidor
-        this.lastServerReturning = false; // Estado returning anterior del servidor
-        
-        // Dead Reckoning - predicción de movimiento
-        this.lastKnownProgress = 0; // Último progress confirmado por servidor
-        this.totalDistance = 0; // Distancia total calculada una vez
-        this.vehicleSpeed = this.getVehicleSpeed(); // Velocidad conocida del vehículo
-        this.game = game; // Referencia al game para verificar Engineer Centers
-        
-        // Sistema de fobSabotage (nuevo)
-        this.sabotageOrigin = false;
-        this.sabotageSpeedPenalty = false;
-        this.firstSabotageUpdate = false;
-        
-        // Sistema de fobSabotage (legacy - mantener compatibilidad)
-        this.harassedOrigin = false;
-        this.harassedSpeedPenalty = false;
-        this.firstHarassedUpdate = false;
+        this.game = game; // Referencia al game
     }
     
+    /**
+     * Actualiza el movimiento del convoy - INTERPOLACIÓN SUAVE PROFESIONAL
+     * El cliente interpola progresivamente hacia el target del servidor
+     */
     update(dt, speedMultiplier = 1) {
-        const speed = this.vehicle.speed * 50 * speedMultiplier;
-        
-        const dx = this.target.x - this.x;
-        const dy = this.target.y - this.y;
-        const dist = Math.hypot(dx, dy);
-        
-        if (dist < 5) {
-            // Llegó al destino
-            this.arrived = true;
-            return true;
-        } else {
-            // Moverse hacia el destino
-            this.x += (dx / dist) * speed * dt;
-            this.y += (dy / dist) * speed * dt;
+        if (!this.isMoving || this.progress >= 1.0) {
             return false;
         }
+        
+        // Interpolar hacia el target del servidor solo si hay diferencia
+        if (Math.abs(this.progress - this.targetProgress) > 0.001) {
+            // Algoritmo de interpolación exponencial con compensación de latencia
+            // Más rápido cuando hay mucha diferencia (catch-up suave)
+            // Más lento cuando está cerca (movimiento suave)
+            
+            const diff = this.targetProgress - this.progress;
+            const absDiff = Math.abs(diff);
+            
+            // Velocidad adaptativa: más rápido para diferencias grandes
+            let lerpSpeed;
+            if (absDiff > 0.1) {
+                // Gran diferencia: interpolar rápidamente para alcanzar
+                lerpSpeed = 15.0;
+            } else if (absDiff > 0.05) {
+                // Diferencia media: velocidad normal
+                lerpSpeed = 8.0;
+            } else {
+                // Diferencia pequeña: muy suave
+                lerpSpeed = 5.0;
+            }
+            
+            // Aplicar interpolación con límite para evitar overshooting
+            this.progress += diff * Math.min(lerpSpeed * dt, 1.0);
+            
+            // Snap si la diferencia es muy pequeña
+            if (absDiff < 0.001) {
+                this.progress = this.targetProgress;
+            }
+        }
+        
+        // Actualizar posición visual basada en el progress interpolado
+        this.updateVisualPosition();
+        
+        return false; // El servidor decide cuándo llegó
     }
     
+    /**
+     * Obtiene el ángulo de dirección
+     */
     getAngle() {
-        const dx = this.target.x - this.x;
-        const dy = this.target.y - this.y;
+        const targetX = this.returning ? this.fromBase.x : this.toBase.x;
+        const targetY = this.returning ? this.fromBase.y : this.toBase.y;
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
         return Math.atan2(dy, dx);
     }
     
     /**
-     * Obtiene la velocidad del vehículo (sincronizada con servidor)
-     */
-    getVehicleSpeed() {
-        if (this.vehicleType === 'heavy_truck') {
-            return 40; // Camión pesado - px/s
-        } else if (this.vehicleType === 'ambulance') {
-            return 60; // Ambulancia: 20% más rápida
-        } else {
-            return 50; // Truck normal
-        }
-    }
-    
-    /**
-     * Calcula la distancia total del trayecto (se calcula una sola vez)
+     * Obtiene la distancia total del viaje
      */
     getTotalDistance() {
-        if (this.totalDistance === 0) {
-            const dx = this.target.x - this.originBase.x;
-            const dy = this.target.y - this.originBase.y;
-            this.totalDistance = Math.hypot(dx, dy);
-        }
-        return this.totalDistance;
+        const dx = this.toBase.x - this.fromBase.x;
+        const dy = this.toBase.y - this.fromBase.y;
+        return Math.sqrt(dx * dx + dy * dy);
     }
     
     /**
-     * Verifica si tiene Engineer Center bonus
-     */
-    hasEngineerCenterBonus() {
-        if (!this.game || !this.game.nodes) return false;
-        
-        // Buscar Engineer Centers del mismo equipo que el convoy
-        const engineerCenters = this.game.nodes.filter(n => 
-            n.type === 'engineerCenter' && 
-            n.team === this.originBase.team && 
-            n.constructed && 
-            !n.isAbandoning
-        );
-        
-        return engineerCenters.length > 0;
-    }
-    
-    takeDamage(amount) {
-        this.cargo = Math.max(0, this.cargo - amount);
-    }
-    
-    startReturning() {
-        this.returning = true;
-        this.cargo = 0; // Ya entregó la carga
-        // NO cambiar target aquí - se maneja en updateVisualPosition()
-    }
-    
-    /**
-     * Actualiza el progress desde el servidor (para multijugador)
-     * DEAD RECKONING PURO: Solo sincroniza en cambio de estado crítico
+     * Actualiza el progress desde el servidor - OBJETIVO AUTORITATIVO
      */
     updateServerProgress(newProgress, isReturning) {
-        // Detectar cambio crítico de estado (returning cambió)
-        const returningChanged = this.lastServerReturning !== isReturning;
-        
-        if (returningChanged) {
-            // CRÍTICO: Actualizar estado returning
+        // CRÍTICO: Si returning cambió de estado, resetear el progress inmediatamente
+        // para evitar saltos visuales
+        if (this.returning !== isReturning) {
+            // Guardar la posición visual actual antes de cambiar returning
+            const oldReturning = this.returning;
+            const oldProgress = this.progress;
+            
+            // Actualizar returning primero
             this.returning = isReturning;
             
-            if (isReturning && !this.lastServerReturning) {
-                // Cambió de ida a vuelta: El servidor resetea progress=0, pero mantenemos continuidad
-                // NO cambiar this.progress - mantener donde está visualmente (≈1.0)
-                this.lastKnownProgress = 0; // Reset para Dead Reckoning del viaje de vuelta
-            } else if (!isReturning && this.lastServerReturning) {
-                // Cambió de vuelta a ida (nuevo convoy): usar server progress
-                this.progress = newProgress;
-                this.lastKnownProgress = newProgress;
+            // Si cambiaramos returning, necesitamos ajustar progress para mantener
+            // la posición visual constante
+            // Cuando returning=false y progress=1.0 (destino), al cambiar a returning=true,
+            // el progress debe ser 0.0 (empezando en destino, ahora es el origen del retorno)
+            if ((oldReturning === false && oldProgress >= 0.99) || 
+                (oldReturning === true && oldProgress >= 0.99)) {
+                // Estábamos casi en el extremo, resetear a 0
+                this.progress = 0;
+            } else {
+                // Interpolar: si estaba en progress=0.8 yendo, y ahora vuelve:
+                // el nuevo progress debe ser 1-0.8 = 0.2 para mantener la posición
+                this.progress = 1 - this.progress;
             }
-            
-        } else {
-            // Estado normal: Solo actualizar referencia del servidor para Dead Reckoning
-            // No alteramos this.progress - lo maneja la predicción pura
-            this.lastKnownProgress = newProgress;
         }
         
-        // Actualizar datos para Dead Reckoning
-        this.lastServerReturning = isReturning;
-        this.lastServerUpdate = Date.now();
-        this.serverProgress = newProgress; // Referencia para validación
-    }
-    
-    /**
-     * DEAD RECKONING PURO: Predice movimiento continuo sin interpolación del servidor
-     * Solo sincroniza cuando hay cambio de estado (returning)
-     */
-    updatePosition(dt = 0.016) {
-        if (!this.totalDistance || this.totalDistance <= 0) return;
+        // Actualizar TARGET (no el progress actual)
+        this.targetProgress = newProgress;
         
-        // Calcular tiempo desde último update del servidor
-        const timeSinceUpdate = (Date.now() - this.lastServerUpdate) / 1000;
-        
-        // DEAD RECKONING PURO: Siempre predicir movimiento basado en velocidad conocida
-        let vehicleSpeed = this.getVehicleSpeed();
-        if (this.hasEngineerCenterBonus()) {
-            vehicleSpeed *= 1.5; // +50% velocidad
-        }
-        
-        // Progress por segundo = velocidad / distancia total
-        const progressPerSecond = vehicleSpeed / this.getTotalDistance();
-        
-        // PREDICCIÓN: Calcular dónde debería estar ahora basado en último estado conocido
-        let predictedProgress;
-        
-        // Si acabamos de cambiar a returning=true, mantener continuidad visual
-        if (this.returning && this.lastKnownProgress === 0 && this.progress > 0.9) {
-            // Estamos iniciando la vuelta desde el destino, continuar desde donde está visualmente
-            predictedProgress = this.progress - (progressPerSecond * timeSinceUpdate);
-        } else {
-            // Predicción normal desde último estado conocido del servidor
-            predictedProgress = this.lastKnownProgress + (progressPerSecond * timeSinceUpdate);
-        }
-        
-        // Aplicar progress predicho continuamente
-        this.progress = Math.max(0, Math.min(1.0, predictedProgress));
-        
-        // Corrección mínima solo si el servidor está muy desincronizado
-        const serverDifference = Math.abs(this.serverProgress - predictedProgress);
-        if (timeSinceUpdate < 0.1 && serverDifference > 0.1) {
-            // Corrección muy suave solo para grandes discrepancias
-            const correctionFactor = 0.05; // Corrección muy sutil
-            this.progress += (this.serverProgress - this.progress) * correctionFactor;
-        }
-        
-        // Calcular posición visual final
+        // Actualizar posición visual inmediatamente después de cambiar returning
         this.updateVisualPosition();
     }
     
     /**
-     * Actualiza la posición visual basada en el progress actual
+     * Actualiza la posición visual - SIMPLE Y DIRECTO
      */
     updateVisualPosition() {
-        let fromBase, toBase;
-        
         if (this.returning) {
-            // Volviendo: desde el destino original hacia la base de origen
-            fromBase = this.target;  // Destino original (donde llegó)
-            toBase = this.originBase; // Base de origen (donde debe volver)
+            // Regresando: de toBase → fromBase
+            this.x = this.toBase.x + (this.fromBase.x - this.toBase.x) * this.progress;
+            this.y = this.toBase.y + (this.fromBase.y - this.toBase.y) * this.progress;
         } else {
-            // Yendo: desde la base de origen hacia el target
-            fromBase = this.originBase;
-            toBase = this.target;
+            // Yendo: de fromBase → toBase
+            this.x = this.fromBase.x + (this.toBase.x - this.fromBase.x) * this.progress;
+            this.y = this.fromBase.y + (this.toBase.y - this.fromBase.y) * this.progress;
         }
-        
-        // Calcular posición basada en progress
-        this.x = fromBase.x + (toBase.x - fromBase.x) * this.progress;
-        this.y = fromBase.y + (toBase.y - fromBase.y) * this.progress;
     }
 }

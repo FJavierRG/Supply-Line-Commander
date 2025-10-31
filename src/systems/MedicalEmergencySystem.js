@@ -111,6 +111,11 @@ export class MedicalEmergencySystem {
      * Actualizar sistema de emergencias
      */
     update(deltaTime) {
+        // En multijugador, el servidor maneja todas las emergencias médicas
+        if (this.game.isMultiplayer) {
+            return;
+        }
+        
         // Sistema médico siempre activo
         if (!this.game.missionStarted) return;
 

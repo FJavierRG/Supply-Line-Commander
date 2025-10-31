@@ -180,11 +180,21 @@ export class RoomManager {
     
     /**
      * Verificar si todos los jugadores están ready
+     * 🤖 NUEVO: Considera IA como siempre lista
      */
     allPlayersReady(roomId) {
         const room = this.rooms.get(roomId);
-        if (!room || room.players.length < 2) return false;
+        if (!room) return false;
         
+        // 🤖 NUEVO: Verificar si hay 2 jugadores humanos O 1 jugador + IA
+        const hasPlayer2 = room.players.length === 2;
+        const hasAI = room.aiPlayer !== null && room.aiPlayer !== undefined;
+        
+        // Debe haber al menos un oponente (humano o IA)
+        if (!hasPlayer2 && !hasAI) return false;
+        
+        // Todos los jugadores humanos deben estar ready
+        // La IA siempre está ready
         return room.players.every(p => p.ready);
     }
     

@@ -1,8 +1,7 @@
 // ===== SISTEMA DE CONSTRUCCIÓN =====
-import { FOB_CURRENCY_CONFIG } from '../config/constants.js';
 import { getNodeConfig, getBuildableNodes, isNodeAvailableForRace } from '../config/nodes.js';
 import { getDefaultRace } from '../config/races.js';
-import { MapNode } from '../entities/MapNode.js';
+import { VisualNode } from '../entities/visualNode.js';
 
 // Compatibilidad temporal
 export function getBuildingConfig(buildingId) {
@@ -21,6 +20,7 @@ export class BuildingSystem {
         this.droneMode = false;
         this.sniperMode = false;
         this.fobSabotageMode = false;
+        this.commandoMode = false; // 🆕 NUEVO: Modo de despliegue de comando especial operativo
         this.currentBuildingType = null; // Tipo de edificio que se está construyendo actualmente
         this.currentRace = getDefaultRace(); // Raza actual (por defecto 'default')
         this.minDistance = 80; // Distancia mínima entre bases
@@ -50,11 +50,15 @@ export class BuildingSystem {
     }
     
     /**
-     * Obtiene el costo de un edificio
+     * Obtiene el costo de un edificio desde la configuración del servidor
      * @param {string} buildingId - ID del edificio
      * @returns {number} Costo del edificio
      */
     getBuildingCost(buildingId) {
+        // Usar configuración autoritativa del servidor
+        if (this.game.serverBuildingConfig?.costs?.[buildingId]) {
+            return this.game.serverBuildingConfig.costs[buildingId];
+        }
         const building = getBuildingConfig(buildingId);
         return building ? building.cost : 0;
     }
@@ -65,6 +69,7 @@ export class BuildingSystem {
      * @returns {boolean} true si se puede pagar
      */
     canAffordBuilding(buildingId) {
+        // Validación UI únicamente - la validación real está en el servidor
         const cost = this.getBuildingCost(buildingId);
         return this.game.currency.canAfford(cost);
     }
@@ -139,6 +144,12 @@ export class BuildingSystem {
             return;
         }
         
+        // Si es specopsCommando, activar modo especial
+        if (buildingId === 'specopsCommando') {
+            this.activateCommandoMode();
+            return;
+        }
+        
         // Activar modo construcción
         this.buildMode = true;
         this.currentBuildingType = buildingId;
@@ -170,6 +181,7 @@ export class BuildingSystem {
     
     /**
      * Coloca un edificio en las coordenadas especificadas
+     * ⚠️ REFACTORIZADO: Ya no ejecuta lógica autoritativa - delega TODO al servidor
      * @param {number} x - Posición X
      * @param {number} y - Posición Y
      */
@@ -177,101 +189,20 @@ export class BuildingSystem {
         if (!this.buildMode || !this.currentBuildingType) return;
         
         const buildingId = this.currentBuildingType;
-        const buildingConfig = getBuildingConfig(buildingId);
         
-        if (!buildingConfig) {
-            console.warn(`⚠️ Configuración de edificio no encontrada: ${buildingId}`);
-            this.deactivateBuildMode();
-            return;
-        }
-        
-        // Verificar currency disponible
-        if (!this.canAffordBuilding(buildingId)) {
-            console.log(`⚠️ No tienes suficiente currency`);
-            this.deactivateBuildMode();
-            return;
-        }
-        
-        // === MULTIJUGADOR: Enviar solicitud al servidor ===
+        // Delegar TODO al servidor/pseudo-servidor
+        // Esto maneja validaciones, currency, territorio, colisiones, etc.
         if (this.game.isMultiplayer && this.game.network) {
-            console.log(`🏗️ MULTIJUGADOR: Enviando build_request: ${buildingId} en (${x}, ${y})`);
+            // MULTIPLAYER: Servidor remoto
+            console.log(`🏗️ MULTIPLAYER: Enviando build_request: ${buildingId} en (${x}, ${y})`);
             this.game.network.requestBuild(buildingId, x, y);
-            
-            // Desactivar modo construcción (optimista)
-            this.deactivateBuildMode();
-            
-            // El servidor validará y enviará building_created
-            return;
+        } else {
+            // SINGLEPLAYER: Pseudo-servidor local (Game.js)
+            console.log(`🏗️ SINGLEPLAYER: Enviando build_request a pseudo-servidor: ${buildingId} en (${x}, ${y})`);
+            this.game.handleBuildRequest(buildingId, x, y);
         }
         
-        // === SINGLEPLAYER: Construir localmente ===
-        
-        // Verificar que esté dentro del territorio aliado
-        // (proyectiles como dron/sniper no se limitan, pero no usan este método)
-        if (!this.game.territory.isInAllyTerritory(x, y)) {
-            console.log('⚠️ Solo puedes construir en territorio aliado');
-            return;
-        }
-        
-        // Verificar que no esté muy cerca de otras bases o edificios
-        if (!this.isValidLocation(x, y, buildingId)) {
-            console.log('⚠️ Muy cerca de otra base/edificio');
-            return;
-        }
-        
-        // Gastar currency
-        if (!this.game.spendMissionCurrency(buildingConfig.cost)) {
-            console.log('❌ Error al gastar currency');
-            this.deactivateBuildMode();
-            return;
-        }
-        
-        // Crear nodo usando BaseFactory (funciona para FOBs y edificios)
-        const newNode = this.game.baseFactory.createBase(x, y, buildingConfig.id, {
-            isConstructed: true
-        });
-        
-        if (newNode) {
-            // En tutorial, agregar al array de nodos del tutorial
-            if (this.game.state === 'tutorial' && this.game.tutorialManager?.tutorialNodes) {
-                this.game.tutorialManager.tutorialNodes.push(newNode);
-                
-                // Tutorial: Hardcodear FOB con 0 suministros (aislado del resto del juego)
-                if (buildingId === 'fob') {
-                    newNode.supplies = 0;
-                    console.log('🎓 Tutorial: FOB construido con 0 suministros');
-                }
-            } else {
-                this.game.nodes.push(newNode);
-            }
-            
-            // Tutorial: Detectar si construyó un FOB
-            if (buildingId === 'fob' && this.game.tutorialManager && this.game.tutorialManager.isTutorialActive) {
-                this.game.tutorialManager.notifyAction('fob_built', { buildingId });
-            }
-            
-            // Registrar acción en la IA enemiga para que pueda reaccionar
-            if (buildingConfig.id === 'antiDrone' || 
-                buildingConfig.id === 'nuclearPlant' || 
-                buildingConfig.id === 'intelRadio' ||
-                buildingConfig.id === 'campaignHospital') {
-                this.game.enemyAI.registerPlayerAction(buildingConfig.id, { x, y });
-                // También notificar al AIDirector si está en modo híbrido
-                if (this.game.aiDirector && this.game.aiSystemMode !== 'legacy') {
-                    this.game.aiDirector.onPlayerAction(buildingConfig.id, { x, y });
-                }
-            }
-        }
-        
-        // Reproducir sonido de construcción
-        this.game.audio.playPlaceBuildingSound();
-        
-        // Incrementar contador de edificios construidos
-        this.game.matchStats.buildingsBuilt++;
-        
-        console.log(`✅ ${buildingConfig.name} construido en (${x.toFixed(0)}, ${y.toFixed(0)})`);
-        
-        // Desactivar modo construcción
+        // Desactivar modo construcción (optimista)
         this.deactivateBuildMode();
     }
     
@@ -340,7 +271,7 @@ export class BuildingSystem {
      * Verifica si el modo construcción O drone está activo
      */
     isActive() {
-        return this.buildMode || this.droneMode || this.sniperMode || this.fobSabotageMode;
+        return this.buildMode || this.droneMode || this.sniperMode || this.fobSabotageMode || this.commandoMode;
     }
     
     /**
@@ -352,6 +283,21 @@ export class BuildingSystem {
         
         return this.game.nodes.some(n => 
             n.type === 'droneLauncher' && 
+            n.constructed && 
+            !n.isAbandoning &&
+            n.team === myTeam
+        );
+    }
+    
+    /**
+     * Verifica si existe al menos un centro de inteligencia construido
+     */
+    hasIntelCenter() {
+        // Obtener equipo del jugador (soporta singleplayer y multiplayer)
+        const myTeam = this.game.myTeam || 'ally';
+        
+        return this.game.nodes.some(n => 
+            n.type === 'intelCenter' && 
             n.constructed && 
             !n.isAbandoning &&
             n.team === myTeam
@@ -397,71 +343,25 @@ export class BuildingSystem {
     
     /**
      * Lanza un dron bomba hacia un objetivo
+     * ⚠️ REFACTORIZADO: Ya no ejecuta lógica autoritativa - delega TODO al servidor
      */
     launchDrone(targetBase) {
-        // VALIDACIÓN: Objetivo no vacío
         if (!targetBase) {
             console.log('⚠️ Objetivo no válido');
             return;
         }
         
-        // Validar que sea un objetivo enemigo válido (edificios construibles, no HQ ni frentes)
-        const validTargetTypes = ['fob', 'nuclearPlant', 'intelRadio', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter'];
-        const isEnemyTarget = targetBase.team !== this.game.myTeam && validTargetTypes.includes(targetBase.type);
-        
-        if (!isEnemyTarget) {
-            // Mensajes específicos según qué intentó atacar
-            if (targetBase.type === 'hq') {
-                console.log('⚠️ No puedes atacar HQs');
-            } else if (targetBase.type === 'front') {
-                console.log('⚠️ No puedes atacar frentes');
-            } else if (targetBase.team === this.game.myTeam) {
-                console.log('⚠️ No puedes atacar tus propias bases');
-            } else {
-                console.log('⚠️ Solo puedes atacar edificios enemigos (FOBs, plantas nucleares, anti-drones, hospitales, etc.)');
-            }
-            return;
-        }
-        
-        // Verificar currency disponible
-        if (!this.canAffordDrone()) {
-            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${this.getDroneCost()})`);
-            this.exitDroneMode();
-            return;
-        }
-        
-        // === MULTIJUGADOR: Enviar solicitud al servidor ===
+        // Delegar TODO al servidor/pseudo-servidor
         if (this.game.isMultiplayer && this.game.network) {
-            console.log(`💣 Enviando drone_request al servidor: target=${targetBase.id}`);
+            // MULTIPLAYER: Servidor remoto
+            console.log(`💣 MULTIPLAYER: Enviando drone_request al servidor: target=${targetBase.id}`);
             this.game.network.requestDrone(targetBase.id);
-            this.exitDroneMode();
-            return;
+        } else {
+            // SINGLEPLAYER: Pseudo-servidor local
+            console.log(`💣 SINGLEPLAYER: Enviando drone_request a pseudo-servidor: target=${targetBase.id}`);
+            this.game.handleDroneRequest(targetBase);
         }
         
-        // === SINGLEPLAYER: Ejecutar localmente ===
-        
-        // Gastar currency
-        if (!this.game.spendMissionCurrency(this.getDroneCost())) {
-            console.log('❌ Error al gastar currency');
-            this.exitDroneMode();
-            return;
-        }
-        
-        // Crear proyectil dron desde el borde izquierdo
-        const droneStartX = 0;
-        const droneStartY = targetBase.y;
-        
-        if (!this.game.droneSystem) {
-            console.error('❌ DroneSystem no inicializado');
-            return;
-        }
-        
-        this.game.droneSystem.launchDrone(droneStartX, droneStartY, targetBase);
-        this.game.matchStats.dronesLaunched++;
-        
-        console.log(`💣 Dron lanzado hacia ${targetBase.type} enemigo`);
-        
-        // Desactivar modo drone
         this.exitDroneMode();
     }
     
@@ -527,58 +427,26 @@ export class BuildingSystem {
     
     /**
      * Ejecuta el disparo de francotirador en un frente enemigo
+     * ⚠️ REFACTORIZADO: Ya no ejecuta lógica autoritativa - delega TODO al servidor
      */
     executeSniperStrike(targetFront) {
-        // VALIDACIÓN: Solo frentes enemigos
-        const isEnemyFront = targetFront.team !== this.game.myTeam && targetFront.type === 'front';
-        
-        if (!targetFront || !isEnemyFront) {
-            console.log('⚠️ Solo puedes atacar frentes enemigos con el francotirador');
-            return;
-        }
-        
-        const sniperConfig = getNodeConfig('sniperStrike');
-        
-        // Verificar currency
-        if (!this.canAffordBuilding('sniperStrike')) {
-            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${sniperConfig.cost})`);
+        if (!targetFront) {
+            console.log('⚠️ Objetivo no válido');
             this.exitSniperMode();
             return;
         }
         
-        // === MULTIJUGADOR: Enviar solicitud al servidor ===
+        // Delegar TODO al servidor/pseudo-servidor
         if (this.game.isMultiplayer && this.game.network) {
-            console.log(`🎯 Enviando sniper_request al servidor: target=${targetFront.id}`);
+            // MULTIPLAYER: Servidor remoto
+            console.log(`🎯 MULTIPLAYER: Enviando sniper_request al servidor: target=${targetFront.id}`);
             this.game.network.requestSniper(targetFront.id);
-            this.exitSniperMode();
-            return;
-        }
-        
-        // === SINGLEPLAYER: Ejecutar localmente ===
-        
-        // Gastar currency
-        if (!this.game.spendMissionCurrency(sniperConfig.cost)) {
-            console.log('❌ Error al gastar currency');
-            this.exitSniperMode();
-            return;
-        }
-        
-        // Reproducir sonido de disparo de francotirador
-        this.game.audio.sounds.sniperShoot.play();
-        
-        // Aplicar efecto "wounded" directamente (sin emergencia médica)
-        if (this.game.medicalSystem) {
-            this.game.medicalSystem.applyPenalty(targetFront);
-            this.game.matchStats.snipersLaunched++;
-            console.log(`🎯 Francotirador disparó al frente enemigo - Efecto wounded aplicado!`);
         } else {
-            console.log('⚠️ Sistema de emergencias médicas no disponible');
+            // SINGLEPLAYER: Pseudo-servidor local
+            console.log(`🎯 SINGLEPLAYER: Enviando sniper_request a pseudo-servidor: target=${targetFront.id}`);
+            this.game.handleSniperRequest(targetFront);
         }
         
-        // Crear sprite flotante de sniper kill feed
-        this.game.particleSystem.createFloatingSprite(targetFront.x, targetFront.y - 40, 'ui-sniper-kill');
-        
-        // Desactivar modo sniper
         this.exitSniperMode();
     }
     
@@ -622,71 +490,26 @@ export class BuildingSystem {
     
     /**
      * Ejecuta el acoso en una FOB enemiga
+     * ⚠️ REFACTORIZADO: Ya no ejecuta lógica autoritativa - delega TODO al servidor
      */
     executeFobSabotage(targetFOB) {
-        // VALIDACIÓN: Solo FOBs enemigas
-        const isEnemyFOB = targetFOB.team !== this.game.myTeam && targetFOB.type === 'fob';
-        
-        if (!targetFOB || !isEnemyFOB) {
-            console.log('⚠️ Solo puedes sabotear FOBs enemigas');
-            return;
-        }
-        
-        const fobSabotageConfig = getNodeConfig('fobSabotage');
-        
-        // Verificar currency
-        if (!this.canAffordBuilding('fobSabotage')) {
-            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${fobSabotageConfig.cost})`);
+        if (!targetFOB) {
+            console.log('⚠️ Objetivo no válido');
             this.exitFobSabotageMode();
             return;
         }
         
-        // === MULTIJUGADOR: Enviar solicitud al servidor ===
+        // Delegar TODO al servidor/pseudo-servidor
         if (this.game.isMultiplayer && this.game.network) {
-            console.log(`⚡ Enviando fob_sabotage_request al servidor: target=${targetFOB.id}`);
+            // MULTIPLAYER: Servidor remoto
+            console.log(`⚡ MULTIPLAYER: Enviando fob_sabotage_request al servidor: target=${targetFOB.id}`);
             this.game.network.requestFobSabotage(targetFOB.id);
-            this.exitFobSabotageMode();
-            return;
+        } else {
+            // SINGLEPLAYER: Pseudo-servidor local
+            console.log(`⚡ SINGLEPLAYER: Enviando fob_sabotage_request a pseudo-servidor: target=${targetFOB.id}`);
+            this.game.handleFobSabotageRequest(targetFOB);
         }
         
-        // === SINGLEPLAYER: Ejecutar localmente ===
-        
-        // Gastar currency
-        if (!this.game.spendMissionCurrency(fobSabotageConfig.cost)) {
-            console.log('❌ Error al gastar currency');
-            this.exitFobSabotageMode();
-            return;
-        }
-        
-        // Aplicar efecto fobSabotage a la FOB
-        targetFOB.addEffect({
-            type: 'fobSabotage',
-            speedPenalty: fobSabotageConfig.speedPenalty, // 0.5 (50% penalización)
-            truckCount: fobSabotageConfig.truckCount, // 3 camiones
-            icon: fobSabotageConfig.effectIcon,
-            tooltip: `Saboteada: -50% velocidad en los siguientes ${fobSabotageConfig.truckCount} camiones`
-        });
-        
-        this.game.matchStats.snipersLaunched++; // Usar este contador temporalmente
-        
-        // Crear efecto visual: specops unit cayendo desde arriba de la FOB
-        if (this.game.particleSystem.createFallingSprite) {
-            this.game.particleSystem.createFallingSprite(
-                targetFOB.x, 
-                targetFOB.y - 80, // Aparece unos píxeles encima de la FOB
-                'specops_unit',
-                0.08 // Escala pequeña para sprite 1024x1024 (similar al tamaño del dron)
-            );
-        }
-        
-        // Reproducir sonido de chopper con velocidad x1.25
-        if (this.game.audio && this.game.audio.playChopperSound) {
-            this.game.audio.playChopperSound();
-        }
-        
-        console.log(`⚡ FOB ${targetFOB.id} sabotajeada - Los siguientes ${fobSabotageConfig.truckCount} camiones tendrán -50% velocidad`);
-        
-        // Desactivar modo fobSabotage
         this.exitFobSabotageMode();
     }
     
@@ -695,6 +518,77 @@ export class BuildingSystem {
      */
     exitFobSabotageMode() {
         this.fobSabotageMode = false;
+        this.game.canvas.style.cursor = 'default';
+    }
+    
+    /**
+     * Activa el modo comando especial operativo
+     * 🆕 NUEVO
+     */
+    activateCommandoMode() {
+        // Verificar requisito de centro de inteligencia
+        if (!this.hasIntelCenter()) {
+            console.log(`⚠️ Necesitas construir un Centro de Inteligencia primero`);
+            return;
+        }
+        
+        // Verificar currency
+        const commandoConfig = getNodeConfig('specopsCommando');
+        if (!this.canAffordBuilding('specopsCommando')) {
+            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${commandoConfig?.cost || 200})`);
+            return;
+        }
+        
+        // Salir del modo construcción si estaba activo
+        if (this.buildMode) {
+            this.exitBuildMode();
+        }
+        
+        // Salir de otros modos de consumibles
+        if (this.fobSabotageMode) {
+            this.exitFobSabotageMode();
+        }
+        if (this.sniperMode) {
+            this.exitSniperMode();
+        }
+        if (this.droneMode) {
+            this.exitDroneMode();
+        }
+        
+        this.commandoMode = true;
+        this.game.selectedBase = null;
+        
+        // Usar cursor normal de construcción (no personalizado)
+        this.game.canvas.style.cursor = 'crosshair';
+        
+        console.log('🎖️ Modo comando especial operativo activado - Selecciona una posición en territorio enemigo para desplegar');
+    }
+    
+    /**
+     * Ejecuta el despliegue del comando especial operativo
+     * 🆕 NUEVO: Delega TODO al servidor
+     */
+    executeCommandoDeploy(x, y) {
+        // Delegar TODO al servidor/pseudo-servidor
+        if (this.game.isMultiplayer && this.game.network) {
+            // MULTIPLAYER: Servidor remoto
+            console.log(`🎖️ MULTIPLAYER: Enviando commando_deploy_request al servidor: x=${x}, y=${y}`);
+            this.game.network.requestCommandoDeploy(x, y);
+        } else {
+            // SINGLEPLAYER: Pseudo-servidor local
+            console.log(`🎖️ SINGLEPLAYER: Enviando commando_deploy_request a pseudo-servidor: x=${x}, y=${y}`);
+            this.game.handleCommandoDeployRequest(x, y);
+        }
+        
+        this.exitCommandoMode();
+    }
+    
+    /**
+     * Sale del modo comando
+     * 🆕 NUEVO
+     */
+    exitCommandoMode() {
+        this.commandoMode = false;
         this.game.canvas.style.cursor = 'default';
     }
     

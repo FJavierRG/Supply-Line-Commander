@@ -111,6 +111,11 @@ export class CombatHandler {
         // Validar que sea un edificio enemigo válido (no HQ ni frentes)
         const validTargetTypes = SERVER_NODE_CONFIG.actions.droneLaunch.validTargets;
         
+        // 🎯 DEBUG: Log para verificar qué está pasando
+        console.log(`💣 Validando objetivo drone: ${targetNode.type}, team: ${targetNode.team}, playerTeam: ${playerTeam}`);
+        console.log(`💣 ValidTargets disponibles:`, validTargetTypes);
+        console.log(`💣 Es válido: ${validTargetTypes.includes(targetNode.type)}, Es enemigo: ${targetNode.team !== playerTeam}`);
+        
         if (!validTargetTypes.includes(targetNode.type) || targetNode.team === playerTeam) {
             return { success: false, reason: 'Objetivo no válido para drones' };
         }
@@ -149,6 +154,71 @@ export class CombatHandler {
         console.log(`💣 Dron ${drone.id} lanzado por ${playerTeam} → ${targetNode.type} ${targetId}`);
         
         return { success: true, drone, launcherId: launcher.id, targetId };
+    }
+    
+    /**
+     * Maneja despliegue de comando especial operativo
+     * 🆕 NUEVO: Crea un nodo especial que deshabilita edificios enemigos dentro de su área
+     */
+    handleCommandoDeploy(playerTeam, x, y) {
+        const commandoConfig = SERVER_NODE_CONFIG.actions.specopsCommando;
+        const commandoCost = commandoConfig.cost;
+        const detectionRadius = commandoConfig.detectionRadius || 200;
+        
+        // Verificar currency
+        if (this.gameState.currency[playerTeam] < commandoCost) {
+            return { success: false, reason: 'Currency insuficiente' };
+        }
+        
+        // 🆕 Validar que esté en territorio enemigo (NO en territorio propio)
+        const inOwnTerritory = this.gameState.territoryCalculator.isInTeamTerritory(x, playerTeam);
+        if (inOwnTerritory) {
+            return { success: false, reason: 'El comando solo puede desplegarse en territorio enemigo' };
+        }
+        
+        // 🆕 NUEVO: Validar que no haya torres de vigilancia enemigas cerca
+        const vigilanceTowers = this.gameState.nodes.filter(n => 
+            (n.type === 'vigilanceTower' || n.isVigilanceTower) &&
+            n.team !== playerTeam &&
+            n.active &&
+            n.constructed &&
+            !n.isAbandoning
+        );
+        
+        for (const tower of vigilanceTowers) {
+            const detectionRadius = tower.detectionRadius || 140;
+            const dist = Math.hypot(x - tower.x, y - tower.y);
+            
+            if (dist <= detectionRadius) {
+                return { success: false, reason: 'Hay una torre de vigilancia enemiga cerca - no se puede desplegar el comando' };
+            }
+        }
+        
+        // Validar ubicación (ignorando límites de detección)
+        if (!this.gameState.buildHandler.isValidLocation(x, y, 'specopsCommando', {
+            ignoreDetectionLimits: true,
+            allowEnemyTerritory: true
+        })) {
+            return { success: false, reason: 'Ubicación no válida' };
+        }
+        
+        // Descontar currency
+        this.gameState.currency[playerTeam] -= commandoCost;
+        
+        // Crear nodo del comando
+        const commandoNode = this.gameState.buildHandler.createNode('specopsCommando', playerTeam, x, y);
+        commandoNode.constructed = true; // No necesita construcción
+        commandoNode.isConstructing = false;
+        commandoNode.active = true;
+        commandoNode.detectionRadius = detectionRadius;
+        commandoNode.isCommando = true;
+        
+        // Agregar al estado del juego
+        this.gameState.nodes.push(commandoNode);
+        
+        console.log(`🎖️ Comando especial operativo desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)}) - Radio: ${detectionRadius}px`);
+        
+        return { success: true, commando: commandoNode };
     }
 }
 
