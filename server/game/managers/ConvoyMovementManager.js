@@ -89,7 +89,6 @@ export class ConvoyMovementManager {
                 // Eliminar efecto si se agotaron los camiones
                 if (sabotageEffect.truckCount <= 0) {
                     fromNode.effects = fromNode.effects.filter(e => e.type !== 'fobSabotage');
-                    console.log(`⚡ FOB ${fromNode.id}: efecto sabotaje completado`);
                 }
             }
         }
@@ -138,17 +137,14 @@ export class ConvoyMovementManager {
                 // Verificar si es del HQ o del hospital
                 if (fromNode && fromNode.type === 'hq') {
                     // HQ: regresar ambulancia
-                    console.log(`🚑 Ambulancia ${convoy.id} llegó - Emergencia resuelta en ${convoy.targetFrontId} - Regresando al HQ`);
                     convoy.returning = true;
                     convoy.progress = 0; // RESETEAR progress para el viaje de vuelta
                     return;
                 } else if (fromNode && fromNode.type === 'campaignHospital') {
                     // Hospital: consumir ambulancia - NO regresar
-                    console.log(`🚑 Ambulancia ${convoy.id} llegó - Emergencia resuelta en ${convoy.targetFrontId} - CONSUMIDA del Hospital`);
                     
                     // Verificar si el hospital se queda sin ambulancias para eliminarlo
                     if (fromNode.availableVehicles <= 0) {
-                        console.log(`🏥 Hospital ${fromNode.id} sin ambulancias - ELIMINANDO`);
                         fromNode.active = false; // Marcar para eliminación
                     }
                     
@@ -181,7 +177,6 @@ export class ConvoyMovementManager {
         if (toNode && toNode.hasSupplies && toNode.supplies !== null) {
             const oldSupplies = toNode.supplies;
             toNode.supplies = Math.min(toNode.maxSupplies, toNode.supplies + convoy.cargo);
-            console.log(`🚛 Convoy ${convoy.id} entregó ${convoy.cargo} suministros a ${toNode.type} ${toNode.id}: ${oldSupplies} → ${toNode.supplies}/${toNode.maxSupplies}`);
         } else {
             console.log(`⚠️ Convoy ${convoy.id} no pudo entregar cargo a nodo ${convoy.toId}: hasSupplies=${toNode?.hasSupplies}, supplies=${toNode?.supplies}`);
         }
@@ -199,17 +194,14 @@ export class ConvoyMovementManager {
             if (fromNode.hasMedicalSystem && fromNode.type === 'hq') {
                 // HQ: devolver al sistema médico
                 fromNode.ambulanceAvailable = true;
-                console.log(`🚑 Ambulancia ${convoy.id} regresó al HQ ${fromNode.team} - Disponible: ${fromNode.ambulanceAvailable}`);
             } else if (fromNode.hasVehicles && fromNode.type === 'campaignHospital') {
                 // Hospital de campaña: NO devolver - se consume
-                console.log(`🚑 Ambulancia ${convoy.id} CONSUMIDA del Hospital ${fromNode.team} - Vehículos disponibles: ${fromNode.availableVehicles}`);
             } else {
                 console.warn(`⚠️ Ambulancia ${convoy.id} intentó regresar pero fromNode no tiene sistema médico/vehículos válido:`, fromNode ? `${fromNode.type} ${fromNode.team} hasMedical=${fromNode.hasMedicalSystem} hasVehicles=${fromNode.hasVehicles}` : 'null');
             }
         } else if (fromNode && fromNode.hasVehicles) {
             // === CONVOY NORMAL: Devolver vehículo ===
             fromNode.availableVehicles = Math.min(fromNode.maxVehicles, fromNode.availableVehicles + 1);
-            console.log(`🚛 Vehículo ${convoy.id} regresó al ${fromNode.type} ${fromNode.team} - Vehículos: ${fromNode.availableVehicles}/${fromNode.maxVehicles}`);
         } else {
             console.warn(`⚠️ Convoy ${convoy.id} intentó regresar pero fromNode no válido:`, fromNode ? `${fromNode.type} hasVehicles=${fromNode.hasVehicles}` : 'null');
         }

@@ -79,7 +79,6 @@ export class AISystem {
             decisionsExecuted: 0
         };
         
-        console.log('🤖 Sistema de IA inicializado en servidor');
     }
     
     /**
@@ -120,12 +119,9 @@ export class AISystem {
         const myFOBs = myNodes.filter(n => n.type === 'fob');
         const myFronts = myNodes.filter(n => n.type === 'front');
         
-        console.log(`🤖 IA ACTIVADA: ${this.raceId} (${this.difficulty})`);
         if (AIConfig.debug.logSupply) {
-            console.log(`🤖 IA DEBUG: Estado inicial - HQ: ${hq ? 'SÍ' : 'NO'}, FOBs: ${myFOBs.length}, Frentes: ${myFronts.length}`);
             if (myFOBs.length > 0) {
                 myFOBs.forEach(fob => {
-                    console.log(`   - FOB ${fob.id}: ${fob.supplies}/${fob.maxSupplies} supplies, ${fob.availableVehicles || 0} vehículos`);
                 });
             }
         }
@@ -136,7 +132,6 @@ export class AISystem {
      */
     deactivate() {
         this.active = false;
-        console.log('🤖 IA DESACTIVADA');
     }
     
     /**
@@ -147,7 +142,6 @@ export class AISystem {
         const hasAIFlag = this.gameState.room?.hasAI === true;
         
         if (hasAIPlayer && !hasAIFlag) {
-            console.log('🤖 WARNING: aiPlayer existe pero hasAI no está en true');
         }
         
         return hasAIPlayer && hasAIFlag;
@@ -170,7 +164,6 @@ export class AISystem {
         const buildings = raceConfig?.buildings || [];
         
         if (AIConfig.debug.logActions) {
-            console.log(`🤖 IA: Edificios disponibles para ${playerRace}: ${buildings.join(', ')}`);
         }
         
         return buildings;
@@ -226,13 +219,11 @@ export class AISystem {
         // Activar si no está activa
         if (!this.active) {
             this.activate();
-            console.log(`🤖 IA configurada: ${this.gameState.room?.aiPlayer?.race} (${this.difficulty})`);
         }
         
         // Debug: Log cada 10s para ver qué está pasando
         if (this.timers.statusReport % 10 < 0.5 && this.timers.statusReport > 0) {
             const currency = this.gameState.currency?.player2 || 0;
-            console.log(`🤖 IA UPDATE: active=${this.active}, currency=${currency.toFixed(0)}$, timers=${JSON.stringify(this.timers)}`);
         }
         
         // Actualizar currency
@@ -317,7 +308,6 @@ export class AISystem {
             if (AIConfig.debug.logActions && this.currency > 0) {
                 const currencyIncrease = newCurrency - this.currency;
                 if (currencyIncrease > 50) {
-                    console.log(`⚠️ IA CURRENCY WARNING: Incremento grande detectado: +${currencyIncrease.toFixed(0)}$ (${this.currency.toFixed(0)}$ → ${newCurrency.toFixed(0)}$)`);
                 }
             }
             
@@ -337,10 +327,6 @@ export class AISystem {
         // Debug: Verificar qué nodos tiene la IA
         if (AIConfig.debug.logSupply && myFOBs.length === 0) {
             const allNodes = this.gameState.nodes.filter(n => n.team === team);
-            console.log(`🤖 IA DEBUG: No se encontraron FOBs para ${team}`);
-            console.log(`   - Total nodos de ${team}: ${allNodes.length}`);
-            console.log(`   - Tipos encontrados: ${allNodes.map(n => n.type).join(', ')}`);
-            console.log(`   - HQ encontrado: ${hq ? 'SÍ' : 'NO'}`);
         }
         
         if (!hq || !myFOBs || myFOBs.length === 0) return;
@@ -361,7 +347,6 @@ export class AISystem {
                 
                 if (success) {
                     if (AIConfig.debug.logSupply || AIConfig.debug.logActions) {
-                        console.log(`🤖 IA SUPPLY: Enviando suministros al FOB ${fob.id} (${supplyPercentage.toFixed(0)}% suministros)`);
                     }
                     // NO hacer return - continuar revisando otros FOBs
                 }
@@ -399,7 +384,6 @@ export class AISystem {
                     
                     if (success) {
                         if (AIConfig.debug.logSupply || AIConfig.debug.logActions) {
-                            console.log(`🤖 IA SUPPLY: Enviando suministros al Frente ${front.id} desde FOB ${closestFOB.id} (${supplyPercentage.toFixed(0)}% suministros)`);
                         }
                         // NO hacer return - continuar revisando otros Frentes
                         continue; // Pasar al siguiente frente
@@ -427,7 +411,6 @@ export class AISystem {
         
         if (myHelicopters.length === 0) {
             if (AIConfig.debug.logSupply) {
-                console.log(`🚁 IA HELICOPTER: No hay helicópteros para ${team}`);
             }
             return;
         }
@@ -499,7 +482,6 @@ export class AISystem {
                         const success = this.sendSupplyConvoy(aerialBase, closestFront, team);
                         if (success) {
                             if (AIConfig.debug.logSupply || AIConfig.debug.logActions) {
-                                console.log(`🚁 IA HELICOPTER: Enviando helicóptero ${heliId} desde Base Aérea ${aerialBase.id} a Frente ${closestFront.id}`);
                             }
                             return; // Solo enviar uno por ciclo para evitar spam
                         }
@@ -537,7 +519,6 @@ export class AISystem {
                         const success = this.sendSupplyConvoy(hq, closestFront, team);
                         if (success) {
                             if (AIConfig.debug.logSupply || AIConfig.debug.logActions) {
-                                console.log(`🚁 IA HELICOPTER: Enviando helicóptero ${heliId} desde HQ a Frente ${closestFront.id}`);
                             }
                             return; // Solo enviar uno por ciclo para evitar spam
                         }
@@ -579,7 +560,6 @@ export class AISystem {
                             const success = this.sendSupplyConvoy(front, targetFront, team);
                             if (success) {
                                 if (AIConfig.debug.logSupply || AIConfig.debug.logActions) {
-                                    console.log(`🚁 IA HELICOPTER: Moviendo helicóptero ${heliId} con cargo parcial (${heli.cargo}) desde Frente ${front.id} a Frente ${targetFront.id}`);
                                 }
                                 return; // Solo enviar uno por ciclo
                             }
@@ -591,7 +571,6 @@ export class AISystem {
                         if (success) {
                             if (AIConfig.debug.logSupply || AIConfig.debug.logActions) {
                                 const destType = rechargeDest.type === 'aerialBase' ? 'Base Aérea' : 'HQ';
-                                console.log(`🚁 IA HELICOPTER: Regresando helicóptero con cargo insuficiente (${heli.cargo}) desde Frente ${front.id} a ${destType} ${rechargeDest.id}`);
                             }
                             return; // Solo enviar uno por ciclo
                         }
@@ -615,7 +594,6 @@ export class AISystem {
                     if (success) {
                         if (AIConfig.debug.logSupply || AIConfig.debug.logActions) {
                             const destType = rechargeDest.type === 'aerialBase' ? 'Base Aérea' : 'HQ';
-                            console.log(`🚁 IA HELICOPTER: Regresando helicóptero vacío ${heliId} desde Frente ${front.id} a ${destType} ${rechargeDest.id}`);
                         }
                         return; // Solo enviar uno por ciclo
                     }
@@ -639,7 +617,6 @@ export class AISystem {
                     if (success) {
                         if (AIConfig.debug.logSupply || AIConfig.debug.logActions) {
                             const destType = rechargeDest.type === 'aerialBase' ? 'Base Aérea' : 'HQ';
-                            console.log(`🚁 IA HELICOPTER: Regresando helicóptero vacío ${heliId} desde ${node.type} ${node.id} a ${destType} ${rechargeDest.id}`);
                         }
                         return; // Solo enviar uno por ciclo
                     }
@@ -690,7 +667,6 @@ export class AISystem {
             // Verificar helicópteros disponibles
             if (!from.landedHelicopters || from.landedHelicopters.length === 0) {
                 if (AIConfig.debug.logSupply) {
-                    console.log(`🚁 IA HELICOPTER: No hay helicópteros disponibles en ${from.id}`);
                 }
                 return false;
             }
@@ -698,7 +674,6 @@ export class AISystem {
             // Verificar vehículos disponibles (sistema tradicional)
             if (!from.availableVehicles || from.availableVehicles <= 0) {
                 if (AIConfig.debug.logSupply) {
-                    console.log(`🤖 IA SUPPLY: No hay vehículos disponibles en ${from.id}`);
                 }
                 return false;
             }
@@ -731,12 +706,10 @@ export class AISystem {
                 }
                 
                 if (AIConfig.debug.logSupply) {
-                    console.log(`🤖 IA SUPPLY: ✅ Convoy creado: ${result.convoy?.id || result.helicopter?.id || 'unknown'} desde ${from.id} a ${to.id}`);
                 }
                 return true;
             } else {
                 if (AIConfig.debug.logSupply) {
-                    console.log(`🤖 IA SUPPLY: ❌ handleConvoy falló: ${result.reason || 'unknown'}`);
                 }
                 return false;
             }
@@ -761,7 +734,6 @@ export class AISystem {
         const threshold = getAdjustedThreshold('currencyStrategic', this.raceId, this.difficulty) || 50;
         if (currency < threshold) {
             if (AIConfig.debug.logActions) {
-                console.log(`🤖 IA: Currency insuficiente (${currency.toFixed(0)}$ < ${threshold.toFixed(0)}$)`);
             }
             return;
         }
@@ -771,7 +743,6 @@ export class AISystem {
         
         if (recommendations.length === 0) {
             if (AIConfig.debug.logActions) {
-                console.log(`🤖 IA: No hay acciones disponibles (currency: ${currency.toFixed(0)}$, phase: ${state.phase})`);
             }
             return;
         }
@@ -783,7 +754,6 @@ export class AISystem {
         if (recommendations.length > 0) {
             const bestAction = recommendations[0];
             if (AIConfig.debug.logActions) {
-                console.log(`🤖 IA: Mejor acción: ${bestAction.buildingType} (score: ${bestAction.score.toFixed(1)}, cost: ${bestAction.cost}$)`);
             }
             this.executeAction(bestAction, team);
         }
@@ -915,7 +885,6 @@ export class AISystem {
                     aerialBaseAction.score = 999;
                     actions.push(aerialBaseAction);
                     if (AIConfig.debug.logActions) {
-                        console.log(`🎯 IA B_Nation PRIORIDAD 1: Necesita Base Aérea (tiene ${state.myAerialBases})`);
                     }
                     // Solo permitir Base Aérea hasta tenerla
                     return actions.sort((a, b) => b.score - a.score);
@@ -923,7 +892,6 @@ export class AISystem {
                     // No puede construir Base Aérea aún (falta currency o no está disponible)
                     // Bloquear otras construcciones hasta tener Base Aérea
                     if (AIConfig.debug.logActions) {
-                        console.log(`🎯 IA B_Nation PRIORIDAD 1: Bloqueando otras construcciones - necesita Base Aérea primero`);
                     }
                     return []; // No permitir otras construcciones
                 }
@@ -937,7 +905,6 @@ export class AISystem {
                     intelRadioAction.score = 998;
                     actions.push(intelRadioAction);
                     if (AIConfig.debug.logActions) {
-                        console.log(`🎯 IA B_Nation PRIORIDAD 2: Necesita antenas (tiene ${state.myIntelRadios}/2)`);
                     }
                     // Solo permitir antenas hasta tener 2
                     return actions.sort((a, b) => b.score - a.score);
@@ -945,7 +912,6 @@ export class AISystem {
                     // No puede construir antena aún (falta currency o no está disponible)
                     // Bloquear otras construcciones hasta tener 2 antenas
                     if (AIConfig.debug.logActions) {
-                        console.log(`🎯 IA B_Nation PRIORIDAD 2: Bloqueando otras construcciones - necesita antenas primero (${state.myIntelRadios}/2)`);
                     }
                     return []; // No permitir otras construcciones
                 }
@@ -988,7 +954,6 @@ export class AISystem {
                         // Aumentar score significativamente para priorizar antenas adicionales
                         intelRadioAction.score *= 1.5; // +50% de score
                         if (AIConfig.debug.logActions) {
-                            console.log(`🎯 IA B_Nation: Priorizando antena adicional (score aumentado a ${intelRadioAction.score.toFixed(1)})`);
                         }
                         actions.push(intelRadioAction);
                         continue; // Ya agregamos la acción, continuar con siguiente edificio
@@ -997,7 +962,6 @@ export class AISystem {
                 // 🆕 NUEVO: Limitar hospitales a solo 1 máximo
                 if (buildingType === 'campaignHospital' && state.myHospitals >= 1) {
                     if (AIConfig.debug.logActions) {
-                        console.log(`🎯 IA B_Nation: Ya tiene hospital (${state.myHospitals}), bloqueando más hospitales`);
                     }
                     continue; // No construir más hospitales
                 }
@@ -1016,15 +980,6 @@ export class AISystem {
             }
         }
         
-        // Debug: Mostrar qué acciones se evaluaron
-        if (AIConfig.debug.logActions && actions.length === 0) {
-            console.log(`🤖 IA DEBUG: evaluateActions evaluó ${this.availableBuildings.length} edificios disponibles:`);
-            console.log(`   - Available: ${this.availableBuildings.join(', ')}`);
-            console.log(`   - Currency: ${currency}$`);
-            console.log(`   - TruckFactory cost: ${getCost('truckFactory')}$, canBuild: ${this.canBuild('truckFactory')}`);
-            console.log(`   - FOB cost: ${getCost('fob')}$, canBuild: ${this.canBuild('fob')}`);
-            console.log(`   - NuclearPlant cost: ${getCost('nuclearPlant')}$, canBuild: ${this.canBuild('nuclearPlant')}`);
-        }
         
         // Ordenar por score
         return actions.sort((a, b) => b.score - a.score);
@@ -1104,14 +1059,11 @@ export class AISystem {
                         cost: fobSabotageCost
                     });
                     if (AIConfig.debug.logActions) {
-                        console.log(`🎯 IA B_Nation: Sabotaje disponible (score aumentado a ${boostedScore.toFixed(1)}, base: ${score.toFixed(1)})`);
                     }
                 }
             } else if (AIConfig.debug.logActions && this.raceId === 'B_Nation') {
                 if (!hasPriority1) {
-                    console.log(`🎯 IA B_Nation: No puede usar sabotaje - falta Base Aérea (tiene ${myAerialBases.length})`);
                 } else if (!hasPriority2) {
-                    console.log(`🎯 IA B_Nation: No puede usar sabotaje - faltan antenas (tiene ${myIntelRadios.length}/2)`);
                 }
             }
         }
@@ -1131,7 +1083,6 @@ export class AISystem {
             if (action.type === 'build') {
                 this.stats.buildingsBuilt++;
                 if (AIConfig.debug.logActions) {
-                    console.log(`🤖 IA: Construyendo ${action.buildingType} (${action.cost}$) - ${result ? 'ÉXITO' : 'FALLÓ'}`);
                 }
             } else if (action.type === 'attack') {
                 if (action.attackType === 'drone') {
@@ -1140,7 +1091,6 @@ export class AISystem {
                     this.stats.snipersLaunched++;
                 }
                 if (AIConfig.debug.logActions) {
-                    console.log(`🤖 IA: ${action.attackType} (${action.cost}$) - ${result ? 'ÉXITO' : 'FALLÓ'}`);
                 }
             }
         } catch (error) {
@@ -1153,7 +1103,6 @@ export class AISystem {
      */
     logStatus(team, currency) {
         const state = this.analyzeState(team);
-        console.log(`🤖 IA (${this.raceId}, ${this.difficulty}): ${state.phase} | ${currency}$ | FOBs:${state.myFOBs} Plants:${state.myPlants} | Drones:${this.stats.dronesLaunched} | Decs:${this.stats.decisionsExecuted}`);
     }
     
     /**
@@ -1185,7 +1134,6 @@ export class AISystem {
         if (playerPlants.length > myPlants.length && currency >= plantCost) {
             this.stats.decisionsExecuted++;
             if (AIConfig.debug.logActions) {
-                console.log(`🤖 IA REACCIÓN: Construir planta (jugador ${playerPlants.length} vs yo ${myPlants.length})`);
             }
             this.executeAction({ type: 'build', buildingType: 'nuclearPlant', cost: plantCost }, team);
             return;
@@ -1253,7 +1201,6 @@ export class AISystem {
         
         if (!ambulanceSource || !ambulanceSource.availableVehicles || ambulanceSource.availableVehicles <= 0) {
             if (AIConfig.debug.logActions && myEmergencyFronts.length > 0) {
-                console.log(`🤖 IA MEDICAL: Hay ${myEmergencyFronts.length} emergencias pero no hay vehículos disponibles`);
             }
             return;
         }
@@ -1280,16 +1227,13 @@ export class AISystem {
                     });
                     
                     if (AIConfig.debug.logActions) {
-                        console.log(`🤖 IA MEDICAL: ✅ Ambulancia enviada al frente ${front.id} (emergencia activa)`);
                     }
                 } else {
                     if (AIConfig.debug.logActions) {
-                        console.log(`🤖 IA MEDICAL: ❌ No se pudo enviar ambulancia: ${result.reason || 'unknown'}`);
                     }
                 }
             } catch (error) {
                 if (AIConfig.debug.logActions) {
-                    console.log(`🤖 IA MEDICAL: Error enviando ambulancia: ${error.message}`);
                 }
             }
         }

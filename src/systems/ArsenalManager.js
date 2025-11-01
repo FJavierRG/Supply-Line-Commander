@@ -2,8 +2,9 @@
 import { getAllyNodes, getProjectiles, getBuildableNodes } from '../config/nodes.js';
 
 export class ArsenalManager {
-    constructor(assetManager) {
+    constructor(assetManager, game) {
         this.assetManager = assetManager;
+        this.game = game;
         this.isVisible = false;
         
         this.setupEventListeners();
@@ -23,19 +24,13 @@ export class ArsenalManager {
     
     show() {
         this.isVisible = true;
-        const overlay = document.getElementById('arsenal-overlay');
-        if (overlay) {
-            overlay.classList.remove('hidden');
-            this.populateArsenal();
-        }
+        this.game.overlayManager.showOverlay('arsenal-overlay');
+        this.populateArsenal();
     }
     
     hide() {
         this.isVisible = false;
-        const overlay = document.getElementById('arsenal-overlay');
-        if (overlay) {
-            overlay.classList.add('hidden');
-        }
+        this.game.overlayManager.hideOverlay('arsenal-overlay');
     }
     
     populateArsenal() {

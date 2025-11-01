@@ -160,3 +160,5 @@ interpolatePosition(entity, dt, {
 La interpolación es uno de los sistemas más importantes en juegos multijugador. Mantenerla centralizada hace tu juego mejor, más profesional y más fácil de mantener.
 
 
+
+

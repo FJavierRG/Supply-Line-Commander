@@ -121,12 +121,10 @@ export class AudioManager {
         
         // Música de menú - PRUEBA: cargar con fetch para verificar que funciona
         const mainThemeUrl = SOUNDS_BASE_URL + 'main_theme.wav';
-        console.log('🎵 Intentando cargar música del menú desde:', mainThemeUrl);
         
         // Test: verificar que la URL es accesible
         fetch(mainThemeUrl, {method: 'HEAD'})
             .then(response => {
-                console.log('✅ URL accesible, Content-Type:', response.headers.get('content-type'));
             })
             .catch(error => {
                 console.error('❌ URL no accesible:', error);
@@ -139,7 +137,6 @@ export class AudioManager {
         
         // Sonido de hover en menú - TEST: probar con sonido más pequeño
         const menuHoverUrl = SOUNDS_BASE_URL + 'menu_choice.wav';
-        console.log('🔊 Cargando sonido de hover desde:', menuHoverUrl);
         this.sounds.menuHover = this.createAudio(menuHoverUrl, 0.4, false);
     }
     
@@ -163,11 +160,9 @@ export class AudioManager {
         });
         
         audio.addEventListener('loadstart', () => {
-            console.log(`🔄 Cargando audio: ${src}`);
         });
         
         audio.addEventListener('canplaythrough', () => {
-            console.log(`✅ Audio listo: ${src}`);
         });
         
         // Asignar src DESPUÉS de configurar todo
@@ -190,7 +185,6 @@ export class AudioManager {
         const playPromise = testAudio.play();
         if (playPromise !== undefined) {
             playPromise.then(() => {
-                console.log('🔊 Contexto de audio desbloqueado correctamente');
                 testAudio.pause();
                 testAudio.currentTime = 0;
             }).catch(error => {
@@ -204,7 +198,6 @@ export class AudioManager {
             const mainThemePromise = this.music.mainTheme.play();
             if (mainThemePromise !== undefined) {
                 mainThemePromise.then(() => {
-                    console.log('🔊 Tema del menú preparado para desbloqueo');
                     this.music.mainTheme.pause();
                     this.music.mainTheme.currentTime = 0;
                     this.music.mainTheme.volume = this.volumes.mainTheme; // Restaurar volumen
@@ -385,18 +378,13 @@ export class AudioManager {
         if (this.music.mainTheme) {
             // Verificar si el audio está listo para reproducir
             if (this.music.mainTheme.readyState >= 3) { // HAVE_FUTURE_DATA o superior
-                console.log('🎵 Reproduciendo tema del menú (audio listo)');
                 this.music.mainTheme.play().catch(e => {
-                    console.log('🔊 Audio del menú bloqueado por navegador:', e.name);
                 });
             } else {
-                console.log('⏳ Esperando que el tema del menú se cargue...');
                 // Esperar a que esté listo
                 const onCanPlay = () => {
-                    console.log('🎵 Tema del menú listo, reproduciendo...');
                     this.music.mainTheme.removeEventListener('canplaythrough', onCanPlay);
                     this.music.mainTheme.play().catch(e => {
-                        console.log('🔊 Audio del menú bloqueado por navegador:', e.name);
                     });
                 };
                 this.music.mainTheme.addEventListener('canplaythrough', onCanPlay);
@@ -432,18 +420,13 @@ export class AudioManager {
         if (this.music.victoryMarch) {
             // Verificar si el audio está listo para reproducir
             if (this.music.victoryMarch.readyState >= 3) { // HAVE_FUTURE_DATA o superior
-                console.log('🎵 Reproduciendo música de victoria (audio listo)');
                 this.music.victoryMarch.play().catch(e => {
-                    console.log('🔊 Audio de victoria bloqueado por navegador:', e.name);
                 });
             } else {
-                console.log('⏳ Esperando que la música de victoria se cargue...');
                 // Esperar a que esté listo
                 const onCanPlay = () => {
-                    console.log('🎵 Música de victoria listo, reproduciendo...');
                     this.music.victoryMarch.removeEventListener('canplaythrough', onCanPlay);
                     this.music.victoryMarch.play().catch(e => {
-                        console.log('🔊 Audio de victoria bloqueado por navegador:', e.name);
                     });
                 };
                 this.music.victoryMarch.addEventListener('canplaythrough', onCanPlay);

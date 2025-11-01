@@ -238,3 +238,5 @@ const threshold = getAdjustedThreshold('currencyStrategic', raceId, this.difficu
 
 **Última Actualización**: 2024
 
+
+

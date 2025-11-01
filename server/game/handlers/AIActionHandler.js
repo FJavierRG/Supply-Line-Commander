@@ -150,7 +150,6 @@ export class AIActionHandler {
         const target = targets[Math.floor(Math.random() * targets.length)];
         
         // TODO: Implementar sniper en CombatHandler
-        console.log(`🎯 IA: Sniper atacando ${target.type} en ${target.id}`);
         
         return true;
     }
@@ -214,7 +213,6 @@ export class AIActionHandler {
                         
                         if (this.buildHandler.isValidLocation(x, y, buildingType) && 
                             territoryCalculator.isInTeamTerritory(x, team)) {
-                            console.log(`🎯 IA B_Nation: Base Aérea construida en punto intermedio (HQ: ${hq.x.toFixed(0)},${hq.y.toFixed(0)} → Frentes promedio: ${avgFrontX.toFixed(0)},${avgFrontY.toFixed(0)} → Construcción: ${x.toFixed(0)},${y.toFixed(0)})`);
                             return { x, y };
                         }
                     }

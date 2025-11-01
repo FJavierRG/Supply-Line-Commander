@@ -91,6 +91,8 @@ body.menu-open #game-canvas {
     position: absolute;
     top: 0;
     left: 0;
+    z-index: 1; /* Explícitamente bajo - capa del juego */
+    pointer-events: auto; /* Activo por defecto */
 }
 
 /* Slider de cámara - DESACTIVADO (mundo 1:1 con viewport) */
@@ -621,6 +623,54 @@ body.menu-open #game-canvas {
     box-shadow: 0 12px 40px rgba(78, 204, 163, 0.6);
 }
 
+/* ===== NUEVA ESTRUCTURA: Capa de UI separada ===== */
+
+/* Capa de UI siempre arriba del canvas */
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1000; /* Siempre arriba del canvas */
+    pointer-events: none; /* Permite clicks a través cuando no hay overlay visible */
+}
+
+/* Overlays dentro de ui-layer capturan eventos cuando están visibles */
+#ui-layer .overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    backdrop-filter: blur(5px);
+    pointer-events: auto; /* Permitir interacción cuando está visible */
+}
+
+/* Overlays ocultos no capturan eventos */
+#ui-layer .overlay.hidden {
+    display: none;
+    pointer-events: none;
+}
+
+/* Bloquear canvas cuando hay cualquier overlay visible en ui-layer */
+/* Usar selector más específico que funcione en todos los navegadores */
+#ui-layer .overlay:not(.hidden) ~ *,
+body:has(#ui-layer .overlay:not(.hidden)) #game-canvas {
+    pointer-events: none;
+}
+
+/* Fallback más robusto: bloquear canvas directamente cuando hay overlay visible */
+#main-game:has(#ui-layer .overlay:not(.hidden)) #game-canvas {
+    pointer-events: none !important;
+}
+
+/* Fallback: Overlays legacy fuera de ui-layer (compatibilidad) */
 .overlay {
     position: absolute;
     top: 0;
@@ -633,10 +683,12 @@ body.menu-open #game-canvas {
     align-items: center;
     z-index: 100;
     backdrop-filter: blur(5px);
+    pointer-events: auto;
 }
 
 .overlay.hidden {
     display: none;
+    pointer-events: none;
 }
 
 /* ===== MISSION BRIEFING - SISTEMA DE DISEÑO ===== */

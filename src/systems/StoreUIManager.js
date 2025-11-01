@@ -107,7 +107,6 @@ export class StoreUIManager {
                 availableConsumables.includes(node.id)
             );
             
-            console.log(`🏛️ Tienda filtrada por servidor (team: ${team}) - Edificios disponibles: ${availableBuildings.join(', ')}, Consumibles: ${availableConsumables.join(', ')}`);
         }
         
         // console.log(`🏛️ Edificios mostrados en tienda: ${buildableNodes.map(n => n.id).join(', ')}`); // Log removido
@@ -151,7 +150,6 @@ export class StoreUIManager {
                 this.game.raceConfigs['player1'] = raceConfig;
                 this.game.myTeam = 'player1'; // Asegurar que myTeam esté establecido
                 
-                console.log(`🏛️ Configuración de raza creada para singleplayer: ${raceId}`, raceConfig);
                 
                 // Actualizar categorías después de crear la configuración
                 this.updateCategories();
@@ -191,7 +189,6 @@ export class StoreUIManager {
         // Tutorial: Verificar permisos
         if (this.game.tutorialManager && this.game.tutorialManager.isTutorialActive) {
             if (!this.game.tutorialManager.isActionAllowed('canOpenStore')) {
-                console.log('⚠️ Tutorial: No puedes abrir la tienda aún');
                 return;
             }
         }
@@ -212,7 +209,6 @@ export class StoreUIManager {
             // Esto asegura que las categorías estén actualizadas con la raza correcta
             this.updateCategories();
             this.updateHitRegions(); // Actualizar hitboxes
-            console.log(`🏛️ Categoría seleccionada: ${categoryId} - Items: ${this.categories[categoryId]?.items?.join(', ') || 'NINGUNO'}`);
         }
     }
     
@@ -420,13 +416,11 @@ export class StoreUIManager {
                 
                 // Verificar si el dron está bloqueado
                 if (itemId === 'drone' && !this.buildSystem.hasDroneLauncher()) {
-                    console.log('⚠️ Necesitas construir una Lanzadera de Drones primero');
                     return true; // Consumir el click pero no activar
                 }
                 
                 // Verificar si el comando está bloqueado
                 if (itemId === 'specopsCommando' && !this.buildSystem.hasIntelCenter()) {
-                    console.log('⚠️ Necesitas construir un Centro de Inteligencia primero');
                     return true; // Consumir el click pero no activar
                 }
                 

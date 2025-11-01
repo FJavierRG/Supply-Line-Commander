@@ -190,7 +190,6 @@ export class GameStateManager {
                 const heli = this.helicopterManager.createHelicopter('player1', hqNode.id);
                 if (!hqNode.landedHelicopters) hqNode.landedHelicopters = [];
                 hqNode.landedHelicopters.push(heli.id);
-                console.log(`🚁 Helicóptero inicial creado para player1 en HQ ${hqNode.id}`);
             }
         }
         
@@ -200,7 +199,6 @@ export class GameStateManager {
                 const heli = this.helicopterManager.createHelicopter('player2', hqNode.id);
                 if (!hqNode.landedHelicopters) hqNode.landedHelicopters = [];
                 hqNode.landedHelicopters.push(heli.id);
-                console.log(`🚁 Helicóptero inicial creado para player2 en HQ ${hqNode.id}`);
             }
         }
         
@@ -394,7 +392,6 @@ export class GameStateManager {
             
             // CRÍTICO: Si hay victoria, enviar evento de victoria
             if (this.victoryResult && victoryCallback) {
-                console.log(`🏆 Enviando evento de victoria: ${this.victoryResult.winner}`);
                 victoryCallback(this.victoryResult);
                 this.victoryResult = null; // Limpiar para evitar spam
             }
@@ -418,7 +415,6 @@ export class GameStateManager {
                 this.countdown = 0;
                 this.gameStarted = true;
                 this.gameStartTicks = 0; // Reset contador para sync inicial
-                console.log('🎮 Servidor: Countdown terminado - INICIANDO SIMULACIÓN');
                 
                 // Evento de sonido: secuencia de inicio (engine + infantry moves)
                 this.addSoundEvent('game_start_sequence');

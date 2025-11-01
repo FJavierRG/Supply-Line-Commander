@@ -4,6 +4,9 @@
 export class UIManager {
     constructor(game) {
         this.game = game;
+        // NUEVO: Referencia a OverlayManager si existe
+        this.overlayManager = game.overlayManager;
+        
         // Esperar un momento para asegurar que el DOM esté listo
         setTimeout(() => this.setupEventListeners(), 0);
     }
@@ -43,17 +46,12 @@ export class UIManager {
      * Muestra el menú principal
      */
     showMainMenu() {
-        const mainMenu = document.getElementById('main-menu-overlay');
-        if (mainMenu) {
-            document.body.classList.add('menu-open');
-            mainMenu.classList.remove('hidden');
-            // Asegurarse de que no haya conflictos con style.display
-            mainMenu.style.display = '';
-            
-            // Reproducir música del menú
-            if (this.game && this.game.audio) {
-                this.game.audio.playMainTheme();
-            }
+        this.overlayManager.showOverlay('main-menu-overlay');
+        document.body.classList.add('menu-open');
+        
+        // Reproducir música del menú
+        if (this.game && this.game.audio) {
+            this.game.audio.playMainTheme();
         }
     }
     
@@ -61,16 +59,13 @@ export class UIManager {
      * Oculta el menú principal
      */
     hideMainMenu() {
-        const mainMenu = document.getElementById('main-menu-overlay');
-        if (mainMenu) {
-            mainMenu.classList.add('hidden');
-            
-            // Detener música del menú
-            if (this.game && this.game.audio) {
-                this.game.audio.stopMainTheme();
-            }
-        }
+        this.overlayManager.hideOverlay('main-menu-overlay');
         document.body.classList.remove('menu-open');
+        
+        // Detener música del menú
+        if (this.game && this.game.audio) {
+            this.game.audio.stopMainTheme();
+        }
     }
     
     
@@ -111,7 +106,7 @@ export class UIManager {
         description.textContent = missionMetadata.description;
         objectives.innerHTML = missionMetadata.objectives;
         
-        overlay.classList.remove('hidden');
+        this.overlayManager.showOverlay('mission-overlay');
         
         // Configurar botón - REEMPLAZAR el botón para eliminar listeners previos
         const startBtn = document.getElementById('start-mission-btn');
@@ -119,7 +114,7 @@ export class UIManager {
             const newBtn = startBtn.cloneNode(true);
             startBtn.replaceWith(newBtn);
             newBtn.onclick = () => {
-                overlay.classList.add('hidden');
+                this.overlayManager.hideOverlay('mission-overlay');
                 onStart();
             };
         }
@@ -146,7 +141,7 @@ export class UIManager {
             }
         }
         
-        overlay.classList.remove('hidden');
+        this.overlayManager.showOverlay('mission-complete-overlay');
         
         // Configurar botones
         const nextBtn = document.getElementById('next-mission-btn');
@@ -154,39 +149,47 @@ export class UIManager {
         
         if (nextBtn) {
             nextBtn.onclick = () => {
-                overlay.classList.add('hidden');
+                this.overlayManager.hideOverlay('mission-complete-overlay');
                 onNext();
             };
         }
         
         if (retryBtn) {
             retryBtn.onclick = () => {
-                overlay.classList.add('hidden');
+                this.overlayManager.hideOverlay('mission-complete-overlay');
                 onRetry();
             };
         }
     }
     
     showPauseMenu(onContinue, onRestart, onExit) {
-        const overlay = document.getElementById('pause-overlay');
-        if (!overlay) return;
-        overlay.classList.remove('hidden');
+        this.overlayManager.showOverlay('pause-overlay');
+        
         const continueBtn = document.getElementById('pause-continue-btn');
         const restartBtn = document.getElementById('pause-restart-btn');
         const exitBtn = document.getElementById('pause-exit-btn');
-        if (continueBtn) continueBtn.onclick = () => { overlay.classList.add('hidden'); if (onContinue) onContinue(); };
-        if (restartBtn) restartBtn.onclick = () => { overlay.classList.add('hidden'); onRestart(); };
-        if (exitBtn) exitBtn.onclick = () => { overlay.classList.add('hidden'); onExit(); };
+        
+        if (continueBtn) continueBtn.onclick = () => { 
+            this.overlayManager.hideOverlay('pause-overlay');
+            if (onContinue) onContinue(); 
+        };
+        if (restartBtn) restartBtn.onclick = () => { 
+            this.overlayManager.hideOverlay('pause-overlay');
+            onRestart(); 
+        };
+        if (exitBtn) exitBtn.onclick = () => { 
+            this.overlayManager.hideOverlay('pause-overlay');
+            onExit(); 
+        };
     }
 
     hidePauseMenu() {
-        const overlay = document.getElementById('pause-overlay');
-        if (overlay) overlay.classList.add('hidden');
+        this.overlayManager.hideOverlay('pause-overlay');
     }
     
     showUpgradeScreen(totalScore, upgradeLevels, onClose, onPurchase) {
-        document.getElementById('mission-complete-overlay').classList.add('hidden');
-        document.getElementById('upgrade-overlay').classList.remove('hidden');
+        this.overlayManager.hideOverlay('mission-complete-overlay');
+        this.overlayManager.showOverlay('upgrades-overlay');
         
         this.updateUpgradeButtons(totalScore, upgradeLevels);
         
@@ -228,7 +231,7 @@ export class UIManager {
     }
     
     hideUpgradeScreen() {
-        document.getElementById('upgrade-overlay').classList.add('hidden');
+        this.overlayManager.hideOverlay('upgrades-overlay');
     }
     
     // === Helpers de Elementos DOM ===
@@ -239,7 +242,15 @@ export class UIManager {
      */
     hideElement(id) {
         const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
+        if (el) {
+            // Si es un overlay, usar OverlayManager
+            if (el.classList.contains('overlay')) {
+                this.overlayManager.hideOverlay(id);
+            } else {
+                // Para elementos no-overlay, usar display normalmente
+                el.style.display = 'none';
+            }
+        }
     }
     
     /**
@@ -248,7 +259,15 @@ export class UIManager {
      */
     showElement(id) {
         const el = document.getElementById(id);
-        if (el) el.style.display = 'block';
+        if (el) {
+            // Si es un overlay, usar OverlayManager
+            if (el.classList.contains('overlay')) {
+                this.overlayManager.showOverlay(id);
+            } else {
+                // Para elementos no-overlay, usar display normalmente
+                el.style.display = 'block';
+            }
+        }
     }
     
     /**

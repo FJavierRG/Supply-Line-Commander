@@ -47,7 +47,8 @@
                 ← Editor
             </button>
             
-            
+            <!-- Capa de UI (nueva estructura) -->
+            <div id="ui-layer">
             <!-- Pantalla de carga -->
             <div id="loading-screen" class="overlay">
                 <div class="loading-container">
@@ -294,9 +295,202 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-    </div>
+            <!-- Pantalla de Mejoras -->
+            <div id="upgrades-overlay" class="overlay hidden">
+                <div class="upgrades-container">
+                    <div class="upgrades-header">
+                        <button id="close-upgrades-btn" class="back-btn">← Volver</button>
+                        <div class="upgrades-currency">
+                            <span id="medals-count-upgrades">0</span>
+                            <span class="currency-icon">Medallas</span>
+                        </div>
+                    </div>
+                    
+                    <h2 class="upgrades-title">Mejoras Permanentes</h2>
+                    
+                    <div id="permanent-upgrades">
+                        <!-- Construcción -->
+                        <div class="upgrade-tree-category">
+                            <h3 class="upgrade-category-title">Construcción y Expansión</h3>
+                            <div class="upgrade-tree-row">
+                                <div class="upgrade-item" data-upgrade="build">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Sistema de Construcción</h3>
+                                        <p class="upgrade-description">Construye 1 FOB por nivel durante las misiones</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="quick-build">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Construcción Rápida</h3>
+                                        <p class="upgrade-description">Los FOBs construidos obtienen +30 recursos adicionales</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="fortified-fobs">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">FOBs Fortificados</h3>
+                                        <p class="upgrade-description">Los FOBs construidos tienen +30 capacidad máxima</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="double-build">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Constructor Experto</h3>
+                                        <p class="upgrade-description">Construye hasta 2 FOBs por nivel</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Vehículos -->
+                        <div class="upgrade-tree-category">
+                            <h3 class="upgrade-category-title">Vehículos y Capacidad</h3>
+                            <div class="upgrade-tree-row">
+                                <div class="upgrade-item" data-upgrade="fob-vehicles">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Vehículos FOB Mejorados</h3>
+                                        <p class="upgrade-description">Los FOBs tienen +1 vehículo (3 total)</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="hq-vehicles">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Flota HQ Ampliada</h3>
+                                        <p class="upgrade-description">El HQ tiene +2 vehículos (8 total)</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="larger-convoys">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Convoyes Pesados</h3>
+                                        <p class="upgrade-description">+50% capacidad de carga en todos los vehículos</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="mega-fleet">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Mega Flota</h3>
+                                        <p class="upgrade-description">HQ +3 vehículos, FOB +2 vehículos adicionales</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Velocidad -->
+                        <div class="upgrade-tree-category">
+                            <h3 class="upgrade-category-title">Velocidad y Eficiencia</h3>
+                            <div class="upgrade-tree-row">
+                                <div class="upgrade-item" data-upgrade="multi-dispatch">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Doble Despacho</h3>
+                                        <p class="upgrade-description">HQ y FOBs pueden enviar 2 vehículos al mismo tiempo</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="faster-convoys">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Motores Mejorados</h3>
+                                        <p class="upgrade-description">Todos los vehículos se mueven +30% más rápido</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="return-speed">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Retorno Rápido</h3>
+                                        <p class="upgrade-description">Los vehículos vuelven +100% más rápido</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="efficient-routes">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Rutas Eficientes</h3>
+                                        <p class="upgrade-description">Los vehículos regresan instantáneamente a su base</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="turbo-mode">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Modo Turbo</h3>
+                                        <p class="upgrade-description">Velocidad de vehículos +50% adicional (total +80%)</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recursos -->
+                        <div class="upgrade-tree-category">
+                            <h3 class="upgrade-category-title">Recursos y Economía</h3>
+                            <div class="upgrade-tree-row">
+                                <div class="upgrade-item" data-upgrade="front-buffer">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Búnkers Reforzados</h3>
+                                        <p class="upgrade-description">Los frentes tienen +30% capacidad máxima</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="fast-transfer">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Transferencia Prioritaria</h3>
+                                        <p class="upgrade-description">FOBs pueden almacenar +50 recursos (130 total)</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="larger-storage">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Almacenes Ampliados</h3>
+                                        <p class="upgrade-description">Todas las bases tienen +30% capacidad máxima</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="starting-supplies">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Suministros Iniciales</h3>
+                                        <p class="upgrade-description">Los frentes empiezan con recursos al máximo</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="slow-consumption">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Racionamiento Eficiente</h3>
+                                        <p class="upgrade-description">Los frentes consumen -20% de recursos</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pasivas -->
+                        <div class="upgrade-tree-category">
+                            <h3 class="upgrade-category-title">Habilidades Pasivas</h3>
+                            <div class="upgrade-tree-row">
+                                <div class="upgrade-item" data-upgrade="emergency-heli">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Helicóptero de Emergencia</h3>
+                                        <p class="upgrade-description">Cada 15s, el HQ envía 20 recursos a cada FOB automáticamente</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                                <div class="upgrade-item" data-upgrade="auto-supply">
+                                    <div class="upgrade-content">
+                                        <h3 class="upgrade-name">Logística Automática</h3>
+                                        <p class="upgrade-description">FOBs envían automáticamente suministros a frentes críticos</p>
+                                    </div>
+                                    <div class="upgrade-action"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div> <!-- Cierre de #ui-layer -->
+        </div> <!-- Cierre de #main-game -->
+
+    </div> <!-- Cierre de #game-container -->
 
     <!-- Menú de opciones -->
     <div id="options-menu" class="options-menu" style="display: none;">

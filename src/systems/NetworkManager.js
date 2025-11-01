@@ -72,12 +72,10 @@ export class NetworkManager {
         });
         
         this.socket.on('connect', () => {
-            // console.log('✅ Conectado al servidor:', this.socket.id); // Log removido
             this.connected = true;
         });
         
         this.socket.on('disconnect', () => {
-            // console.log('❌ Desconectado del servidor'); // Log removido
             this.connected = false;
         });
         
@@ -117,43 +115,35 @@ export class NetworkManager {
         });
         
         this.socket.on('opponent_joined', (data) => {
-            console.log('👥 Oponente se unió:', data.opponentName);
             // La actualización del lobby se maneja en lobby_update
         });
         
         this.socket.on('room_ready', (data) => {
-            console.log('✅ Sala lista con 2 jugadores:', data.players);
             // La UI se actualiza con lobby_update
         });
         
         this.socket.on('lobby_update', (data) => {
-            console.log('🔄 Actualización del lobby:', data);
             this.updateLobbyUI(data);
         });
         
         this.socket.on('ai_player_added', (data) => {
-            console.log('🤖 IA añadida:', data);
             // La UI se actualiza con lobby_update
         });
         
         this.socket.on('ai_player_updated', (data) => {
-            console.log('🤖 IA actualizada:', data);
             // La UI se actualiza con lobby_update
         });
         
         this.socket.on('ai_player_removed', () => {
-            console.log('🤖 IA eliminada');
             // La UI se actualiza con lobby_update
         });
         
         this.socket.on('kicked_from_room', (data) => {
-            console.log('🚫 Expulsado de la sala');
             alert('Has sido expulsado de la sala por el host');
             this.leaveRoom();
         });
         
         this.socket.on('lobby_chat_message', (data) => {
-            console.log('💬 Chat:', data);
             this.addChatMessage(data);
         });
         
@@ -164,7 +154,6 @@ export class NetworkManager {
         // === EVENTOS DE SELECCIÓN DE RAZAS ===
         
         this.socket.on('race_selected', (data) => {
-            console.log('🏛️ Raza seleccionada:', data.raceId);
             // Actualizar la UI local con la selección confirmada
             if (this.game.raceSelectionManager) {
                 this.game.raceSelectionManager.onRaceSelected(data.raceId);
@@ -172,7 +161,6 @@ export class NetworkManager {
         });
         
         this.socket.on('race_selection_updated', (data) => {
-            console.log('🔄 Actualización de selección de razas:', data);
             // Actualizar la UI del lobby con los nuevos datos
             this.updateLobbyUI(data);
         });
@@ -180,7 +168,6 @@ export class NetworkManager {
         // === EVENTOS DE JUEGO ===
         
         this.socket.on('countdown', (data) => {
-            console.log(`⏱️ Countdown: ${data.seconds}`);
             this.game.countdown = data.seconds;
             
             // Actualizar UI del lobby con countdown
@@ -196,8 +183,7 @@ export class NetworkManager {
         });
         
         this.socket.on('game_start', (data) => {
-            // console.log('🎮 Partida iniciada! Mi equipo:', data.myTeam); // Log removido
-            // console.log('🏛️ Datos recibidos del servidor:', data); // Log removido
+
             this.isMultiplayer = true;
             this.myTeam = data.myTeam;
             this.opponentTeam = data.opponentTeam;
@@ -207,25 +193,20 @@ export class NetworkManager {
             
             // 🆕 CENTRALIZADO: Sincronizar información de razas del estado inicial PRIMERO
             if (data.initialState && data.initialState.playerRaces) {
-                // console.log('🏛️ Información de razas recibida:', data.initialState.playerRaces); // Log removido
                 this.game.playerRaces = data.initialState.playerRaces;
             }
             
             if (data.initialState && data.initialState.raceConfigs) {
-                // console.log('🏛️ Configuraciones de razas recibidas:', data.initialState.raceConfigs); // Log removido
                 this.game.raceConfigs = data.initialState.raceConfigs;
             }
             
             // 🆕 NUEVO: Establecer raza seleccionada desde el servidor
             if (data.selectedRace) {
                 this.game.selectedRace = data.selectedRace;
-                // console.log('🏛️ Raza establecida desde servidor:', data.selectedRace); // Log removido
-                // console.log('🏛️ this.game.selectedRace ahora es:', this.game.selectedRace); // Log removido
             } else {
                 // 🎯 CRÍTICO: Si no hay selectedRace pero hay playerRaces, usar la raza del playerRaces
                 if (this.game.playerRaces && this.game.playerRaces[this.myTeam]) {
                     const raceFromPlayerRaces = this.game.playerRaces[this.myTeam];
-                    // console.log(`🏛️ No hay selectedRace, usando raceFromPlayerRaces: ${raceFromPlayerRaces}`); // Log removido
                     this.game.selectedRace = raceFromPlayerRaces;
                 } else {
                     console.error('❌ No se recibió selectedRace del servidor y no hay playerRaces');
@@ -236,12 +217,10 @@ export class NetworkManager {
             if (this.game.storeUI) {
                 if (this.game.selectedRace) {
                     this.game.storeUI.setRace(this.game.selectedRace);
-                    // console.log('🏛️ Tienda actualizada con raza:', this.game.selectedRace); // Log removido
                 }
                 // Actualizar categorías directamente con la configuración del servidor
                 if (this.game.raceConfigs) {
                     this.game.storeUI.updateCategories();
-                    // console.log('🏛️ Tienda actualizada con configuración del servidor'); // Log removido
                 }
             }
             
@@ -253,11 +232,9 @@ export class NetworkManager {
                 if (this.game.state === 'tutorial') {
                     this.game.state = 'menu';
                 }
-                // console.log('📚 TutorialManager.active = false'); // Log removido
             }
             if (this.game.tutorialSystem) {
                 this.game.tutorialSystem.enabled = false;
-                // console.log('📚 TutorialSystem desactivado'); // Log removido
             }
             
             // Cargar estado inicial
@@ -271,7 +248,7 @@ export class NetworkManager {
             this.game.timeLeft = data.duration;
             
             // Iniciar el juego
-            this.game.state = 'playing';
+            this.game.setGameState('playing');
             this.game.missionStarted = true;
             this.game.paused = false;
             
@@ -306,20 +283,8 @@ export class NetworkManager {
             if (!this.game._gameLoopRunning) {
                 this.game._gameLoopRunning = true;
                 this.game.gameLoop();
-                // console.log('🔄 Game loop iniciado'); // Log removido
             }
             
-            // Debug: Verificar estado del juego
-            // console.log('✅ Juego multijugador iniciado correctamente'); // Log removido
-            // console.log('📊 Estado:', { // Log removido
-            //     state: this.game.state,
-            //     nodes: this.game.nodes.length,
-            //     myTeam: this.game.myTeam,
-            //     isMultiplayer: this.game.isMultiplayer,
-            //     worldWidth: this.game.worldWidth,
-            //     worldHeight: this.game.worldHeight,
-            //     backgroundTiles: !!this.game.backgroundTiles
-            // });
             
             // Verificar que los assets estén completamente cargados
             const assetsLoaded = this.game.assetManager.isReady();
@@ -327,13 +292,7 @@ export class NetworkManager {
             
             // Verificar también que todos los assets estén realmente disponibles
             const allAssetsReady = assetsLoaded && criticalAssetsLoaded;
-            
-            // console.log('🖼️ Verificación de assets:', { // Log removido
-            //     allLoaded: assetsLoaded,
-            //     criticalLoaded: criticalAssetsLoaded,
-            //     allReady: allAssetsReady,
-            //     progress: this.game.assetManager.getProgress()
-            // });
+
             
             // Si no están completamente listos, esperar
             if (!allAssetsReady) {
@@ -359,12 +318,10 @@ export class NetworkManager {
         });
         
         this.socket.on('building_created', (data) => {
-            // console.log('🏗️ Edificio creado por servidor:', data.type, 'equipo:', data.team, 'en', data.x, data.y); // Log removido
             
             // Verificar que no exista ya (evitar duplicados)
             const exists = this.game.nodes.find(n => n.id === data.nodeId);
             if (exists) {
-                console.warn(`⚠️ Nodo ${data.nodeId} ya existe, ignorando building_created`);
                 return;
             }
             
@@ -397,7 +354,6 @@ export class NetworkManager {
                 
                 this.game.nodes.push(newNode);
                 
-                // console.log(`✅ Edificio ${data.type} creado localmente con ID ${data.nodeId} (en construcción)`); // Log removido
                 
                 // CRÍTICO: Reproducir sonido para AMBOS jugadores (en multiplayer nadie lo reproduce localmente)
                     this.game.audio.playPlaceBuildingSound();
@@ -407,7 +363,6 @@ export class NetworkManager {
         });
         
         this.socket.on('convoy_spawned', (data) => {
-            // console.log('🚁 CONVOY_SPAWNED recibido:', data); // Log removido
             // Buscar los nodos
             const fromNode = this.game.nodes.find(n => n.id === data.fromId);
             const toNode = this.game.nodes.find(n => n.id === data.toId);
@@ -461,10 +416,7 @@ export class NetworkManager {
             
             this.game.convoyManager.convoys.push(convoy);
             
-            // console.log(`✅ Convoy ${convoy.id} añadido. Total convoys: ${this.game.convoyManager.convoys.length}`); // Log removido
-            // console.log(`📍 Convoy position: x=${convoy.x}, y=${convoy.y}, progress=${convoy.progress}`); // Log removido
-            
-            // Reproducir sonido solo si NO es de mi equipo - usar volumen reducido para enemigos
+ // Reproducir sonido solo si NO es de mi equipo - usar volumen reducido para enemigos
             if (data.team !== this.myTeam) {
                 this.game.audio.playEnemyTruckSound(); // Sonido del enemigo con volumen reducido 44% (56% del original)
             }
@@ -472,7 +424,6 @@ export class NetworkManager {
         
         // 🆕 NUEVO: Evento de helicóptero despachado
         this.socket.on('helicopter_dispatched', (data) => {
-            // console.log('🚁 HELICOPTER_DISPATCHED recibido:', data); // Log removido
             
             // El helicóptero ya está sincronizado por el game_state
             // El sonido se reproduce mediante el evento de sonido 'chopper' del servidor
@@ -485,7 +436,6 @@ export class NetworkManager {
         });
         
         this.socket.on('ambulance_spawned', (data) => {
-            // console.log(`🚑 Ambulancia autorizada por servidor: ${data.fromId} → ${data.toId}`); // Log removido
             
             // Buscar los nodos
             const fromNode = this.game.nodes.find(n => n.id === data.fromId);
@@ -528,7 +478,6 @@ export class NetworkManager {
             // Inicializar sistema de interpolación suave y Dead Reckoning
             this.game.convoyManager.convoys.push(convoy);
             
-            // console.log(`✅ Ambulancia ${data.convoyId} creada localmente`); // Log removido
             
             // Reproducir sonido solo si NO es de mi equipo - usar volumen reducido para enemigos
             if (data.team !== this.myTeam) {
@@ -540,7 +489,6 @@ export class NetworkManager {
          * Manejo de disparo de francotirador
          */
         this.socket.on('sniper_fired', (data) => {
-            // console.log(`🎯 Sniper disparado por ${data.shooterId} → frente ${data.targetId}`); // Log removido
             
             // Buscar el frente objetivo
             const targetFront = this.game.nodes.find(n => n.id === data.targetId);
@@ -556,7 +504,6 @@ export class NetworkManager {
                     'ui-sniper-kill'
                 );
                 
-                // console.log(`✅ Efectos visuales de sniper aplicados`); // Log removido
             } else {
                 console.warn(`⚠️ Frente objetivo ${data.targetId} no encontrado`);
             }
@@ -566,7 +513,6 @@ export class NetworkManager {
          * Manejo de sabotaje de FOB
          */
         this.socket.on('fob_sabotage_fired', (data) => {
-            // console.log(`⚡ FOB sabotajeada por ${data.saboteurId} → FOB ${data.targetId}`); // Log removido
             
             // Buscar la FOB objetivo
             const targetFOB = this.game.nodes.find(n => n.id === data.targetId);
@@ -587,21 +533,18 @@ export class NetworkManager {
                     this.game.audio.playChopperSound();
                 }
                 
-                // console.log(`✅ FOB ${data.targetId} saboteada - efectos aplicados`); // Log removido
             } else {
                 console.warn(`⚠️ FOB objetivo ${data.targetId} no encontrada`);
             }
         });
         
         this.socket.on('fob_sabotage_failed', (data) => {
-            // console.log(`⚠️ Sabotaje de FOB falló: ${data.reason}`); // Log removido
         });
         
         /**
          * 🆕 NUEVO: Manejo de despliegue de comando especial operativo
          */
         this.socket.on('commando_deployed', (data) => {
-            // console.log(`🎖️ Comando desplegado por ${data.team} en (${data.x.toFixed(0)}, ${data.y.toFixed(0)})`); // Log removido
             
             // Verificar que no exista ya (evitar duplicados)
             const exists = this.game.nodes.find(n => n.id === data.commandoId);
@@ -640,7 +583,6 @@ export class NetworkManager {
                 
                 this.game.nodes.push(newNode);
                 
-                // console.log(`✅ Comando ${data.commandoId} creado localmente en (${data.x.toFixed(0)}, ${data.y.toFixed(0)})`); // Log removido
                 
                 // Sonido de despliegue de comando
                 if (this.game.audio && this.game.audio.playCommandoDeploySound) {
@@ -653,7 +595,6 @@ export class NetworkManager {
          * 🆕 NUEVO: Manejo de fallo de despliegue de comando
          */
         this.socket.on('commando_deploy_failed', (data) => {
-            // console.log(`⚠️ Despliegue de comando falló: ${data.reason}`); // Log removido
             // TODO: Mostrar mensaje visual al usuario cuando se implemente showMessage en UIManager
         });
         
@@ -661,19 +602,16 @@ export class NetworkManager {
          * Manejo de lanzamiento de dron
          */
         this.socket.on('drone_launched', (data) => {
-            // console.log(`💣 Dron lanzado por ${data.team}: ${data.droneId} → ${data.targetId}`); // Log removido
             
             // El servidor ya lo tiene en el estado, solo reproducir sonido
             this.game.audio.playDroneSound(data.droneId);
             
-            // console.log(`✅ Dron ${data.droneId} lanzado - servidor simula trayectoria`); // Log removido
         });
         
         /**
          * Manejo de impacto de dron
          */
         this.socket.on('drone_impact', (impact) => {
-            // console.log(`💥 Dron ${impact.droneId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`); // Log removido
             
             // Detener sonido del dron
             this.game.audio.stopDroneSound(impact.droneId);
@@ -690,14 +628,12 @@ export class NetworkManager {
             // Crear marca de impacto permanente (cráter grande)
             this.game.particleSystem.createImpactMark(impact.x, impact.y, 'impact_icon', 1.2);
             
-            // console.log(`✅ Efectos de explosión de dron aplicados`); // Log removido
         });
         
         /**
          * Manejo de alerta de anti-drone (dron detectado en rango de 220px)
          */
         this.socket.on('antidrone_alert', (alert) => {
-            // console.log(`🚨 Anti-drone ${alert.antiDroneId} detectó dron ${alert.droneId} (alerta)`); // Log removido
             
             // Reproducir sonido de ataque anti-drone (alerta)
             this.game.audio.playAntiDroneAttackSound();
@@ -707,7 +643,6 @@ export class NetworkManager {
          * Manejo de intercepción de dron por anti-drone
          */
         this.socket.on('drone_intercepted', (interception) => {
-            // console.log(`🎯 Anti-drone ${interception.antiDroneId} interceptó dron ${interception.droneId}`); // Log removido
             
             // Detener sonido del dron
             this.game.audio.stopDroneSound(interception.droneId);
@@ -762,7 +697,6 @@ export class NetworkManager {
                 }, 2000);
             }
             
-            console.log(`✅ Efectos de intercepción aplicados - Dron destruido, anti-drone en fade out`);
         });
         
         this.socket.on('cheat_success', (data) => {
@@ -777,19 +711,15 @@ export class NetworkManager {
         
         // CRÍTICO: Manejar final de partida (victoria/derrota)
         this.socket.on('game_over', (victoryResult) => {
-            console.log('🏆 Partida terminada:', victoryResult);
             
             if (victoryResult.winner === this.game.myTeam) {
-                console.log('🎉 ¡VICTORIA!');
                 this.game.triggerVictory();
             } else {
-                console.log('💀 Derrota');
                 this.game.triggerDefeat();
             }
         });
         
         this.socket.on('error', (data) => {
-            console.error('⚠️ Error del servidor:', data.message);
             alert(`Error: ${data.message}`);
         });
     }
@@ -835,7 +765,6 @@ export class NetworkManager {
                                this.game.assetManager.areCriticalAssetsLoaded();
         
         if (!finalAssetCheck) {
-            console.warn('⚠️ Assets no completamente cargados en finishGameStart(), pero continuando...');
             console.log('🖼️ Estado final:', {
                 allLoaded: this.game.assetManager.isReady(),
                 criticalLoaded: this.game.assetManager.areCriticalAssetsLoaded(),
@@ -845,22 +774,11 @@ export class NetworkManager {
             console.log('✅ Verificación final de assets: TODO LISTO');
         }
         
-        // Verificar cámara
-        console.log('📷 Cámara:', {
-            offsetX: this.game.camera.offsetX,
-            offsetY: this.game.camera.offsetY,
-            zoom: this.game.camera.zoom
-        });
+
         
         // Verificar canvas
         const canvas = this.game.canvas;
-        console.log('🖼️ Canvas:', {
-            width: canvas.width,
-            height: canvas.height,
-            display: canvas.style.display,
-            visibility: canvas.style.visibility,
-            zIndex: canvas.style.zIndex
-        });
+        
         
         // SOLUCIÓN DEFINITIVA: Crear regla CSS !important para ocultar tutorial
         const style = document.createElement('style');
@@ -922,11 +840,9 @@ export class NetworkManager {
             }
         `;
         document.head.appendChild(style);
-        console.log('🎨 CSS !important aplicado para ocultar tutorial y mostrar UI del juego');
         
         // Forzar primer render
         this.game.render();
-        console.log('🎨 Primer render forzado');
     }
     
     // === ACCIONES DEL CLIENTE ===
@@ -1014,7 +930,6 @@ export class NetworkManager {
     requestConvoy(fromId, toId) {
         if (!this.isMultiplayer || !this.roomId) return;
         
-        console.log('🚁 CONVOY_REQUEST enviado:', { fromId, toId, roomId: this.roomId });
         this.socket.emit('convoy_request', {
             roomId: this.roomId,
             fromId,
@@ -1026,20 +941,13 @@ export class NetworkManager {
      * Seleccionar raza en multiplayer
      */
     selectRace(raceId) {
-        console.log('🏛️ DEBUG selectRace:', {
-            raceId,
-            isMultiplayer: this.isMultiplayer,
-            roomId: this.roomId,
-            socket: !!this.socket
-        });
         
         if (!this.isMultiplayer || !this.roomId) {
             console.log('❌ selectRace bloqueado - isMultiplayer:', this.isMultiplayer, 'roomId:', this.roomId);
             return;
         }
         
-        console.log('🏛️ Seleccionando raza:', raceId, 'en sala:', this.roomId);
-        console.log('🏛️ Estado multiplayer:', this.isMultiplayer, 'roomId:', this.roomId);
+
         
         this.socket.emit('select_race', {
             roomId: this.roomId,
@@ -1053,7 +961,6 @@ export class NetworkManager {
     requestAmbulance(fromId, toId) {
         if (!this.isMultiplayer || !this.roomId) return;
         
-        console.log(`🚑 Enviando ambulance_request: ${fromId} → ${toId}`);
         
         this.socket.emit('ambulance_request', {
             roomId: this.roomId,
@@ -1067,9 +974,7 @@ export class NetworkManager {
      */
     requestSniper(targetId) {
         if (!this.isMultiplayer || !this.roomId) return;
-        
-        console.log(`🎯 Enviando sniper_request: target=${targetId}`);
-        
+                
         this.socket.emit('sniper_request', {
             roomId: this.roomId,
             targetId
@@ -1082,7 +987,6 @@ export class NetworkManager {
     requestFobSabotage(targetId) {
         if (!this.isMultiplayer || !this.roomId) return;
         
-        console.log(`⚡ Enviando fob_sabotage_request: target=${targetId}`);
         
         this.socket.emit('fob_sabotage_request', {
             roomId: this.roomId,
@@ -1096,7 +1000,6 @@ export class NetworkManager {
     requestDrone(targetId) {
         if (!this.isMultiplayer || !this.roomId) return;
         
-        console.log(`💣 Enviando drone_request: target=${targetId}`);
         
         this.socket.emit('drone_request', {
             roomId: this.roomId,
@@ -1111,7 +1014,6 @@ export class NetworkManager {
     requestCommandoDeploy(x, y) {
         if (!this.isMultiplayer || !this.roomId) return;
         
-        console.log(`🎖️ Enviando commando_deploy_request: x=${x.toFixed(0)}, y=${y.toFixed(0)}`);
         
         this.socket.emit('commando_deploy_request', {
             roomId: this.roomId,
@@ -1125,7 +1027,6 @@ export class NetworkManager {
      */
     addCurrency(amount = 500) {
         if (!this.isMultiplayer || !this.roomId) {
-            console.log('⚠️ Este comando solo funciona en multijugador');
             return;
         }
         
@@ -1134,7 +1035,6 @@ export class NetworkManager {
             amount
         });
         
-        console.log(`💰 Solicitando +${amount}$ al servidor...`);
     }
     
     // === MANEJO DE ESTADO ===
@@ -1206,11 +1106,9 @@ export class NetworkManager {
             console.log(`  ✓ Nodo creado: ${nodeData.type} (${nodeData.team}) en (${nodeData.x}, ${nodeData.y})`);
         });
         
-        console.log(`✅ ${this.game.nodes.length} nodos cargados`);
         
         // Establecer currency (CRÍTICO: usar missionCurrency, no .currency)
         this.game.currency.missionCurrency = initialState.currency[this.myTeam];
-        console.log(`💰 Currency inicial: ${initialState.currency[this.myTeam]}$ para ${this.myTeam}`);
         
         // Configurar mundo
         this.game.worldWidth = initialState.worldWidth;
@@ -1219,11 +1117,7 @@ export class NetworkManager {
         // CRÍTICO: Reset y configurar cámara
         this.game.camera.reset();
         this.game.camera.setWorldSize(this.game.worldWidth, this.game.worldHeight);
-        console.log('📷 Cámara inicializada:', {
-            offsetX: this.game.camera.offsetX,
-            offsetY: this.game.camera.offsetY,
-            zoom: this.game.camera.zoom
-        });
+
         
         // Generar sistema de tiles del background
         this.game.backgroundTiles = new BackgroundTileSystem(this.game.worldWidth, this.game.worldHeight, 60);
@@ -1238,14 +1132,12 @@ export class NetworkManager {
         
         // 🆕 SERVIDOR COMO AUTORIDAD: Cargar configuración de edificios
         if (initialState.buildingConfig) {
-            console.log('🏗️ Configuración de edificios recibida del servidor:', initialState.buildingConfig);
             this.game.serverBuildingConfig = initialState.buildingConfig;
             
             // Actualizar configuración local con valores del servidor
             this.updateLocalBuildingConfig(initialState.buildingConfig);
         }
         
-        console.log(`✅ Estado inicial cargado. Nodos: ${this.game.nodes.length}`);
     }
     
     /**
@@ -1358,15 +1250,12 @@ export class NetworkManager {
                     // 🆕 CENTRALIZADO: Actualizar propiedades de helicópteros según raza
                     if (nodeData.hasHelicopters !== undefined) {
                         node.hasHelicopters = nodeData.hasHelicopters;
-                        // console.log(`🚁 CLIENTE: Nodo ${node.id} (${node.type}) hasHelicopters = ${nodeData.hasHelicopters}`);
                     }
                     if (nodeData.availableHelicopters !== undefined) {
                         node.availableHelicopters = nodeData.availableHelicopters;
-                        // console.log(`🚁 CLIENTE: Nodo ${node.id} (${node.type}) availableHelicopters = ${nodeData.availableHelicopters}`);
                     }
                     if (nodeData.maxHelicopters !== undefined) {
                         node.maxHelicopters = nodeData.maxHelicopters;
-                        // console.log(`🚁 CLIENTE: Nodo ${node.id} (${node.type}) maxHelicopters = ${nodeData.maxHelicopters}`);
                     }
                     
                     // 🆕 NUEVO: Sincronizar helicópteros aterrizados
@@ -1390,7 +1279,6 @@ export class NetworkManager {
                     
                     // Log cuando se completa construcción
                     if (wasConstructing && !node.isConstructing && node.constructed) {
-                        console.log(`✅ Construcción COMPLETADA: ${node.type} ${node.id}`);
                         
                         // Sonido especial de anti-drone al COMPLETAR construcción (x2 velocidad)
                         if (node.type === 'antiDrone') {
@@ -1399,7 +1287,6 @@ export class NetworkManager {
                                 this.game.audio.volumes.antiDroneSpawn
                             );
                             audio.playbackRate = 2.0; // Doble velocidad
-                            console.log('🔊 Anti-drone spawn sound (x2 velocidad)');
                         }
                     }
                     
@@ -1480,7 +1367,6 @@ export class NetworkManager {
                 // Eliminar cualquier nodo que ya no esté en el servidor
                 // (edificios destruidos por drones, abandonados, etc.)
                 if (!serverNodeIds.includes(localNode.id)) {
-                    console.log(`🗑️ Eliminando nodo local ${localNode.id} ${localNode.type} (ya no existe en servidor)`);
                     this.game.nodes.splice(i, 1);
                 }
             }
@@ -1493,10 +1379,7 @@ export class NetworkManager {
                 const convoy = this.game.convoyManager.convoys.find(c => c.id === convoyData.id);
                 
                 if (convoy) {
-                    // DEBUG: Log desactivado - reduce spam en consola
-                    // if (Math.random() < 0.1 && convoyData.progress > 0) { // 10% de las veces
-                    //     console.log(`🔄 Actualizando convoy ${convoyData.id}: progress=${convoyData.progress.toFixed(2)}, returning=${convoyData.returning}`);
-                    // }
+
                     
                     // CRÍTICO: Actualizar progress desde el servidor con interpolación suave
                     if (convoy.updateServerProgress) {
@@ -1552,7 +1435,6 @@ export class NetworkManager {
                         };
                         
                         this.game.droneSystem.drones.push(newDrone);
-                        console.log(`💣 Dron ${droneData.id} creado desde servidor en (${droneData.x}, ${droneData.y})`);
                     }
                 }
             });
@@ -1602,17 +1484,14 @@ export class NetworkManager {
         switch(event.type) {
             case 'game_start_sequence':
                 // IGNORAR: Ya se reproduce localmente después de 3s (evitar duplicación)
-                console.log('🎵 game_start_sequence ignorado (ya reproducido localmente)');
                 break;
                 
             case 'start_battle_music':
                 // IGNORAR: Ya se reproduce localmente (evitar duplicación)
-                console.log('🎵 start_battle_music ignorado (ya reproducido localmente)');
                 break;
                 
             case 'clear_shoots':
                 // Ambientes cada 60s
-                this.game.audio.playClearShoots();
                 break;
                 
             case 'random_radio_effect':
@@ -1843,22 +1722,6 @@ export class NetworkManager {
             const aiHasRace = hasAI ? (data.aiPlayer.race !== null) : true;
             const allHaveRace = allPlayersHaveRace && aiHasRace;
             
-            console.log('🔍 DEBUG Botón Inicio:', {
-                myTeam: this.myTeam,
-                playersCount: data.players.length,
-                hasAI,
-                hasOpponent,
-                allReady,
-                allHaveRace,
-                players: data.players.map(p => ({ 
-                    name: p.name, 
-                    ready: p.ready, 
-                    selectedRace: p.selectedRace,
-                    team: p.team,
-                    id: p.id
-                })),
-                aiPlayer: data.aiPlayer
-            });
             
             startBtn.style.display = (hasOpponent && allReady && allHaveRace) ? 'block' : 'none';
         }
@@ -1884,9 +1747,7 @@ export class NetworkManager {
             // Agregar nuevo listener
             select.addEventListener('change', (e) => {
                 const raceId = e.target.value;
-                console.log('🏛️ Event listener activado:', raceId);
                 if (raceId) {
-                    console.log('🏛️ Enviando al servidor:', raceId);
                     this.socket.emit('select_race', {
                         roomId: this.roomId,
                         raceId: raceId
@@ -2012,7 +1873,6 @@ export class NetworkManager {
      */
     kickPlayer(targetPlayerId) {
         if (this.myTeam !== 'player1') {
-            console.error('Solo el host puede expulsar jugadores');
             return;
         }
         
@@ -2142,7 +2002,6 @@ export class NetworkManager {
         overlay.appendChild(countdownText);
         
         document.body.appendChild(overlay);
-        console.log('🎮 Overlay de countdown del juego creado');
     }
     
     updateGameCountdownDisplay(seconds) {
@@ -2150,16 +2009,13 @@ export class NetworkManager {
         if (countdownText) {
             if (seconds <= 3) {
                 countdownText.textContent = seconds;
-                console.log(`🎮 Countdown del juego: ${seconds}`);
             } else {
                 countdownText.textContent = '¡COMIENZA!';
-                console.log('🎮 ¡JUEGO INICIADO!');
             }
         }
     }
     
     startActualGame() {
-        console.log('🎮 Iniciando juego real...');
         
         // CRÍTICO: Detener cualquier sonido del countdown que siga sonando
         if (this.game.audio.sounds.countdown) {
@@ -2175,40 +2031,14 @@ export class NetworkManager {
         
         // Despausar el juego
         this.game.paused = false;
-        this.game.state = 'playing';
+        this.game.setGameState('playing');
         
-        console.log('✅ Juego real iniciado - ¡A jugar!');
     }
 
     hideLobby() {
-        console.log('✅ Ocultando lobby, mostrando juego...');
         
-        const lobbyOverlay = document.getElementById('multiplayer-lobby-overlay');
-        if (lobbyOverlay) {
-            lobbyOverlay.style.display = 'none';
-            lobbyOverlay.classList.add('hidden');
-            console.log('  ✓ Lobby oculto');
-        }
-        
-        // Ocultar TODOS los overlays posibles
-        const overlays = [
-            'main-menu-overlay',
-            'press-to-continue-screen',
-            'loading-screen',
-            'pause-overlay',
-            'victory-overlay',
-            'defeat-overlay',
-            'arsenal-overlay'
-        ];
-        
-        overlays.forEach(overlayId => {
-            const overlay = document.getElementById(overlayId);
-            if (overlay) {
-                overlay.style.display = 'none';
-                overlay.classList.add('hidden');
-                console.log(`  ✓ Overlay oculto: ${overlayId}`);
-            }
-        });
+        // Ocultar todos los overlays usando OverlayManager
+        this.game.overlayManager.hideAllOverlays();
         
         // CRÍTICO: Ocultar el botón de overlay "Comenzar" y TODOS los botones de overlay
         const startTimerBtn = document.getElementById('start-timer-btn');
@@ -2228,7 +2058,6 @@ export class NetworkManager {
             btn.style.visibility = 'hidden';
             btn.style.opacity = '0';
         });
-        console.log(`  ✓ ${overlayButtons.length} botones de overlay ocultados`);
         
         // CRÍTICO: Ocultar elementos del tutorial que tienen z-index altísimo
         const tutorialElements = [
@@ -2250,7 +2079,6 @@ export class NetworkManager {
                 // FORZAR eliminación del DOM
                 if (elem.parentNode) {
                     elem.parentNode.removeChild(elem);
-                    console.log(`  ✓ Tutorial element ELIMINADO del DOM: ${elemId}`);
                 }
             }
         });
@@ -2271,7 +2099,6 @@ export class NetworkManager {
             gameCanvas.style.visibility = 'visible';
             gameCanvas.style.zIndex = '1';
             gameCanvas.style.position = 'relative';
-            console.log('  ✓ Canvas mostrado');
         }
         
         // Asegurar que el contenedor del juego esté visible
@@ -2279,14 +2106,12 @@ export class NetworkManager {
         if (gameContainer) {
             gameContainer.style.display = 'block';
             gameContainer.style.visibility = 'visible';
-            console.log('  ✓ game-container mostrado');
         }
         
         const mainGame = document.getElementById('main-game');
         if (mainGame) {
             mainGame.style.display = 'block';
             mainGame.style.visibility = 'visible';
-            console.log('  ✓ main-game mostrado');
         }
         
         // Verificar TODOS los elementos que podrían estar tapando
@@ -2295,11 +2120,9 @@ export class NetworkManager {
         allElements.forEach(el => {
             const zIndex = parseInt(window.getComputedStyle(el).zIndex);
             if (zIndex > 100 && el.style.display !== 'none') {
-                console.warn(`⚠️ Elemento con z-index alto visible:`, el.id || el.className, 'z-index:', zIndex);
                 elementsOnTop++;
             }
         });
-        console.log(`🔍 Elementos con z-index alto: ${elementsOnTop}`);
         
         // Ocultar slider de cámara inicialmente
         this.game.ui.hideElement('camera-slider-container');
@@ -2308,12 +2131,10 @@ export class NetworkManager {
         this.game.ui.showElement('timer-display');
         this.game.ui.showElement('fob-currency-display');
         
-        console.log('💰 Mostrando UI de currency...');
         
         // Forzar actualización inmediata del HUD
         setTimeout(() => {
             this.game.ui.updateHUD(this.game.getGameState());
-            console.log('💰 HUD actualizado con currency:', this.game.currency.get());
             
             // DEBUG: Verificar que el elemento currency esté visible
             const currencyDisplay = document.getElementById('fob-currency-display');
@@ -2321,15 +2142,7 @@ export class NetworkManager {
             
             if (currencyDisplay) {
                 const styles = window.getComputedStyle(currencyDisplay);
-                console.log('💰 Currency Display:', {
-                    exists: true,
-                    display: styles.display,
-                    visibility: styles.visibility,
-                    zIndex: styles.zIndex,
-                    top: styles.top,
-                    left: styles.left,
-                    opacity: styles.opacity
-                });
+
             } else {
                 console.error('❌ Currency Display NO ENCONTRADO en el DOM!');
             }
@@ -2358,7 +2171,6 @@ export class NetworkManager {
      * Manejar fin de partida
      */
     handleGameOver(data) {
-        console.log('🏆 Manejando fin de partida:', data);
         
         // Detener el juego
         this.game.paused = true;
@@ -2564,7 +2376,6 @@ export class NetworkManager {
                 Object.keys(serverConfig.costs).forEach(buildingType => {
                     if (NODE_CONFIG[buildingType]) {
                         NODE_CONFIG[buildingType].cost = serverConfig.costs[buildingType];
-                        console.log(`💰 ${buildingType}: costo actualizado a ${serverConfig.costs[buildingType]}$`);
                     }
                 });
             }
@@ -2574,7 +2385,6 @@ export class NetworkManager {
                 Object.keys(serverConfig.buildTimes).forEach(buildingType => {
                     if (NODE_CONFIG[buildingType]) {
                         NODE_CONFIG[buildingType].constructionTime = serverConfig.buildTimes[buildingType];
-                        console.log(`⏱️ ${buildingType}: tiempo de construcción actualizado a ${serverConfig.buildTimes[buildingType]}s`);
                     }
                 });
             }
@@ -2585,7 +2395,6 @@ export class NetworkManager {
                     if (NODE_CONFIG[buildingType]) {
                         NODE_CONFIG[buildingType].name = serverConfig.descriptions[buildingType].name;
                         NODE_CONFIG[buildingType].description = serverConfig.descriptions[buildingType].description;
-                        console.log(`📝 ${buildingType}: descripción actualizada desde servidor`);
                     }
                 });
             }
@@ -2597,7 +2406,6 @@ export class NetworkManager {
                         const capacities = serverConfig.capacities[nodeType];
                         Object.keys(capacities).forEach(capacityKey => {
                             NODE_CONFIG[nodeType][capacityKey] = capacities[capacityKey];
-                            console.log(`📊 ${nodeType}: ${capacityKey} actualizado a ${capacities[capacityKey]}`);
                         });
                     }
                 });
@@ -2610,7 +2418,6 @@ export class NetworkManager {
                         const bonuses = serverConfig.bonuses[nodeType];
                         Object.keys(bonuses).forEach(bonusKey => {
                             NODE_CONFIG[nodeType][bonusKey] = bonuses[bonusKey];
-                            console.log(`🎁 ${nodeType}: ${bonusKey} actualizado a ${bonuses[bonusKey]} (ANTI-HACK)`);
                         });
                     }
                 });
@@ -2623,7 +2430,6 @@ export class NetworkManager {
                         const gameplay = serverConfig.gameplay[nodeType];
                         Object.keys(gameplay).forEach(gameplayKey => {
                             NODE_CONFIG[nodeType][gameplayKey] = gameplay[gameplayKey];
-                            console.log(`🎮 ${nodeType}: ${gameplayKey} actualizado a ${gameplay[gameplayKey]}`);
                         });
                     }
                 });
@@ -2634,7 +2440,6 @@ export class NetworkManager {
                 Object.keys(serverConfig.detectionRadii).forEach(nodeType => {
                     if (NODE_CONFIG[nodeType]) {
                         NODE_CONFIG[nodeType].detectionRadius = serverConfig.detectionRadii[nodeType];
-                        console.log(`🛡️ ${nodeType}: detectionRadius actualizado a ${serverConfig.detectionRadii[nodeType]} (SEGURIDAD)`);
                     }
                 });
             }
@@ -2646,7 +2451,6 @@ export class NetworkManager {
                     Object.keys(serverConfig.security.hitboxRadius).forEach(nodeType => {
                         if (NODE_CONFIG[nodeType]) {
                             NODE_CONFIG[nodeType].hitboxRadius = serverConfig.security.hitboxRadius[nodeType];
-                            console.log(`🎯 ${nodeType}: hitboxRadius actualizado a ${serverConfig.security.hitboxRadius[nodeType]} (ANTI-HACK)`);
                         }
                     });
                 }
@@ -2656,7 +2460,6 @@ export class NetworkManager {
                     Object.keys(serverConfig.security.needsConstruction).forEach(nodeType => {
                         if (NODE_CONFIG[nodeType]) {
                             NODE_CONFIG[nodeType].needsConstruction = serverConfig.security.needsConstruction[nodeType];
-                            console.log(`🏗️ ${nodeType}: needsConstruction actualizado a ${serverConfig.security.needsConstruction[nodeType]} (ANTI-HACK)`);
                         }
                     });
                 }
@@ -2666,7 +2469,6 @@ export class NetworkManager {
                     Object.keys(serverConfig.security.canBeDestroyed).forEach(nodeType => {
                         if (NODE_CONFIG[nodeType]) {
                             NODE_CONFIG[nodeType].canBeDestroyed = serverConfig.security.canBeDestroyed[nodeType];
-                            console.log(`💥 ${nodeType}: canBeDestroyed actualizado a ${serverConfig.security.canBeDestroyed[nodeType]} (ANTI-HACK)`);
                         }
                     });
                 }
@@ -2679,7 +2481,6 @@ export class NetworkManager {
                     Object.keys(serverConfig.behavior.enabled).forEach(nodeType => {
                         if (NODE_CONFIG[nodeType]) {
                             NODE_CONFIG[nodeType].enabled = serverConfig.behavior.enabled[nodeType];
-                            console.log(`🔧 ${nodeType}: enabled actualizado a ${serverConfig.behavior.enabled[nodeType]} (ANTI-HACK)`);
                         }
                     });
                 }
@@ -2691,7 +2492,6 @@ export class NetworkManager {
                             const behaviorProps = serverConfig.behavior.behavior[nodeType];
                             Object.keys(behaviorProps).forEach(propKey => {
                                 NODE_CONFIG[nodeType][propKey] = behaviorProps[propKey];
-                                console.log(`🎮 ${nodeType}: ${propKey} actualizado a ${behaviorProps[propKey]} (ANTI-HACK)`);
                             });
                         }
                     });

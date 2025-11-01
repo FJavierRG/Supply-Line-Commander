@@ -26,15 +26,101 @@ export class InputHandler {
     }
     
     /**
+     * Verifica si el overlay de pausa está visible
+     * @returns {boolean} True si el overlay de pausa está visible
+     */
+    isPauseMenuVisible() {
+        const pauseOverlay = document.getElementById('pause-overlay');
+        return pauseOverlay && !pauseOverlay.classList.contains('hidden');
+    }
+    
+    /**
+     * Verifica si algún overlay importante está visible y bloquea el input del juego
+     * @returns {boolean} True si el input del CANVAS debe ser bloqueado
+     * NOTA: Solo bloquea eventos del canvas, NO afecta a botones HTML del menú
+     */
+    shouldBlockGameInput() {
+        // Bloquear si el menú de pausa está visible (solo durante el juego)
+        if (this.isPauseMenuVisible()) {
+            return true;
+        }
+        
+        // Bloquear si las opciones están visibles (solo durante el juego)
+        if (this.game.options && this.game.options.isVisible) {
+            return true;
+        }
+        
+        // NO bloquear si estamos en el menú principal - los overlays del menú
+        // tienen sus propios botones HTML que no deben ser bloqueados
+        // El bloqueo del canvas en estado 'menu' ya se maneja en handleCanvasClick
+        
+        return false;
+    }
+    
+    /**
      * Configura todos los event listeners
      */
     setupListeners() {
         // Canvas listeners
-        this.game.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
+        // IMPORTANTE: Usar capture phase para poder interceptar antes
+        this.game.canvas.addEventListener('click', (e) => {
+            // CRÍTICO: Si hay overlays visibles o el click está en UI, NO procesar
+            if (this.game.inputRouter) {
+                if (this.game.inputRouter.isClickOnUIElement(e)) {
+                    e.stopPropagation(); // Detener propagación
+                    return; // No procesar en canvas
+                }
+                if (!this.game.inputRouter.shouldRouteToCanvas(e)) {
+                    e.stopPropagation(); // Detener propagación
+                    return; // No procesar en canvas
+                }
+            }
+            this.handleCanvasClick(e);
+        }, false); // No usar capture phase, pero verificar antes
+        
         this.game.canvas.addEventListener('mousemove', (e) => this.handleCanvasMouseMove(e));
-        this.game.canvas.addEventListener('mousedown', (e) => this.handleCanvasMouseDown(e));
-        this.game.canvas.addEventListener('mouseup', (e) => this.handleCanvasMouseUp(e));
-        this.game.canvas.addEventListener('contextmenu', (e) => this.handleRightClick(e));
+        this.game.canvas.addEventListener('mousedown', (e) => {
+            // CRÍTICO: Si hay overlays visibles o el click está en UI, NO procesar
+            if (this.game.inputRouter) {
+                if (this.game.inputRouter.isClickOnUIElement(e)) {
+                    e.stopPropagation();
+                    return;
+                }
+                if (!this.game.inputRouter.shouldRouteToCanvas(e)) {
+                    e.stopPropagation();
+                    return;
+                }
+            }
+            this.handleCanvasMouseDown(e);
+        });
+        this.game.canvas.addEventListener('mouseup', (e) => {
+            // CRÍTICO: Si hay overlays visibles o el click está en UI, NO procesar
+            if (this.game.inputRouter) {
+                if (this.game.inputRouter.isClickOnUIElement(e)) {
+                    e.stopPropagation();
+                    return;
+                }
+                if (!this.game.inputRouter.shouldRouteToCanvas(e)) {
+                    e.stopPropagation();
+                    return;
+                }
+            }
+            this.handleCanvasMouseUp(e);
+        });
+        this.game.canvas.addEventListener('contextmenu', (e) => {
+            // CRÍTICO: Si hay overlays visibles o el click está en UI, NO procesar
+            if (this.game.inputRouter) {
+                if (this.game.inputRouter.isClickOnUIElement(e)) {
+                    e.stopPropagation();
+                    return;
+                }
+                if (!this.game.inputRouter.shouldRouteToCanvas(e)) {
+                    e.stopPropagation();
+                    return;
+                }
+            }
+            this.handleRightClick(e);
+        });
         
         // Keyboard listeners
         window.addEventListener('keydown', (e) => this.handleKeyDown(e));
@@ -208,6 +294,24 @@ export class InputHandler {
      * Maneja clicks en el canvas
      */
     handleCanvasClick(e) {
+        // NUEVO: Usar InputRouter si está disponible
+        if (this.game.inputRouter) {
+            // Verificar si el click está en UI antes de procesar
+            if (this.game.inputRouter.isClickOnUIElement(e)) {
+                return; // Dejar que el elemento UI maneje el evento
+            }
+            
+            // Verificar si debería rutear al canvas
+            if (!this.game.inputRouter.shouldRouteToCanvas(e)) {
+                return; // No procesar en canvas
+            }
+        } else {
+            // FALLBACK: Verificación básica (compatibilidad)
+            if (this.shouldBlockGameInput()) {
+                return;
+            }
+        }
+        
         const rect = this.game.canvas.getBoundingClientRect();
         // Coordenadas del click relativas al canvas escalado
         const clickX = e.clientX - rect.left;
@@ -615,6 +719,11 @@ export class InputHandler {
      * Maneja mouse down en el canvas
      */
     handleCanvasMouseDown(e) {
+        // Bloquear input si el menú de pausa u otros overlays están visibles
+        if (this.shouldBlockGameInput()) {
+            return;
+        }
+        
         const rect = this.game.canvas.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const clickY = e.clientY - rect.top;
@@ -649,6 +758,11 @@ export class InputHandler {
      * Maneja mouse up en el canvas
      */
     handleCanvasMouseUp(e) {
+        // Bloquear input si el menú de pausa u otros overlays están visibles
+        if (this.shouldBlockGameInput()) {
+            return;
+        }
+        
         // Delegar al editor si está en modo editor
         if (this.game.state === 'editor') {
             if (this.game.mapEditor && this.game.mapEditor.active) {
@@ -675,10 +789,17 @@ export class InputHandler {
             return;
         }
         
-        // ESC para pausar el juego (solo si las opciones no están abiertas)
+        // ESC para pausar/reanudar el juego
         if (e.key === 'Escape') {
+            // Si las opciones están visibles, las opciones manejan su propio ESC
             if (this.game.options && this.game.options.isVisible) {
-                // Las opciones manejan su propio ESC
+                return;
+            }
+            
+            // Si el menú de pausa está visible, cerrarlo (reanudar juego)
+            if (this.isPauseMenuVisible()) {
+                e.preventDefault();
+                this.game.togglePause(); // Esto cerrará el menú y reanudará
                 return;
             }
             
@@ -708,6 +829,7 @@ export class InputHandler {
                 return;
             }
             
+            // Abrir menú de pausa
             this.game.togglePause();
         }
         
@@ -782,6 +904,10 @@ export class InputHandler {
      * Maneja movimiento del mouse en el canvas
      */
     handleCanvasMouseMove(e) {
+        // Bloquear input si el menú de pausa u otros overlays están visibles
+        // PERO permitir movimiento del mouse para hover (solo bloquear acciones)
+        // Por ahora permitimos el movimiento para mantener la UI responsive
+        
         const rect = this.game.canvas.getBoundingClientRect();
         const moveX = e.clientX - rect.left;
         const moveY = e.clientY - rect.top;
@@ -1061,6 +1187,11 @@ export class InputHandler {
      */
     handleRightClick(e) {
         e.preventDefault(); // Prevenir menú contextual del navegador
+        
+        // Bloquear input si el menú de pausa u otros overlays están visibles
+        if (this.shouldBlockGameInput()) {
+            return;
+        }
         
         // Si está en modo construcción o drone, cancelarlo
         if (this.game.state === 'playing') {

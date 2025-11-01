@@ -28,6 +28,9 @@ import { TutorialSystem } from './systems/TutorialSystem.js';
 import { TutorialManager } from './systems/TutorialManager.js';
 import { NetworkManager } from './systems/NetworkManager.js';
 import { RaceSelectionManager } from './systems/RaceSelectionManager.js';
+import { OverlayManager } from './systems/OverlayManager.js';
+import { GameStateManager } from './systems/GameStateManager.js';
+import { InputRouter } from './systems/InputRouter.js';
 import { GAME_CONFIG } from './config/constants.js';
 // ELIMINADO: MAP_CONFIG, calculateAbsolutePosition - Ya no se genera el mapa en el cliente
 import { getNodeConfig } from './config/nodes.js';
@@ -46,6 +49,16 @@ export class Game {
         // Sistemas especializados
         this.assetManager = new AssetManager();
         this.renderer = new RenderSystem(canvas, this.assetManager, this);
+        
+        // NUEVO: Managers de HUD/UI
+        this.overlayManager = new OverlayManager();
+        this.gameStateManager = new GameStateManager();
+        this.gameStateManager.setState('menu'); // Estado inicial
+        
+        // NUEVO: InputRouter necesita los managers antes de crearse
+        this.inputRouter = new InputRouter(this.gameStateManager, this.overlayManager);
+        
+        // MANTENER: UIManager sigue existiendo (compatibilidad)
         this.ui = new UIManager(this);
         this.audio = new AudioManager();
         this.loadingScreen = new LoadingScreenManager();
@@ -55,7 +68,7 @@ export class Game {
         this.buildSystem = new BuildingSystem(this);
         this.storeUI = new StoreUIManager(this.assetManager, this.buildSystem, this);
         this.options = new OptionsManager(this.audio);
-        this.arsenal = new ArsenalManager(this.assetManager);
+        this.arsenal = new ArsenalManager(this.assetManager, this);
         this.convoyManager = new ConvoyManager(this);
         this.medicalSystem = new MedicalEmergencySystem(this);
         this.droneSystem = new DroneSystem(this);
@@ -71,7 +84,6 @@ export class Game {
         
         if (this.aiSystemMode === 'hybrid' || this.aiSystemMode === 'modular') {
             this.aiDirector = new AIDirector(this);
-            console.log(`🤖 Sistema IA: ${this.aiSystemMode.toUpperCase()} - AIDirector + EnemyAISystem`);
         } else {
             console.log(`🤖 Sistema IA: LEGACY - Solo EnemyAISystem`);
         }
@@ -102,6 +114,17 @@ export class Game {
         
         // Estado del juego
         this.state = 'menu'; // menu, playing, paused, editor
+        // MANTENER: this.state para compatibilidad, pero sincronizar con GameStateManager
+        this.gameStateManager.onStateChange((newState) => {
+            this.state = newState; // Mantener sincronizado
+        });
+        
+        // NUEVO: Helper para cambiar estado (usa GameStateManager)
+        this.setGameState = (newState) => {
+            this.gameStateManager.setState(newState);
+            // this.state se actualiza automáticamente vía listener
+        };
+        
         this.score = 0;
         this.deliveries = 0;
         this.lastTime = 0;
@@ -231,7 +254,7 @@ export class Game {
     }
     
     startMission() {
-        this.state = 'playing';
+        this.setGameState('playing');
         this.score = 0;
         this.deliveries = 0;
         this.nodes = []; // Limpiar todos los nodos
@@ -352,7 +375,6 @@ export class Game {
         this.helicopters.push(heli);
         hq.landedHelicopters.push(heli.id);
         
-        console.log(`🚁 SINGLEPLAYER: Helicóptero ${heli.id} creado en HQ`);
     }
     
     // ELIMINADO: generateBases() y shouldGenerateFOBs()
@@ -387,14 +409,13 @@ export class Game {
         // Cargar suministros si sale del HQ
         if (fromNode.type === 'hq') {
             heli.cargo = 100;
-            console.log(`🚁 SINGLEPLAYER: Helicóptero cargó 100 suministros del HQ`);
         }
         
         // Validar cargo según destino
         
         // FRONT: necesita al menos 50 de cargo
         if (toNode.type === 'front' && heli.cargo < 50) {
-            console.error(`❌ Sin suficientes suministros para Front (necesita 50, tiene ${heli.cargo})`);
+            console.error(`❌ Sin suficientes suministros para Front`);
             return false;
         }
         
@@ -405,13 +426,11 @@ export class Game {
         if (isAerialBase) {
             // Ya está lleno - no necesita recargar
             if (heli.cargo >= 100) {
-                console.error('❌ El helicóptero ya está lleno - no necesita recargar');
                 return false;
             }
             
             // Base sin suministros
             if (toNode.supplies <= 0) {
-                console.error('❌ La Base Aérea no tiene suministros disponibles');
                 return false;
             }
         }
@@ -431,7 +450,6 @@ export class Game {
         // Remover del nodo de origen
         fromNode.landedHelicopters = fromNode.landedHelicopters.filter(id => id !== heliId);
         
-        console.log(`🚁 SINGLEPLAYER: Helicóptero despegó de ${fromNode.type} hacia ${toNode.type}`);
         
         // El sonido se reproduce mediante el evento de sonido 'chopper' del servidor
         
@@ -751,15 +769,13 @@ export class Game {
     render() {
         // CRÍTICO: En multijugador, verificar que NO estamos en estado tutorial
         if (this.isMultiplayer && this.state === 'tutorial') {
-            this.state = 'playing';
-            console.log('⚠️ FORZADO: Cambiado de tutorial a playing en multijugador');
+            this.setGameState('playing');
         }
         
         this.renderer.clear();
         
         // Debug para multijugador
         if (this.isMultiplayer && this.nodes.length === 0) {
-            console.warn('⚠️ RENDER: Sin nodos en multijugador!');
         }
         
         // Debug: Log ONE TIME para confirmar que render se ejecuta
@@ -807,7 +823,6 @@ export class Game {
         // Renderizar convoyes
         const convoys = this.convoyManager.getConvoys();
         if (convoys.length > 0 && !this._convoyRenderLogged) {
-            console.log(`🚚 Renderizando ${convoys.length} convoyes`);
             this._convoyRenderLogged = true;
         }
         convoys.forEach(convoy => this.renderer.renderConvoy(convoy));
@@ -974,7 +989,7 @@ export class Game {
     restartMission() {
         // Reiniciar misión actual limpiamente
         this.ui.hidePauseMenu();
-        this.state = 'playing';
+        this.setGameState('playing');
         this.paused = false;
         const pauseBtn = document.getElementById('pause-btn');
         if (pauseBtn) {
@@ -1004,10 +1019,8 @@ export class Game {
         }
         
         // Ocultar overlays de victoria/derrota
-        const victoryOverlay = document.getElementById('victory-overlay');
-        const defeatOverlay = document.getElementById('defeat-overlay');
-        if (victoryOverlay) victoryOverlay.classList.add('hidden');
-        if (defeatOverlay) defeatOverlay.classList.add('hidden');
+        this.overlayManager.hideOverlay('victory-overlay');
+        this.overlayManager.hideOverlay('defeat-overlay');
         
         // Detener todos los sonidos
         this.audio.stopAllSounds();
@@ -1029,7 +1042,7 @@ export class Game {
             this.inputHandler.resetDifficultySelector();
         }
         
-        this.state = 'menu';
+        this.setGameState('menu');
         // Limpiar canvas para que no quede frame congelado
         this.renderer.clear();
         
@@ -1037,7 +1050,7 @@ export class Game {
     }
     
     showMainMenu() {
-        this.state = 'menu';
+        this.setGameState('menu');
         this.ui.showMainMenu();
         
         // Ocultar botón de "Volver al Editor" si existe
@@ -1061,7 +1074,6 @@ export class Game {
             this.enemyAI = null;
         }
         this.enemyAI = new EnemyAISystem(this, this.aiDifficulty);
-        console.log(`🤖 IA inicializada con dificultad: ${this.aiDifficulty}`);
     }
     
     // ELIMINADO: setAIDifficulty, startGameFromMenu, onRaceSelected
@@ -1073,13 +1085,11 @@ export class Game {
     startTutorialFromMenu() {
         // Verificar que los assets estén listos antes de continuar
         if (!this.assetManager.allLoaded) {
-            console.log('⚠️ Esperando a que terminen de cargar los assets...');
             return;
         }
         
-        console.log('📚 Iniciando tutorial...');
         
-        this.state = 'tutorial'; // Estado separado para el tutorial
+        this.setGameState('tutorial'); // Estado separado para el tutorial
         this.ui.hideMainMenu();
         
         // Iniciar tutorial con su propio sistema
@@ -1091,7 +1101,7 @@ export class Game {
      */
     startTutorialMission() {
         console.warn('⚠️ startTutorialMission() está obsoleto');
-        this.state = 'playing';
+        this.setGameState('playing');
         this.score = 0;
         this.deliveries = 0;
         this.nodes = []; // Limpiar todos los nodos
@@ -1146,7 +1156,6 @@ export class Game {
         // Crear nodos del tutorial usando el mapa personalizado
         this.createTutorialMap();
         
-        console.log('✅ Mapa del tutorial cargado');
         
         // Forzar actualización del territorio para que reconozca los nodos
         setTimeout(() => {
@@ -1159,13 +1168,10 @@ export class Game {
      */
     createTutorialMap() {
         console.warn('⚠️ createTutorialMap() está obsoleto');
-        console.log('🔧 Creando mapa del tutorial...');
-        
+
         const tutorialMap = this.tutorialManager.getTutorialMap();
-        console.log('📋 Configuración del tutorial:', tutorialMap);
         
         tutorialMap.nodes.forEach((nodeData, index) => {
-            console.log(`🔧 Creando nodo ${index + 1}:`, nodeData);
             
             const config = getNodeConfig(nodeData.type);
             const node = new VisualNode(
@@ -1182,14 +1188,11 @@ export class Game {
             
             if (node) {
                 this.nodes.push(node);
-                console.log(`✅ Nodo ${nodeData.type} creado en (${nodeData.x}, ${nodeData.y})`);
             } else {
                 console.error(`❌ Error creando nodo ${nodeData.type}`);
             }
         });
-        
-        console.log(`✅ Mapa del tutorial completado: ${this.nodes.length} nodos creados`);
-        console.log('📍 Nodos creados:', this.nodes.map(n => `${n.type} en (${n.x}, ${n.y})`));
+
     }
     
     // ===== MÉTODOS DEL EDITOR DE MAPAS ELIMINADOS (LEGACY) =====
@@ -1238,25 +1241,21 @@ export class Game {
      * @param {number} y - Posición Y
      */
     handleBuildRequest(buildingId, x, y) {
-        console.log(`🏗️ Pseudo-servidor: Procesando construcción de ${buildingId} en (${x}, ${y})`);
         
         // 🆕 NUEVO: Verificar si el edificio está habilitado
         const enabled = this.serverBuildingConfig?.behavior?.enabled?.[buildingId];
         if (enabled === false) {
-            console.log(`🚫 Pseudo-servidor: ${buildingId} está deshabilitado`);
             return;
         }
         
         // Obtener costo desde configuración autoritativa del servidor
         const cost = this.serverBuildingConfig?.costs?.[buildingId];
         if (!cost) {
-            console.error(`❌ Pseudo-servidor: Tipo de edificio inválido: ${buildingId}`);
             return;
         }
         
         // Validar currency (AUTORITATIVA)
         if (!this.canAffordBuilding(buildingId)) {
-            console.log(`❌ Pseudo-servidor: Currency insuficiente (Necesitas: ${cost}, Tienes: ${this.getMissionCurrency()})`);
             return;
         }
         
@@ -1266,19 +1265,16 @@ export class Game {
         if (!isCommando) {
             // Validar territorio (AUTORITATIVA) - solo para edificios normales
             if (!this.territory.isInAllyTerritory(x, y)) {
-                console.log(`❌ Pseudo-servidor: Fuera de territorio`);
                 return;
             }
             
             // Validar colisiones (AUTORITATIVA) - solo para edificios normales
             if (!this.buildSystem.isValidLocation(x, y, buildingId)) {
-                console.log(`❌ Pseudo-servidor: Muy cerca de otro edificio`);
                 return;
             }
         } else {
             // Para el comando: validar que esté en territorio ENEMIGO y que no esté muy cerca físicamente
             if (this.territory.isInAllyTerritory(x, y)) {
-                console.log(`❌ Pseudo-servidor: El comando solo puede desplegarse en territorio enemigo`);
                 return;
             }
             
@@ -1298,7 +1294,6 @@ export class Game {
                 const dist = Math.hypot(x - tower.x, y - tower.y);
                 
                 if (dist <= detectionRadius) {
-                    console.log(`❌ Pseudo-servidor: Hay una torre de vigilancia enemiga cerca - no se puede desplegar el comando`);
                     return;
                 }
             }
@@ -1310,7 +1305,6 @@ export class Game {
                 const dist = Math.hypot(x - node.x, y - node.y);
                 const minSeparation = 25 + (node.radius || 30); // Solo colisión física básica
                 if (dist < minSeparation) {
-                    console.log(`❌ Pseudo-servidor: Muy cerca de otro edificio`);
                     return;
                 }
             }
@@ -1318,14 +1312,12 @@ export class Game {
         
         // Descontar currency (AUTORITATIVA)
         if (!this.spendMissionCurrency(cost)) {
-            console.error(`❌ Pseudo-servidor: Error al gastar currency`);
             return;
         }
         
         // Obtener configuración del nodo
         const buildingConfig = getNodeConfig(buildingId);
         if (!buildingConfig) {
-            console.error(`❌ Pseudo-servidor: Configuración no encontrada`);
             return;
         }
         
@@ -1354,7 +1346,6 @@ export class Game {
                 // Tutorial: Hardcodear FOB con 0 suministros
                 if (buildingId === 'fob') {
                     newNode.supplies = 0;
-                    console.log('🎓 Tutorial: FOB construido con 0 suministros');
                 }
             } else {
                 this.nodes.push(newNode);
@@ -1385,7 +1376,6 @@ export class Game {
         // Incrementar contador
         this.matchStats.buildingsBuilt++;
         
-        console.log(`✅ Pseudo-servidor: ${buildingConfig.name} construido exitosamente en (${x.toFixed(0)}, ${y.toFixed(0)})`);
     }
     
     /**
@@ -1401,35 +1391,20 @@ export class Game {
      * @param {Object} targetBase - Base objetivo del drone
      */
     handleDroneRequest(targetBase) {
-        console.log(`💣 Pseudo-servidor: Procesando drone hacia ${targetBase.id}`);
         
         // Validar objetivo
         const validTargetTypes = ['fob', 'nuclearPlant', 'intelRadio', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelCenter', 'aerialBase'];
         const isEnemyTarget = targetBase.team !== this.myTeam && validTargetTypes.includes(targetBase.type);
         
-        if (!isEnemyTarget) {
-            if (targetBase.type === 'hq') {
-                console.log('❌ Pseudo-servidor: No puedes atacar HQs');
-            } else if (targetBase.type === 'front') {
-                console.log('❌ Pseudo-servidor: No puedes atacar frentes');
-            } else if (targetBase.team === this.myTeam) {
-                console.log('❌ Pseudo-servidor: No puedes atacar tus propias bases');
-            } else {
-                console.log('❌ Pseudo-servidor: Objetivo no válido');
-            }
-            return;
-        }
         
         // Validar currency
         const droneCost = this.serverBuildingConfig?.costs?.drone || 0;
         if (!this.canAffordBuilding('drone')) {
-            console.log(`❌ Pseudo-servidor: Currency insuficiente`);
             return;
         }
         
         // Descontar currency
         if (!this.spendMissionCurrency(droneCost)) {
-            console.error(`❌ Pseudo-servidor: Error al gastar currency`);
             return;
         }
         
@@ -1440,7 +1415,6 @@ export class Game {
         this.droneSystem.launchDrone(droneStartX, droneStartY, targetBase);
         this.matchStats.dronesLaunched++;
         
-        console.log(`✅ Pseudo-servidor: Dron lanzado exitosamente`);
     }
     
     /**
@@ -1448,26 +1422,22 @@ export class Game {
      * @param {Object} targetFront - Frente objetivo del sniper
      */
     handleSniperRequest(targetFront) {
-        console.log(`🎯 Pseudo-servidor: Procesando sniper hacia ${targetFront.id}`);
         
         // Validar objetivo
         const isEnemyFront = targetFront.team !== this.myTeam && targetFront.type === 'front';
         
         if (!isEnemyFront) {
-            console.log('❌ Pseudo-servidor: Solo puedes atacar frentes enemigos');
             return;
         }
         
         // Validar currency
         const sniperCost = this.serverBuildingConfig?.costs?.sniperStrike || 0;
         if (!this.canAffordBuilding('sniperStrike')) {
-            console.log(`❌ Pseudo-servidor: Currency insuficiente`);
             return;
         }
         
         // Descontar currency
         if (!this.spendMissionCurrency(sniperCost)) {
-            console.error(`❌ Pseudo-servidor: Error al gastar currency`);
             return;
         }
         
@@ -1483,7 +1453,6 @@ export class Game {
         // Crear efecto visual
         this.particleSystem.createFloatingSprite(targetFront.x, targetFront.y - 40, 'ui-sniper-kill');
         
-        console.log(`✅ Pseudo-servidor: Sniper ejecutado exitosamente`);
     }
     
     /**
@@ -1491,32 +1460,27 @@ export class Game {
      * @param {Object} targetFOB - FOB objetivo del sabotaje
      */
     handleFobSabotageRequest(targetFOB) {
-        console.log(`⚡ Pseudo-servidor: Procesando sabotaje FOB ${targetFOB.id}`);
         
         // Validar objetivo
         const isEnemyFOB = targetFOB.team !== this.myTeam && targetFOB.type === 'fob';
         
         if (!isEnemyFOB) {
-            console.log('❌ Pseudo-servidor: Solo puedes sabotear FOBs enemigas');
             return;
         }
         
         // Validar currency
         if (!this.canAffordBuilding('fobSabotage')) {
-            console.log(`❌ Pseudo-servidor: Currency insuficiente`);
             return;
         }
         
         // Obtener configuración
         const fobSabotageConfig = getNodeConfig('fobSabotage');
         if (!fobSabotageConfig) {
-            console.error('❌ Pseudo-servidor: Configuración no encontrada');
             return;
         }
         
         // Descontar currency
         if (!this.spendMissionCurrency(fobSabotageConfig.cost)) {
-            console.error(`❌ Pseudo-servidor: Error al gastar currency`);
             return;
         }
         
@@ -1546,7 +1510,6 @@ export class Game {
             this.audio.playChopperSound();
         }
         
-        console.log(`✅ Pseudo-servidor: FOB sabotajeada exitosamente`);
     }
     
     /**
@@ -1555,24 +1518,20 @@ export class Game {
      * @param {number} y - Posición Y donde desplegar
      */
     handleCommandoDeployRequest(x, y) {
-        console.log(`🎖️ Pseudo-servidor: Procesando despliegue de comando en (${x.toFixed(0)}, ${y.toFixed(0)})`);
         
         // Validar currency
         if (!this.canAffordBuilding('specopsCommando')) {
-            console.log(`❌ Pseudo-servidor: Currency insuficiente`);
             return;
         }
         
         // Obtener configuración
         const commandoConfig = getNodeConfig('specopsCommando');
         if (!commandoConfig) {
-            console.error('❌ Pseudo-servidor: Configuración no encontrada');
             return;
         }
         
         // Descontar currency
         if (!this.spendMissionCurrency(commandoConfig.cost || 200)) {
-            console.error(`❌ Pseudo-servidor: Error al gastar currency`);
             return;
         }
         
@@ -1584,7 +1543,6 @@ export class Game {
             this.audio.playCommandoDeploySound();
         }
         
-        console.log(`✅ Pseudo-servidor: Comando desplegado exitosamente`);
     }
     
     /**
@@ -1642,7 +1600,7 @@ export class Game {
      */
     triggerVictory() {
         if (this.state === 'playing') {
-            this.state = 'victory';
+            this.setGameState('victory');
             this.matchStats.endTime = Date.now();
             console.log('🎉 ¡PARTIDA GANADA!');
             
@@ -1660,7 +1618,7 @@ export class Game {
      */
     triggerDefeat() {
         if (this.state === 'playing') {
-            this.state = 'defeat';
+            this.setGameState('defeat');
             this.matchStats.endTime = Date.now();
             console.log('💀 ¡PARTIDA PERDIDA!');
             
@@ -1744,7 +1702,7 @@ export class Game {
         `;
         
         victoryOverlay.innerHTML = statsHTML;
-        victoryOverlay.classList.remove('hidden');
+        this.overlayManager.showOverlay('victory-overlay');
         
         // Reconectar el botón
         const btn = document.getElementById('victory-menu-btn');
@@ -1825,7 +1783,7 @@ export class Game {
         `;
         
         defeatOverlay.innerHTML = statsHTML;
-        defeatOverlay.classList.remove('hidden');
+        this.overlayManager.showOverlay('defeat-overlay');
         
         // Reconectar el botón
         const btn = document.getElementById('defeat-menu-btn');
@@ -1889,9 +1847,7 @@ export class Game {
                 }
             };
             
-            console.log('🏗️ Configuración de edificios inicializada para singleplayer desde servidor');
         }).catch(error => {
-            console.error('❌ Error cargando configuración del servidor:', error);
             
             // Fallback: usar configuración básica si falla la importación
             this.serverBuildingConfig = {

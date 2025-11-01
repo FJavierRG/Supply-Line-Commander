@@ -149,9 +149,14 @@ export class BuildHandler {
                 const hq = this.gameState.nodes.find(n => n.type === 'hq' && n.team === node.team);
                 const bonus = SERVER_NODE_CONFIG.effects.truckFactory.vehicleBonus;
                 if (hq && hq.hasVehicles) {
-                    hq.maxVehicles = (hq.maxVehicles || 4) + bonus;
-                    hq.availableVehicles = (hq.availableVehicles || 4) + bonus;
-                    console.log(`🚚 TruckFactory completada - ${node.team} HQ ahora tiene ${hq.maxVehicles} vehículos`);
+                    const oldMax = hq.maxVehicles || 4;
+                    hq.maxVehicles = oldMax + bonus;
+                    // Solo ajustar availableVehicles si excede el nuevo máximo, NO aumentar directamente
+                    // Esto evita reponer camiones desplegados
+                    if (hq.availableVehicles > hq.maxVehicles) {
+                        hq.availableVehicles = hq.maxVehicles;
+                    }
+                    console.log(`🚚 TruckFactory completada - ${node.team} HQ ahora tiene ${hq.maxVehicles} vehículos máximos (disponibles: ${hq.availableVehicles})`);
                 }
                 break;
                 
