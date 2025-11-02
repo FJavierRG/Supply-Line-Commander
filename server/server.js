@@ -40,6 +40,16 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// 🆕 NUEVO: Middleware para establecer tipo MIME correcto para módulos ES6
+app.use((req, res, next) => {
+    // Establecer tipo MIME correcto para archivos JavaScript (módulos ES6)
+    if (req.path.endsWith('.js')) {
+        res.type('application/javascript');
+    }
+    next();
+});
+
 app.use(express.static(path.join(__dirname, '..')));
 
 // Configurar Socket.IO con CORS más permisivo
