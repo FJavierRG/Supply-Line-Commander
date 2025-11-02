@@ -36,21 +36,29 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 // Servir archivos estáticos del cliente (para ngrok/producción)
+// IMPORTANTE: Configurar headers correctos para módulos ES6
 import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 🆕 NUEVO: Middleware para establecer tipo MIME correcto para módulos ES6
+// Middleware para servir archivos estáticos con headers correctos para ES modules
 app.use((req, res, next) => {
-    // Establecer tipo MIME correcto para archivos JavaScript (módulos ES6)
+    // Si es un archivo .js, asegurar que tenga el header correcto para módulos ES6
     if (req.path.endsWith('.js')) {
-        res.type('application/javascript');
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
     }
     next();
 });
 
-app.use(express.static(path.join(__dirname, '..')));
+app.use(express.static(path.join(__dirname, '..'), {
+    // Asegurar que los módulos ES6 se sirvan correctamente
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        }
+    }
+}));
 
 // Configurar Socket.IO con CORS más permisivo
 const io = new Server(httpServer, {
@@ -71,7 +79,25 @@ const PORT = process.env.PORT || 3000;
 
 // ===== ENDPOINTS HTTP =====
 
+// Servir index.html en la raíz
 app.get('/', (req, res) => {
+    // Si es una petición de API (headers Accept: application/json), devolver JSON
+    if (req.headers.accept && req.headers.accept.includes('application/json')) {
+        res.json({
+            game: 'Supply Line Commander',
+            version: '2.0.0',
+            status: 'online',
+            players: io.engine.clientsCount,
+            rooms: roomManager.getRoomCount(),
+            activeGames: roomManager.getActiveGames()
+        });
+    } else {
+        // Servir index.html para el juego
+        res.sendFile(path.join(__dirname, '..', 'index.html'));
+    }
+});
+
+app.get('/api/status', (req, res) => {
     res.json({
         game: 'Supply Line Commander',
         version: '2.0.0',
@@ -84,6 +110,23 @@ app.get('/', (req, res) => {
 
 app.get('/rooms', (req, res) => {
     res.json(roomManager.getAvailableRooms());
+});
+
+// Catch-all: servir index.html para cualquier ruta que no sea API o archivo estático
+// Esto permite que las rutas del cliente funcionen correctamente (SPA)
+app.get('*', (req, res, next) => {
+    // Si es una petición de API, continuar
+    if (req.path.startsWith('/api/')) {
+        return next();
+    }
+    
+    // Si es un archivo estático (con extensión), continuar al middleware de static
+    if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot)$/)) {
+        return next();
+    }
+    
+    // Para cualquier otra ruta, servir index.html (SPA routing)
+    res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
 
 // ===== SOCKET.IO EVENTOS =====
