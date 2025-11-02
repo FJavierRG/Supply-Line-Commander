@@ -521,20 +521,14 @@ export class TerritorySystem {
     
     /**
      * Actualiza el sistema de territorio (detección de FOBs fuera de territorio)
+     * ⚠️ LEGACY REMOVED: El servidor maneja toda la lógica de abandono de edificios.
+     * El cliente solo renderiza el territorio basado en las posiciones de frentes del servidor.
      * @param {number} dt - Delta time en segundos
      */
     update(dt) {
-        // En multijugador, el servidor maneja toda la lógica de territorio
-        if (this.game.isMultiplayer) {
-            return;
-        }
-        
-        // Verificar FOBs fuera de territorio cada segundo
-        this.checkAbandonmentTimer += dt;
-        if (this.checkAbandonmentTimer >= this.checkAbandonmentInterval) {
-            this.checkAbandonmentTimer = 0;
-            this.checkFOBsOutOfTerritory();
-        }
+        // El servidor autoritativo maneja toda la detección y ejecución de abandono.
+        // El cliente solo renderiza el territorio basado en las posiciones que vienen del servidor.
+        // TODO: Eliminar completamente este método o dejar vacío si se necesita para compatibilidad.
     }
     
     /**

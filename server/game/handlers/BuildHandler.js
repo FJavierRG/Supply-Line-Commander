@@ -58,6 +58,13 @@ export class BuildHandler {
     }
     
     /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene radios de construcción (proximidad para evitar stacking)
+     */
+    getBuildRadii() {
+        return { ...SERVER_NODE_CONFIG.buildRadius };
+    }
+    
+    /**
      * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene radios de detección (CRÍTICO PARA SEGURIDAD)
      */
     getDetectionRadii() {
@@ -406,9 +413,11 @@ export class BuildHandler {
         }
         
         // Lógica normal de detección
-        // Obtener radio de detección del edificio que se está construyendo
-        const newDetectionRadius = SERVER_NODE_CONFIG.detectionRadius[buildingType] || 
-                                 (SERVER_NODE_CONFIG.radius[buildingType] || 30) * 2.5;
+        // 🆕 NUEVO: Usar buildRadius para construcción (proximidad), detectionRadius para detección de comandos
+        // Obtener radio de construcción del edificio que se está construyendo
+        const newBuildRadius = SERVER_NODE_CONFIG.buildRadius?.[buildingType] || 
+                              SERVER_NODE_CONFIG.detectionRadius[buildingType] || 
+                              (SERVER_NODE_CONFIG.radius[buildingType] || 30) * 2.5;
         
         // Verificar colisiones con todos los nodos existentes (incluye bases iniciales y edificios construidos)
         for (const node of this.gameState.nodes) {
@@ -416,12 +425,13 @@ export class BuildHandler {
             
             const dist = Math.hypot(x - node.x, y - node.y);
             
-            // Obtener radio de detección del nodo existente
-            const existingDetectionRadius = SERVER_NODE_CONFIG.detectionRadius[node.type] || 
-                                          (SERVER_NODE_CONFIG.radius[node.type] || 30) * 2.5;
+            // Obtener radio de construcción del nodo existente (usar buildRadius si existe)
+            const existingBuildRadius = SERVER_NODE_CONFIG.buildRadius?.[node.type] || 
+                                       SERVER_NODE_CONFIG.detectionRadius[node.type] || 
+                                       (SERVER_NODE_CONFIG.radius[node.type] || 30) * 2.5;
             
-            // Verificar colisión: ningún edificio puede estar dentro del área de detección del otro
-            const minSeparation = Math.max(existingDetectionRadius, newDetectionRadius);
+            // Verificar colisión: ningún edificio puede estar dentro del área de construcción del otro
+            const minSeparation = Math.max(existingBuildRadius, newBuildRadius);
             
             if (dist < minSeparation) {
                 return false;

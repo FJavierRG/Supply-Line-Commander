@@ -1549,6 +1549,17 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     position: relative;
     box-sizing: border-box;
     /* sin transform para evitar recortes del overlay */
+    pointer-events: auto; /* Asegurar que el contenedor sea clickeable */
+}
+
+/* Asegurar que el overlay del arsenal tenga z-index alto */
+#arsenal-overlay {
+    z-index: 110 !important; /* Mayor que otros overlays (100) */
+}
+
+/* Asegurar que todos los elementos del arsenal sean clickeables */
+#arsenal-overlay * {
+    pointer-events: auto;
 }
 
 .arsenal-header {
@@ -1620,6 +1631,8 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     align-items: center;
     border: none;
     min-height: 110px; /* Altura mínima para que quepan bien los textos */
+    cursor: pointer; /* Indicar que es clickeable */
+    pointer-events: auto; /* Asegurar que sea clickeable */
 }
 
 .arsenal-item:hover {

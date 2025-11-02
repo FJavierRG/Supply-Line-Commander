@@ -109,69 +109,22 @@ export class MedicalEmergencySystem {
 
     /**
      * Actualizar sistema de emergencias
+     * ⚠️ LEGACY REMOVED: El servidor maneja toda la lógica de emergencias médicas.
+     * El cliente solo muestra las emergencias que vienen del servidor.
      */
     update(deltaTime) {
-        // En multijugador, el servidor maneja todas las emergencias médicas
-        if (this.game.isMultiplayer) {
-            return;
-        }
+        // El servidor autoritativo maneja toda la creación y gestión de emergencias.
+        // El cliente solo muestra las emergencias que vienen del estado del servidor.
+        // TODO: Mantener solo la lógica de renderizado/progreso visual si es necesaria.
         
-        // Sistema médico siempre activo
-        if (!this.game.missionStarted) return;
-
-        // Tutorial: pausar progreso de emergencias si está pausado
-        if (this.game.state === 'tutorial' && this.game.tutorialManager && this.game.tutorialManager.simulationPaused) {
-            // No actualizar el progreso de emergencias cuando está pausado
-            return;
-        }
-
-        // Tutorial: forzar emergencia en nivel 6
-        if (this.tutorialEmergency && this.nextEmergencyCheck > 0) {
-            this.nextEmergencyCheck -= deltaTime;
-            if (this.nextEmergencyCheck <= 0) {
-                this.triggerRandomEmergency();
-                this.tutorialEmergency = false;
-            }
-        }
-
-        // Chequeo periódico de nuevas emergencias
-        if (!this.tutorialEmergency) {
-            this.nextEmergencyCheck -= deltaTime;
-            if (this.nextEmergencyCheck <= 0) {
-                this.nextEmergencyCheck = this.emergencyCheckInterval;
-                
-                // Probabilidad de crear emergencia
-                if (Math.random() < this.emergencyChance) {
-                    this.triggerRandomEmergency();
-                }
-            }
-        }
-
-        // Chequeo periódico de hospitales para emergencias existentes
-        this.nextHospitalCheck -= deltaTime;
-        if (this.nextHospitalCheck <= 0) {
-            this.nextHospitalCheck = this.hospitalCheckInterval;
-            this.checkHospitalsForActiveEmergencies();
-        }
-
-        // Actualizar emergencias activas
+        // Actualizar progreso visual de emergencias activas (solo para UI)
         const now = Date.now();
         for (const [frontId, emergency] of this.activeEmergencies.entries()) {
             const elapsed = now - emergency.startTime;
             
-            // Tiempo agotado
-            if (elapsed >= emergency.duration && !emergency.penalty) {
-                emergency.penalty = true;
-                const front = this.game.nodes.find(b => b.id === frontId);
-                if (front) {
-                    this.applyPenalty(front);
-                    // Incrementar contador de emergencias fallidas (solo para jugador)
-                    if (front.team === this.game.myTeam) {
-                        this.game.matchStats.emergenciesFailed++;
-                    }
-                }
-                this.activeEmergencies.delete(frontId);
-            }
+            // ⚠️ LEGACY REMOVED: NO aplicar penalizaciones aquí - el servidor maneja esto
+            // Solo actualizar para mostrar progreso visual en UI
+            // El servidor enviará actualización cuando expire o se resuelva
         }
     }
 

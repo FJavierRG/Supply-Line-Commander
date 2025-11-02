@@ -68,54 +68,21 @@ export class AIDirector {
 
     /**
      * Actualiza la IA (llamado cada frame)
+     * ⚠️ LEGACY REMOVED: El servidor maneja toda la lógica de IA.
+     * El cliente solo debe leer el estado que viene del servidor.
      */
     update(dt) {
-        if (!this.active) return;
+        // ⚠️ LEGACY REMOVED: Todo el código de comportamiento de IA eliminado.
+        // El servidor autoritativo maneja todas las decisiones y acciones de IA.
+        // Este método debe mantenerse vacío o solo para compatibilidad con código legacy.
         
-        // 1. PRIORIDAD MÁX: Amenazas inmediatas (continuo)
-        this.handleImmediateThreats();
-        
-        // 2. Responder a emergencias médicas (continuo)
-        this.respondToMedicalEmergencies();
-        
-        // 3. Reabastecimiento (cada 2s)
-        this.timers.supply += dt;
-        if (this.timers.supply >= this.intervals.supply) {
-            this.timers.supply = 0;
-            this.handleSupply();
+        // Deshabilitar completamente la IA del cliente
+        if (this.active) {
+            console.warn('⚠️ LEGACY: AIDirector.update() llamado - IA del cliente deshabilitada. El servidor maneja todo.');
+            this.active = false;
         }
         
-        // 4. Construcciones estratégicas (cada 8s)
-        this.timers.strategic += dt;
-        if (this.timers.strategic >= this.intervals.strategic) {
-            this.timers.strategic = 0;
-            this.handleStrategicBuilding();
-        }
-        
-        // 5. Decisiones ofensivas (cada 35-45s variable)
-        this.timers.offensive += dt;
-        if (this.timers.offensive >= this.intervals.offensive) {
-            this.timers.offensive = 0;
-            this.intervals.offensive = this.getRandomOffensiveInterval(); // Nuevo intervalo aleatorio
-            this.handleOffensiveDecision();
-        }
-        
-        // 6. Harass con sniper (cada 25s)
-        this.timers.harass += dt;
-        if (this.timers.harass >= this.intervals.harass) {
-            this.timers.harass = 0;
-            this.handleSniperHarass();
-        }
-        
-        // 7. Reporte de estado (cada 30s)
-        this.timers.statusReport += dt;
-        if (this.timers.statusReport >= this.intervals.statusReport) {
-            this.timers.statusReport = 0;
-            this.printStatusReport();
-        }
-        
-        // 8. Iniciativa si jugador inactivo
-        this.checkInitiative();
+        return;
     }
 
     /**

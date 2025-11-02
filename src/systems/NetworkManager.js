@@ -2435,6 +2435,15 @@ export class NetworkManager {
                 });
             }
             
+            // 🆕 SERVIDOR COMO AUTORIDAD: Actualizar radios de construcción (proximidad)
+            if (serverConfig.buildRadii) {
+                Object.keys(serverConfig.buildRadii).forEach(nodeType => {
+                    if (NODE_CONFIG[nodeType]) {
+                        NODE_CONFIG[nodeType].buildRadius = serverConfig.buildRadii[nodeType];
+                    }
+                });
+            }
+            
             // 🆕 SERVIDOR COMO AUTORIDAD: Actualizar radios de detección (CRÍTICO PARA SEGURIDAD)
             if (serverConfig.detectionRadii) {
                 Object.keys(serverConfig.detectionRadii).forEach(nodeType => {

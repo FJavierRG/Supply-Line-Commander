@@ -67,53 +67,13 @@ export class DroneSystem {
     
     /**
      * Actualiza todos los drones activos
+     * ⚠️ LEGACY REMOVED: El servidor maneja toda la lógica de drones.
+     * El cliente solo renderiza las posiciones que vienen del servidor.
      */
     update(dt) {
-        // En multijugador, el servidor maneja toda la lógica de drones
-        if (this.game.isMultiplayer) {
-            return;
-        }
-        
-        for (let i = this.drones.length - 1; i >= 0; i--) {
-            const drone = this.drones[i];
-            
-            if (!drone.active) {
-                this.drones.splice(i, 1);
-                continue;
-            }
-            
-            // Encontrar el objetivo (ahora todo está en nodes)
-            let target = this.game.nodes.find(n => n.id === drone.targetId);
-            
-            if (!target || !target.active) {
-                // Objetivo destruido o no encontrado - detener sonido y eliminar dron
-                this.game.audio.stopDroneSound(drone.id);
-                drone.active = false;
-                continue;
-            }
-            
-            // Mover hacia el objetivo
-            const dx = target.x - drone.x;
-            const dy = target.y - drone.y;
-            const distance = Math.hypot(dx, dy);
-            
-            if (distance < 5) {
-                // IMPACTO - Destruir objetivo
-                this.destroyTarget(target);
-                drone.active = false;
-                // Detener sonido del dron al impactar (usando ID único)
-                this.game.audio.stopDroneSound(drone.id);
-                // Crear cráter pequeño del dron (40% más pequeño)
-                this.createDroneCrater(drone.x, drone.y);
-            } else {
-                // Mover hacia el objetivo
-                const vx = (dx / distance) * drone.speed * dt;
-                const vy = (dy / distance) * drone.speed * dt;
-                
-                drone.x += vx;
-                drone.y += vy;
-            }
-        }
+        // El servidor autoritativo maneja todo el movimiento y colisiones de drones.
+        // El cliente solo renderiza las posiciones que vienen del servidor.
+        // TODO: Eliminar completamente este método o dejar vacío si se necesita para compatibilidad.
     }
     
     /**
@@ -128,8 +88,14 @@ export class DroneSystem {
     
     /**
      * Destruye el objetivo del dron
+     * ⚠️ LEGACY REMOVED: El servidor maneja la destrucción de objetivos.
+     * Este método solo debería usarse para efectos visuales cuando el servidor notifica destrucción.
      */
     destroyTarget(target) {
+        // ⚠️ LEGACY: El servidor debería notificar cuando un objetivo es destruido.
+        // Este método solo debería ejecutarse cuando el servidor envía un evento de destrucción.
+        // Por ahora, mantener solo efectos visuales/audio pero NO modificar el estado del juego.
+        
         // Reproducir sonido de explosión
         this.game.audio.playExplosionSound();
         
@@ -142,12 +108,9 @@ export class DroneSystem {
         // Crear marca de impacto permanente (cráter grande del edificio)
         this.game.particleSystem.createImpactMark(target.x, target.y, 'impact_icon', 1.2); // 120% del tamaño base
         
-        // Eliminar el objetivo del array unificado de nodos
-        const nodeIndex = this.game.nodes.findIndex(n => n.id === target.id);
-        if (nodeIndex !== -1) {
-            this.game.nodes.splice(nodeIndex, 1);
-            console.log(`💥 ${target.name || target.type} destruido por dron!`);
-        }
+        // ⚠️ LEGACY REMOVED: NO eliminar nodos aquí - el servidor maneja esto
+        // El servidor enviará actualización de estado con el nodo eliminado
+        console.log(`💥 ${target.name || target.type} destruido por dron! (visual only - servidor maneja estado)`);
     }
     
     /**

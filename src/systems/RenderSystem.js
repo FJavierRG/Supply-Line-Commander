@@ -1887,19 +1887,25 @@ export class RenderSystem {
             }
         } else {
             // Lógica normal de detección para otros edificios
-            const newDetectionRadius = config?.detectionRadius || (config?.radius || 30) * 2.5;
+            // 🆕 NUEVO: Usar buildRadius si existe (para construcción), o detectionRadius como fallback
+            const buildRadii = this.game?.serverBuildingConfig?.buildRadii || {};
+            const newBuildRadius = buildRadii[buildingType] || 
+                                  config?.detectionRadius || 
+                                  (config?.radius || 30) * 2.5;
             
             for (const node of allNodes) {
                 if (!node.active) continue;
                 
                 const dist = Math.hypot(x - node.x, y - node.y);
                 
-                // Obtener radio de detección del nodo existente
+                // Obtener radio de construcción del nodo existente (usar buildRadius si existe)
                 const existingConfig = getNodeConfig(node.type);
-                const existingDetectionRadius = existingConfig?.detectionRadius || (existingConfig?.radius || 30) * 2.5;
+                const existingBuildRadius = buildRadii[node.type] || 
+                                           existingConfig?.detectionRadius || 
+                                           (existingConfig?.radius || 30) * 2.5;
                 
-                // Verificar colisión: ningún edificio puede estar dentro del área de detección del otro
-                const minSeparation = Math.max(existingDetectionRadius, newDetectionRadius);
+                // Verificar colisión: ningún edificio puede estar dentro del área de construcción del otro
+                const minSeparation = Math.max(existingBuildRadius, newBuildRadius);
                 
                 if (dist < minSeparation) {
                     tooClose = true;

@@ -224,6 +224,7 @@ export class GameStateManager {
                 capacities: this.buildHandler.getBuildingCapacities(),
                 bonuses: this.buildHandler.getBuildingBonuses(),
                 gameplay: this.buildHandler.getGameplayProperties(),
+                buildRadii: this.buildHandler.getBuildRadii(), // 🆕 Radio de construcción (proximidad)
                 detectionRadii: this.buildHandler.getDetectionRadii(),
                 security: this.buildHandler.getSecurityProperties(),
                 behavior: this.buildHandler.getBehaviorProperties()

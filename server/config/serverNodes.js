@@ -119,6 +119,16 @@ export const SERVER_NODE_CONFIG = {
     },
     
     // ═══════════════════════════════════════════════════════════════
+    // RADIOS DE CONSTRUCCIÓN (proximidad para evitar stacking)
+    // ═══════════════════════════════════════════════════════════════
+    buildRadius: {
+        // Radio usado para validar proximidad al construir (evitar stacking)
+        // Si no se define, se usa detectionRadius como fallback
+        vigilanceTower: 130  // 🆕 Torre de Vigilancia: radio de construcción más pequeño (130px)
+        // Otros edificios usan detectionRadius como buildRadius por defecto
+    },
+    
+    // ═══════════════════════════════════════════════════════════════
     // RADIOS DE DETECCIÓN (SERVIDOR COMO AUTORIDAD - CRÍTICO PARA SEGURIDAD)
     // ═══════════════════════════════════════════════════════════════
     detectionRadius: {
@@ -134,7 +144,7 @@ export const SERVER_NODE_CONFIG = {
         intelRadio: 120,       // Valor original (sin +15%)
         intelCenter: 130,      // 🆕 Centro de Inteligencia
         aerialBase: 130,        // 🆕 Base Aérea
-        vigilanceTower: 280     // 🆕 Torre de Vigilancia (radio de protección - doble del original)
+        vigilanceTower: 280     // 🆕 Torre de Vigilancia (radio de protección para comandos - 280px)
     },
     
     // Radios base para fallback si no se define detectionRadius

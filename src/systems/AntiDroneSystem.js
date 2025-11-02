@@ -17,14 +17,20 @@ export class AntiDroneSystem {
     
     /**
      * Actualiza todos los edificios anti-drone
+     * ⚠️ LEGACY REMOVED: El servidor maneja toda la lógica de combate anti-drone.
+     * El cliente solo renderiza los efectos visuales cuando el servidor notifica un disparo.
      * @param {number} dt - Delta time en milisegundos
      */
     update(dt) {
-        // Actualizar lista de edificios anti-drone activos
+        // El servidor autoritativo maneja toda la detección y combate anti-drone.
+        // El cliente solo renderiza efectos visuales cuando el servidor envía eventos de disparo.
+        // TODO: Mantener solo la lógica de renderizado/efectos visuales si es necesaria.
+        
+        // Actualizar lista de edificios anti-drone activos (solo para renderizado)
         this.updateAntiDroneBuildings();
         
-        // Verificar drones enemigos para cada edificio
-        this.checkForDrones();
+        // ⚠️ LEGACY REMOVED: NO verificar drones ni disparar aquí - el servidor maneja esto
+        // El servidor enviará eventos cuando un anti-drone dispare y destruya un drone
     }
     
     /**
@@ -181,15 +187,21 @@ export class AntiDroneSystem {
     
     /**
      * Dispara contra un drone y lo destruye
+     * ⚠️ LEGACY REMOVED: El servidor maneja la lógica de disparo y destrucción.
+     * Este método solo debería usarse para efectos visuales cuando el servidor notifica un disparo.
      * @param {Building} building - Edificio que dispara
      * @param {Object} drone - Drone a destruir
      */
     shootDrone(building, drone) {
-        // Marcar cooldown
+        // ⚠️ LEGACY: El servidor debería notificar cuando un anti-drone dispara.
+        // Este método solo debería ejecutarse cuando el servidor envía un evento de disparo.
+        // Por ahora, mantener solo efectos visuales/audio pero NO modificar el estado del juego.
+        
+        // Marcar cooldown (solo visual para UI)
         this.lastShotTimes.set(building.id, Date.now());
         
-        // Destruir el drone
-        drone.active = false;
+        // ⚠️ LEGACY REMOVED: NO modificar estado del drone aquí - el servidor maneja esto
+        // El servidor enviará actualización de estado con el drone eliminado
         
         // Detener sonido del dron al ser destruido (usando ID único)
         this.game.audio.stopDroneSound(drone.id);
@@ -212,10 +224,10 @@ export class AntiDroneSystem {
         // Sonido de disparo anti-drone
         this.game.audio.playBomShootSound();
         
-        console.log(`🎯 Anti-dron destruyó un drone enemigo`);
+        console.log(`🎯 Anti-dron destruyó un drone enemigo (visual only - servidor maneja estado)`);
         
-        // Destruir el edificio anti-drone (se consume al disparar)
-        this.destroyAntiDroneBuilding(building);
+        // ⚠️ LEGACY REMOVED: NO destruir edificio aquí - el servidor maneja esto
+        // El servidor enviará actualización de estado cuando el edificio se consuma
     }
     
     /**
@@ -247,10 +259,16 @@ export class AntiDroneSystem {
     
     /**
      * Destruye el edificio anti-drone después del disparo
+     * ⚠️ LEGACY REMOVED: El servidor maneja la destrucción de edificios.
+     * Este método solo debería usarse para efectos visuales cuando el servidor notifica destrucción.
      * @param {Building} building - Edificio a destruir
      */
     destroyAntiDroneBuilding(building) {
-        // Limpiar flags del edificio
+        // ⚠️ LEGACY: El servidor debería notificar cuando un edificio anti-drone se consume.
+        // Este método solo debería ejecutarse cuando el servidor envía un evento de destrucción.
+        // Por ahora, mantener solo efectos visuales/audio pero NO modificar el estado del juego.
+        
+        // Limpiar flags del edificio (solo visual para UI)
         this.alertSoundPlayed.delete(building.id);
         this.lastShotTimes.delete(building.id);
         
@@ -266,13 +284,9 @@ export class AntiDroneSystem {
         // Sonido de explosión del edificio
         this.game.audio.playSound('explosion');
         
-        // Eliminar del array de nodos
-        const index = this.game.nodes.indexOf(building);
-        if (index > -1) {
-            this.game.nodes.splice(index, 1);
-        }
-        
-        console.log(`Edificio anti-dron consumido tras el disparo`);
+        // ⚠️ LEGACY REMOVED: NO eliminar nodos aquí - el servidor maneja esto
+        // El servidor enviará actualización de estado con el nodo eliminado
+        console.log(`Edificio anti-dron consumido tras el disparo (visual only - servidor maneja estado)`);
     }
     
     /**

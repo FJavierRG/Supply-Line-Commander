@@ -6,6 +6,7 @@ export class ArsenalManager {
         this.assetManager = assetManager;
         this.game = game;
         this.isVisible = false;
+        this.openedFromMenu = false; // Track si se abrió desde el menú principal
         
         this.setupEventListeners();
     }
@@ -13,7 +14,11 @@ export class ArsenalManager {
     setupEventListeners() {
         const arsenalBtn = document.getElementById('arsenal-btn');
         if (arsenalBtn) {
-            arsenalBtn.addEventListener('click', () => this.show());
+            arsenalBtn.addEventListener('click', () => {
+                // Marcar que se abrió desde el menú si el menú está visible
+                this.openedFromMenu = this.game.overlayManager.isOverlayVisible('main-menu-overlay');
+                this.show();
+            });
         }
         
         const backBtn = document.getElementById('arsenal-back-btn');
@@ -24,6 +29,10 @@ export class ArsenalManager {
     
     show() {
         this.isVisible = true;
+        // Ocultar el menú principal si está visible (cuando se abre desde el menú)
+        if (this.game.overlayManager.isOverlayVisible('main-menu-overlay')) {
+            this.game.overlayManager.hideOverlay('main-menu-overlay');
+        }
         this.game.overlayManager.showOverlay('arsenal-overlay');
         this.populateArsenal();
     }
@@ -31,6 +40,11 @@ export class ArsenalManager {
     hide() {
         this.isVisible = false;
         this.game.overlayManager.hideOverlay('arsenal-overlay');
+        // Si se abrió desde el menú y estamos en estado menu, volver a mostrar el menú
+        if (this.openedFromMenu && this.game.state === 'menu') {
+            this.game.overlayManager.showOverlay('main-menu-overlay');
+        }
+        this.openedFromMenu = false; // Reset flag
     }
     
     populateArsenal() {

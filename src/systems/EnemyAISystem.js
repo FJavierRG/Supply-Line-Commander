@@ -156,91 +156,22 @@ export class EnemyAISystem {
     
     /**
      * Actualiza la IA enemiga
+     * ⚠️ LEGACY REMOVED: El servidor maneja toda la lógica de IA enemiga.
+     * El cliente solo debe leer el estado que viene del servidor.
      * Cada comportamiento tiene su propio intervalo (APM simulado)
      */
     update(dt) {
-        if (!this.enabled) return;
+        // ⚠️ LEGACY REMOVED: Todo el código de comportamiento de IA eliminado.
+        // El servidor autoritativo maneja todas las decisiones y acciones de IA.
+        // Este método debe mantenerse vacío o solo para compatibilidad con código legacy.
         
-        // Actualizar currency pasiva del enemigo
-        this.updateCurrency(dt);
-        
-        // Obtener nodos enemigos (una sola vez)
-        const enemyHQ = this.getEnemyHQ();
-        const enemyFOBs = this.getEnemyFOBs();
-        const enemyFronts = this.getEnemyFronts();
-        
-        if (!enemyHQ) return;
-        
-        // === COMPORTAMIENTO 1: Comprobar FOBs cada 2 segundos ===
-        this.fobCheckTimer += dt;
-        if (this.fobCheckTimer >= this.fobCheckInterval) {
-            this.fobCheckTimer = 0;
-            this.ruleResupplyFOBs(enemyHQ, enemyFOBs);
+        // Deshabilitar completamente la IA del cliente
+        if (this.enabled) {
+            console.warn('⚠️ LEGACY: EnemyAISystem.update() llamado - IA del cliente deshabilitada. El servidor maneja todo.');
+            this.enabled = false;
         }
         
-        // === COMPORTAMIENTO 2: Comprobar Frentes cada 3 segundos ===
-        this.frontCheckTimer += dt;
-        if (this.frontCheckTimer >= this.frontCheckInterval) {
-            this.frontCheckTimer = 0;
-            this.ruleResupplyFronts(enemyHQ, enemyFOBs, enemyFronts);
-        }
-        
-        // === COMPORTAMIENTO 3: Reaccionar al jugador ===
-        // Amenazas económicas/médicas: CADA FRAME (inmediato)
-        // Otras reacciones: cada 2.5s
-        this.ruleReactToPlayer();
-        
-        // === COMPORTAMIENTO 4: EMERGENCIA - Construir FOB si tiene 0 FOBs (cada 3s) ===
-        this.emergencyFobCheckTimer += dt;
-        if (this.emergencyFobCheckTimer >= this.emergencyFobCheckInterval) {
-            this.emergencyFobCheckTimer = 0;
-            const hasEmergency = this.ruleEmergencyFOB();
-            
-            // Si hubo emergencia y se construyó, no hacer más en este ciclo
-            if (hasEmergency) {
-            return;
-        }
-        }
-        
-        // === COMPORTAMIENTO 5: Harass con sniper cada 25 segundos (early game) ===
-        this.harassCheckTimer += dt;
-        if (this.harassCheckTimer >= this.harassCheckInterval) {
-            this.harassCheckTimer = 0;
-            this.ruleSniperHarass();
-        }
-        
-        // === COMPORTAMIENTO 6: Ataque ofensivo programado cada 40 segundos ===
-        this.offensiveCheckTimer += dt;
-        if (this.offensiveCheckTimer >= this.offensiveCheckInterval) {
-            this.offensiveCheckTimer = 0;
-            this.ruleOffensiveStrike();
-        }
-        
-        // === COMPORTAMIENTO 7: Construcciones estratégicas cada 8 segundos ===
-        this.buildCheckTimer += dt;
-        if (this.buildCheckTimer >= this.buildCheckInterval) {
-            this.buildCheckTimer = 0;
-            this.ruleStrategicBuilding();
-        }
-        
-        // === COMPORTAMIENTO 8: Truck Factory automática cada 3 minutos ===
-        this.truckFactoryTimer += dt;
-        if (this.truckFactoryTimer >= this.truckFactoryInterval) {
-            this.truckFactoryTimer = 0;
-            this.spawnEnemyTruckFactory();
-        }
-        
-        // === COMPORTAMIENTO 9: Responder a emergencias médicas (CONTINUO, CADA FRAME) ===
-        // NOTA: Las emergencias se crean en MedicalEmergencySystem (sistema global)
-        // La IA solo RESPONDE a emergencias, no las crea
-        this.respondToMedicalEmergencies();
-        
-        // === REPORTE DE ESTADO: Cada 30 segundos ===
-        this.statusReportTimer += dt;
-        if (this.statusReportTimer >= this.statusReportInterval) {
-            this.statusReportTimer = 0;
-            this.printStatusReport();
-        }
+        return;
     }
     
     /**

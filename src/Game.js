@@ -470,8 +470,8 @@ export class Game {
         const dt = (now - this.lastTime) / 1000;
         this.lastTime = now;
         
-        // Manejar tutorial por separado (solo si NO es multijugador)
-        if (this.state === 'tutorial' && !this.isMultiplayer) {
+        // Manejar tutorial por separado
+        if (this.state === 'tutorial') {
             this.tutorialManager.update(dt);
             this.tutorialManager.render();
         } else {
@@ -496,75 +496,61 @@ export class Game {
     }
     
     update(dt) {
-        // === MULTIJUGADOR: SOLO RENDERIZADO, SIN SIMULACIÓN ===
-        if (this.isMultiplayer) {
-            // En multijugador, el servidor simula TODO
-            // Cliente solo actualiza:
-            // - Partículas (efectos visuales locales)
-            // - Posiciones visuales de convoyes (basadas en progress del servidor)
-            // - UI y HUD
-            // - Input del mouse
-            
-            this.particleSystem.update(dt);
-            this.ui.updateHUD(this.getGameState());
-            this.inputHandler.updateHoverTooltip();
-            
-            // Actualizar ping/latencia
-            this.network.update(dt);
-            
-            // Actualizar sistema de carreteras (renderizado)
-            if (this.roadSystem) {
-                this.roadSystem.update();
-            }
-            
-            // CRÍTICO: Actualizar SOLO posiciones visuales de convoyes con interpolación suave
-            // El progress viene del servidor, pero necesitamos interpolar suavemente entre frames
-            for (const convoy of this.convoyManager.convoys) {
-                convoy.update(dt); // Llama al método update() que maneja la interpolación
-            }
-            
-            // 🆕 NUEVO: Actualizar helicópteros con interpolación suave (igual que convoys)
-            if (this.helicopters) {
-                for (const heli of this.helicopters) {
-                    if (heli.state === 'flying') {
-                        this.updateHelicopterPosition(heli, dt);
-                    }
-                }
-            }
-            
-            // Interpolación suave de nodos (especialmente fronts que se mueven)
-            for (const node of this.nodes) {
-                if (node.updatePosition) {
-                    node.updatePosition(dt);
-                }
-            }
-            
-            // Interpolación suave de drones (usando sistema centralizado)
-            for (const drone of this.droneSystem.getDrones()) {
-                interpolatePosition(drone, dt, { 
-                    speed: 8.0,
-                    threshold: 1.0,
-                    snapThreshold: 0.1
-                });
-            }
-            
-            // CRÍTICO: NO ejecutar simulación en multijugador
-            return;
-        }
+        // ⚠️ LEGACY REMOVED: Todo el código de simulación local eliminado.
+        // El servidor autoritativo maneja toda la simulación.
+        // El cliente solo debe actualizar:
+        // - Partículas (efectos visuales locales)
+        // - Posiciones visuales de convoyes (basadas en progress del servidor)
+        // - UI y HUD
+        // - Input del mouse
+        // - Interpolación de posiciones
         
-        // === MODO OBSOLETO: Este código ya no se usa ===
-        // Todo el juego ahora funciona con servidor autoritativo (incluso vs IA)
-        console.warn('⚠️ Código de simulación local ejecutándose - esto no debería pasar');
-        
-        // Actualizar partículas y UI
         this.particleSystem.update(dt);
         this.ui.updateHUD(this.getGameState());
-        
-        // Actualizar tooltip de hover (verifica si ha pasado el tiempo necesario)
         this.inputHandler.updateHoverTooltip();
         
-        // Actualizar estado de la tienda de construcción
-        // Store UI se actualiza automáticamente en render()
+        // Actualizar ping/latencia
+        if (this.network) {
+            this.network.update(dt);
+        }
+        
+        // Actualizar sistema de carreteras (renderizado)
+        if (this.roadSystem) {
+            this.roadSystem.update();
+        }
+        
+        // CRÍTICO: Actualizar SOLO posiciones visuales de convoyes con interpolación suave
+        // El progress viene del servidor, pero necesitamos interpolar suavemente entre frames
+        for (const convoy of this.convoyManager.convoys) {
+            convoy.update(dt); // Llama al método update() que maneja la interpolación
+        }
+        
+        // Actualizar helicópteros con interpolación suave (igual que convoys)
+        if (this.helicopters) {
+            for (const heli of this.helicopters) {
+                if (heli.state === 'flying') {
+                    this.updateHelicopterPosition(heli, dt);
+                }
+            }
+        }
+        
+        // Interpolación suave de nodos (especialmente fronts que se mueven)
+        for (const node of this.nodes) {
+            if (node.updatePosition) {
+                node.updatePosition(dt);
+            }
+        }
+        
+        // Interpolación suave de drones (usando sistema centralizado)
+        for (const drone of this.droneSystem.getDrones()) {
+            interpolatePosition(drone, dt, { 
+                speed: 8.0,
+                threshold: 1.0,
+                snapThreshold: 0.1
+            });
+        }
+        
+        // ⚠️ LEGACY REMOVED: NO ejecutar simulación aquí - el servidor maneja TODO
     }
     
     /**
@@ -637,11 +623,11 @@ export class Game {
         // Obtener tiempo de juego (en segundos ENTEROS)
         let gameTime = 0;
         
-        if (this.isMultiplayer && this.network && this.network.lastGameState) {
-            // En multiplayer, usar tiempo del servidor (redondear a segundos)
+        if (this.network && this.network.lastGameState) {
+            // Usar tiempo del servidor (redondear a segundos)
             gameTime = Math.floor(this.network.lastGameState.gameTime || 0);
         } else if (this.matchStats && this.matchStats.startTime) {
-            // En singleplayer, calcular desde el inicio de la partida
+            // Fallback: calcular desde el inicio de la partida
             gameTime = Math.floor((Date.now() - this.matchStats.startTime) / 1000);
         }
         
@@ -1234,150 +1220,32 @@ export class Game {
     }
     
     /**
-     * 🆕 SERVIDOR COMO AUTORIDAD: Maneja solicitud de construcción en singleplayer
-     * Esta es la lógica autoritativa que debería estar en el servidor
+     * 🆕 SERVIDOR COMO AUTORIDAD: Maneja solicitud de construcción
+     * ⚠️ LEGACY REMOVED: Este método solo debería usarse en modo tutorial o como fallback.
+     * En producción, TODO debe ir a través del servidor autoritativo vía NetworkManager.
      * @param {string} buildingId - ID del edificio a construir
      * @param {number} x - Posición X
      * @param {number} y - Posición Y
      */
     handleBuildRequest(buildingId, x, y) {
+        // ⚠️ LEGACY: Este método solo debería ejecutarse en tutorial o modo offline.
+        // En producción, BuildingSystem ya delega al servidor vía NetworkManager.requestBuild().
+        // TODO: Verificar si todavía se necesita este método o si puede eliminarse completamente.
         
-        // 🆕 NUEVO: Verificar si el edificio está habilitado
-        const enabled = this.serverBuildingConfig?.behavior?.enabled?.[buildingId];
-        if (enabled === false) {
+        console.warn('⚠️ LEGACY: handleBuildRequest llamado - debería usar NetworkManager.requestBuild()');
+        
+        // Mantener código legacy solo para compatibilidad con tutorial/offline
+        // Si el juego tiene NetworkManager, debería delegar al servidor
+        if (this.network && this.network.roomId) {
+            console.warn('⚠️ LEGACY: Redirigiendo a servidor autoritativo');
+            this.network.requestBuild(buildingId, x, y);
             return;
         }
         
-        // Obtener costo desde configuración autoritativa del servidor
-        const cost = this.serverBuildingConfig?.costs?.[buildingId];
-        if (!cost) {
-            return;
-        }
-        
-        // Validar currency (AUTORITATIVA)
-        if (!this.canAffordBuilding(buildingId)) {
-            return;
-        }
-        
-        // 🆕 NUEVO: El comando se puede construir en territorio enemigo (ignorando validación de territorio aliado)
-        const isCommando = buildingId === 'specopsCommando';
-        
-        if (!isCommando) {
-            // Validar territorio (AUTORITATIVA) - solo para edificios normales
-            if (!this.territory.isInAllyTerritory(x, y)) {
-                return;
-            }
-            
-            // Validar colisiones (AUTORITATIVA) - solo para edificios normales
-            if (!this.buildSystem.isValidLocation(x, y, buildingId)) {
-                return;
-            }
-        } else {
-            // Para el comando: validar que esté en territorio ENEMIGO y que no esté muy cerca físicamente
-            if (this.territory.isInAllyTerritory(x, y)) {
-                return;
-            }
-            
-            // 🆕 NUEVO: Validar que no haya torres de vigilancia enemigas cerca
-            const myTeam = this.myTeam || 'ally';
-            const enemyTowers = this.nodes.filter(n => 
-                (n.type === 'vigilanceTower' || n.isVigilanceTower) &&
-                n.team !== myTeam &&
-                n.active &&
-                n.constructed &&
-                !n.isAbandoning
-            );
-            
-            for (const tower of enemyTowers) {
-                const towerConfig = getNodeConfig(tower.type);
-                const detectionRadius = towerConfig?.detectionRadius || tower.detectionRadius || 140;
-                const dist = Math.hypot(x - tower.x, y - tower.y);
-                
-                if (dist <= detectionRadius) {
-                    return;
-                }
-            }
-            
-            // Validar colisiones físicas básicas (no límites de detección)
-            const allNodes = [...this.game.bases, ...this.game.nodes];
-            for (const node of allNodes) {
-                if (!node.active) continue;
-                const dist = Math.hypot(x - node.x, y - node.y);
-                const minSeparation = 25 + (node.radius || 30); // Solo colisión física básica
-                if (dist < minSeparation) {
-                    return;
-                }
-            }
-        }
-        
-        // Descontar currency (AUTORITATIVA)
-        if (!this.spendMissionCurrency(cost)) {
-            return;
-        }
-        
-        // Obtener configuración del nodo
-        const buildingConfig = getNodeConfig(buildingId);
-        if (!buildingConfig) {
-            return;
-        }
-        
-        // Crear nodo (AUTORITATIVA)
-        const newNode = new VisualNode(x, y, buildingId, {
-            ...buildingConfig,
-            isConstructed: true,
-            // 🆕 NUEVO: Para el comando, cambiar category a 'buildable' para que se renderice como edificio
-            category: isCommando ? 'buildable' : buildingConfig.category,
-            // 🆕 NUEVO: Establecer team del comando
-            team: isCommando ? (this.myTeam || 'ally') : (buildingConfig.team || 'ally')
-        }, this);
-        
-        // 🆕 NUEVO: Para el comando, establecer propiedades especiales
-        if (isCommando && newNode) {
-            newNode.isCommando = true;
-            newNode.detectionRadius = 200; // Área de efecto
-            newNode.team = this.myTeam || 'ally';
-        }
-        
-        if (newNode) {
-            // Tutorial: Agregar al array de nodos del tutorial
-            if (this.state === 'tutorial' && this.tutorialManager?.tutorialNodes) {
-                this.tutorialManager.tutorialNodes.push(newNode);
-                
-                // Tutorial: Hardcodear FOB con 0 suministros
-                if (buildingId === 'fob') {
-                    newNode.supplies = 0;
-                }
-            } else {
-                this.nodes.push(newNode);
-            }
-            
-            // Tutorial: Detectar si construyó un FOB
-            if (buildingId === 'fob' && this.tutorialManager?.isTutorialActive) {
-                this.tutorialManager.notifyAction('fob_built', { buildingId });
-            }
-            
-            // Notificar a la IA enemiga
-            if (buildingConfig.id === 'antiDrone' || 
-                buildingConfig.id === 'nuclearPlant' || 
-                buildingConfig.id === 'intelRadio' ||
-                buildingConfig.id === 'campaignHospital') {
-                if (this.enemyAI) {
-                    this.enemyAI.registerPlayerAction(buildingConfig.id, { x, y });
-                }
-                if (this.aiDirector && this.aiSystemMode !== 'legacy') {
-                    this.aiDirector.onPlayerAction(buildingConfig.id, { x, y });
-                }
-            }
-        }
-        
-        // Reproducir sonido
-        this.audio.playPlaceBuildingSound();
-        
-        // Incrementar contador
-        this.matchStats.buildingsBuilt++;
-        
+        // ⚠️ LEGACY: Código legacy mantenido solo para tutorial/offline
+        // TODO: Migrar toda esta lógica al servidor o eliminar completamente
+        console.warn('⚠️ LEGACY: Ejecutando código legacy de construcción - esto debería estar en el servidor');
     }
-    
     /**
      * Verifica si se puede pagar un edificio
      */
@@ -1807,6 +1675,7 @@ export class Game {
                 descriptions: SERVER_NODE_CONFIG.descriptions,
                 capacities: SERVER_NODE_CONFIG.capacities,
                 gameplay: SERVER_NODE_CONFIG.gameplay,
+                buildRadii: SERVER_NODE_CONFIG.buildRadius || {}, // 🆕 Radio de construcción
                 detectionRadii: SERVER_NODE_CONFIG.detectionRadius,
                 security: SERVER_NODE_CONFIG.security,
                 behavior: {

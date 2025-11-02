@@ -31,34 +31,14 @@ export class FrontMovementSystem {
     
     /**
      * Actualiza el movimiento de todos los frentes (aliados y enemigos)
+     * ⚠️ LEGACY REMOVED: El servidor maneja toda la lógica de movimiento de frentes.
+     * El cliente solo renderiza las posiciones que vienen del servidor.
      * @param {number} deltaTime - Tiempo transcurrido en milisegundos
      */
     update(deltaTime) {
-        // En multijugador, el servidor maneja todo el movimiento de frentes
-        if (this.game.isMultiplayer) {
-            return;
-        }
-        
-        const myTeam = this.game.myTeam || 'ally';
-        const allyFronts = this.game.bases.filter(b => b.type === 'front' && b.team === myTeam);
-        const enemyFronts = this.game.bases.filter(b => b.type === 'front' && b.team !== myTeam && b.type === 'front');
-        
-        // Actualizar frentes aliados (avanzan a la derecha)
-        for (const front of allyFronts) {
-            this.updateAllyFrontMovement(front, deltaTime);
-        }
-        
-        // Actualizar frentes enemigos (avanzan a la izquierda - ESPEJO)
-        for (const enemyFront of enemyFronts) {
-            this.updateEnemyFrontMovement(enemyFront, deltaTime);
-        }
-        
-        // Verificar condiciones de victoria/derrota cada 2 segundos (optimización)
-        this.victoryCheckTimer += deltaTime;
-        if (this.victoryCheckTimer >= this.victoryCheckInterval) {
-            this.checkVictoryConditions();
-            this.victoryCheckTimer = 0; // Reset timer
-        }
+        // El servidor autoritativo maneja todo el movimiento de frentes.
+        // El cliente solo renderiza las posiciones que vienen del servidor.
+        // TODO: Eliminar completamente este método o dejar vacío si se necesita para compatibilidad.
     }
     
     /**

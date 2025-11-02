@@ -17,22 +17,17 @@ export class CurrencyManager {
     
     /**
      * Actualiza la currency pasiva (generación constante)
+     * ⚠️ LEGACY REMOVED: El servidor maneja toda la generación de currency.
+     * El cliente solo debe leer la currency que viene del estado del servidor.
      * @param {number} dt - Delta time en segundos
      */
     updatePassiveCurrency(dt) {
-        // Calcular bonus de plantas nucleares
-        const nuclearBonus = this.getNuclearPlantBonus();
-        const passiveRate = this.game?.serverBuildingConfig?.currency?.passiveRate || 3;
-        const totalRate = passiveRate + nuclearBonus;
+        // ⚠️ LEGACY REMOVED: El servidor autoritativo maneja toda la generación de currency.
+        // El cliente solo debe leer la currency que viene del estado del servidor.
+        // Este método debe mantenerse vacío o solo para compatibilidad con código legacy.
         
-        this.passiveCurrencyAccumulator += dt * totalRate;
-        
-        // Cuando acumulamos al menos 1, otorgar currency
-        if (this.passiveCurrencyAccumulator >= 1) {
-            const currencyToAdd = Math.floor(this.passiveCurrencyAccumulator);
-            this.missionCurrency += currencyToAdd;
-            this.passiveCurrencyAccumulator -= currencyToAdd;
-        }
+        // NO calcular currency aquí - el servidor maneja esto
+        // La currency debe venir del estado del servidor vía NetworkManager.applyGameState()
     }
     
     /**
@@ -58,18 +53,30 @@ export class CurrencyManager {
     
     /**
      * Añade currency temporal de la misión (por avance de terreno)
+     * ⚠️ LEGACY REMOVED: El servidor maneja todos los cambios de currency.
+     * Este método solo debería usarse cuando el servidor notifica cambios.
      * @param {number} amount - Cantidad a añadir
      */
     add(amount) {
+        // ⚠️ LEGACY: El servidor debería notificar cuando la currency cambia.
+        // Este método solo debería ejecutarse cuando el servidor envía actualización de currency.
+        // Por ahora, mantener para compatibilidad pero agregar warning.
+        console.warn('⚠️ LEGACY: CurrencyManager.add() llamado - debería venir del servidor');
         this.missionCurrency += amount;
     }
     
     /**
      * Gasta currency temporal de la misión
+     * ⚠️ LEGACY REMOVED: El servidor maneja todos los gastos de currency.
+     * Este método solo debería usarse para validación local o efectos visuales.
      * @param {number} amount - Cantidad a gastar
      * @returns {boolean} true si se pudo gastar, false si no hay suficiente
      */
     spend(amount) {
+        // ⚠️ LEGACY: El servidor debería validar y ejecutar todos los gastos.
+        // Este método solo debería usarse para validación local o efectos visuales.
+        // NO debería modificar el estado real - el servidor es la autoridad.
+        console.warn('⚠️ LEGACY: CurrencyManager.spend() llamado - debería validarse en el servidor');
         if (this.missionCurrency >= amount) {
             this.missionCurrency -= amount;
             return true;
