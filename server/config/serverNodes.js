@@ -383,7 +383,7 @@ export const SERVER_NODE_CONFIG = {
             disableDuration: -1    // -1 = permanente hasta que el comando sea destruido
         },
         
-        // Propiedades de UI/comportamiento críticas
+        // Activar / Desactivar nodos por completo, usar para dev y testing
         enabled: {
             hq: true,
             fob: true,
@@ -399,7 +399,7 @@ export const SERVER_NODE_CONFIG = {
             intelRadio: true,
             intelCenter: true,    // 🆕 Centro de Inteligencia - desbloquea comandos
             aerialBase: true,
-            vigilanceTower: true  // 🆕 Torre de Vigilancia - counterea comandos
+            vigilanceTower: false  // 🆕 Torre de Vigilancia - counterea comandos
         },
         
         // Propiedades de comportamiento
