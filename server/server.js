@@ -55,7 +55,41 @@ console.log('📁 Directorio src existe:', existsSync(srcDir));
 console.log('📁 index.html existe:', existsSync(indexHtmlPath));
 console.log('📁 src/entities/convoy.js existe:', existsSync(convoyPath));
 
-// Middleware para servir archivos estáticos con headers correctos para ES modules
+// CRÍTICO: Servir archivos estáticos PRIMERO, antes de cualquier otro middleware
+app.use(express.static(rootDir, {
+    // Asegurar que los módulos ES6 se sirvan correctamente
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        }
+        // Headers adicionales para CORS en archivos estáticos
+        res.setHeader('Access-Control-Allow-Origin', '*');
+    },
+    // Fallthrough: si no encuentra el archivo, continuar al siguiente middleware
+    fallthrough: true
+}));
+
+// Middleware para logging de archivos estáticos solicitados (solo en producción para debug)
+app.use((req, res, next) => {
+    // Loggear solo archivos .js que no sean de API
+    if (req.path.endsWith('.js') && !req.path.startsWith('/api/')) {
+        const requestedPath = path.join(rootDir, req.path);
+        const exists = existsSync(requestedPath);
+        if (!exists) {
+            console.log(`❌ 404: ${req.path}`);
+            console.log(`   Ruta completa: ${requestedPath}`);
+            console.log(`   Directorio raíz: ${rootDir}`);
+            // Intentar con diferentes variaciones de casing
+            const pathLower = requestedPath.toLowerCase();
+            const pathUpper = requestedPath.toUpperCase();
+            console.log(`   ¿Existe en minúsculas?: ${existsSync(pathLower)}`);
+            console.log(`   ¿Existe en mayúsculas?: ${existsSync(pathUpper)}`);
+        }
+    }
+    next();
+});
+
+// Middleware para headers adicionales en archivos estáticos
 app.use((req, res, next) => {
     // Si es un archivo .js, asegurar que tenga el header correcto para módulos ES6
     if (req.path.endsWith('.js')) {
@@ -64,29 +98,22 @@ app.use((req, res, next) => {
     next();
 });
 
-// Middleware de logging para debugging de archivos estáticos
-app.use((req, res, next) => {
-    // Solo loggear archivos .js para debugging
-    if (req.path.endsWith('.js') && !req.path.startsWith('/api/')) {
-        const requestedPath = path.join(rootDir, req.path);
-        const exists = existsSync(requestedPath);
-        if (!exists) {
-            console.log(`⚠️ Archivo JS no encontrado: ${req.path}`);
-            console.log(`   Ruta completa: ${requestedPath}`);
-            console.log(`   Directorio raíz: ${rootDir}`);
+// Middleware de logging para debugging de archivos estáticos (solo en desarrollo)
+if (process.env.NODE_ENV !== 'production') {
+    app.use((req, res, next) => {
+        // Solo loggear archivos .js para debugging
+        if (req.path.endsWith('.js') && !req.path.startsWith('/api/')) {
+            const requestedPath = path.join(rootDir, req.path);
+            const exists = existsSync(requestedPath);
+            if (!exists) {
+                console.log(`⚠️ Archivo JS no encontrado: ${req.path}`);
+                console.log(`   Ruta completa: ${requestedPath}`);
+                console.log(`   Directorio raíz: ${rootDir}`);
+            }
         }
-    }
-    next();
-});
-
-app.use(express.static(rootDir, {
-    // Asegurar que los módulos ES6 se sirvan correctamente
-    setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.js')) {
-            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-        }
-    }
-}));
+        next();
+    });
+}
 
 // Configurar Socket.IO con CORS más permisivo
 const io = new Server(httpServer, {
@@ -121,7 +148,12 @@ app.get('/', (req, res) => {
         });
     } else {
         // Servir index.html para el juego
-        res.sendFile(path.join(__dirname, '..', 'index.html'));
+        const indexPath = path.join(__dirname, '..', 'index.html');
+        if (existsSync(indexPath)) {
+            res.sendFile(indexPath);
+        } else {
+            res.status(404).send('index.html no encontrado');
+        }
     }
 });
 
@@ -148,13 +180,21 @@ app.get('*', (req, res, next) => {
         return next();
     }
     
-    // Si es un archivo estático (con extensión), continuar al middleware de static
+    // Si es un archivo estático (con extensión), el middleware de static ya lo maneja
+    // Si llegamos aquí y es un archivo estático, significa que no se encontró
     if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot)$/)) {
-        return next();
+        // El archivo no existe, devolver 404
+        res.status(404).send(`Archivo no encontrado: ${req.path}`);
+        return;
     }
     
     // Para cualquier otra ruta, servir index.html (SPA routing)
-    res.sendFile(path.join(__dirname, '..', 'index.html'));
+    const indexPath = path.join(__dirname, '..', 'index.html');
+    if (existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).send('index.html no encontrado');
+    }
 });
 
 // ===== SOCKET.IO EVENTOS =====
