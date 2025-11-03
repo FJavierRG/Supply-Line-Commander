@@ -69,9 +69,18 @@ app.use(express.static(rootDir, {
     fallthrough: true
 }));
 
-// Middleware para logging de archivos estáticos solicitados (solo en producción para debug)
+// Middleware para headers adicionales en archivos estáticos
 app.use((req, res, next) => {
-    // Loggear solo archivos .js que no sean de API
+    // Si es un archivo .js, asegurar que tenga el header correcto para módulos ES6
+    if (req.path.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    }
+    next();
+});
+
+// Middleware de logging para debugging de archivos estáticos (siempre activo para Railway)
+app.use((req, res, next) => {
+    // Loggear solo archivos .js que no sean de API y devuelvan 404
     if (req.path.endsWith('.js') && !req.path.startsWith('/api/')) {
         const requestedPath = path.join(rootDir, req.path);
         const exists = existsSync(requestedPath);
@@ -88,32 +97,6 @@ app.use((req, res, next) => {
     }
     next();
 });
-
-// Middleware para headers adicionales en archivos estáticos
-app.use((req, res, next) => {
-    // Si es un archivo .js, asegurar que tenga el header correcto para módulos ES6
-    if (req.path.endsWith('.js')) {
-        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-    }
-    next();
-});
-
-// Middleware de logging para debugging de archivos estáticos (solo en desarrollo)
-if (process.env.NODE_ENV !== 'production') {
-    app.use((req, res, next) => {
-        // Solo loggear archivos .js para debugging
-        if (req.path.endsWith('.js') && !req.path.startsWith('/api/')) {
-            const requestedPath = path.join(rootDir, req.path);
-            const exists = existsSync(requestedPath);
-            if (!exists) {
-                console.log(`⚠️ Archivo JS no encontrado: ${req.path}`);
-                console.log(`   Ruta completa: ${requestedPath}`);
-                console.log(`   Directorio raíz: ${rootDir}`);
-            }
-        }
-        next();
-    });
-}
 
 // Configurar Socket.IO con CORS más permisivo
 const io = new Server(httpServer, {
