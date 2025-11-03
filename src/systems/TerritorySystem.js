@@ -1,4 +1,6 @@
-// ===== SISTEMA DE CONTROL DE TERRITORIO (FRONTERA DINÁMICA) =====
+// ===== SISTEMA DE CONTROL DE TERRITORIO (FRONTERA DINÁMICA) - SOLO VISUAL =====
+// ⚠️ IMPORTANTE: Este sistema SOLO renderiza el territorio.
+// NO detecta ni ejecuta abandono de edificios - el servidor es la autoridad.
 
 // Configuración de territorio
 const TERRITORY_CONFIG = {
@@ -27,9 +29,8 @@ export class TerritorySystem {
         this.allyInitialized = false;
         this.enemyInitialized = false;
         
-        // Sistema de abandono de FOBs
-        this.checkAbandonmentTimer = 0;
-        this.checkAbandonmentInterval = 1.0; // Verificar cada 1 segundo
+        // === LEGACY REMOVED: Sistema de abandono eliminado ===
+        // El servidor maneja toda la detección y ejecución de abandono.
     }
     
     /**
@@ -520,96 +521,37 @@ export class TerritorySystem {
     }
     
     /**
-     * Actualiza el sistema de territorio (detección de FOBs fuera de territorio)
-     * ⚠️ LEGACY REMOVED: El servidor maneja toda la lógica de abandono de edificios.
-     * El cliente solo renderiza el territorio basado en las posiciones de frentes del servidor.
+     * === LEGACY REMOVED: update(), checkFOBsOutOfTerritory(), isBuildingCompletelyOutOfTerritory() eliminados ===
+     * El servidor maneja toda la detección y ejecución de abandono de edificios.
+     * Ver: server/systems/AbandonmentSystem.js
+     */
+    
+    /**
+     * Actualiza el sistema de territorio (SOLO VISUAL)
      * @param {number} dt - Delta time en segundos
      */
     update(dt) {
-        // El servidor autoritativo maneja toda la detección y ejecución de abandono.
-        // El cliente solo renderiza el territorio basado en las posiciones que vienen del servidor.
-        // TODO: Eliminar completamente este método o dejar vacío si se necesita para compatibilidad.
-    }
-    
-    /**
-     * Verifica si hay edificios construibles completamente fuera del territorio de su bando
-     * Incluye: FOBs, Anti-Drones, Hospitales, Plantas Nucleares, etc.
-     * Excluye: Proyectiles/consumibles (dron, sniper) que no permanecen en el mapa
-     */
-    checkFOBsOutOfTerritory() {
-        // Verificar edificios ALIADOS construibles
-        const allyBuildings = this.game.nodes.filter(n => 
-            n.category === 'buildable' && 
-            n.team === this.game.myTeam &&
-            n.constructed && 
-            !n.isAbandoning &&
-            n.type !== 'drone' && // Excluir proyectiles
-            n.type !== 'sniperStrike' &&
-            n.type !== 'specopsCommando' // 🆕 Excluir comando - puede estar en territorio enemigo
-        );
-        
-        for (const building of allyBuildings) {
-            if (this.isBuildingCompletelyOutOfTerritory(building, this.game.myTeam)) {
-                building.startAbandoning();
-            }
-        }
-        
-        // Verificar edificios ENEMIGOS (cualquier team que NO sea el mío)
-        const enemyBuildings = this.game.nodes.filter(n => 
-            n.category === 'buildable' && 
-            n.team !== this.game.myTeam &&
-            n.constructed &&
-            !n.isAbandoning &&
-            n.type !== 'drone' && // Excluir proyectiles
-            n.type !== 'sniperStrike' &&
-            n.type !== 'specopsCommando' // 🆕 Excluir comando - puede estar en territorio enemigo
-        );
-        
-        for (const building of enemyBuildings) {
-            if (this.isBuildingCompletelyOutOfTerritory(building, 'enemy')) {
-                building.startAbandoning();
-            }
-        }
+        // No hay nada que actualizar - solo renderizado visual
     }
     
     /**
      * Verifica si un edificio construible está COMPLETAMENTE fuera del territorio de su bando
-     * (toda su hitbox, no solo el centro)
-     * Aplica a: FOBs, Anti-Drones, Hospitales, Plantas Nucleares, etc.
+     * SOLO PARA VALIDACIÓN VISUAL EN UI - El servidor es la autoridad
      * @param {MapNode} building - El edificio a verificar
      * @param {string} team - 'ally', 'player1', 'player2', etc.
-     * @returns {boolean} true si está completamente fuera de territorio
+     * @returns {boolean} true si está completamente fuera de territorio (visual)
      */
     isBuildingCompletelyOutOfTerritory(building, team) {
         const buildingRadius = building.radius || 40;
         const normalizedTeam = this.normalizeTeamToFrontier(team);
         
         if (normalizedTeam === 'ally') {
-            // Edificio aliado: está fuera si TODO el edificio está a la DERECHA (adelante) de la frontera aliada
-            // El territorio aliado va desde el HQ (izquierda) hasta la frontera (frente)
-            // Un edificio está fuera si está MÁS ALLÁ del frente (a la derecha de la frontera)
-            
-            // Verificar el punto más a la IZQUIERDA del edificio (centro - radio)
             const buildingLeftEdge = building.x - buildingRadius;
-            
-            // Obtener la posición X de la frontera a la altura del edificio
             const frontierX = this.getFrontierXAtY(building.y, team);
-            
-            // Si el borde IZQUIERDO del edificio está más adelante que la frontera, TODO el edificio está fuera
             return buildingLeftEdge > frontierX;
-            
         } else {
-            // Edificio enemigo: está fuera si TODO el edificio está a la IZQUIERDA (adelante) de la frontera enemiga
-            // El territorio enemigo va desde la frontera (frente) hasta el HQ (derecha)
-            // Un edificio está fuera si está MÁS ALLÁ del frente (a la izquierda de la frontera)
-            
-            // Verificar el punto más a la DERECHA del edificio (centro + radio)
             const buildingRightEdge = building.x + buildingRadius;
-            
-            // Obtener la posición X de la frontera a la altura del edificio
             const frontierX = this.getFrontierXAtY(building.y, 'enemy');
-            
-            // Si el borde DERECHO del edificio está más adelante que la frontera, TODO el edificio está fuera
             return buildingRightEdge < frontierX;
         }
     }

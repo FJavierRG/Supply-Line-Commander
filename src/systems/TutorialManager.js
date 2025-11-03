@@ -1,7 +1,7 @@
 // ===== TUTORIAL MANAGER: INSTANCIA AISLADA DEL JUEGO PARA TUTORIAL =====
 import { TUTORIAL_MAP, TUTORIAL_STEPS } from './TutorialConfig.js';
 import { VisualNode } from '../entities/visualNode.js';
-import { Convoy } from '../entities/convoy.js';
+import { Convoy } from '../entities/Convoy.js';
 import { VEHICLE_TYPES, GAME_CONFIG } from '../config/constants.js';
 import { BackgroundTileSystem } from './BackgroundTileSystem.js';
 import { getNodeConfig } from '../config/nodes.js';

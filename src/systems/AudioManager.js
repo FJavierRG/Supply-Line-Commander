@@ -192,17 +192,22 @@ export class AudioManager {
             });
         }
         
-        // También intentar con el tema del menú si existe
+        // Desbloquear el tema del menú intentando reproducirlo y pausarlo
+        // Esto desbloquea el contexto sin dejar el audio reproduciéndose
         if (this.music.mainTheme) {
-            this.music.mainTheme.volume = 0;
+            // Asegurarse de que el volumen esté configurado correctamente
+            this.music.mainTheme.volume = this.volumes.mainTheme;
+            
+            // Intentar reproducir para desbloquear el contexto
             const mainThemePromise = this.music.mainTheme.play();
             if (mainThemePromise !== undefined) {
                 mainThemePromise.then(() => {
+                    // Desbloquear el contexto pausándolo inmediatamente
+                    // Esto permite que playMainTheme() lo reproduzca después sin problemas
                     this.music.mainTheme.pause();
                     this.music.mainTheme.currentTime = 0;
-                    this.music.mainTheme.volume = this.volumes.mainTheme; // Restaurar volumen
                 }).catch(() => {
-                    this.music.mainTheme.volume = this.volumes.mainTheme; // Restaurar volumen
+                    // Si falla, el audio se intentará reproducir en playMainTheme()
                 });
             }
         }
@@ -376,16 +381,43 @@ export class AudioManager {
      */
     playMainTheme() {
         if (this.music.mainTheme) {
+            // Asegurarse de que el volumen esté configurado correctamente
+            this.music.mainTheme.volume = this.volumes.mainTheme;
+            
+            // Si ya está reproduciendo, no hacer nada
+            if (!this.music.mainTheme.paused) {
+                return;
+            }
+            
             // Verificar si el audio está listo para reproducir
             if (this.music.mainTheme.readyState >= 3) { // HAVE_FUTURE_DATA o superior
-                this.music.mainTheme.play().catch(e => {
-                });
+                // Si estaba en tiempo 0, significa que es la primera vez
+                // Intentar reproducir directamente
+                const playPromise = this.music.mainTheme.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(e => {
+                        // Si falla, puede ser que el contexto de audio no esté desbloqueado
+                        // Intentar desbloquear y reproducir de nuevo
+                        console.log('⚠️ Error al reproducir tema principal, reintentando...');
+                        this.unlockAudioContext();
+                        // Esperar un poco y reintentar
+                        setTimeout(() => {
+                            this.music.mainTheme.play().catch(err => {
+                                console.error('❌ No se pudo reproducir el tema principal:', err);
+                            });
+                        }, 100);
+                    });
+                }
             } else {
                 // Esperar a que esté listo
                 const onCanPlay = () => {
                     this.music.mainTheme.removeEventListener('canplaythrough', onCanPlay);
-                    this.music.mainTheme.play().catch(e => {
-                    });
+                    const playPromise = this.music.mainTheme.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(e => {
+                            console.error('❌ Error al reproducir tema principal después de cargar:', e);
+                        });
+                    }
                 };
                 this.music.mainTheme.addEventListener('canplaythrough', onCanPlay);
             }

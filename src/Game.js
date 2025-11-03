@@ -22,8 +22,6 @@ import { StoreUIManager } from './systems/StoreUIManager.js';
 import { RoadSystem } from './utils/RoadSystem.js';
 import { OptionsManager } from './systems/OptionsManager.js';
 import { ArsenalManager } from './systems/ArsenalManager.js';
-import { EnemyAISystem } from './systems/EnemyAISystem.js';
-import { AIDirector } from './ai/AIDirector.js';
 import { TutorialSystem } from './systems/TutorialSystem.js';
 import { TutorialManager } from './systems/TutorialManager.js';
 import { NetworkManager } from './systems/NetworkManager.js';
@@ -35,11 +33,8 @@ import { GAME_CONFIG } from './config/constants.js';
 // ELIMINADO: MAP_CONFIG, calculateAbsolutePosition - Ya no se genera el mapa en el cliente
 import { getNodeConfig } from './config/nodes.js';
 
-// === CONFIGURACIÓN DE SISTEMA DE IA ===
-// 'legacy' = EnemyAISystem (umbrales fijos + RNG)
-// 'hybrid' = AIDirector (scoring contextual) + EnemyAISystem (ejecución)
-// 'modular' = AIDirector completo (futuro)
-const AI_SYSTEM_MODE = 'hybrid';
+// === LEGACY REMOVED: Sistema de IA eliminado ===
+// La IA ahora está completamente en el servidor (server/game/managers/AISystem.js)
 
 export class Game {
     constructor(canvas) {
@@ -78,15 +73,9 @@ export class Game {
         this.camera = new CameraController(this);
         this.inputHandler = new InputHandler(this);
         
-        // Sistema de IA (configurable)
-        this.aiSystemMode = AI_SYSTEM_MODE;
-        this.enemyAI = null; // Se inicializará según la dificultad seleccionada
-        
-        if (this.aiSystemMode === 'hybrid' || this.aiSystemMode === 'modular') {
-            this.aiDirector = new AIDirector(this);
-        } else {
-            console.log(`🤖 Sistema IA: LEGACY - Solo EnemyAISystem`);
-        }
+        // === LEGACY REMOVED: Sistema de IA eliminado ===
+        // La IA ahora está completamente en el servidor (server/game/managers/AISystem.js)
+        // No hay IA en el cliente - solo renderizado visual
         
         this.tutorialSystem = new TutorialSystem(this);
         this.tutorialManager = new TutorialManager(this);
@@ -244,11 +233,15 @@ export class Game {
         this.loadingScreen.hide();
         this.loadingScreen.showPressToContinue(() => {
             // CRÍTICO: Desbloquear el contexto de audio del navegador
+            // Esto debe hacerse ANTES de mostrar el menú para que el audio funcione
             this.audio.unlockAudioContext();
             
             // Al hacer clic, mostrar el menú principal (esto activará el audio)
             if (this.state === 'menu') {
-                this.showMainMenu();
+                // Dar un pequeño delay para asegurar que el contexto de audio se desbloqueó
+                setTimeout(() => {
+                    this.showMainMenu();
+                }, 50);
             }
         });
     }
@@ -291,12 +284,8 @@ export class Game {
         this.territory.reset();
         this.audio.resetEventFlags();
         
-        // Inicializar IA con dificultad seleccionada
-        if (!this.enemyAI) {
-            this.initializeEnemyAI();
-        } else {
-            this.enemyAI.reset();
-        }
+        // === LEGACY REMOVED: IA eliminada del cliente ===
+        // La IA ahora está completamente en el servidor
         
         // Iniciar cuenta atrás de 3 segundos
         this.countdown = 3;
@@ -1007,6 +996,47 @@ export class Game {
         // Ocultar overlays de victoria/derrota
         this.overlayManager.hideOverlay('victory-overlay');
         this.overlayManager.hideOverlay('defeat-overlay');
+        this.overlayManager.hideOverlay('pause-overlay');
+        
+        // === LIMPIAR COMPLETAMENTE EL ESTADO DEL JUEGO ===
+        // Limpiar todas las entidades y sistemas
+        this.nodes = []; // Limpiar todos los nodos
+        this.helicopters = []; // Limpiar helicópteros
+        this.convoyManager.clear();
+        this.particleSystem.clear();
+        this.droneSystem.clear();
+        
+        // Resetear sistemas
+        this.currency.reset();
+        this.buildSystem.resetLevel();
+        this.medicalSystem.reset();
+        this.frontMovement.resetLevel();
+        this.territory.reset();
+        this.audio.resetEventFlags();
+        this.camera.reset();
+        
+        // Resetear estado del juego
+        this.score = 0;
+        this.deliveries = 0;
+        this.missionStarted = false;
+        this.countdown = 0;
+        this.matchStats = {
+            startTime: 0,
+            endTime: 0,
+            buildingsBuilt: 0,
+            buildingsLost: 0,
+            dronesLaunched: 0,
+            snipersLaunched: 0,
+            convoysDispatched: 0,
+            emergenciesResolved: 0,
+            emergenciesFailed: 0
+        };
+        
+        // Si estaba en multijugador, desconectar
+        if (this.isMultiplayer && this.network) {
+            this.network.disconnect();
+            this.isMultiplayer = false;
+        }
         
         // Detener todos los sonidos
         this.audio.stopAllSounds();
@@ -1021,6 +1051,7 @@ export class Game {
         // Si estaba en playtest, limpiar mejoras
         if (this.isPlaytesting) {
             this.playtestUpgrades = [];
+            this.isPlaytesting = false;
         }
         
         // Resetear selector de dificultad PRIMERO (antes de cambiar estado)
@@ -1028,10 +1059,20 @@ export class Game {
             this.inputHandler.resetDifficultySelector();
         }
         
+        // Cambiar estado a menú ANTES de limpiar canvas
         this.setGameState('menu');
-        // Limpiar canvas para que no quede frame congelado
+        
+        // Limpiar canvas completamente para que no quede frame congelado
         this.renderer.clear();
         
+        // Ocultar elementos del juego
+        const timerDisplay = document.getElementById('timer-display');
+        if (timerDisplay) timerDisplay.style.display = 'none';
+        
+        const fobCurrencyDisplay = document.getElementById('fob-currency-display');
+        if (fobCurrencyDisplay) fobCurrencyDisplay.style.display = 'none';
+        
+        // Mostrar menú principal
         this.showMainMenu();
     }
     
@@ -1052,15 +1093,9 @@ export class Game {
     }
     
     /**
-     * Inicializa la IA enemiga con la dificultad seleccionada
+     * === LEGACY REMOVED: initializeEnemyAI eliminado ===
+     * La IA ahora está completamente en el servidor (server/game/managers/AISystem.js)
      */
-    initializeEnemyAI() {
-        if (this.enemyAI) {
-            // Si ya existe, limpiar referencias
-            this.enemyAI = null;
-        }
-        this.enemyAI = new EnemyAISystem(this, this.aiDifficulty);
-    }
     
     // ELIMINADO: setAIDifficulty, startGameFromMenu, onRaceSelected
     // Ahora todo se maneja desde el lobby unificado con servidor autoritativo
@@ -1110,13 +1145,7 @@ export class Game {
         this.frontMovement.resetLevel();
         this.territory.reset();
         this.audio.resetEventFlags();
-        this.enemyAI.reset();
-        
-        // Desactivar IA enemiga para el tutorial
-        this.enemyAI.setEnabled(false);
-        if (this.aiDirector) {
-            this.aiDirector.deactivate();
-        }
+        // === LEGACY REMOVED: IA eliminada del cliente ===
         
         // Iniciar cuenta atrás de 3 segundos
         this.countdown = 3;
@@ -1312,14 +1341,15 @@ export class Game {
         // Reproducir sonido
         this.audio.sounds.sniperShoot.play();
         
-        // Aplicar efecto "wounded"
-        if (this.medicalSystem) {
-            this.medicalSystem.applyPenalty(targetFront);
-            this.matchStats.snipersLaunched++;
-        }
+        // === LEGACY REMOVED: applyPenalty() eliminado ===
+        // El servidor maneja todas las penalizaciones por sniper strike.
+        // Ver: server/game/handlers/CombatHandler.js
         
         // Crear efecto visual
         this.particleSystem.createFloatingSprite(targetFront.x, targetFront.y - 40, 'ui-sniper-kill');
+        
+        // === LEGACY REMOVED: NO modificar matchStats aquí ===
+        // El servidor maneja todas las estadísticas.
         
     }
     
@@ -1523,8 +1553,8 @@ export class Game {
         const playerFOBs = this.nodes.filter(n => n.type === 'fob' && n.team === 'ally' && n.constructed).length;
         const enemyFOBs = this.nodes.filter(n => n.type === 'enemy_fob' && n.constructed).length;
         
-        // Obtener stats de la IA
-        const aiStats = this.enemyAI.getStats();
+        // === LEGACY REMOVED: Stats de IA eliminadas ===
+        // Las stats del enemigo ahora vienen del servidor si están disponibles
         
         // Construir HTML con las stats
         const statsHTML = `
@@ -1552,13 +1582,9 @@ export class Game {
                         
                         <div>
                             <h3 style="color: #e74c3c; margin-bottom: 10px;">ENEMIGO</h3>
-                            <div>Currency final: ${this.enemyAI.getCurrency()}$</div>
                             <div>FOBs: ${enemyFOBs}</div>
                             <div>Edificios: ${enemyBuildings}</div>
-                            <div>Drones: ${aiStats.dronesLaunched}</div>
-                            <div>Snipers: ${aiStats.snipersLaunched}</div>
-                            <div>Convoyes: ${aiStats.suppliesSent}</div>
-                            <div>Ambulancias: ${aiStats.medicsSent}</div>
+                            <div style="color: #888; font-size: 12px;">Stats del enemigo disponibles desde el servidor</div>
                         </div>
                     </div>
                 </div>
@@ -1604,8 +1630,8 @@ export class Game {
         const playerFOBs = this.nodes.filter(n => n.type === 'fob' && n.team === 'ally' && n.constructed).length;
         const enemyFOBs = this.nodes.filter(n => n.type === 'enemy_fob' && n.constructed).length;
         
-        // Obtener stats de la IA
-        const aiStats = this.enemyAI.getStats();
+        // === LEGACY REMOVED: Stats de IA eliminadas ===
+        // Las stats del enemigo ahora vienen del servidor si están disponibles
         
         // Construir HTML con las stats
         const statsHTML = `
@@ -1633,13 +1659,9 @@ export class Game {
                         
                         <div>
                             <h3 style="color: #e74c3c; margin-bottom: 10px;">ENEMIGO</h3>
-                            <div>Currency final: ${this.enemyAI.getCurrency()}$</div>
                             <div>FOBs: ${enemyFOBs}</div>
                             <div>Edificios: ${enemyBuildings}</div>
-                            <div>Drones: ${aiStats.dronesLaunched}</div>
-                            <div>Snipers: ${aiStats.snipersLaunched}</div>
-                            <div>Convoyes: ${aiStats.suppliesSent}</div>
-                            <div>Ambulancias: ${aiStats.medicsSent}</div>
+                            <div style="color: #888; font-size: 12px;">Stats del enemigo disponibles desde el servidor</div>
                         </div>
                     </div>
                 </div>

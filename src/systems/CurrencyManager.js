@@ -1,10 +1,12 @@
-// ===== GESTOR DE CURRENCY =====
+// ===== GESTOR DE CURRENCY (SOLO VISUAL) =====
+// ⚠️ IMPORTANTE: Este sistema SOLO muestra currency del servidor.
+// NO calcula ni modifica currency - el servidor es la autoridad.
 
 export class CurrencyManager {
     constructor(game = null) {
-        this.game = game; // Referencia al juego para acceder a edificios
-        this.missionCurrency = 0; // Currency temporal de la misión
-        this.passiveCurrencyAccumulator = 0; // Acumulador para fracciones de segundo
+        this.game = game;
+        // Currency mostrada (viene del servidor)
+        this.missionCurrency = 0;
     }
     
     /**
@@ -12,32 +14,22 @@ export class CurrencyManager {
      */
     reset() {
         this.missionCurrency = 0;
-        this.passiveCurrencyAccumulator = 0;
     }
     
     /**
-     * Actualiza la currency pasiva (generación constante)
-     * ⚠️ LEGACY REMOVED: El servidor maneja toda la generación de currency.
-     * El cliente solo debe leer la currency que viene del estado del servidor.
-     * @param {number} dt - Delta time en segundos
+     * === LEGACY REMOVED: updatePassiveCurrency eliminado ===
+     * El servidor maneja toda la generación de currency.
      */
-    updatePassiveCurrency(dt) {
-        // ⚠️ LEGACY REMOVED: El servidor autoritativo maneja toda la generación de currency.
-        // El cliente solo debe leer la currency que viene del estado del servidor.
-        // Este método debe mantenerse vacío o solo para compatibilidad con código legacy.
-        
-        // NO calcular currency aquí - el servidor maneja esto
-        // La currency debe venir del estado del servidor vía NetworkManager.applyGameState()
-    }
     
     /**
      * Calcula el bonus de currency de las plantas nucleares activas
-     * @returns {number} Bonus total de currency por segundo
+     * SOLO para visualización - el servidor calcula el bonus real
+     * @returns {number} Bonus total de currency por segundo (visual)
      */
     getNuclearPlantBonus() {
         if (!this.game || !this.game.nodes) return 0;
         
-        // Solo contar plantas nucleares de MI equipo
+        // Solo contar plantas nucleares de MI equipo (para visualización)
         const myTeam = this.game.myTeam || 'player1';
         const nuclearPlants = this.game.nodes.filter(n => 
             n.type === 'nuclearPlant' && 
@@ -47,36 +39,30 @@ export class CurrencyManager {
             !n.isAbandoning
         );
         
-        // Cada planta nuclear añade +2 currency/segundo
+        // Cada planta nuclear añade +2 currency/segundo (visual)
         return nuclearPlants.length * 2;
     }
     
     /**
      * Añade currency temporal de la misión (por avance de terreno)
-     * ⚠️ LEGACY REMOVED: El servidor maneja todos los cambios de currency.
-     * Este método solo debería usarse cuando el servidor notifica cambios.
+     * ⚠️ SOLO PARA VISUALIZACIÓN: El servidor maneja todos los cambios de currency.
+     * Este método solo actualiza el valor visual cuando el servidor notifica cambios.
      * @param {number} amount - Cantidad a añadir
      */
     add(amount) {
-        // ⚠️ LEGACY: El servidor debería notificar cuando la currency cambia.
-        // Este método solo debería ejecutarse cuando el servidor envía actualización de currency.
-        // Por ahora, mantener para compatibilidad pero agregar warning.
-        console.warn('⚠️ LEGACY: CurrencyManager.add() llamado - debería venir del servidor');
+        // ⚠️ SOLO VISUAL: El servidor es la autoridad
         this.missionCurrency += amount;
     }
     
     /**
      * Gasta currency temporal de la misión
-     * ⚠️ LEGACY REMOVED: El servidor maneja todos los gastos de currency.
-     * Este método solo debería usarse para validación local o efectos visuales.
+     * ⚠️ SOLO PARA VALIDACIÓN UI LOCAL: El servidor valida y ejecuta todos los gastos.
+     * Este método solo se usa para validación previa en la UI.
      * @param {number} amount - Cantidad a gastar
-     * @returns {boolean} true si se pudo gastar, false si no hay suficiente
+     * @returns {boolean} true si hay suficiente (visual)
      */
     spend(amount) {
-        // ⚠️ LEGACY: El servidor debería validar y ejecutar todos los gastos.
-        // Este método solo debería usarse para validación local o efectos visuales.
-        // NO debería modificar el estado real - el servidor es la autoridad.
-        console.warn('⚠️ LEGACY: CurrencyManager.spend() llamado - debería validarse en el servidor');
+        // ⚠️ SOLO VALIDACIÓN UI: El servidor valida y ejecuta
         if (this.missionCurrency >= amount) {
             this.missionCurrency -= amount;
             return true;
@@ -85,20 +71,28 @@ export class CurrencyManager {
     }
     
     /**
-     * Obtiene la currency actual de la misión
-     * @returns {number} Currency disponible
+     * Obtiene la currency actual de la misión (visual)
+     * @returns {number} Currency disponible (viene del servidor)
      */
     get() {
         return this.missionCurrency;
     }
     
     /**
-     * Verifica si hay suficiente currency
+     * Verifica si hay suficiente currency (validación UI)
      * @param {number} amount - Cantidad a verificar
-     * @returns {boolean} true si hay suficiente
+     * @returns {boolean} true si hay suficiente (visual)
      */
     canAfford(amount) {
         return this.missionCurrency >= amount;
+    }
+    
+    /**
+     * Actualiza la currency desde el estado del servidor
+     * @param {number} newCurrency - Nueva currency del servidor
+     */
+    updateFromServer(newCurrency) {
+        this.missionCurrency = newCurrency;
     }
 }
 

@@ -396,7 +396,8 @@ export class InputHandler {
             // Solo permitir frentes aliados
             if (clickedBase && clickedBase.type === 'front') {
                 // Usar el mismo método que la IA
-                this.game.enemyAI.attemptSniperStrike();
+                // === LEGACY REMOVED: IA eliminada del cliente ===
+                // El servidor maneja todas las acciones de IA.
                 console.log(`🎯 DEBUG: Sniper enemigo ejecutado (usa lógica de IA)`);
                 // Desactivar modo tras lanzar
                 this.game.debugEnemySniperMode = false;

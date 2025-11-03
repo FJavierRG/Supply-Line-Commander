@@ -1877,7 +1877,7 @@ export class RenderSystem {
             
             for (const tower of enemyTowers) {
                 const towerConfig = getNodeConfig(tower.type);
-                const detectionRadius = towerConfig?.detectionRadius || tower.detectionRadius || 140;
+                const detectionRadius = towerConfig?.detectionRadius || tower.detectionRadius || 400;
                 const dist = Math.hypot(x - tower.x, y - tower.y);
                 
                 if (dist <= detectionRadius) {

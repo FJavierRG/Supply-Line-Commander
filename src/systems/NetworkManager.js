@@ -1,6 +1,6 @@
 // ===== GESTOR DE RED - Cliente Socket.IO =====
 import { BackgroundTileSystem } from './BackgroundTileSystem.js';
-import { Convoy } from '../entities/convoy.js';
+import { Convoy } from '../entities/Convoy.js';
 import { VisualNode } from '../entities/visualNode.js';
 import { getNodeConfig } from '../config/nodes.js';
 
@@ -1049,13 +1049,8 @@ export class NetworkManager {
         this.game.isMultiplayer = true;
         this.isMultiplayer = true;
         
-        // Desactivar IA explícitamente
-        if (this.game.enemyAI) {
-            this.game.enemyAI.enabled = false;
-        }
-        if (this.game.aiDirector) {
-            this.game.aiDirector.enabled = false;
-        }
+        // === LEGACY REMOVED: IA eliminada del cliente ===
+        // La IA ahora está completamente en el servidor
         
         // Limpiar nodos actuales
         this.game.nodes = [];

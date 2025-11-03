@@ -1,5 +1,8 @@
-// ===== GESTOR DE CONVOYES =====
-import { Convoy } from '../entities/convoy.js';
+// ===== GESTOR DE CONVOYES (SOLO VISUAL) =====
+// ⚠️ IMPORTANTE: Este sistema SOLO muestra convoyes visualmente.
+// NO entrega suministros ni modifica estado - el servidor es la autoridad.
+
+import { Convoy } from '../entities/Convoy.js';
 import { VEHICLE_TYPES } from '../config/constants.js';
 import { getRaceConfig } from '../config/races.js';
 
@@ -112,29 +115,32 @@ export class ConvoyManager {
     }
     
     /**
-     * Entrega suministros al destino
+     * Muestra efectos visuales cuando un convoy entrega suministros (SOLO VISUAL)
+     * El servidor maneja toda la lógica de entrega.
+     * Este método debe llamarse cuando el servidor notifica que un convoy llegó.
+     * @param {Convoy} convoy - Convoy que entregó
      */
     deliverSupplies(convoy) {
-        // Ambulancia: resolver emergencia
+        // === SOLO EFECTOS VISUALES ===
+        // El servidor ya entregó los suministros - esto solo muestra efectos
+        
+        // Ambulancia: mostrar resolución de emergencia (visual)
         if (convoy.isMedical) {
+            // El servidor ya resolvió la emergencia - solo mostrar visual
             this.game.medicalSystem.resolveEmergency(convoy.targetFrontId);
             this.game.audio.playSound('delivery');
             return;
         }
         
-        // Convoy normal
-        convoy.target.addSupplies(convoy.cargo);
+        // === EFECTOS VISUALES PARA CONVOY NORMAL ===
+        // El servidor ya entregó los suministros - solo mostrar efectos
         
-        if (convoy.target.type === 'front') {
-            this.game.score += Math.floor(convoy.cargo);
-            this.game.deliveries++;
-            this.game.audio.playSound('delivery');
-            
+        if (convoy.target && convoy.target.type === 'front') {
             // Texto flotante mostrando la cantidad (con acumulación por baseId)
             this.game.particleSystem.createFloatingText(
                 convoy.target.x, 
                 convoy.target.y - 30, 
-                `+${Math.floor(convoy.cargo)}`, 
+                `+${Math.floor(convoy.cargo || 0)}`, 
                 '#4ecca3',
                 convoy.target.id  // Pasar ID de la base para acumulación
             );
@@ -143,13 +149,12 @@ export class ConvoyManager {
             if (this.game.state === 'tutorial' && this.game.tutorialManager && convoy.target.type === 'front') {
                 this.game.tutorialManager.notifyAction('convoy_arrived_to_front', { targetId: convoy.target.id });
             }
-        } else {
-            
+        } else if (convoy.target) {
             // Texto flotante para FOB también (con acumulación por baseId)
             this.game.particleSystem.createFloatingText(
                 convoy.target.x, 
                 convoy.target.y - 30, 
-                `+${Math.floor(convoy.cargo)}`, 
+                `+${Math.floor(convoy.cargo || 0)}`, 
                 '#4ecca3',
                 convoy.target.id  // Pasar ID de la base para acumulación
             );
@@ -159,6 +164,14 @@ export class ConvoyManager {
                 this.game.tutorialManager.notifyAction('convoy_arrived_to_fob', { targetId: convoy.target.id });
             }
         }
+        
+        // Sonido de entrega
+        this.game.audio.playSound('delivery');
+        
+        // === LEGACY REMOVED: NO modificar estado aquí ===
+        // - NO convoy.target.addSupplies() - el servidor maneja esto
+        // - NO modificar score/deliveries - el servidor maneja esto
+        // Ver: server/game/managers/ConvoyMovementManager.js
     }
     
     /**

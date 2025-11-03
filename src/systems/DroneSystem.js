@@ -55,14 +55,8 @@ export class DroneSystem {
         const teamName = isEnemy ? 'ENEMIGO' : 'ALIADO';
         console.log(`💣 Dron ${teamName} creado en (${x}, ${y}) → Objetivo: ${actualTarget.type}`);
         
-        // Si es un dron del jugador (aliado), registrar la acción en la IA
-        if (!isEnemy) {
-            this.game.enemyAI.registerPlayerAction('drone', actualTarget);
-            // También notificar al AIDirector si está en modo híbrido
-            if (this.game.aiDirector && this.game.aiSystemMode !== 'legacy') {
-                this.game.aiDirector.onPlayerAction('drone', actualTarget);
-            }
-        }
+        // === LEGACY REMOVED: Registro de acciones eliminado ===
+        // La IA del servidor detecta acciones automáticamente
     }
     
     /**

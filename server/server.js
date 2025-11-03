@@ -39,7 +39,7 @@ app.use(express.json());
 // IMPORTANTE: Configurar headers correctos para módulos ES6
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -47,13 +47,46 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.join(__dirname, '..');
 const srcDir = path.join(rootDir, 'src');
 const indexHtmlPath = path.join(rootDir, 'index.html');
-const convoyPath = path.join(srcDir, 'entities', 'convoy.js');
+const convoyPath = path.join(srcDir, 'entities', 'Convoy.js');
 
 console.log('📁 Directorio del servidor:', __dirname);
 console.log('📁 Directorio raíz del proyecto:', rootDir);
 console.log('📁 Directorio src existe:', existsSync(srcDir));
 console.log('📁 index.html existe:', existsSync(indexHtmlPath));
-console.log('📁 src/entities/convoy.js existe:', existsSync(convoyPath));
+console.log('📁 src/entities/Convoy.js existe:', existsSync(convoyPath));
+
+// Middleware de logging para debugging ANTES de servir archivos estáticos
+app.use((req, res, next) => {
+    // Loggear solo archivos .js que no sean de API
+    if (req.path.endsWith('.js') && !req.path.startsWith('/api/')) {
+        const requestedPath = path.join(rootDir, req.path);
+        const exists = existsSync(requestedPath);
+        if (!exists) {
+            console.log(`❌ 404: ${req.path}`);
+            console.log(`   Ruta completa: ${requestedPath}`);
+            console.log(`   Directorio raíz: ${rootDir}`);
+            // Intentar con diferentes variaciones de casing
+            const pathLower = requestedPath.toLowerCase();
+            const pathUpper = requestedPath.toUpperCase();
+            console.log(`   ¿Existe en minúsculas?: ${existsSync(pathLower)}`);
+            console.log(`   ¿Existe en mayúsculas?: ${existsSync(pathUpper)}`);
+            
+            // Listar archivos en el directorio para debug
+            try {
+                const dir = path.dirname(requestedPath);
+                if (existsSync(dir)) {
+                    const files = readdirSync(dir);
+                    console.log(`   Archivos en ${dir}:`, files);
+                }
+            } catch (e) {
+                console.log(`   Error listando directorio:`, e.message);
+            }
+        } else {
+            console.log(`✅ 200: ${req.path}`);
+        }
+    }
+    next();
+});
 
 // CRÍTICO: Servir archivos estáticos PRIMERO, antes de cualquier otro middleware
 app.use(express.static(rootDir, {
@@ -74,26 +107,6 @@ app.use((req, res, next) => {
     // Si es un archivo .js, asegurar que tenga el header correcto para módulos ES6
     if (req.path.endsWith('.js')) {
         res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-    }
-    next();
-});
-
-// Middleware de logging para debugging de archivos estáticos (siempre activo para Railway)
-app.use((req, res, next) => {
-    // Loggear solo archivos .js que no sean de API y devuelvan 404
-    if (req.path.endsWith('.js') && !req.path.startsWith('/api/')) {
-        const requestedPath = path.join(rootDir, req.path);
-        const exists = existsSync(requestedPath);
-        if (!exists) {
-            console.log(`❌ 404: ${req.path}`);
-            console.log(`   Ruta completa: ${requestedPath}`);
-            console.log(`   Directorio raíz: ${rootDir}`);
-            // Intentar con diferentes variaciones de casing
-            const pathLower = requestedPath.toLowerCase();
-            const pathUpper = requestedPath.toUpperCase();
-            console.log(`   ¿Existe en minúsculas?: ${existsSync(pathLower)}`);
-            console.log(`   ¿Existe en mayúsculas?: ${existsSync(pathUpper)}`);
-        }
     }
     next();
 });

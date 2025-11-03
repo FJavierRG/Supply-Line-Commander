@@ -1,4 +1,7 @@
-// ===== SISTEMA DE DEFENSA ANTI-DRONES =====
+// ===== SISTEMA DE DEFENSA ANTI-DRONES (SOLO VISUAL) =====
+// ⚠️ IMPORTANTE: Este sistema SOLO muestra efectos visuales cuando el servidor notifica disparos.
+// NO ejecuta lógica de combate ni destruye drones - el servidor es la autoridad.
+
 import { getNodeConfig } from '../config/nodes.js';
 
 export class AntiDroneSystem {
@@ -50,54 +53,15 @@ export class AntiDroneSystem {
     }
     
     /**
-     * Verifica drones y dispara si están en rango
+     * === LEGACY REMOVED: checkForDrones() eliminado ===
+     * El servidor maneja toda la detección y combate anti-drone.
+     * Ver: server/game/handlers/CombatHandler.js
      */
-    checkForDrones() {
-        // Torretas ALIADAS destruyen drones ENEMIGOS
-        const enemyDrones = this.game.droneSystem.getDrones().filter(drone => drone.active && drone.isEnemy);
-        for (const building of this.allyAntiDrones) {
-            // Verificar área de alerta (reproducir sonido)
-            const droneInAlertRange = this.findDroneInAlertRange(building, enemyDrones);
-            if (droneInAlertRange && !this.alertSoundPlayed.get(building.id)) {
-                this.game.audio.playAntiDroneAttackSound();
-                this.alertSoundPlayed.set(building.id, true);
-            }
-            
-            // Verificar área de ataque (disparar)
-            if (!this.canShoot(building)) {
-                continue;
-            }
-            const droneInRange = this.findDroneInRange(building, enemyDrones);
-            if (droneInRange) {
-                this.shootDrone(building, droneInRange);
-            }
-        }
-        
-        // Torretas ENEMIGAS destruyen drones ALIADOS
-        const allyDrones = this.game.droneSystem.getDrones().filter(drone => drone.active && !drone.isEnemy);
-        for (const building of this.enemyAntiDrones) {
-            // Verificar área de alerta (reproducir sonido)
-            const droneInAlertRange = this.findDroneInAlertRange(building, allyDrones);
-            if (droneInAlertRange && !this.alertSoundPlayed.get(building.id)) {
-                this.game.audio.playAntiDroneAttackSound();
-                this.alertSoundPlayed.set(building.id, true);
-            }
-            
-            // Verificar área de ataque (disparar)
-            if (!this.canShoot(building)) {
-                continue;
-            }
-            const droneInRange = this.findDroneInRange(building, allyDrones);
-            if (droneInRange) {
-                this.shootDrone(building, droneInRange);
-            }
-        }
-    }
     
     /**
-     * Verifica si un edificio puede disparar (no en cooldown)
+     * Verifica si un edificio puede disparar (SOLO VISUAL para UI)
      * @param {Building} building - Edificio anti-drone
-     * @returns {boolean} True si puede disparar
+     * @returns {boolean} True si puede disparar (visual)
      */
     canShoot(building) {
         const lastShot = this.lastShotTimes.get(building.id) || 0;
@@ -137,7 +101,7 @@ export class AntiDroneSystem {
     }
     
     /**
-     * Encuentra el drone más cercano en rango de detección
+     * Encuentra el drone más cercano en rango de detección (SOLO VISUAL para UI)
      * @param {Building} building - Edificio anti-drone
      * @param {Array} drones - Array de drones activos
      * @returns {Object|null} Drone en rango o null
@@ -163,7 +127,7 @@ export class AntiDroneSystem {
     }
     
     /**
-     * Encuentra el drone más cercano en rango de alerta
+     * Encuentra el drone más cercano en rango de alerta (SOLO VISUAL para UI)
      * @param {Building} building - Edificio anti-drone
      * @param {Array} drones - Array de drones activos
      * @returns {Object|null} Drone en rango de alerta o null
@@ -186,25 +150,20 @@ export class AntiDroneSystem {
     }
     
     /**
-     * Dispara contra un drone y lo destruye
-     * ⚠️ LEGACY REMOVED: El servidor maneja la lógica de disparo y destrucción.
-     * Este método solo debería usarse para efectos visuales cuando el servidor notifica un disparo.
+     * Dispara contra un drone y muestra efectos visuales (SOLO VISUAL)
+     * El servidor maneja la lógica de disparo y destrucción.
+     * Este método debe llamarse cuando el servidor notifica un disparo.
      * @param {Building} building - Edificio que dispara
-     * @param {Object} drone - Drone a destruir
+     * @param {Object} drone - Drone objetivo
      */
     shootDrone(building, drone) {
-        // ⚠️ LEGACY: El servidor debería notificar cuando un anti-drone dispara.
-        // Este método solo debería ejecutarse cuando el servidor envía un evento de disparo.
-        // Por ahora, mantener solo efectos visuales/audio pero NO modificar el estado del juego.
-        
         // Marcar cooldown (solo visual para UI)
         this.lastShotTimes.set(building.id, Date.now());
         
-        // ⚠️ LEGACY REMOVED: NO modificar estado del drone aquí - el servidor maneja esto
-        // El servidor enviará actualización de estado con el drone eliminado
-        
         // Detener sonido del dron al ser destruido (usando ID único)
-        this.game.audio.stopDroneSound(drone.id);
+        if (drone.id) {
+            this.game.audio.stopDroneSound(drone.id);
+        }
         
         // Crear efecto visual de disparo
         this.createShotEffect(building, drone);
@@ -224,10 +183,7 @@ export class AntiDroneSystem {
         // Sonido de disparo anti-drone
         this.game.audio.playBomShootSound();
         
-        console.log(`🎯 Anti-dron destruyó un drone enemigo (visual only - servidor maneja estado)`);
-        
-        // ⚠️ LEGACY REMOVED: NO destruir edificio aquí - el servidor maneja esto
-        // El servidor enviará actualización de estado cuando el edificio se consuma
+        console.log(`🎯 Anti-dron disparó (visual only - servidor maneja estado)`);
     }
     
     /**
@@ -258,16 +214,12 @@ export class AntiDroneSystem {
     }
     
     /**
-     * Destruye el edificio anti-drone después del disparo
-     * ⚠️ LEGACY REMOVED: El servidor maneja la destrucción de edificios.
-     * Este método solo debería usarse para efectos visuales cuando el servidor notifica destrucción.
-     * @param {Building} building - Edificio a destruir
+     * Muestra efectos visuales cuando un edificio anti-drone se consume (SOLO VISUAL)
+     * El servidor maneja la destrucción del edificio.
+     * Este método debe llamarse cuando el servidor notifica que el edificio se consumió.
+     * @param {Building} building - Edificio consumido
      */
     destroyAntiDroneBuilding(building) {
-        // ⚠️ LEGACY: El servidor debería notificar cuando un edificio anti-drone se consume.
-        // Este método solo debería ejecutarse cuando el servidor envía un evento de destrucción.
-        // Por ahora, mantener solo efectos visuales/audio pero NO modificar el estado del juego.
-        
         // Limpiar flags del edificio (solo visual para UI)
         this.alertSoundPlayed.delete(building.id);
         this.lastShotTimes.delete(building.id);
@@ -284,9 +236,7 @@ export class AntiDroneSystem {
         // Sonido de explosión del edificio
         this.game.audio.playSound('explosion');
         
-        // ⚠️ LEGACY REMOVED: NO eliminar nodos aquí - el servidor maneja esto
-        // El servidor enviará actualización de estado con el nodo eliminado
-        console.log(`Edificio anti-dron consumido tras el disparo (visual only - servidor maneja estado)`);
+        console.log(`Edificio anti-dron consumido (visual only - servidor maneja estado)`);
     }
     
     /**
