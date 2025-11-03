@@ -41,27 +41,100 @@ export class NetworkManager {
      */
     connect() {
         return new Promise((resolve, reject) => {
-            // Cargar Socket.IO client desde CDN
+            // Si ya está conectado, resolver inmediatamente
+            if (this.connected && this.socket && this.socket.connected) {
+                console.log('✅ Ya conectado al servidor');
+                resolve();
+                return;
+            }
+            
+            // Si ya hay un socket intentando conectar, esperar a ese
+            if (this.socket && !this.socket.connected) {
+                console.log('⏳ Esperando conexión existente...');
+                const checkConnection = setInterval(() => {
+                    if (this.connected && this.socket && this.socket.connected) {
+                        clearInterval(checkConnection);
+                        resolve();
+                    } else if (!this.socket || this.socket.disconnected) {
+                        clearInterval(checkConnection);
+                        // Intentar de nuevo
+                        this.initializeSocket();
+                    }
+                }, 100);
+                
+                // Timeout después de 10 segundos
+                setTimeout(() => {
+                    clearInterval(checkConnection);
+                    if (!this.connected) {
+                        reject(new Error('Timeout esperando conexión'));
+                    }
+                }, 10000);
+                return;
+            }
+            
+            // Cargar Socket.IO client desde CDN si no está disponible
             if (typeof io === 'undefined') {
                 const script = document.createElement('script');
                 script.src = 'https://cdn.socket.io/4.6.1/socket.io.min.js';
                 script.onload = () => {
                     this.initializeSocket();
-                    resolve();
+                    // Esperar a que se conecte
+                    this.waitForConnection(resolve, reject);
                 };
                 script.onerror = () => reject(new Error('No se pudo cargar Socket.IO'));
                 document.head.appendChild(script);
             } else {
                 this.initializeSocket();
-                resolve();
+                // Esperar a que se conecte
+                this.waitForConnection(resolve, reject);
             }
         });
+    }
+    
+    /**
+     * Espera a que se establezca la conexión
+     */
+    waitForConnection(resolve, reject) {
+        const timeout = setTimeout(() => {
+            reject(new Error('Timeout esperando conexión al servidor'));
+        }, 15000); // 15 segundos timeout
+        
+        const checkConnection = setInterval(() => {
+            if (this.connected && this.socket && this.socket.connected) {
+                clearInterval(checkConnection);
+                clearTimeout(timeout);
+                console.log('✅ Conectado al servidor:', this.serverUrl);
+                resolve();
+            }
+        }, 100);
+        
+        // También escuchar eventos de conexión directamente
+        if (this.socket) {
+            const onConnect = () => {
+                clearInterval(checkConnection);
+                clearTimeout(timeout);
+                console.log('✅ Conectado al servidor:', this.serverUrl);
+                resolve();
+            };
+            
+            const onError = (error) => {
+                clearInterval(checkConnection);
+                clearTimeout(timeout);
+                console.error('❌ Error de conexión:', error);
+                reject(error);
+            };
+            
+            this.socket.once('connect', onConnect);
+            this.socket.once('connect_error', onError);
+        }
     }
     
     /**
      * Inicializar socket y eventos
      */
     initializeSocket() {
+        console.log('🔌 Inicializando socket...', this.serverUrl);
+        
         // Configurar socket con opciones para resolver problemas CORS
         this.socket = io(this.serverUrl, {
             transports: ['polling', 'websocket'],
@@ -73,17 +146,20 @@ export class NetworkManager {
         
         this.socket.on('connect', () => {
             this.connected = true;
+            console.log('✅ Socket conectado:', this.socket.id);
         });
         
         this.socket.on('disconnect', () => {
             this.connected = false;
+            console.log('❌ Socket desconectado');
         });
         
         this.socket.on('connect_error', (error) => {
-            console.error('❌ Error de conexión CORS:', error);
-            console.error('❌ Intenta conectarse a:', this.serverUrl);
-            console.error('❌ Tipo de error:', error.type);
+            console.error('❌ Error de conexión:', error);
+            console.error('❌ URL:', this.serverUrl);
+            console.error('❌ Tipo:', error.type);
             console.error('❌ Descripción:', error.description);
+            this.connected = false;
         });
         
         this.socket.on('error', (error) => {
