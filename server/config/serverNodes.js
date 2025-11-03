@@ -144,7 +144,7 @@ export const SERVER_NODE_CONFIG = {
         intelRadio: 120,       // Valor original (sin +15%)
         intelCenter: 130,      // 🆕 Centro de Inteligencia
         aerialBase: 130,        // 🆕 Base Aérea
-        vigilanceTower: 280     // 🆕 Torre de Vigilancia (radio de protección para comandos - 280px)
+        vigilanceTower: 400     // 🆕 Torre de Vigilancia (radio de protección para comandos - 400px)
     },
     
     // Radios base para fallback si no se define detectionRadius
@@ -399,7 +399,7 @@ export const SERVER_NODE_CONFIG = {
             intelRadio: true,
             intelCenter: true,    // 🆕 Centro de Inteligencia - desbloquea comandos
             aerialBase: true,
-            vigilanceTower: false  // 🆕 Torre de Vigilancia - counterea comandos
+            vigilanceTower: true  // 🆕 Torre de Vigilancia - counterea comandos
         },
         
         // Propiedades de comportamiento

@@ -20,7 +20,6 @@ export class EffectsSystem {
                         if (effect.type === 'wounded' && node.type === 'front') {
                             // Restaurar consumo normal (dividir por el multiplicador)
                             node.consumeRate = (node.consumeRate || 3.2) / 2;
-                            console.log(`⏱️ Efecto wounded expiró en frente ${node.id} - Consumo restaurado a ${node.consumeRate}`);
                         }
                         return false; // Eliminar efecto
                     }

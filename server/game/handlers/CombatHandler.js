@@ -163,7 +163,7 @@ export class CombatHandler {
     handleCommandoDeploy(playerTeam, x, y) {
         const commandoConfig = SERVER_NODE_CONFIG.actions.specopsCommando;
         const commandoCost = commandoConfig.cost;
-        const detectionRadius = commandoConfig.detectionRadius || 200;
+        const commandoDetectionRadius = commandoConfig.detectionRadius || SERVER_NODE_CONFIG.specialNodes?.specopsCommando?.detectionRadius || 200;
         
         // Verificar currency
         if (this.gameState.currency[playerTeam] < commandoCost) {
@@ -186,7 +186,7 @@ export class CombatHandler {
         );
         
         for (const tower of vigilanceTowers) {
-            const detectionRadius = tower.detectionRadius || 140;
+            const detectionRadius = tower.detectionRadius || 400;
             const dist = Math.hypot(x - tower.x, y - tower.y);
             
             if (dist <= detectionRadius) {
@@ -210,13 +210,13 @@ export class CombatHandler {
         commandoNode.constructed = true; // No necesita construcción
         commandoNode.isConstructing = false;
         commandoNode.active = true;
-        commandoNode.detectionRadius = detectionRadius;
+        commandoNode.detectionRadius = commandoDetectionRadius;
         commandoNode.isCommando = true;
         
         // Agregar al estado del juego
         this.gameState.nodes.push(commandoNode);
         
-        console.log(`🎖️ Comando especial operativo desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)}) - Radio: ${detectionRadius}px`);
+        console.log(`🎖️ Comando especial operativo desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)}) - Radio: ${commandoDetectionRadius}px`);
         
         return { success: true, commando: commandoNode };
     }

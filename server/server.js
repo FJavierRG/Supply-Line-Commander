@@ -39,8 +39,21 @@ app.use(express.json());
 // IMPORTANTE: Configurar headers correctos para módulos ES6
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Debug: Verificar rutas en producción
+const rootDir = path.join(__dirname, '..');
+const srcDir = path.join(rootDir, 'src');
+const indexHtmlPath = path.join(rootDir, 'index.html');
+const convoyPath = path.join(srcDir, 'entities', 'convoy.js');
+
+console.log('📁 Directorio del servidor:', __dirname);
+console.log('📁 Directorio raíz del proyecto:', rootDir);
+console.log('📁 Directorio src existe:', existsSync(srcDir));
+console.log('📁 index.html existe:', existsSync(indexHtmlPath));
+console.log('📁 src/entities/convoy.js existe:', existsSync(convoyPath));
 
 // Middleware para servir archivos estáticos con headers correctos para ES modules
 app.use((req, res, next) => {
@@ -51,7 +64,22 @@ app.use((req, res, next) => {
     next();
 });
 
-app.use(express.static(path.join(__dirname, '..'), {
+// Middleware de logging para debugging de archivos estáticos
+app.use((req, res, next) => {
+    // Solo loggear archivos .js para debugging
+    if (req.path.endsWith('.js') && !req.path.startsWith('/api/')) {
+        const requestedPath = path.join(rootDir, req.path);
+        const exists = existsSync(requestedPath);
+        if (!exists) {
+            console.log(`⚠️ Archivo JS no encontrado: ${req.path}`);
+            console.log(`   Ruta completa: ${requestedPath}`);
+            console.log(`   Directorio raíz: ${rootDir}`);
+        }
+    }
+    next();
+});
+
+app.use(express.static(rootDir, {
     // Asegurar que los módulos ES6 se sirvan correctamente
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.js')) {

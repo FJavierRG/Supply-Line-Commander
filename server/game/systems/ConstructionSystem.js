@@ -18,7 +18,6 @@ export class ConstructionSystem {
                 if (node.constructionTimer >= node.constructionTime) {
                     node.isConstructing = false;
                     node.constructed = true;
-                    console.log(`✅ Construcción completada: ${node.type} ${node.id}`);
                     
                     // Aplicar efectos inmediatos al completar construcción
                     this.gameState.applyBuildingEffects(node);
