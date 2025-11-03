@@ -39,7 +39,9 @@ export class ConvoyMovementManager {
             // Velocidad del vehículo (píxeles por segundo) - IGUAL para ida y vuelta
             let vehicleSpeed = this.getVehicleSpeed(convoy.vehicleType);
             
-            // Penalización por fobSabotage (verificar solo una vez por convoy)
+            // Penalización por fobSabotage (aplicar tanto en ida como en vuelta)
+            // La penalización se aplica siempre que el convoy tenga el flag sabotagePenaltyApplied
+            // Esto asegura que el efecto se aplique tanto al ir como al volver
             vehicleSpeed = this.applySabotagePenalty(convoy, fromNode, vehicleSpeed);
             
             // Bonus de EngineerCenter: +50% velocidad
@@ -70,26 +72,40 @@ export class ConvoyMovementManager {
     
     /**
      * Aplica penalización por sabotaje de FOB
+     * La penalización se aplica tanto en la ida como en la vuelta
      * @param {Object} convoy - Convoy
      * @param {Object} fromNode - Nodo origen
      * @param {number} vehicleSpeed - Velocidad actual
      * @returns {number} Velocidad con penalización aplicada
      */
     applySabotagePenalty(convoy, fromNode, vehicleSpeed) {
-        if (!convoy.sabotagePenaltyApplied && fromNode && fromNode.effects) {
+        // Si el convoy ya tiene la penalización aplicada (flag), aplicar la velocidad reducida
+        // Esto asegura que se aplique tanto al ir como al volver
+        if (convoy.sabotagePenaltyApplied) {
+            // 🆕 SERVIDOR COMO AUTORIDAD: Usar configuración centralizada
+            vehicleSpeed *= GAME_CONFIG.convoy.penalties.sabotage;
+            return vehicleSpeed;
+        }
+        
+        // Si aún no se ha aplicado, verificar si el nodo origen tiene el efecto de sabotaje
+        if (fromNode && fromNode.effects) {
             const sabotageEffect = fromNode.effects.find(e => e.type === 'fobSabotage');
             if (sabotageEffect && sabotageEffect.truckCount > 0) {
                 // 🆕 SERVIDOR COMO AUTORIDAD: Usar configuración centralizada
                 vehicleSpeed *= GAME_CONFIG.convoy.penalties.sabotage;
-                convoy.sabotagePenaltyApplied = true; // Marcar como aplicado
                 
-                // Consumir un camión del contador
+                // Marcar como aplicado para que se mantenga en el viaje de vuelta
+                convoy.sabotagePenaltyApplied = true;
+                
+                // Consumir un camión del contador (solo una vez cuando se crea el convoy)
                 sabotageEffect.truckCount--;
                 
                 // Eliminar efecto si se agotaron los camiones
                 if (sabotageEffect.truckCount <= 0) {
                     fromNode.effects = fromNode.effects.filter(e => e.type !== 'fobSabotage');
                 }
+                
+                console.log(`🐌 Convoy ${convoy.id} afectado por sabotaje FOB ${fromNode.id} - velocidad reducida a 50% (ida y vuelta)`);
             }
         }
         return vehicleSpeed;

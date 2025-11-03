@@ -4,6 +4,7 @@ import { MedicalSystemServer } from '../systems/MedicalSystemServer.js';
 import { FrontMovementSystemServer } from '../systems/FrontMovementSystemServer.js';
 import { TerritorySystemServer } from '../systems/TerritorySystemServer.js';
 import { DroneSystemServer } from '../systems/DroneSystemServer.js';
+import { TankSystemServer } from '../systems/TankSystemServer.js';
 import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
 import { BuildHandler } from './handlers/BuildHandler.js';
@@ -59,6 +60,7 @@ export class GameStateManager {
         this.frontMovement = new FrontMovementSystemServer(this);
         this.territory = new TerritorySystemServer(this);
         this.droneSystem = new DroneSystemServer(this);
+        this.tankSystem = new TankSystemServer(this);
         
         // Handlers de acciones
         this.buildHandler = new BuildHandler(this);
@@ -369,6 +371,14 @@ export class GameStateManager {
     }
     
     /**
+     * Maneja lanzamiento de tanque
+     * 🆕 NUEVO
+     */
+    handleTankLaunch(playerTeam, targetId) {
+        return this.combatHandler.handleTankLaunch(playerTeam, targetId);
+    }
+    
+    /**
      * Maneja despliegue de comando especial operativo
      * 🆕 NUEVO
      */
@@ -532,9 +542,17 @@ export class GameStateManager {
             this.droneAlerts = droneResult.alerts;
         }
         
+        // === ACTUALIZAR TANQUES (MOVIMIENTO + IMPACTOS) ===
+        const tankResult = this.tankSystem.update(dt);
+        
+        // Guardar eventos para enviar a clientes
+        if (tankResult.impacts.length > 0) {
+            this.tankImpacts = tankResult.impacts;
+        }
+        
         // Limpiar nodos destruidos del servidor (eliminados del array)
         let nodesChanged = false;
-        if (droneResult.impacts.length > 0 || droneResult.interceptions.length > 0) {
+        if (droneResult.impacts.length > 0 || droneResult.interceptions.length > 0 || tankResult.impacts.length > 0) {
             const beforeCount = this.nodes.length;
             this.nodes = this.nodes.filter(n => n.active !== false);
             
@@ -595,6 +613,7 @@ export class GameStateManager {
             convoys: this.stateSerializer.serializeAllConvoys(), // También todos los convoyes
             helicopters: this.stateSerializer.serializeAllHelicopters(), // Helicópteros
             drones: this.droneSystem.getDrones(), // Drones activos con posiciones
+            tanks: this.tankSystem.getTanks(), // Tanques activos con posiciones
             emergencies: this.medicalSystem.getEmergencies(),
             currency: {
                 player1: Math.floor(this.currency.player1),

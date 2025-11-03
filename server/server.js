@@ -874,6 +874,40 @@ io.on('connection', (socket) => {
     });
     
     /**
+     * Lanzamiento de tanque
+     * 🆕 NUEVO
+     */
+    socket.on('tank_request', (data) => {
+        const { roomId, targetId } = data;
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room || !room.gameState) throw new Error('Partida no iniciada');
+            
+            const playerTeam = roomManager.getPlayerTeam(roomId, socket.id);
+            const result = room.gameState.handleTankLaunch(playerTeam, targetId);
+            
+            if (result.success) {
+                // Broadcast a todos
+                io.to(roomId).emit('tank_launched', {
+                    tankId: result.tank.id,
+                    targetId: result.targetId,
+                    team: playerTeam,
+                    x: result.tank.x,
+                    y: result.tank.y
+                });
+                
+                console.log(`🛡️ Tanque lanzado por ${playerTeam} → ${targetId}`);
+            } else {
+                socket.emit('tank_failed', { reason: result.reason });
+                console.log(`⚠️ Tanque rechazado: ${result.reason}`);
+            }
+        } catch (error) {
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
+    /**
      * Ping/pong para medir latencia
      */
     socket.on('ping', (timestamp) => {
@@ -1041,6 +1075,15 @@ function startGame(roomId) {
                         console.log(`💥 Dron ${impact.droneId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`);
                     });
                     gameState.droneImpacts = []; // Limpiar después de enviar
+                }
+                
+                // Enviar impactos de tanques si hay
+                if (gameState.tankImpacts && gameState.tankImpacts.length > 0) {
+                    gameState.tankImpacts.forEach(impact => {
+                        io.to(roomId).emit('tank_impact', impact);
+                        console.log(`💥 Tanque ${impact.tankId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`);
+                    });
+                    gameState.tankImpacts = []; // Limpiar después de enviar
                 }
                 
                 // Enviar intercepciones de anti-drones si hay

@@ -412,6 +412,10 @@ export class BuildHandler {
             return true;
         }
         
+        // 🆕 NUEVO: La torre de vigilancia puede construirse incluso si hay comandos enemigos cerca
+        // (su propósito es eliminarlos, así que no debe estar bloqueada por ellos)
+        const isVigilanceTower = buildingType === 'vigilanceTower';
+        
         // Lógica normal de detección
         // 🆕 NUEVO: Usar buildRadius para construcción (proximidad), detectionRadius para detección de comandos
         // Obtener radio de construcción del edificio que se está construyendo
@@ -422,6 +426,18 @@ export class BuildHandler {
         // Verificar colisiones con todos los nodos existentes (incluye bases iniciales y edificios construidos)
         for (const node of this.gameState.nodes) {
             if (!node.active) continue;
+            
+            // 🆕 NUEVO: Si estamos construyendo una torre de vigilancia, ignorar comandos enemigos
+            if (isVigilanceTower && node.isCommando) {
+                // Solo verificar colisión física básica con comandos (no área de detección)
+                const dist = Math.hypot(x - node.x, y - node.y);
+                const minPhysicalSeparation = (SERVER_NODE_CONFIG.radius[buildingType] || 35) + 
+                                             (SERVER_NODE_CONFIG.radius[node.type] || 25);
+                if (dist < minPhysicalSeparation) {
+                    return false; // Solo bloquear si hay colisión física directa
+                }
+                continue; // Saltar la verificación de área de detección para comandos
+            }
             
             const dist = Math.hypot(x - node.x, y - node.y);
             

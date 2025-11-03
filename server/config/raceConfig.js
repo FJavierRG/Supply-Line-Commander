@@ -73,7 +73,8 @@ export const SERVER_RACE_CONFIG = {
         consumables: [
             'fobSabotage',  // ✅ Ataque especial de B_Nation
             'sniperStrike',   // ✅ Disponible para B_Nation (menos prioritario según IA)
-            'specopsCommando' // 🆕 NUEVO: Comando especial operativo
+            'specopsCommando', // 🆕 NUEVO: Comando especial operativo
+            'tank'  // 🆕 NUEVO: Tanque - similar al dron pero no puede atacar FOBs ni HQs
         ],
         
         // 🚨 CRÍTICO: Mecánicas especiales (ANTI-HACK)

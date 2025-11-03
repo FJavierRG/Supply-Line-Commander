@@ -22,7 +22,8 @@ export const SERVER_NODE_CONFIG = {
         drone: 150,
         sniperStrike: 40,
         fobSabotage: 40,
-        specopsCommando: 200  // 🆕 NUEVO: Comando especial operativo
+        specopsCommando: 200,  // 🆕 NUEVO: Comando especial operativo
+        tank: 200  // 🆕 NUEVO: Tanque - similar al dron pero no puede atacar FOBs ni HQs
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -87,6 +88,11 @@ export const SERVER_NODE_CONFIG = {
         droneLaunch: {
             cost: 150,
             validTargets: ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase']
+        },
+        tankLaunch: {
+            cost: 200,
+            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower']
+            // No puede atacar FOBs ni HQs
         }
     },
 

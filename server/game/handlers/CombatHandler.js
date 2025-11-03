@@ -157,6 +157,52 @@ export class CombatHandler {
     }
     
     /**
+     * Maneja lanzamiento de tanque
+     * 🆕 NUEVO: Similar al dron pero no puede atacar FOBs ni HQs
+     */
+    handleTankLaunch(playerTeam, targetId) {
+        const targetNode = this.gameState.nodes.find(n => n.id === targetId);
+        
+        if (!targetNode) {
+            return { success: false, reason: 'Objetivo no encontrado' };
+        }
+        
+        // Validar que sea un edificio enemigo válido (NO FOBs ni HQs)
+        const validTargetTypes = SERVER_NODE_CONFIG.actions.tankLaunch.validTargets;
+        
+        console.log(`🛡️ Validando objetivo tanque: ${targetNode.type}, team: ${targetNode.team}, playerTeam: ${playerTeam}`);
+        console.log(`🛡️ ValidTargets disponibles:`, validTargetTypes);
+        console.log(`🛡️ Es válido: ${validTargetTypes.includes(targetNode.type)}, Es enemigo: ${targetNode.team !== playerTeam}`);
+        
+        if (!validTargetTypes.includes(targetNode.type) || targetNode.team === playerTeam) {
+            return { success: false, reason: 'Objetivo no válido para tanques' };
+        }
+        
+        // Validar que el objetivo esté construido (no atacar edificios en construcción)
+        if (targetNode.isConstructing || !targetNode.constructed) {
+            return { success: false, reason: 'No puedes atacar edificios en construcción' };
+        }
+        
+        // Costo del tanque
+        const tankCost = SERVER_NODE_CONFIG.actions.tankLaunch.cost;
+        
+        // Verificar currency
+        if (this.gameState.currency[playerTeam] < tankCost) {
+            return { success: false, reason: 'Currency insuficiente' };
+        }
+        
+        // Descontar currency
+        this.gameState.currency[playerTeam] -= tankCost;
+        
+        // Lanzar tanque desde el extremo del mapa
+        const tank = this.gameState.tankSystem.launchTank(playerTeam, targetNode);
+        
+        console.log(`🛡️ Tanque ${tank.id} lanzado por ${playerTeam} → ${targetNode.type} ${targetId}`);
+        
+        return { success: true, tank, targetId };
+    }
+    
+    /**
      * Maneja despliegue de comando especial operativo
      * 🆕 NUEVO: Crea un nodo especial que deshabilita edificios enemigos dentro de su área
      */
