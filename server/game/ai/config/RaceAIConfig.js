@@ -180,27 +180,46 @@ const RACE_AI_CONFIG = {
 
 /**
  * Configuración de multiplicadores por dificultad
- * 🎯 FOCO PRINCIPAL: Velocidad de acciones (APM)
- * Fácil = acciones más lentas, Difícil = acciones más rápidas
+ * 🎯 SISTEMA MEJORADO: Multiplicadores específicos por tipo de acción
+ * Permite control fino de cada aspecto de la IA
  */
 const DIFFICULTY_MULTIPLIERS = {
     easy: {
-        actionScore: 1.0,         // Scores normales (no cambia agresividad)
-        currencyThreshold: 1.3,  // Umbrales normales
-        reactionSpeed: 1.0,       // Velocidad de reacción normal (no usado actualmente)
-        intervalMultiplier: 2   // ⭐ ACCIONES 50% MÁS LENTAS (intervalos 1.5x más largos)
+        actionScore: 1.0,              // Scores normales (no cambia agresividad)
+        currencyThreshold: 1.5,       // Umbrales de currency más altos
+        
+        // ⭐ MULTIPLICADORES ESPECÍFICOS POR TIPO DE ACCIÓN
+        supplyMultiplier: 2.0,         // Reabastecimiento 2x más lento
+        buildingMultiplier: 2.0,       // Construcciones 2x más lentas
+        attackMultiplier: 2.0,         // Ataques (drones, snipers) 2x más lentos
+        reactionMultiplier: 2.0,       // Reacciones 2x más lentas
+        
+        // Fallback para compatibilidad (usa buildingMultiplier)
+        intervalMultiplier: 2.0
     },
     medium: {
         actionScore: 1.0,
         currencyThreshold: 1.0,
-        reactionSpeed: 1.0,
-        intervalMultiplier: 1.0   // ⭐ VELOCIDAD NORMAL
+        
+        // ⭐ VELOCIDAD NORMAL (multiplicador 1.0)
+        supplyMultiplier: 1.0,
+        buildingMultiplier: 1.0,
+        attackMultiplier: 1.0,
+        reactionMultiplier: 1.0,
+        
+        intervalMultiplier: 1.0
     },
     hard: {
-        actionScore: 1.0,         // Scores normales (no cambia agresividad)
-        currencyThreshold: 0.9,  // Umbrales normales
-        reactionSpeed: 1.0,       // Velocidad de reacción normal (no usado actualmente)
-        intervalMultiplier: 0.65   // ⭐ ACCIONES 35% MÁS RÁPIDAS (intervalos 35% más cortos)
+        actionScore: 1.0,
+        currencyThreshold: 0.9,       // Umbrales de currency más bajos (actúa antes)
+        
+        // ⭐ ACCIONES MÁS RÁPIDAS
+        supplyMultiplier: 0.7,        // Reabastecimiento 30% más rápido
+        buildingMultiplier: 0.65,      // Construcciones 35% más rápidas
+        attackMultiplier: 0.65,        // Ataques 35% más rápidos
+        reactionMultiplier: 0.7,      // Reacciones 30% más rápidas
+        
+        intervalMultiplier: 0.65
     }
 };
 
@@ -224,7 +243,8 @@ export function getDifficultyMultipliers(difficulty) {
 
 /**
  * Obtiene un intervalo ajustado por raza y dificultad
- * @param {string} intervalName - Nombre del intervalo ('strategic', 'offensive', etc)
+ * 🎯 MEJORADO: Usa multiplicadores específicos por tipo de acción
+ * @param {string} intervalName - Nombre del intervalo ('strategic', 'offensive', 'supply', 'harass', 'reaction')
  * @param {string} raceId - ID de la raza
  * @param {string} difficulty - Dificultad
  * @returns {number} Intervalo ajustado en segundos
@@ -239,8 +259,29 @@ export function getAdjustedInterval(intervalName, raceId, difficulty) {
         baseInterval = AIConfig.intervals[intervalName] || 8.0;
     }
     
-    // 2. Aplicar multiplicador de dificultad
-    return baseInterval * difficultyMultipliers.intervalMultiplier;
+    // 2. Mapear nombre de intervalo a multiplicador específico
+    let multiplier;
+    switch (intervalName) {
+        case 'supply':
+            multiplier = difficultyMultipliers.supplyMultiplier;
+            break;
+        case 'strategic':
+            multiplier = difficultyMultipliers.buildingMultiplier;
+            break;
+        case 'offensive':
+        case 'harass':
+            multiplier = difficultyMultipliers.attackMultiplier;
+            break;
+        case 'reaction':
+            multiplier = difficultyMultipliers.reactionMultiplier;
+            break;
+        default:
+            // Fallback al multiplicador general para compatibilidad
+            multiplier = difficultyMultipliers.intervalMultiplier;
+    }
+    
+    // 3. Aplicar multiplicador de dificultad específico
+    return baseInterval * multiplier;
 }
 
 /**

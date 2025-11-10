@@ -42,14 +42,14 @@ export class AISystem {
         // Nota: Para obtener la dificultad correcta, necesitamos calcularlos después de establecer difficulty
         // Por ahora usamos valores temporales, se recalcularán en activate()
         this.intervals = {
-            supply: AIConfig.intervals.supply,
+            supply: AIConfig.intervals.supply,  // Temporal, se ajustará en activate()
             fobCheck: 2.0,        // Revisar FOBs cada 2s (desde HQ)
             frontCheck: 3.0,     // Revisar frentes cada 3s (desde FOBs)
             helicopterCheck: 1.5, // 🆕 Revisar helicópteros cada 1.5s (B_Nation)
-            strategic: Math.min(4.0, AIConfig.intervals.strategic), // Primera decisión más rápida
-            offensive: AIConfig.intervals.offensive,
-            harass: AIConfig.intervals.harass,
-            reaction: 0.5  // Reacciones cada 0.5s (muy responsivo)
+            strategic: AIConfig.intervals.strategic, // Temporal, se ajustará en activate()
+            offensive: AIConfig.intervals.offensive,  // Temporal, se ajustará en activate()
+            harass: AIConfig.intervals.harass,  // Temporal, se ajustará en activate()
+            reaction: 0.5  // Temporal, se ajustará en activate()
         };
         
         // Flag para primera decisión estratégica
@@ -102,13 +102,13 @@ export class AISystem {
         const randomOffensive = base + (Math.random() * variance * 2) - variance;
         
         this.intervals = {
-            supply: AIConfig.intervals.supply,
+            supply: getAdjustedInterval('supply', this.raceId, this.difficulty),
             fobCheck: 2.0,
             frontCheck: 3.0,
             helicopterCheck: 1.5, // 🆕 Revisar helicópteros cada 1.5s (B_Nation)
-            strategic: Math.min(4.0, getAdjustedInterval('strategic', this.raceId, this.difficulty)), // Primera decisión más rápida
+            strategic: Math.min(4.0 * this.difficultyMultipliers.buildingMultiplier, getAdjustedInterval('strategic', this.raceId, this.difficulty)), // Primera decisión más rápida (ajustada por dificultad)
             offensive: randomOffensive,
-            harass: AIConfig.intervals.harass,
+            harass: getAdjustedInterval('harass', this.raceId, this.difficulty),
             reaction: getAdjustedInterval('reaction', this.raceId, this.difficulty)
         };
         
@@ -267,7 +267,8 @@ export class AISystem {
         this.timers.offensive += dt;
         if (this.timers.offensive >= this.intervals.offensive) {
             this.timers.offensive = 0;
-            const base = AIConfig.intervals.offensive;
+            // 🐛 FIX: Usar getAdjustedInterval para respetar multiplicador de dificultad
+            const base = getAdjustedInterval('offensive', this.raceId, this.difficulty);
             const variance = AIConfig.intervals.offensiveVariance;
             this.intervals.offensive = base + (Math.random() * variance * 2) - variance;
             this.handleOffensiveDecision(enemyTeam, currency);
