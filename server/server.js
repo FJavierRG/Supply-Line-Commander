@@ -1070,15 +1070,43 @@ function startGameCountdown(roomId) {
     
     let countdown = 3;
     
+    // Mensaje inicial en el chat
+    io.to(roomId).emit('lobby_chat_message', {
+        playerName: 'Sistema',
+        message: '⏱️ La partida comenzará en 3 segundos...',
+        timestamp: Date.now()
+    });
+    
+    // Enviar el primer número inmediatamente (3)
+    io.to(roomId).emit('countdown', { seconds: countdown });
+    io.to(roomId).emit('lobby_chat_message', {
+        playerName: 'Sistema',
+        message: `⏱️ ${countdown}...`,
+        timestamp: Date.now()
+    });
+    
     const interval = setInterval(() => {
+        countdown--;
+        
         io.to(roomId).emit('countdown', { seconds: countdown });
         
-        if (countdown === 0) {
+        if (countdown > 0) {
+            // Enviar mensaje de cuenta atrás al chat
+            io.to(roomId).emit('lobby_chat_message', {
+                playerName: 'Sistema',
+                message: `⏱️ ${countdown}...`,
+                timestamp: Date.now()
+            });
+        } else {
+            // Cuando llega a 0, mostrar mensaje final y comenzar
             clearInterval(interval);
+            io.to(roomId).emit('lobby_chat_message', {
+                playerName: 'Sistema',
+                message: '🚀 ¡Comienza la partida!',
+                timestamp: Date.now()
+            });
             startGame(roomId);
         }
-        
-        countdown--;
     }, 1000);
 }
 
