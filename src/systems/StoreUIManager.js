@@ -12,7 +12,8 @@ export class StoreUIManager {
         // Estado de la tienda
         this.isVisible = true; // Visible por defecto
         this.selectedCategory = null; // Sin categoría seleccionada por defecto
-        this.currentRace = getDefaultRace(); // Raza actual (por defecto 'default')
+        this.currentRace = getDefaultRace(); // Raza actual (por defecto 'default') - DEPRECATED: Mantener para compatibilidad
+        this.currentDeckId = null; // 🆕 NUEVO: ID del mazo actualmente seleccionado
         
         // Sistema de hover para tooltips
         this.hoveredItem = null;
@@ -37,76 +38,79 @@ export class StoreUIManager {
     }
     
     /**
-     * Actualiza las categorías dinámicamente desde la configuración (filtrado por raza)
-     * 🎯 CORREGIDO: Usa configuración del servidor cuando esté disponible
+     * Actualiza las categorías dinámicamente desde el mazo seleccionado
+     * 🎯 NUEVO: Usa el mazo seleccionado en lugar de la configuración de raza
      */
     updateCategories() {
-        // 🎯 SERVIDOR COMO AUTORIDAD: Usar configuración del servidor cuando esté disponible
         let buildableNodes = [];
         let projectileNodes = [];
         
-        // Determinar team del jugador
-        const team = this.game?.myTeam || 'player1';
+        // 🎯 NUEVO: Obtener mazo seleccionado
+        let selectedDeck = null;
         
-        // Verificar que existe la configuración del servidor
-        if (!this.game || !this.game.raceConfigs || !this.game.raceConfigs[team]) {
-            // 🎯 FALLBACK TEMPORAL: Si no hay configuración del servidor aún, usar configuración local basada en currentRace
-            // Esto puede pasar durante la inicialización antes de que llegue raceConfigs del servidor
-            // console.warn(`⚠️ No hay configuración del servidor para team ${team} aún, usando fallback temporal basado en currentRace: ${this.currentRace}`); // Log removido
-            
+        if (this.currentDeckId && this.game && this.game.deckManager) {
+            // Usar el mazo especificado por currentDeckId
+            selectedDeck = this.game.deckManager.getDeck(this.currentDeckId);
+        } else if (this.game && this.game.deckManager) {
+            // Si no hay mazo específico, usar el mazo seleccionado o el predeterminado
+            selectedDeck = this.game.deckManager.getSelectedDeck();
+            if (!selectedDeck) {
+                // Si no hay mazo seleccionado del jugador, usar el predeterminado
+                selectedDeck = this.game.deckManager.getDefaultDeck();
+            }
+        }
+        
+        if (selectedDeck && selectedDeck.units) {
+            // 🎯 NUEVO: Filtrar unidades del mazo por tipo (edificios vs consumibles)
             const allBuildableNodes = getBuildableNodes();
             const allProjectiles = getProjectiles();
             
-            // Fallback temporal basado en currentRace
-            if (this.currentRace === 'A_Nation') {
-                buildableNodes = allBuildableNodes.filter(n => 
-                    ['fob', 'antiDrone', 'droneLauncher', 'truckFactory', 'engineerCenter', 'nuclearPlant', 'campaignHospital', 'intelRadio', 'aerialBase', 'vigilanceTower'].includes(n.id)
-                );
-                projectileNodes = allProjectiles.filter(n => 
-                    ['drone', 'sniperStrike'].includes(n.id)
-                );
-            } else if (this.currentRace === 'B_Nation') {
-                buildableNodes = allBuildableNodes.filter(n => 
-                    ['intelRadio', 'intelCenter', 'campaignHospital', 'aerialBase', 'antiDrone', 'vigilanceTower'].includes(n.id)
-                );
-                projectileNodes = allProjectiles.filter(n => 
-                    ['fobSabotage', 'sniperStrike', 'specopsCommando'].includes(n.id)
-                );
-            } else {
-                // Fallback genérico: mostrar todos (no debería pasar)
-                console.error(`❌ Raza desconocida en fallback: ${this.currentRace}`);
-                buildableNodes = allBuildableNodes;
-                projectileNodes = allProjectiles;
-            }
-        } else {
-            // Usar configuración del servidor (SERVIDOR COMO AUTORIDAD)
-            const myRaceConfig = this.game.raceConfigs[team];
-            if (!myRaceConfig || !myRaceConfig.buildings || !myRaceConfig.consumables) {
-                console.error(`❌ ERROR CRÍTICO: Configuración de raza incompleta para team ${team}:`, myRaceConfig);
-                // No mostrar nada hasta que llegue la configuración completa
-                this.categories = {
-                    buildings: { name: 'Edificios', icon: 'hammer_wrench', items: [] },
-                    vehicles: { name: 'Vehículos', icon: 'wheel', items: [] }
-                };
-                this.hitRegions = [];
-                return;
-            }
+            // Crear sets de IDs para búsqueda rápida
+            const buildableIds = new Set(allBuildableNodes.map(n => n.id));
+            const projectileIds = new Set(allProjectiles.map(n => n.id));
             
-            const availableBuildings = myRaceConfig.buildings || [];
-            const availableConsumables = myRaceConfig.consumables || [];
+            // Separar las unidades del mazo en edificios y consumibles
+            const deckUnits = selectedDeck.units || [];
             
-            // Obtener todos los nodos construibles y filtrar por los disponibles
-            const allBuildableNodes = getBuildableNodes();
             buildableNodes = allBuildableNodes.filter(node => 
-                availableBuildings.includes(node.id)
+                deckUnits.includes(node.id) && buildableIds.has(node.id)
             );
             
-            // Obtener todos los proyectiles y filtrar por los disponibles
-            const allProjectiles = getProjectiles();
             projectileNodes = allProjectiles.filter(node => 
-                availableConsumables.includes(node.id)
+                deckUnits.includes(node.id) && projectileIds.has(node.id)
             );
             
+            // console.log(`🎴 Tienda cargada desde mazo "${selectedDeck.name}": ${buildableNodes.length} edificios, ${projectileNodes.length} consumibles`);
+        } else {
+            // 🎯 FALLBACK: Si no hay mazo disponible, usar configuración del servidor (compatibilidad temporal)
+            const team = this.game?.myTeam || 'player1';
+            
+            if (this.game && this.game.raceConfigs && this.game.raceConfigs[team]) {
+                const myRaceConfig = this.game.raceConfigs[team];
+                if (myRaceConfig && myRaceConfig.buildings && myRaceConfig.consumables) {
+                    const availableBuildings = myRaceConfig.buildings || [];
+                    const availableConsumables = myRaceConfig.consumables || [];
+                    
+                    const allBuildableNodes = getBuildableNodes();
+                    buildableNodes = allBuildableNodes.filter(node => 
+                        availableBuildings.includes(node.id)
+                    );
+                    
+                    const allProjectiles = getProjectiles();
+                    projectileNodes = allProjectiles.filter(node => 
+                        availableConsumables.includes(node.id)
+                    );
+                } else {
+                    console.warn('⚠️ No hay configuración de raza disponible, usando fallback');
+                    // Fallback genérico: mostrar todos
+                    buildableNodes = getBuildableNodes();
+                    projectileNodes = getProjectiles();
+                }
+            } else {
+                // Fallback genérico: mostrar todos
+                buildableNodes = getBuildableNodes();
+                projectileNodes = getProjectiles();
+            }
         }
         
         // console.log(`🏛️ Edificios mostrados en tienda: ${buildableNodes.map(n => n.id).join(', ')}`); // Log removido
@@ -767,8 +771,25 @@ export class StoreUIManager {
     }
     
     /**
+     * Establece el mazo actual y actualiza las categorías
+     * @param {string} deckId - ID del mazo a establecer
+     */
+    setDeck(deckId) {
+        if (this.currentDeckId !== deckId) {
+            this.currentDeckId = deckId;
+            this.updateCategories();
+            this.selectedCategory = null; // Limpiar selección actual
+            // console.log(`🎴 Tienda actualizada para mazo: ${deckId}`);
+        } else {
+            // Mismo mazo, pero forzar actualización por si cambió el contenido
+            this.updateCategories();
+        }
+    }
+    
+    /**
      * Establece la raza actual y actualiza las categorías
      * @param {string} raceId - ID de la raza a establecer
+     * @deprecated Usar setDeck() en su lugar. Mantenido para compatibilidad.
      */
     setRace(raceId) {
         if (this.currentRace !== raceId) {

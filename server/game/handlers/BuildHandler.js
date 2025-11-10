@@ -110,10 +110,9 @@ export class BuildHandler {
             return { success: false, reason: 'Currency insuficiente' };
         }
         
-        // 🆕 NUEVO: Validar construcción según raza del jugador
-        const playerRace = this.gameState.getPlayerRace(playerTeam);
-        if (!this.canBuildBuilding(playerRace, buildingType)) {
-            return { success: false, reason: 'Tu nación no puede construir este edificio' };
+        // 🎯 NUEVO: Validar construcción según mazo del jugador
+        if (!this.canBuildBuilding(playerTeam, buildingType)) {
+            return { success: false, reason: 'Tu mazo no incluye este edificio' };
         }
         
         // Validar que esté dentro del territorio del jugador
@@ -462,15 +461,27 @@ export class BuildHandler {
     
     /**
      * Verifica si una raza puede construir un tipo de edificio específico
-     * 🎯 CORREGIDO: Usa configuración centralizada de raceConfig (SERVIDOR COMO AUTORIDAD)
-     * @param {string} raceId - ID de la raza
+     * 🎯 ACTUALIZADO: Ahora usa el mazo del jugador en lugar de la raza
+     * @param {string} team - Equipo del jugador (player1/player2)
      * @param {string} buildingType - Tipo de edificio
      * @returns {boolean} True si puede construir, false si no
      */
-    canBuildBuilding(raceId, buildingType) {
-        // Si no hay raza seleccionada, permitir todo (fallback)
+    canBuildBuilding(team, buildingType) {
+        // 🎯 NUEVO: Usar mazo del jugador si está disponible
+        const deck = this.gameState.getPlayerDeck(team);
+        
+        if (deck && deck.units) {
+            // Validar usando el mazo
+            const canBuild = deck.units.includes(buildingType);
+            console.log(`🎴 ${team} (mazo "${deck.name}") intenta construir ${buildingType}: ${canBuild ? 'PERMITIDO' : 'DENEGADO'} (disponibles: ${deck.units.join(', ')})`);
+            return canBuild;
+        }
+        
+        // Fallback: Si no hay mazo, usar validación por raza (compatibilidad)
+        const raceId = this.gameState.getPlayerRace(team);
         if (!raceId) {
-            return true;
+            console.log(`⚠️ No hay mazo ni raza para ${team}, permitiendo construcción (fallback)`);
+            return true; // Fallback: permitir construcción
         }
         
         // 🎯 USAR CONFIGURACIÓN CENTRALIZADA: Obtener edificios disponibles desde raceConfig

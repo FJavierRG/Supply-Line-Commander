@@ -237,9 +237,6 @@
                         <h2 class="arsenal-title">Constructor de Mazos</h2>
                         <div class="arsenal-header-right">
                             <button id="arsenal-load-btn" class="back-btn">Cargar</button>
-                            <div class="deck-counter">
-                                <span id="deck-count">0</span> / <span id="deck-limit">20</span>
-                            </div>
                         </div>
                     </div>
 
@@ -254,7 +251,12 @@
 
                         <!-- Panel derecho: Mazo actual -->
                         <div class="deck-panel">
-                            <h3 class="panel-title">Tu Mazo</h3>
+                            <div class="deck-panel-header">
+                                <h3 class="panel-title">Tu Mazo</h3>
+                                <div class="deck-counter">
+                                    <span id="deck-count">0</span> / <span id="deck-limit">800</span> puntos
+                                </div>
+                            </div>
                             <div class="deck-list" id="deck-list">
                                 <div class="deck-empty">Tu mazo está vacío. Haz clic en las unidades disponibles para añadirlas.</div>
                             </div>

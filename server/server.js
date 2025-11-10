@@ -198,6 +198,14 @@ app.get('*', (req, res, next) => {
 io.on('connection', (socket) => {
     console.log(`✅ Cliente conectado: ${socket.id}`);
     
+    // 🎯 NUEVO: Enviar configuración del juego al cliente (incluyendo límite de mazo)
+    (async () => {
+        const { GAME_CONFIG } = await import('./config/gameConfig.js');
+        socket.emit('game_config', {
+            deckPointLimit: GAME_CONFIG.deck.pointLimit || 650
+        });
+    })();
+    
     // === LOBBY ===
     
     /**
@@ -317,32 +325,100 @@ io.on('connection', (socket) => {
     });
     
     /**
-     * Seleccionar raza
+     * Seleccionar raza/mazo
+     * 🎯 ACTUALIZADO: Ahora acepta deckId y valida el mazo del jugador
      */
-    socket.on('select_race', (data) => {
-        console.log('🏛️ SERVIDOR: Recibido select_race:', data);
-        const { roomId, raceId } = data;
+    socket.on('select_race', async (data) => {
+        console.log('🎴 SERVIDOR: Recibido select_race (ahora maneja mazos):', data);
+        const { roomId, raceId, deckUnits } = data; // raceId ahora es deckId, deckUnits es opcional
         
         try {
             const room = roomManager.getRoom(roomId);
             if (!room) throw new Error('Sala no encontrada');
             
-            // Validar que la raza sea válida
-            // 🚧 TEMPORAL: Solo A_Nation disponible para migración a sistema de mazo
-            const validRaces = ['A_Nation'];
-            if (!validRaces.includes(raceId)) {
-                throw new Error('Raza inválida');
-            }
-            
-            // Encontrar el jugador y actualizar su raza
+            // Encontrar el jugador
             const player = room.players.find(p => p.id === socket.id);
             if (!player) throw new Error('Jugador no encontrado');
             
-            player.selectedRace = raceId;
+            // 🎯 NUEVO: Validar y almacenar el mazo
+            let validatedDeck = null;
+            
+            if (raceId === 'default') {
+                // Mazo predeterminado - usar el del servidor
+                const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
+                validatedDeck = {
+                    id: 'default',
+                    name: 'Mazo Predeterminado',
+                    units: DEFAULT_DECK.units
+                };
+            } else if (deckUnits && Array.isArray(deckUnits)) {
+                // 🎯 VALIDACIÓN ANTI-HACK: Validar que todas las unidades sean válidas
+                const { SERVER_NODE_CONFIG } = await import('./config/serverNodes.js');
+                const { GAME_CONFIG } = await import('./config/gameConfig.js');
+                const enabled = SERVER_NODE_CONFIG.gameplay.enabled || {};
+                const costs = SERVER_NODE_CONFIG.costs || {};
+                const deckPointLimit = GAME_CONFIG.deck.pointLimit || 650;
+                
+                // Verificar que todas las unidades estén habilitadas en el servidor
+                const validUnits = deckUnits.filter(unitId => {
+                    const isEnabled = enabled[unitId] === true;
+                    if (!isEnabled) {
+                        console.warn(`⚠️ Unidad deshabilitada en mazo: ${unitId}`);
+                    }
+                    return isEnabled;
+                });
+                
+                // El HQ siempre debe estar presente
+                if (!validUnits.includes('hq')) {
+                    validUnits.unshift('hq');
+                }
+                
+                // 🎯 VALIDACIÓN ANTI-HACK: Calcular costo total del mazo
+                // El HQ siempre está presente y no cuenta para el límite
+                const deckCost = validUnits
+                    .filter(unitId => unitId !== 'hq') // Excluir HQ del cálculo
+                    .reduce((total, unitId) => {
+                        const unitCost = costs[unitId] || 0;
+                        return total + unitCost;
+                    }, 0);
+                
+                // Validar que el costo no exceda el límite
+                if (deckCost > deckPointLimit) {
+                    console.warn(`🚫 Mazo rechazado: costo ${deckCost} excede límite ${deckPointLimit}`);
+                    socket.emit('deck_validation_error', {
+                        error: 'INVALID_DECK_COST',
+                        message: `El costo del mazo (${deckCost}) excede el límite permitido (${deckPointLimit})`,
+                        deckCost: deckCost,
+                        deckLimit: deckPointLimit
+                    });
+                    return; // Rechazar el mazo
+                }
+                
+                console.log(`✅ Mazo validado: ${validUnits.length} unidades, costo total: ${deckCost}/${deckPointLimit}`);
+                
+                validatedDeck = {
+                    id: raceId, // El deckId del cliente
+                    name: `Mazo del jugador ${player.name}`,
+                    units: validUnits
+                };
+            } else {
+                // Si no hay deckUnits, asumir que es el mazo predeterminado
+                const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
+                validatedDeck = {
+                    id: 'default',
+                    name: 'Mazo Predeterminado',
+                    units: DEFAULT_DECK.units
+                };
+            }
+            
+            // Almacenar el mazo en el jugador
+            player.selectedRace = validatedDeck.id; // Mantener compatibilidad con nombre anterior
+            player.selectedDeck = validatedDeck; // 🆕 NUEVO: Almacenar mazo completo
             
             // Confirmar selección al jugador
             socket.emit('race_selected', {
-                raceId: raceId,
+                raceId: validatedDeck.id, // Mantener compatibilidad
+                deckId: validatedDeck.id, // 🆕 NUEVO
                 playerName: player.name
             });
             
@@ -352,13 +428,15 @@ io.on('connection', (socket) => {
                     id: p.id,
                     name: p.name,
                     team: p.team,
-                    selectedRace: p.selectedRace,
+                    selectedRace: p.selectedRace, // Mantener compatibilidad
+                    selectedDeck: p.selectedDeck ? { id: p.selectedDeck.id, name: p.selectedDeck.name } : null, // 🆕 NUEVO: Enviar info del mazo
                     ready: p.ready
                 }))
             });
             
-            console.log(`✅ Jugador ${player.name} seleccionó raza ${raceId} en sala ${roomId}`);
+            console.log(`✅ Jugador ${player.name} seleccionó mazo "${validatedDeck.name}" (${validatedDeck.units.length} unidades) en sala ${roomId}`);
         } catch (error) {
+            console.error('❌ Error al seleccionar mazo:', error);
             socket.emit('error', { message: error.message });
         }
     });
@@ -1004,10 +1082,7 @@ function startGameCountdown(roomId) {
     }, 1000);
 }
 
-/**
- * Inicia la partida
- */
-function startGame(roomId) {
+async function startGame(roomId) {
     try {
         const room = roomManager.getRoom(roomId);
         if (!room) throw new Error('Sala no encontrada');
@@ -1017,28 +1092,49 @@ function startGame(roomId) {
         room.gameState = gameState;
         room.status = 'playing';
         
-        // 🆕 CENTRALIZADO: Establecer razas seleccionadas ANTES de crear estado inicial
+        // 🆕 CENTRALIZADO: Establecer mazos seleccionados ANTES de crear estado inicial
         const player1 = room.players.find(p => p.team === 'player1');
         const player2 = room.players.find(p => p.team === 'player2');
         
         // 🤖 NUEVO: Si hay IA, usar sus datos
         const hasAI = room.aiPlayer !== null && room.aiPlayer !== undefined;
         
-        if (player1.selectedRace) {
-            gameState.setPlayerRace('player1', player1.selectedRace);
-            console.log(`🏛️ Raza establecida para player1: ${player1.selectedRace}`);
+        if (player1 && player1.selectedDeck) {
+            // 🎯 NUEVO: Usar mazo en lugar de raza (automáticamente establece A_Nation)
+            gameState.setPlayerDeck('player1', player1.selectedDeck);
+            console.log(`🎴 Mazo establecido para player1: "${player1.selectedDeck.name}" (${player1.selectedDeck.units.length} unidades)`);
+        } else if (player1 && player1.selectedRace) {
+            // Fallback: Si solo hay selectedRace (compatibilidad), crear mazo predeterminado
+            const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
+            gameState.setPlayerDeck('player1', DEFAULT_DECK);
+            console.log(`🎴 Mazo predeterminado establecido para player1 (fallback)`);
+        } else {
+            // 🎯 NUEVO: Si no hay mazo ni raza, establecer mazo predeterminado y A_Nation
+            const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
+            gameState.setPlayerDeck('player1', DEFAULT_DECK);
+            console.log(`🎴 Mazo predeterminado establecido para player1 (sin selección previa)`);
         }
         
         if (hasAI) {
-            // IA en player2
+            // IA en player2 - usar raza para compatibilidad con IA
             gameState.setPlayerRace('player2', room.aiPlayer.race);
             console.log(`🤖 Raza establecida para IA (player2): ${room.aiPlayer.race} (${room.aiPlayer.difficulty})`);
             room.hasAI = true;
             room.aiDifficulty = room.aiPlayer.difficulty;
+        } else if (player2 && player2.selectedDeck) {
+            // 🎯 NUEVO: Usar mazo en lugar de raza (automáticamente establece A_Nation)
+            gameState.setPlayerDeck('player2', player2.selectedDeck);
+            console.log(`🎴 Mazo establecido para player2: "${player2.selectedDeck.name}" (${player2.selectedDeck.units.length} unidades)`);
         } else if (player2 && player2.selectedRace) {
-            // Jugador humano en player2
-            gameState.setPlayerRace('player2', player2.selectedRace);
-            console.log(`🏛️ Raza establecida para player2: ${player2.selectedRace}`);
+            // Fallback: Si solo hay selectedRace (compatibilidad), crear mazo predeterminado
+            const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
+            gameState.setPlayerDeck('player2', DEFAULT_DECK);
+            console.log(`🎴 Mazo predeterminado establecido para player2 (fallback)`);
+        } else {
+            // 🎯 NUEVO: Si no hay mazo ni raza, establecer mazo predeterminado y A_Nation
+            const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
+            gameState.setPlayerDeck('player2', DEFAULT_DECK);
+            console.log(`🎴 Mazo predeterminado establecido para player2 (sin selección previa)`);
         }
         
         // 🤖 NUEVO: Inicializar AISystem con io y roomId para simular eventos de jugador

@@ -2,6 +2,8 @@
 // Maneja la persistencia y gestión de mazos (CRUD)
 // Preparado para migración fácil a base de datos
 
+import { getNodeConfig } from '../config/nodes.js';
+
 // Mazo predeterminado del juego
 // Nota: Este debe coincidir con server/config/defaultDeck.js
 const DEFAULT_DECK_CONFIG = {
@@ -16,6 +18,7 @@ const DEFAULT_DECK_CONFIG = {
 };
 
 const STORAGE_KEY = 'game_decks';
+const DEFAULT_DECK_POINT_LIMIT = 650; // 🆕 Valor por defecto (será sobrescrito por el servidor)
 
 export class DeckManager {
     constructor(game) {
@@ -23,6 +26,7 @@ export class DeckManager {
         this.decks = [];
         this.defaultDeckId = null;
         this.lastSelectedDeckId = null;
+        this.deckPointLimit = DEFAULT_DECK_POINT_LIMIT; // 🎯 Límite dinámico (actualizado desde servidor)
         
         this.initialize();
     }
@@ -130,6 +134,55 @@ export class DeckManager {
     }
     
     /**
+     * Calcula el costo total de un mazo (suma de precios de todas las unidades)
+     * @param {Array<string>} units - Array de IDs de unidades
+     * @returns {number} Costo total del mazo
+     */
+    calculateDeckCost(units) {
+        if (!units || !Array.isArray(units)) return 0;
+        
+        let totalCost = 0;
+        
+        units.forEach(unitId => {
+            // El HQ es gratis (no tiene costo o costo 0)
+            if (unitId === 'hq') {
+                return; // Continuar sin sumar
+            }
+            
+            // Obtener el costo de la unidad desde la configuración
+            const config = getNodeConfig(unitId);
+            const cost = config?.cost || 0;
+            
+            totalCost += cost;
+        });
+        
+        return totalCost;
+    }
+    
+    /**
+     * Obtiene el límite de puntos permitido para un mazo
+     * @returns {number} Límite de puntos
+     */
+    getDeckPointLimit() {
+        return this.deckPointLimit;
+    }
+    
+    /**
+     * Establece el límite de puntos desde el servidor (ANTI-HACK)
+     * @param {number} limit - Límite de puntos del servidor
+     */
+    setPointLimit(limit) {
+        if (typeof limit === 'number' && limit > 0) {
+            this.deckPointLimit = limit;
+            console.log(`🎯 Límite de puntos actualizado desde servidor: ${limit}`);
+            // Notificar al arsenal si está disponible
+            if (this.game && this.game.arsenalManager) {
+                this.game.arsenalManager.deckPointLimit = limit;
+            }
+        }
+    }
+    
+    /**
      * Valida que un mazo sea válido
      * @param {Object} deck - Objeto del mazo a validar
      * @returns {Object} { valid: boolean, errors: string[] }
@@ -158,6 +211,12 @@ export class DeckManager {
             const uniqueUnits = [...new Set(deck.units)];
             if (uniqueUnits.length !== deck.units.length) {
                 errors.push('El mazo no puede tener unidades duplicadas');
+            }
+            
+            // 🆕 NUEVO: Verificar límite de puntos
+            const deckCost = this.calculateDeckCost(deck.units);
+            if (deckCost > this.deckPointLimit) {
+                errors.push(`El mazo excede el límite de puntos (${deckCost}/${this.deckPointLimit})`);
             }
             
             // Verificar que todas las unidades existan y estén habilitadas (si está disponible)

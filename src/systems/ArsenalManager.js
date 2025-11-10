@@ -12,7 +12,8 @@ export class ArsenalManager {
         this.deckManager = game.deckManager;
         this.currentDeckId = null; // ID del mazo que estamos editando
         this.deck = ['hq']; // Array de IDs únicos - HQ siempre incluido por defecto
-        this.deckLimit = 20; // Límite máximo de unidades en el mazo (preparado para sistema de puntos)
+        this.deckLimit = 20; // Límite máximo de unidades en el mazo (DEPRECATED: ahora se usa sistema de puntos)
+        this.deckPointLimit = this.deckManager.getDeckPointLimit(); // 🆕 NUEVO: Límite de puntos
         
         this.setupEventListeners();
     }
@@ -112,18 +113,52 @@ export class ArsenalManager {
     }
     
     /**
+     * Calcula el costo total del mazo actual
+     * @returns {number} Costo total en puntos
+     */
+    getDeckCost() {
+        return this.deckManager.calculateDeckCost(this.deck);
+    }
+    
+    /**
+     * Verifica si se puede añadir una unidad al mazo (sin exceder límite de puntos)
+     * @param {string} itemId - ID de la unidad
+     * @returns {Object} { canAdd: boolean, reason: string }
+     */
+    canAddToDeck(itemId) {
+        // Verificar si ya está en el mazo
+        if (this.deck.includes(itemId)) {
+            return { canAdd: false, reason: 'Esta unidad ya está en el mazo' };
+        }
+        
+        // Obtener el costo de la unidad
+        const itemConfig = this.getItemConfig(itemId);
+        const unitCost = itemConfig?.cost || 0;
+        
+        // Calcular el costo actual del mazo
+        const currentCost = this.getDeckCost();
+        const newCost = currentCost + unitCost;
+        
+        // Verificar límite de puntos
+        if (newCost > this.deckPointLimit) {
+            return { 
+                canAdd: false, 
+                reason: `Excede el límite de puntos (${newCost}/${this.deckPointLimit})` 
+            };
+        }
+        
+        return { canAdd: true, reason: '' };
+    }
+    
+    /**
      * Añade una unidad al mazo (sin duplicados)
      */
     addToDeck(itemId) {
-        // Verificar si ya está en el mazo
-        if (this.deck.includes(itemId)) {
-            console.log('Esta unidad ya está en el mazo');
-            return false;
-        }
-        
-        // Verificar límite
-        if (this.deck.length >= this.deckLimit) {
-            console.log('Límite de mazo alcanzado');
+        // Verificar si se puede añadir
+        const check = this.canAddToDeck(itemId);
+        if (!check.canAdd) {
+            console.log(check.reason);
+            alert(check.reason);
             return false;
         }
         
@@ -176,6 +211,13 @@ export class ArsenalManager {
     saveDeck() {
         if (this.deck.length === 0) {
             alert('El mazo está vacío');
+            return;
+        }
+        
+        // 🆕 NUEVO: Validar límite de puntos antes de guardar
+        const deckCost = this.getDeckCost();
+        if (deckCost > this.deckPointLimit) {
+            alert(`El mazo excede el límite de puntos (${deckCost}/${this.deckPointLimit}). Elimina algunas unidades antes de guardar.`);
             return;
         }
         
@@ -244,6 +286,13 @@ export class ArsenalManager {
             return;
         }
         
+        // 🆕 NUEVO: Validar límite de puntos antes de confirmar
+        const deckCost = this.getDeckCost();
+        if (deckCost > this.deckPointLimit) {
+            alert(`El mazo excede el límite de puntos (${deckCost}/${this.deckPointLimit}). Elimina algunas unidades antes de confirmar.`);
+            return;
+        }
+        
         // Guardar el mazo si hay cambios
         if (this.currentDeckId) {
             this.deckManager.updateDeck(this.currentDeckId, {
@@ -274,17 +323,30 @@ export class ArsenalManager {
     updateDeckDisplay() {
         const deckList = document.getElementById('deck-list');
         const deckCountEl = document.getElementById('deck-count');
+        const deckLimitEl = document.getElementById('deck-limit');
         
         if (!deckList) return;
         
-        // Actualizar contador
+        // 🆕 NUEVO: Calcular costo total del mazo
+        const deckCost = this.getDeckCost();
+        const pointLimit = this.deckPointLimit;
+        
+        // Actualizar contador de puntos (reemplaza el contador de unidades)
         if (deckCountEl) {
-            deckCountEl.textContent = this.getDeckCount();
-            if (this.getDeckCount() >= this.deckLimit) {
-                deckCountEl.style.color = '#e74c3c';
+            deckCountEl.textContent = deckCost;
+            // Cambiar color si está cerca o excede el límite
+            if (deckCost >= pointLimit) {
+                deckCountEl.style.color = '#e74c3c'; // Rojo si excede
+            } else if (deckCost >= pointLimit * 0.9) {
+                deckCountEl.style.color = '#f39c12'; // Naranja si está cerca (90%+)
             } else {
-                deckCountEl.style.color = '#ffffff';
+                deckCountEl.style.color = '#ffffff'; // Blanco normal
             }
+        }
+        
+        // Actualizar límite mostrado
+        if (deckLimitEl) {
+            deckLimitEl.textContent = pointLimit;
         }
         
         // Limpiar lista
@@ -321,9 +383,12 @@ export class ArsenalManager {
     
     /**
      * Actualiza el estado visual de los items disponibles según si están en el mazo
+     * 🆕 ACTUALIZADO: También verifica si se puede añadir sin exceder límite de puntos
      */
     updateAvailableItemsState() {
         const items = document.querySelectorAll('.arsenal-item');
+        const currentCost = this.getDeckCost();
+        
         items.forEach(itemDiv => {
             const itemId = itemDiv.dataset.itemId;
             if (!itemId) return;
@@ -336,9 +401,20 @@ export class ArsenalManager {
                 itemDiv.style.cursor = 'not-allowed';
                 itemDiv.style.pointerEvents = 'none';
             } else {
+                // 🆕 NUEVO: Verificar si se puede añadir sin exceder límite
+                const check = this.canAddToDeck(itemId);
+                if (!check.canAdd) {
+                    itemDiv.classList.add('disabled');
+                    itemDiv.style.opacity = '0.4';
+                    itemDiv.style.cursor = 'not-allowed';
+                    itemDiv.title = check.reason; // Mostrar razón en tooltip
+                } else {
+                    itemDiv.classList.remove('disabled');
+                    itemDiv.style.opacity = '1';
+                    itemDiv.style.cursor = 'pointer';
+                    itemDiv.title = ''; // Limpiar tooltip
+                }
                 itemDiv.classList.remove('in-deck');
-                itemDiv.style.opacity = '1';
-                itemDiv.style.cursor = 'pointer';
                 itemDiv.style.pointerEvents = 'auto';
             }
         });
@@ -386,6 +462,14 @@ export class ArsenalManager {
             name.textContent;
         }
         info.appendChild(name);
+        
+        // 🎯 NUEVO: Añadir precio (solo el número)
+        if (itemConfig.cost && itemConfig.cost > 0) {
+            const cost = document.createElement('div');
+            cost.className = 'deck-item-cost';
+            cost.textContent = itemConfig.cost;
+            info.appendChild(cost);
+        }
         
         div.appendChild(info);
         
@@ -452,18 +536,24 @@ export class ArsenalManager {
         
         // Categoría 3: Consumibles
         const projectiles = getProjectiles();
-        const projectilesCategory = this.createCategory('Consumibles', projectiles.map(p => {
-            // Usar getNodeConfig para obtener descripción del servidor si está disponible
-            const nodeConfig = getNodeConfig(p.id);
-            return {
-            id: p.id,
-                name: nodeConfig?.name || p.name,
-                description: nodeConfig?.description || p.description,
-                spriteKey: nodeConfig?.spriteKey || p.spriteKey,
-                cost: nodeConfig?.cost || p.cost
-            };
-        }));
-        container.appendChild(projectilesCategory);
+        console.log('🎴 Consumibles obtenidos:', projectiles.length, projectiles.map(p => p.id));
+        
+        if (projectiles.length > 0) {
+            const projectilesCategory = this.createCategory('Consumibles', projectiles.map(p => {
+                // Usar getNodeConfig para obtener descripción del servidor si está disponible
+                const nodeConfig = getNodeConfig(p.id);
+                return {
+                id: p.id,
+                    name: nodeConfig?.name || p.name,
+                    description: nodeConfig?.description || p.description,
+                    spriteKey: nodeConfig?.spriteKey || p.spriteKey,
+                    cost: nodeConfig?.cost || p.cost
+                };
+            }));
+            container.appendChild(projectilesCategory);
+        } else {
+            console.warn('⚠️ No se encontraron consumibles para mostrar');
+        }
         
         // Actualizar estado visual de items ya en el mazo
         this.updateAvailableItemsState();
@@ -498,10 +588,32 @@ export class ArsenalManager {
         // Verificar si ya está en el mazo
         const isInDeck = this.deck.includes(item.id);
         
+        // Verificar si el dron está bloqueado (solo si buildSystem está disponible)
+        const isDroneLocked = this.buildSystem && item.id === 'drone' && !this.buildSystem.hasDroneLauncher();
+        
+        // Verificar si el comando está bloqueado (solo si buildSystem está disponible)
+        const isCommandoLocked = this.buildSystem && item.id === 'specopsCommando' && !this.buildSystem.hasIntelCenter();
+        
+        // 🆕 NUEVO: Verificar si se puede añadir sin exceder límite de puntos
+        let canAddCheck = { canAdd: true, reason: '' };
+        try {
+            canAddCheck = this.canAddToDeck(item.id);
+        } catch (error) {
+            console.warn('Error al verificar si se puede añadir:', error);
+            // Si hay error, permitir añadir (fallback)
+        }
+        const cannotAdd = !canAddCheck.canAdd && !isInDeck;
+        
         if (isInDeck) {
             div.classList.add('in-deck');
             div.style.opacity = '0.5';
             div.style.cursor = 'not-allowed';
+        } else if (cannotAdd) {
+            // No se puede añadir (excede límite o ya está)
+            div.classList.add('disabled');
+            div.style.opacity = '0.4';
+            div.style.cursor = 'not-allowed';
+            div.title = canAddCheck.reason;
         } else {
             div.addEventListener('click', () => {
                 if (this.addToDeck(item.id)) {

@@ -21,7 +21,8 @@ export class RoomManager {
                     id: playerId,
                     name: playerName,
                     team: 'player1', // El creador siempre es player1
-                    selectedRace: null, // 🆕 NUEVO: Raza seleccionada
+                    selectedRace: null, // Mantener para compatibilidad
+                    selectedDeck: null, // 🆕 NUEVO: Mazo seleccionado
                     ready: false
                 }
             ],
@@ -54,7 +55,8 @@ export class RoomManager {
             id: playerId,
             name: playerName,
             team: 'player2', // El segundo jugador siempre es player2
-            selectedRace: null, // 🆕 NUEVO: Raza seleccionada
+            selectedRace: null, // Mantener para compatibilidad
+            selectedDeck: null, // 🆕 NUEVO: Mazo seleccionado
             ready: false
         });
         

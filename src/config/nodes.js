@@ -544,11 +544,12 @@ export function getProjectiles() {
     if (window.game?.serverBuildingConfig?.behavior?.enabled) {
         const serverEnabled = window.game.serverBuildingConfig.behavior.enabled;
         return allNodes.filter(n => {
-            // Si el servidor tiene configuración de enabled, usarla
+            // Si el servidor tiene configuración de enabled para este nodo, usarla
             if (serverEnabled.hasOwnProperty(n.id)) {
                 return serverEnabled[n.id] === true;
             }
-            // Si no está en el servidor, usar configuración local
+            // 🎯 CORREGIDO: Si NO está en el servidor, usar configuración local (permitir por defecto)
+            // Esto es importante porque los consumibles pueden no estar en la lista de enabled del servidor
             return (n.enabled === undefined || n.enabled !== false);
         });
     }

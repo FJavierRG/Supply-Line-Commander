@@ -115,6 +115,82 @@ export class RaceManager {
     }
     
     /**
+     * Establece el mazo de un jugador
+     * 🎯 ACTUALIZADO: También establece A_Nation como raza por defecto para vehículos iniciales
+     * @param {string} team - Equipo del jugador
+     * @param {Object} deck - Objeto del mazo con { id, name, units }
+     */
+    setPlayerDeck(team, deck) {
+        if (!deck || !deck.units || !Array.isArray(deck.units)) {
+            console.error(`❌ Mazo inválido para ${team}:`, deck);
+            return;
+        }
+        
+        // Almacenar el mazo completo
+        if (!this.gameState.playerDecks) {
+            this.gameState.playerDecks = {};
+        }
+        this.gameState.playerDecks[team] = deck;
+        
+        // 🎯 NUEVO: Establecer A_Nation como raza por defecto automáticamente
+        // Esto es necesario para los vehículos iniciales del HQ/FOB y otras configuraciones
+        // El usuario nunca verá esto, solo ve mazos
+        this.gameState.playerRaces[team] = 'A_Nation';
+        
+        console.log(`🎴 Mazo establecido: ${team} = "${deck.name}" (${deck.units.length} unidades)`);
+        console.log(`🏛️ Raza establecida automáticamente: ${team} = A_Nation (para vehículos iniciales)`);
+    }
+    
+    /**
+     * Obtiene el mazo de un jugador
+     * @param {string} team - Equipo del jugador
+     * @returns {Object|null} Objeto del mazo o null si no existe
+     */
+    getPlayerDeck(team) {
+        return this.gameState.playerDecks?.[team] || null;
+    }
+    
+    /**
+     * Verifica si el jugador puede construir/usar una unidad según su mazo
+     * @param {string} team - Equipo del jugador
+     * @param {string} unitId - ID de la unidad
+     * @returns {boolean} True si la unidad está en el mazo
+     */
+    canPlayerUseUnit(team, unitId) {
+        const deck = this.getPlayerDeck(team);
+        if (!deck || !deck.units) {
+            // Fallback: Si no hay mazo, usar validación por raza (compatibilidad)
+            const raceId = this.getPlayerRace(team);
+            if (raceId) {
+                const availableBuildings = getServerRaceBuildings(raceId);
+                return availableBuildings.includes(unitId);
+            }
+            return false;
+        }
+        
+        return deck.units.includes(unitId);
+    }
+    
+    /**
+     * Obtiene las unidades disponibles del mazo del jugador
+     * @param {string} team - Equipo del jugador
+     * @returns {Array<string>} Array de IDs de unidades disponibles
+     */
+    getPlayerAvailableUnits(team) {
+        const deck = this.getPlayerDeck(team);
+        if (!deck || !deck.units) {
+            // Fallback: Si no hay mazo, usar edificios de raza (compatibilidad)
+            const raceId = this.getPlayerRace(team);
+            if (raceId) {
+                return getServerRaceBuildings(raceId);
+            }
+            return [];
+        }
+        
+        return [...deck.units]; // Copia del array
+    }
+    
+    /**
      * Establece la raza de un jugador
      * @param {string} team - Equipo del jugador
      * @param {string} raceId - ID de la raza

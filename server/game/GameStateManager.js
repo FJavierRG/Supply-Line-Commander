@@ -749,6 +749,24 @@ export class GameStateManager {
     }
     
     /**
+     * Establece el mazo de un jugador
+     * @param {string} team - Equipo del jugador
+     * @param {Object} deck - Objeto del mazo con { id, name, units }
+     */
+    setPlayerDeck(team, deck) {
+        return this.raceManager.setPlayerDeck(team, deck);
+    }
+    
+    /**
+     * Obtiene el mazo de un jugador
+     * @param {string} team - Equipo del jugador
+     * @returns {Object|null} Objeto del mazo o null si no existe
+     */
+    getPlayerDeck(team) {
+        return this.raceManager.getPlayerDeck(team);
+    }
+    
+    /**
      * Establece la raza de un jugador
      * @param {string} team - Equipo del jugador
      * @param {string} raceId - ID de la raza

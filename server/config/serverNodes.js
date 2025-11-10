@@ -405,7 +405,13 @@ export const SERVER_NODE_CONFIG = {
             intelRadio: true,
             intelCenter: true,    // 🆕 Centro de Inteligencia - desbloquea comandos
             aerialBase: true,
-            vigilanceTower: true  // 🆕 Torre de Vigilancia - counterea comandos
+            vigilanceTower: true,  // 🆕 Torre de Vigilancia - counterea comandos
+            // 🆕 CONSUMIBLES/PROYECTILES
+            drone: true,
+            sniperStrike: true,
+            fobSabotage: true,
+            specopsCommando: true,
+            tank: true
         },
         
         // Propiedades de comportamiento

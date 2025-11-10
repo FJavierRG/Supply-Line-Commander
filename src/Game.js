@@ -170,20 +170,38 @@ export class Game {
     
     /**
      * Maneja la selección de raza del usuario
-     * @param {string} raceId - ID de la raza seleccionada
+     * @param {string} raceId - ID de la raza seleccionada (ahora puede ser un deckId)
+     * @deprecated Este método ahora maneja mazos en lugar de razas
      */
     onRaceSelected(raceId) {
-        this.selectedRace = raceId;
-        console.log(`🏛️ Raza seleccionada: ${raceId}`);
+        this.selectedRace = raceId; // Mantener para compatibilidad
+        console.log(`🏛️ Raza/Mazo seleccionado: ${raceId}`);
         
         // Establecer myTeam cuando se selecciona raza
         if (!this.isMultiplayer) {
             this.myTeam = 'player1';
         }
         
-        // Actualizar sistemas con la nueva raza
-        this.storeUI.setRace(raceId);
-        this.buildSystem.setRace(raceId);
+        // 🎯 NUEVO: Actualizar tienda con el mazo seleccionado
+        if (this.storeUI && this.deckManager) {
+            // Si raceId es un deckId válido, usarlo directamente
+            const deck = this.deckManager.getDeck(raceId);
+            if (deck) {
+                this.storeUI.setDeck(deck.id);
+            } else {
+                // Si no es un deckId válido, usar el mazo seleccionado o predeterminado
+                const selectedDeck = this.deckManager.getSelectedDeck();
+                const deckToUse = selectedDeck || this.deckManager.getDefaultDeck();
+                if (deckToUse) {
+                    this.storeUI.setDeck(deckToUse.id);
+                }
+            }
+        }
+        
+        // Mantener compatibilidad con buildSystem (puede necesitar actualización también)
+        if (this.buildSystem && this.buildSystem.setRace) {
+            this.buildSystem.setRace(raceId);
+        }
         
         // Iniciar la misión con la raza seleccionada
         this.startMission();

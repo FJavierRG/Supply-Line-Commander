@@ -166,6 +166,24 @@ export class NetworkManager {
             console.error('❌ Error del socket:', error);
         });
         
+        // 🎯 NUEVO: Recibir configuración del juego del servidor (incluyendo límite de mazo)
+        this.socket.on('game_config', (config) => {
+            console.log('⚙️ Configuración del juego recibida:', config);
+            if (config.deckPointLimit && this.game && this.game.deckManager) {
+                this.game.deckManager.setPointLimit(config.deckPointLimit);
+            }
+        });
+        
+        // 🎯 NUEVO: Manejar errores de validación de mazo
+        this.socket.on('deck_validation_error', (error) => {
+            console.error('🚫 Error de validación de mazo:', error);
+            alert(`Error: ${error.message}`);
+            // Recargar el arsenal para mostrar el estado correcto
+            if (this.game && this.game.arsenalManager) {
+                this.game.arsenalManager.populateArsenal();
+            }
+        });
+        
         // Ping/pong para medir latencia
         this.socket.on('pong', (timestamp) => {
             this.ping = Date.now() - timestamp;
@@ -289,14 +307,19 @@ export class NetworkManager {
                 }
             }
             
-            // 🎯 NUEVO: Actualizar tienda después de establecer la raza
+            // 🎯 NUEVO: Actualizar tienda después de establecer el mazo seleccionado
             if (this.game.storeUI) {
+                // selectedRace ahora contiene el deckId seleccionado
                 if (this.game.selectedRace) {
-                    this.game.storeUI.setRace(this.game.selectedRace);
-                }
-                // Actualizar categorías directamente con la configuración del servidor
-                if (this.game.raceConfigs) {
-                    this.game.storeUI.updateCategories();
+                    // Usar setDeck con el deckId recibido del servidor
+                    this.game.storeUI.setDeck(this.game.selectedRace);
+                } else if (this.game.deckManager) {
+                    // Si no hay deckId del servidor, usar el mazo seleccionado o predeterminado
+                    const selectedDeck = this.game.deckManager.getSelectedDeck();
+                    const deckToUse = selectedDeck || this.game.deckManager.getDefaultDeck();
+                    if (deckToUse) {
+                        this.game.storeUI.setDeck(deckToUse.id);
+                    }
                 }
             }
             
@@ -1723,15 +1746,11 @@ export class NetworkManager {
                                 font-size: 14px;
                                 width: 200px;
                             " ${player.ready ? 'disabled' : ''}>
-                                <option value="A_Nation" ${player.selectedRace === 'A_Nation' || !player.selectedRace ? 'selected' : ''}>Fuerzas Unificadas</option>
-                                <!-- 🚧 TEMPORAL: B_Nation deshabilitada para migración a sistema de mazo -->
+                                ${this.generateDeckOptions(player.selectedRace)}
                             </select>
                         ` : `
                             <div style="font-size: 14px; color: ${player.selectedRace ? '#2ecc71' : '#e74c3c'};">
-                                ${player.selectedRace ? 
-                                    (player.selectedRace === 'A_Nation' ? 'Fuerzas Unificadas' : 'Fuerza de Asalto Directa') : 
-                                    'Sin seleccionar'
-                                }
+                                ${this.getDeckDisplayName(player.selectedRace)}
                             </div>
                         `}
                     </div>
@@ -1818,6 +1837,63 @@ export class NetworkManager {
     }
     
     /**
+     * Genera las opciones del desplegable de mazos
+     * @param {string} selectedDeckId - ID del mazo actualmente seleccionado
+     * @returns {string} HTML con las opciones del select
+     */
+    generateDeckOptions(selectedDeckId) {
+        if (!this.game || !this.game.deckManager) {
+            // Fallback si no hay DeckManager disponible
+            return '<option value="default">Mazo Predeterminado</option>';
+        }
+        
+        const allDecks = this.game.deckManager.getAllDecks();
+        const defaultDeck = allDecks.find(d => d.isDefault === true);
+        const playerDecks = allDecks.filter(d => d.isDefault === false);
+        
+        let optionsHTML = '';
+        
+        // Primero el mazo predeterminado (siempre disponible)
+        if (defaultDeck) {
+            const isSelected = (!selectedDeckId && !this.game.deckManager.lastSelectedDeckId) || 
+                              selectedDeckId === defaultDeck.id ||
+                              (!selectedDeckId && this.game.deckManager.lastSelectedDeckId === defaultDeck.id);
+            optionsHTML += `<option value="${defaultDeck.id}" ${isSelected ? 'selected' : ''}>${defaultDeck.name}</option>`;
+        }
+        
+        // Luego los mazos del jugador
+        playerDecks.forEach(deck => {
+            const isSelected = selectedDeckId === deck.id;
+            optionsHTML += `<option value="${deck.id}" ${isSelected ? 'selected' : ''}>${deck.name}</option>`;
+        });
+        
+        // Si no hay mazos guardados, mostrar solo el predeterminado
+        if (playerDecks.length === 0 && !defaultDeck) {
+            optionsHTML = '<option value="default">Mazo Predeterminado</option>';
+        }
+        
+        return optionsHTML;
+    }
+    
+    /**
+     * Obtiene el nombre del mazo para mostrar en la UI
+     * @param {string} deckId - ID del mazo
+     * @returns {string} Nombre del mazo o mensaje por defecto
+     */
+    getDeckDisplayName(deckId) {
+        if (!deckId) {
+            return 'Sin seleccionar';
+        }
+        
+        if (!this.game || !this.game.deckManager) {
+            return 'Mazo Predeterminado';
+        }
+        
+        const deck = this.game.deckManager.getDeck(deckId);
+        return deck ? deck.name : 'Mazo desconocido';
+    }
+    
+    /**
      * Configurar event listeners para los selects de raza
      */
     setupRaceSelectListeners() {
@@ -1831,30 +1907,65 @@ export class NetworkManager {
             // Remover listeners anteriores para evitar duplicados
             select.removeEventListener('change', this.handleRaceSelect);
             
-            // 🆕 NUEVO: Si el selector ya tiene un valor seleccionado (A_Nation por defecto),
+            // 🆕 NUEVO: Si el selector ya tiene un valor seleccionado (mazo predeterminado o mazo guardado),
             // enviarlo automáticamente al servidor
-            if (select.value && select.value === 'A_Nation') {
-                // Verificar si el jugador ya tiene esta raza seleccionada en el servidor
+            if (select.value) {
+                // Verificar si el jugador ya tiene este mazo seleccionado en el servidor
                 // usando los datos del lobby que acabamos de recibir
                 const playerId = select.id.replace('race-select-', '');
                 const playerData = this.lastLobbyData?.players?.find(p => p.id === playerId);
                 
-                // Solo enviar si el jugador actual no tiene raza seleccionada aún en el servidor
+                // Solo enviar si el jugador actual no tiene mazo seleccionado aún en el servidor
                 if (playerData && !playerData.selectedRace) {
+                    // 🎯 NUEVO: Obtener las unidades del mazo seleccionado
+                    let deckUnits = null;
+                    const deckId = select.value;
+                    
+                    if (this.game && this.game.deckManager) {
+                        const deck = this.game.deckManager.getDeck(deckId);
+                        if (deck) {
+                            deckUnits = deck.units;
+                        } else if (deckId === 'default') {
+                            const defaultDeck = this.game.deckManager.getDefaultDeck();
+                            if (defaultDeck) {
+                                deckUnits = defaultDeck.units;
+                            }
+                        }
+                    }
+                    
                     this.socket.emit('select_race', {
                         roomId: this.roomId,
-                        raceId: select.value
+                        raceId: deckId, // Mantener compatibilidad
+                        deckUnits: deckUnits // 🆕 NUEVO: Enviar unidades del mazo
                     });
                 }
             }
             
             // Agregar nuevo listener para cambios futuros
             select.addEventListener('change', (e) => {
-                const raceId = e.target.value;
-                if (raceId) {
+                const deckId = e.target.value;
+                if (deckId) {
+                    // 🎯 NUEVO: Obtener las unidades del mazo seleccionado
+                    let deckUnits = null;
+                    
+                    if (this.game && this.game.deckManager) {
+                        const deck = this.game.deckManager.getDeck(deckId);
+                        if (deck) {
+                            deckUnits = deck.units;
+                        } else if (deckId === 'default') {
+                            // Si es el mazo predeterminado, obtenerlo
+                            const defaultDeck = this.game.deckManager.getDefaultDeck();
+                            if (defaultDeck) {
+                                deckUnits = defaultDeck.units;
+                            }
+                        }
+                    }
+                    
+                    // Enviar al servidor con las unidades del mazo
                     this.socket.emit('select_race', {
                         roomId: this.roomId,
-                        raceId: raceId
+                        raceId: deckId, // Mantener compatibilidad con nombre anterior
+                        deckUnits: deckUnits // 🆕 NUEVO: Enviar unidades del mazo
                     });
                 }
             });

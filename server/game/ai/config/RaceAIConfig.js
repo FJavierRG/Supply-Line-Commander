@@ -186,9 +186,9 @@ const RACE_AI_CONFIG = {
 const DIFFICULTY_MULTIPLIERS = {
     easy: {
         actionScore: 1.0,         // Scores normales (no cambia agresividad)
-        currencyThreshold: 1.0,  // Umbrales normales
+        currencyThreshold: 1.3,  // Umbrales normales
         reactionSpeed: 1.0,       // Velocidad de reacción normal (no usado actualmente)
-        intervalMultiplier: 1.5   // ⭐ ACCIONES 50% MÁS LENTAS (intervalos 1.5x más largos)
+        intervalMultiplier: 2   // ⭐ ACCIONES 50% MÁS LENTAS (intervalos 1.5x más largos)
     },
     medium: {
         actionScore: 1.0,
@@ -198,7 +198,7 @@ const DIFFICULTY_MULTIPLIERS = {
     },
     hard: {
         actionScore: 1.0,         // Scores normales (no cambia agresividad)
-        currencyThreshold: 1.0,  // Umbrales normales
+        currencyThreshold: 0.9,  // Umbrales normales
         reactionSpeed: 1.0,       // Velocidad de reacción normal (no usado actualmente)
         intervalMultiplier: 0.65   // ⭐ ACCIONES 35% MÁS RÁPIDAS (intervalos 35% más cortos)
     }
