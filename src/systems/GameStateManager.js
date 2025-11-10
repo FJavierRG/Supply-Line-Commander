@@ -8,12 +8,45 @@
  * - Validar transiciones de estado
  * - Notificar cambios de estado a listeners
  * - Proporcionar API consistente para cambios de estado
+ * - 🆕 NUEVO: Manejar transiciones de pantalla de forma consistente
  */
 export class GameStateManager {
     constructor() {
         this.currentState = 'menu';
         this.previousState = null;
         this.listeners = new Map(); // state -> [callbacks]
+        this.screenHandlers = new Map(); // state -> { enter, exit }
+    }
+    
+    /**
+     * 🆕 NUEVO: Registra handlers para entrar/salir de una pantalla
+     * @param {string} state - Estado de la pantalla
+     * @param {Object} handlers - { enter: Function, exit: Function }
+     */
+    registerScreenHandlers(state, handlers) {
+        this.screenHandlers.set(state, handlers);
+    }
+    
+    /**
+     * 🆕 NUEVO: Ejecuta el handler de entrada para un estado
+     * @param {string} state - Estado al que se está entrando
+     */
+    async enterScreen(state) {
+        const handlers = this.screenHandlers.get(state);
+        if (handlers && handlers.enter) {
+            await handlers.enter();
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Ejecuta el handler de salida para un estado
+     * @param {string} state - Estado del que se está saliendo
+     */
+    async exitScreen(state) {
+        const handlers = this.screenHandlers.get(state);
+        if (handlers && handlers.exit) {
+            await handlers.exit();
+        }
     }
     
     /**
@@ -35,11 +68,12 @@ export class GameStateManager {
     /**
      * Cambia el estado del juego
      * @param {string} newState - Nuevo estado
+     * @param {boolean} force - Si es true, ejecuta handlers incluso si el estado no cambia
      * @returns {boolean} True si el cambio fue exitoso
      */
-    setState(newState) {
-        // No cambiar si es el mismo estado
-        if (this.currentState === newState) {
+    async setState(newState, force = false) {
+        // No cambiar si es el mismo estado (a menos que force sea true)
+        if (this.currentState === newState && !force) {
             return true;
         }
         
@@ -52,7 +86,15 @@ export class GameStateManager {
         // Guardar estado anterior
         const oldState = this.currentState;
         this.previousState = oldState;
+        
+        // 🆕 NUEVO: Ejecutar handler de salida del estado anterior
+        await this.exitScreen(oldState);
+        
+        // Cambiar estado
         this.currentState = newState;
+        
+        // 🆕 NUEVO: Ejecutar handler de entrada del nuevo estado
+        await this.enterScreen(newState);
         
         // Notificar listeners
         this.notifyStateChange(oldState, newState);
@@ -149,10 +191,12 @@ export class GameStateManager {
     /**
      * Resetea el estado al estado inicial
      */
-    reset() {
+    async reset() {
         const oldState = this.currentState;
+        await this.exitScreen(oldState);
         this.currentState = 'menu';
         this.previousState = oldState;
+        await this.enterScreen('menu');
         this.notifyStateChange(oldState, 'menu');
     }
 }

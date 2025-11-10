@@ -164,6 +164,15 @@ export class NetworkManager {
         
         this.socket.on('error', (error) => {
             console.error('❌ Error del socket:', error);
+            // 🆕 FIX: Restaurar botón si hay error al iniciar partida
+            if (this._startingGame) {
+                this._startingGame = false;
+                const startBtn = document.getElementById('start-multiplayer-game-btn');
+                if (startBtn) {
+                    startBtn.disabled = false;
+                    startBtn.textContent = 'Comenzar Partida';
+                }
+            }
         });
         
         // 🎯 NUEVO: Recibir configuración del juego del servidor (incluyendo límite de mazo)
@@ -197,6 +206,13 @@ export class NetworkManager {
             this.roomId = data.roomId;
             this.myTeam = 'player1';
             this.game.myTeam = 'player1';
+            // 🆕 FIX: Resetear flag de inicio y restaurar botón
+            this._startingGame = false;
+            const startBtn = document.getElementById('start-multiplayer-game-btn');
+            if (startBtn) {
+                startBtn.disabled = false;
+                startBtn.textContent = 'Comenzar Partida';
+            }
             this.showRoomView(data.roomId);
         });
         
@@ -205,6 +221,13 @@ export class NetworkManager {
             this.roomId = data.roomId;
             this.myTeam = 'player2';
             this.game.myTeam = 'player2';
+            // 🆕 FIX: Resetear flag de inicio y restaurar botón
+            this._startingGame = false;
+            const startBtn = document.getElementById('start-multiplayer-game-btn');
+            if (startBtn) {
+                startBtn.disabled = false;
+                startBtn.textContent = 'Comenzar Partida';
+            }
             this.showRoomView(data.roomId);
         });
         
@@ -347,29 +370,18 @@ export class NetworkManager {
             this.game.missionStarted = true;
             this.game.paused = false;
             
-            // CRÍTICO: Eliminar elementos del tutorial ANTES de cualquier render
-            const removeAllTutorialElements = () => {
-                const spotlight = document.getElementById('tutorial-spotlight');
-                const textbox = document.getElementById('tutorial-textbox');
-                const exitBtn = document.getElementById('tutorial-exit-btn');
-                const nextBtn = document.getElementById('tutorial-next-btn');
-                const prevBtn = document.getElementById('tutorial-prev-btn');
-                
-                [spotlight, textbox, exitBtn, nextBtn, prevBtn].forEach(elem => {
-                    if (elem && elem.parentNode) {
-                        elem.parentNode.removeChild(elem);
-                    }
-                });
-            };
-            
-            // Ejecutar limpieza inicial
-            removeAllTutorialElements();
+            // 🆕 SIMPLIFICADO: Solo cerrar el tutorial si está activo
+            // El tutorial nuevo es simple y se cierra automáticamente al cambiar de estado
+            if (this.game.tutorialManager && this.game.tutorialManager.active) {
+                const tutorialOverlay = document.getElementById('tutorial-overlay');
+                if (tutorialOverlay) {
+                    tutorialOverlay.style.display = 'none';
+                }
+                this.game.tutorialManager.active = false;
+            }
             
             // Configurar UI
             this.game.ui.setupMissionUI(this.game.nodes);
-            
-            // Ejecutar limpieza DESPUÉS de setupMissionUI (por si crea algo)
-            removeAllTutorialElements();
             
             // CRÍTICO: Forzar inicio del game loop
             this.game.lastTime = Date.now();
@@ -816,6 +828,15 @@ export class NetworkManager {
         
         this.socket.on('error', (data) => {
             alert(`Error: ${data.message}`);
+            // 🆕 FIX: Restaurar botón si hay error al iniciar partida
+            if (this._startingGame) {
+                this._startingGame = false;
+                const startBtn = document.getElementById('start-multiplayer-game-btn');
+                if (startBtn) {
+                    startBtn.disabled = false;
+                    startBtn.textContent = 'Comenzar Partida';
+                }
+            }
         });
     }
     
@@ -871,70 +892,63 @@ export class NetworkManager {
         
 
         
+        // 🆕 SIMPLIFICADO: Solo ocultar el overlay del tutorial si está activo
+        // El tutorial nuevo es simple y no debería interferir, pero por seguridad lo ocultamos
+        if (this.game.tutorialManager && this.game.tutorialManager.active) {
+            const tutorialOverlay = document.getElementById('tutorial-overlay');
+            if (tutorialOverlay) {
+                tutorialOverlay.style.display = 'none';
+            }
+            this.game.tutorialManager.active = false;
+        }
+        
+        // 🆕 FIX: Asegurar que el canvas y contenedores sean visibles
+        // Esto es necesario porque algunos overlays pueden ocultarlos
+        const gameCanvas = document.getElementById('game-canvas');
+        if (gameCanvas) {
+            gameCanvas.style.display = 'block';
+            gameCanvas.style.visibility = 'visible';
+            gameCanvas.style.opacity = '1';
+            gameCanvas.style.zIndex = '1';
+            gameCanvas.style.position = 'relative';
+            gameCanvas.style.pointerEvents = 'auto';
+        }
+        
+        const gameContainer = document.getElementById('game-container');
+        if (gameContainer) {
+            gameContainer.style.display = 'block';
+            gameContainer.style.visibility = 'visible';
+            gameContainer.style.opacity = '1';
+        }
+        
+        const mainGame = document.getElementById('main-game');
+        if (mainGame) {
+            mainGame.style.display = 'block';
+            mainGame.style.visibility = 'visible';
+            mainGame.style.opacity = '1';
+        }
+        
+        // 🆕 FIX: Asegurar que los elementos de UI del juego sean visibles
+        const fobCurrencyDisplay = document.getElementById('fob-currency-display');
+        if (fobCurrencyDisplay) {
+            fobCurrencyDisplay.style.display = 'flex';
+            fobCurrencyDisplay.style.visibility = 'visible';
+            fobCurrencyDisplay.style.opacity = '1';
+            // El CSS ya maneja el z-index con var(--z-game-hud)
+            fobCurrencyDisplay.style.pointerEvents = 'auto';
+        }
+        
+        const timerDisplay = document.getElementById('timer-display');
+        if (timerDisplay) {
+            timerDisplay.style.display = 'flex';
+            timerDisplay.style.visibility = 'visible';
+            timerDisplay.style.opacity = '1';
+            // El CSS ya maneja el z-index con var(--z-game-hud)
+            timerDisplay.style.pointerEvents = 'auto';
+        }
+        
         // Verificar canvas
         const canvas = this.game.canvas;
-        
-        
-        // SOLUCIÓN DEFINITIVA: Crear regla CSS !important para ocultar tutorial
-        const style = document.createElement('style');
-        style.id = 'multiplayer-tutorial-killer';
-        style.innerHTML = `
-            #tutorial-spotlight,
-            #tutorial-textbox,
-            #tutorial-exit-btn,
-            #tutorial-next-btn,
-            #tutorial-prev-btn,
-            .tutorial-spotlight,
-            .tutorial-overlay {
-                display: none !important;
-                visibility: hidden !important;
-                opacity: 0 !important;
-                pointer-events: none !important;
-                z-index: -9999 !important;
-            }
-            
-            /* FORZAR VISIBILIDAD DEL CANVAS */
-            #game-canvas {
-                display: block !important;
-                visibility: visible !important;
-                opacity: 1 !important;
-                z-index: 10 !important;
-                position: relative !important;
-                background: #000 !important;
-            }
-            
-            #game-container {
-                display: block !important;
-                visibility: visible !important;
-                opacity: 1 !important;
-                z-index: 5 !important;
-            }
-            
-            #main-game {
-                display: block !important;
-                visibility: visible !important;
-                opacity: 1 !important;
-                z-index: 5 !important;
-            }
-            
-            /* FORZAR VISIBILIDAD DEL CURRENCY Y TIMER */
-            #fob-currency-display {
-                display: flex !important;
-                visibility: visible !important;
-                opacity: 1 !important;
-                z-index: 100 !important;
-                pointer-events: auto !important;
-            }
-            
-            #timer-display {
-                display: flex !important;
-                visibility: visible !important;
-                opacity: 1 !important;
-                z-index: 100 !important;
-                pointer-events: auto !important;
-            }
-        `;
-        document.head.appendChild(style);
         
         // Forzar primer render
         this.game.render();
@@ -964,6 +978,14 @@ export class NetworkManager {
         this.opponentTeam = null;
         this.isReady = false;
         this._startingGame = false;
+        
+        // 🆕 FIX: Restaurar botón de inicio
+        const startBtn = document.getElementById('start-multiplayer-game-btn');
+        if (startBtn) {
+            startBtn.disabled = false;
+            startBtn.textContent = 'Comenzar Partida';
+            startBtn.style.display = 'none';
+        }
         
         this.socket.emit('create_room', { playerName });
     }
@@ -1154,15 +1176,34 @@ export class NetworkManager {
     loadInitialState(initialState) {
         console.log('📦 Cargando estado inicial:', initialState);
         
+        // 🆕 FIX: Limpiar completamente el estado ANTES de cargar el nuevo estado
+        // Esto evita que residuos de partidas anteriores interfieran
+        if (this.game.clearGameState) {
+            this.game.clearGameState();
+        } else {
+            // Fallback: limpieza manual si clearGameState no existe
+            this.game.nodes = [];
+            this.game.helicopters = [];
+            this.game.convoyManager.clear();
+            this.game.particleSystem.clear();
+            this.game.droneSystem.clear();
+            this.game.tankSystem.clear();
+            this.game.currency.reset();
+            this.game.buildSystem.resetLevel();
+            this.game.medicalSystem.reset();
+            this.game.frontMovement.resetLevel();
+            this.game.territory.reset();
+            this.game.audio.resetEventFlags();
+            this.game.camera.reset();
+            this.game.renderer.clear();
+        }
+        
         // IMPORTANTE: Marcar como multijugador para desactivar IA
         this.game.isMultiplayer = true;
         this.isMultiplayer = true;
         
         // === LEGACY REMOVED: IA eliminada del cliente ===
         // La IA ahora está completamente en el servidor
-        
-        // Limpiar nodos actuales
-        this.game.nodes = [];
         
         // Crear nodos desde datos del servidor
         initialState.nodes.forEach(nodeData => {
@@ -1684,6 +1725,18 @@ export class NetworkManager {
         // Guardar datos del lobby para uso posterior (necesario para auto-selección de raza)
         this.lastLobbyData = data;
         
+        // 🆕 FIX: Determinar si soy host basándome en los datos del servidor
+        // Esto evita problemas de race condition cuando lobby_update llega antes de room_created
+        const myPlayer = data.players.find(p => p.id === this.socket.id);
+        const isHost = myPlayer && (myPlayer.isHost || myPlayer.team === 'player1');
+        
+        // 🆕 FIX: Actualizar this.myTeam si aún no está establecido (para evitar race conditions)
+        if (!this.myTeam && myPlayer) {
+            this.myTeam = myPlayer.team;
+            this.game.myTeam = myPlayer.team;
+            console.log(`🔄 myTeam actualizado desde lobby_update: ${this.myTeam}`);
+        }
+        
         // Renderizar cada jugador
         data.players.forEach(player => {
             const playerCard = document.createElement('div');
@@ -1756,7 +1809,7 @@ export class NetworkManager {
             playerCard.appendChild(playerInfo);
             
             // Botón expulsar (solo si soy host y no es mi card) - MÁS PEQUEÑO
-            if (this.myTeam === 'player1' && !isMe) {
+            if (isHost && !isMe) {
                 const kickBtn = document.createElement('button');
                 kickBtn.className = 'menu-btn secondary';
                 kickBtn.textContent = '🚫';
@@ -1770,6 +1823,7 @@ export class NetworkManager {
         });
         
         // 🤖 NUEVO: Mostrar/ocultar slot de IA según corresponda
+        // 🆕 FIX: Usar isHost de los datos del servidor en lugar de this.myTeam
         const aiSlot = document.getElementById('ai-slot');
         const aiSlotEmpty = document.getElementById('ai-slot-empty');
         const aiSlotConfig = document.getElementById('ai-slot-config');
@@ -1785,8 +1839,9 @@ export class NetworkManager {
                 if (raceSelect) raceSelect.value = data.aiPlayer.race;
                 if (difficultySelect) difficultySelect.value = data.aiPlayer.difficulty;
             }
-        } else if (data.players.length < 2 && this.myTeam === 'player1') {
+        } else if (data.players.length < 2 && isHost) {
             // No hay IA y soy host: mostrar botón para añadir
+            if (aiSlot) aiSlot.style.display = 'block';
             if (aiSlotEmpty) aiSlotEmpty.style.display = 'block';
             if (aiSlotConfig) aiSlotConfig.style.display = 'none';
         } else {
@@ -1795,7 +1850,6 @@ export class NetworkManager {
         }
         
         // Actualizar mi estado de ready basado en los datos del servidor
-        const myPlayer = data.players.find(p => p.id === this.socket.id);
         if (myPlayer) {
             this.isReady = myPlayer.ready;
             
@@ -1808,7 +1862,7 @@ export class NetworkManager {
         
         // Actualizar botón de inicio (solo visible para host si todos están ready Y han seleccionado nación)
         const startBtn = document.getElementById('start-multiplayer-game-btn');
-        if (startBtn && this.myTeam === 'player1') {
+        if (startBtn && isHost) {
             // 🤖 NUEVO: Verificar si hay 2 jugadores humanos O 1 jugador + IA
             const hasPlayer2 = data.players.length === 2;
             const hasAI = data.aiPlayer !== null && data.aiPlayer !== undefined;
@@ -1824,8 +1878,16 @@ export class NetworkManager {
             const aiHasRace = hasAI ? (data.aiPlayer.race !== null) : true;
             const allHaveRace = allPlayersHaveRace && aiHasRace;
             
+            // 🆕 FIX: Restaurar botón antes de mostrar/ocultar
+            startBtn.disabled = false;
+            startBtn.textContent = 'Comenzar Partida';
             
             startBtn.style.display = (hasOpponent && allReady && allHaveRace) ? 'block' : 'none';
+        } else if (startBtn) {
+            // Si no soy host, ocultar y restaurar el botón
+            startBtn.style.display = 'none';
+            startBtn.disabled = false;
+            startBtn.textContent = 'Comenzar Partida';
         }
         
         // Configurar event listeners para los selects de raza
@@ -2115,6 +2177,14 @@ export class NetworkManager {
         this.lastLobbyData = null;
         this._startingGame = false;
         
+        // 🆕 FIX: Restaurar botón de inicio
+        const startBtn = document.getElementById('start-multiplayer-game-btn');
+        if (startBtn) {
+            startBtn.disabled = false;
+            startBtn.textContent = 'Comenzar Partida';
+            startBtn.style.display = 'none';
+        }
+        
         // Notificar al servidor que salimos de la sala (si estamos conectados)
         // El servidor manejará la desconexión automáticamente cuando el socket se desconecte,
         // pero si solo estamos saliendo de la sala sin desconectar, el servidor lo manejará
@@ -2209,7 +2279,7 @@ export class NetworkManager {
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 1000;
+            z-index: 100; /* var(--z-modals) - Countdown es un modal temporal */
             color: white;
             font-size: 72px;
             font-weight: bold;
@@ -2267,6 +2337,7 @@ export class NetworkManager {
             startTimerBtn.style.visibility = 'hidden';
             startTimerBtn.style.opacity = '0';
             startTimerBtn.style.pointerEvents = 'none';
+            // Ocultar botón completamente
             startTimerBtn.style.zIndex = '-1';
             console.log('  ✓ start-timer-btn FORZADO a oculto');
         }
@@ -2279,46 +2350,47 @@ export class NetworkManager {
             btn.style.opacity = '0';
         });
         
-        // CRÍTICO: Ocultar elementos del tutorial que tienen z-index altísimo
-        const tutorialElements = [
-            'tutorial-spotlight',
-            'tutorial-textbox',
-            'tutorial-exit-btn',
-            'tutorial-next-btn',
-            'tutorial-prev-btn'
+        // 🆕 SIMPLIFICADO: Solo ocultar overlay del tutorial si existe
+        // El tutorial nuevo es simple: solo tiene un overlay con id 'tutorial-overlay'
+        // No necesita limpieza compleja como el tutorial antiguo
+        const tutorialOverlay = document.getElementById('tutorial-overlay');
+        if (tutorialOverlay) {
+            tutorialOverlay.style.display = 'none';
+        }
+        
+        // Asegurar que el tutorialManager sepa que está inactivo
+        if (this.game.tutorialManager) {
+            this.game.tutorialManager.active = false;
+        }
+        
+        console.log('✅ Tutorial oculto (si estaba activo)');
+        
+        // 🆕 FIX: Asegurar que todos los overlays del menú estén ocultos
+        // Esto es crítico para que el canvas sea visible
+        const overlaysToHide = [
+            'main-menu-overlay',
+            'multiplayer-lobby-overlay',
+            'press-to-continue-screen',
+            'tutorial-overlay'
         ];
         
-        tutorialElements.forEach(elemId => {
-            const elem = document.getElementById(elemId);
-            if (elem) {
-                elem.style.display = 'none';
-                elem.style.visibility = 'hidden';
-                elem.style.opacity = '0';
-                elem.style.zIndex = '-999';
-                elem.style.pointerEvents = 'none';
-                // FORZAR eliminación del DOM
-                if (elem.parentNode) {
-                    elem.parentNode.removeChild(elem);
-                }
+        overlaysToHide.forEach(overlayId => {
+            const overlay = document.getElementById(overlayId);
+            if (overlay) {
+                overlay.classList.add('hidden');
+                overlay.style.display = 'none';
             }
         });
-        
-        // Ocultar cualquier elemento con clase tutorial
-        const tutorialClassElements = document.querySelectorAll('.tutorial-spotlight, .tutorial-overlay');
-        tutorialClassElements.forEach(elem => {
-            if (elem.parentNode) {
-                elem.parentNode.removeChild(elem);
-            }
-        });
-        console.log(`  ✓ ${tutorialClassElements.length} elementos de tutorial eliminados por clase`);
         
         // Asegurar que el canvas esté visible y en primer plano
         const gameCanvas = document.getElementById('game-canvas');
         if (gameCanvas) {
             gameCanvas.style.display = 'block';
             gameCanvas.style.visibility = 'visible';
+            gameCanvas.style.opacity = '1';
             gameCanvas.style.zIndex = '1';
             gameCanvas.style.position = 'relative';
+            gameCanvas.style.pointerEvents = 'auto';
         }
         
         // Asegurar que el contenedor del juego esté visible
@@ -2337,9 +2409,10 @@ export class NetworkManager {
         // Verificar TODOS los elementos que podrían estar tapando
         const allElements = document.querySelectorAll('*');
         let elementsOnTop = 0;
+        // Verificar elementos con z-index alto (usando var(--z-modals) = 100 como referencia)
         allElements.forEach(el => {
             const zIndex = parseInt(window.getComputedStyle(el).zIndex);
-            if (zIndex > 100 && el.style.display !== 'none') {
+            if (zIndex >= 100 && el.style.display !== 'none') { // Modales y superiores
                 elementsOnTop++;
             }
         });
@@ -2740,6 +2813,15 @@ export class NetworkManager {
         // 🆕 NUEVO: Limpiar completamente el estado antes de desconectar
         // Esto evita que al crear una nueva sala se reconecte a la anterior
         
+        // 🆕 FIX: Asegurar que el tutorial esté cerrado
+        if (this.game.tutorialManager && this.game.tutorialManager.active) {
+            const tutorialOverlay = document.getElementById('tutorial-overlay');
+            if (tutorialOverlay) {
+                tutorialOverlay.style.display = 'none';
+            }
+            this.game.tutorialManager.active = false;
+        }
+        
         // Salir de la sala actual si existe
         if (this.roomId) {
             this.leaveRoom();
@@ -2760,6 +2842,14 @@ export class NetworkManager {
         this.isMultiplayer = false;
         this.lastLobbyData = null;
         this._startingGame = false;
+        
+        // 🆕 FIX: Restaurar botón de inicio
+        const startBtn = document.getElementById('start-multiplayer-game-btn');
+        if (startBtn) {
+            startBtn.disabled = false;
+            startBtn.textContent = 'Comenzar Partida';
+            startBtn.style.display = 'none';
+        }
         
         // Limpiar UI del lobby
         const initialView = document.getElementById('lobby-initial-view');

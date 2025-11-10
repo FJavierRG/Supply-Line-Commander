@@ -163,6 +163,12 @@ export class UIManager {
     }
     
     showPauseMenu(onContinue, onRestart, onExit) {
+        // 🆕 NUEVO: Usar ScreenManager para mostrar pausa
+        if (this.game.screenManager) {
+            this.game.screenManager.show('PAUSE');
+        }
+        
+        // Mantener compatibilidad
         this.overlayManager.showOverlay('pause-overlay');
         
         const continueBtn = document.getElementById('pause-continue-btn');
@@ -170,20 +176,26 @@ export class UIManager {
         const exitBtn = document.getElementById('pause-exit-btn');
         
         if (continueBtn) continueBtn.onclick = () => { 
-            this.overlayManager.hideOverlay('pause-overlay');
+            this.hidePauseMenu();
             if (onContinue) onContinue(); 
         };
         if (restartBtn) restartBtn.onclick = () => { 
-            this.overlayManager.hideOverlay('pause-overlay');
+            this.hidePauseMenu();
             onRestart(); 
         };
         if (exitBtn) exitBtn.onclick = () => { 
-            this.overlayManager.hideOverlay('pause-overlay');
+            this.hidePauseMenu();
             onExit(); 
         };
     }
 
     hidePauseMenu() {
+        // 🆕 NUEVO: Usar ScreenManager para ocultar pausa
+        if (this.game.screenManager) {
+            this.game.screenManager.hide('PAUSE');
+        }
+        
+        // Mantener compatibilidad
         this.overlayManager.hideOverlay('pause-overlay');
     }
     
@@ -264,8 +276,13 @@ export class UIManager {
             if (el.classList.contains('overlay')) {
                 this.overlayManager.showOverlay(id);
             } else {
-                // Para elementos no-overlay, usar display normalmente
-                el.style.display = 'block';
+                // Para elementos específicos que necesitan display: flex
+                if (id === 'timer-display' || id === 'fob-currency-display') {
+                    el.style.display = 'flex';
+                } else {
+                    // Para otros elementos, usar display: block
+                    el.style.display = 'block';
+                }
             }
         }
     }

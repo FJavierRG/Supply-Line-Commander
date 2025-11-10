@@ -39,7 +39,7 @@ export class TutorialManager {
             width: 100vw;
             height: 100vh;
             background: rgba(0, 0, 0, 0.9);
-            z-index: 10000;
+            z-index: 100; /* var(--z-modals) - Tutorial es un modal */
             display: none;
             pointer-events: auto;
         `;
@@ -148,7 +148,7 @@ export class TutorialManager {
             font-size: 14px;
             cursor: pointer;
             font-weight: bold;
-            z-index: 10001;
+            z-index: 101; /* Ligeramente por encima del overlay del tutorial */
             pointer-events: auto;
         `;
         this.exitButton.onclick = () => this.exitTutorial();
@@ -196,11 +196,19 @@ export class TutorialManager {
     startTutorial() {
         console.log('🎓 Iniciando tutorial simple...');
         
+        // 🆕 FIX: Asegurarse de que el overlay exista y esté en el DOM
+        if (!this.overlayElement || !this.overlayElement.parentNode) {
+            console.warn('⚠️ Overlay del tutorial no existe, recreándolo...');
+            this.createUIElements();
+        }
+        
         this.active = true;
         this.currentStepIndex = 0;
         
-        // Mostrar overlay
+        // Mostrar overlay (z-index ya está definido en CSS inline)
         this.overlayElement.style.display = 'block';
+        this.overlayElement.style.visibility = 'visible';
+        this.overlayElement.style.opacity = '1';
         
         // Mostrar primer paso
         this.showStep(0);
@@ -275,8 +283,30 @@ export class TutorialManager {
         this.active = false;
         this.overlayElement.style.display = 'none';
         
-        // Volver al menú principal
-        this.game.state = 'menu';
+        // 🆕 FIX: Ocultar tutorial usando ScreenManager
+        if (this.game.screenManager) {
+            this.game.screenManager.hide('TUTORIAL');
+        }
+        
+        // 🆕 FIX: Pausar renderizado ANTES de limpiar (canvas sigue visible pero limpio)
+        if (this.game.canvasManager) {
+            this.game.canvasManager.pause();
+        }
+        
+        // 🆕 FIX: Limpiar cualquier estado residual del juego antes de volver al menú
+        if (this.game.clearGameState) {
+            this.game.clearGameState();
+        }
+        
+        // 🆕 FIX: Cambiar estado a menú ANTES de mostrar el menú
+        this.game.setGameState('menu');
+        
+        // 🆕 FIX: Mostrar menú usando ScreenManager
+        if (this.game.screenManager) {
+            this.game.screenManager.show('MAIN_MENU');
+        }
+        
+        // Mantener compatibilidad
         this.game.ui.showMainMenu();
     }
     
@@ -335,3 +365,7 @@ export class TutorialManager {
         }
     }
 }
+
+
+
+

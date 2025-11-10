@@ -1245,11 +1245,42 @@ export class InputHandler {
     // ===== FUNCIONES DE LOBBY UNIFICADO =====
     
     async showMultiplayerLobby() {
-        // Ocultar menú principal
+        // 🆕 NUEVO: Usar ScreenManager para mostrar el lobby
+        if (this.game.screenManager) {
+            this.game.screenManager.show('MULTIPLAYER_LOBBY');
+        }
+        
+        // Mantener compatibilidad con código existente
         this.game.ui.hideElement('main-menu-overlay');
+        
+        // Asegurar que el overlay del menú esté completamente oculto
+        const menuOverlay = document.getElementById('main-menu-overlay');
+        if (menuOverlay) {
+            menuOverlay.classList.add('hidden');
+            menuOverlay.style.display = 'none';
+            menuOverlay.style.visibility = 'hidden';
+            menuOverlay.style.pointerEvents = 'none';
+        }
         
         // Mostrar lobby
         this.game.ui.showElement('multiplayer-lobby-overlay');
+        
+        // 🆕 FIX: Asegurar que el overlay del lobby esté visible y sea interactivo
+        const lobbyOverlay = document.getElementById('multiplayer-lobby-overlay');
+        if (lobbyOverlay) {
+            lobbyOverlay.classList.remove('hidden');
+            lobbyOverlay.style.display = 'block';
+            lobbyOverlay.style.visibility = 'visible';
+            lobbyOverlay.style.opacity = '1';
+            // El CSS ya maneja el z-index con variables
+            lobbyOverlay.style.pointerEvents = 'auto';
+            
+            // Asegurar que todos los botones dentro del lobby también tengan pointer-events
+            const buttons = lobbyOverlay.querySelectorAll('button, a, .menu-btn, input');
+            buttons.forEach(btn => {
+                btn.style.pointerEvents = 'auto';
+            });
+        }
         
         // 🆕 NUEVO: Limpiar cualquier estado anterior de sala antes de conectar
         // Esto evita problemas si el jugador salió de una partida anterior
@@ -1339,6 +1370,8 @@ export class InputHandler {
     }
     
     hideMultiplayerLobby() {
+        console.log('🔙 Ocultando lobby multijugador...');
+        
         // Salir de la sala si estaba en una
         if (this.game.network && this.game.network.roomId) {
             this.game.network.leaveRoom();
@@ -1354,9 +1387,46 @@ export class InputHandler {
         const roomCodeInput = document.getElementById('room-code-input-container');
         if (roomCodeInput) roomCodeInput.style.display = 'none';
         
-        // Volver al menú principal
+        // 🆕 NUEVO: Usar ScreenManager para ocultar el lobby
+        if (this.game.screenManager) {
+            this.game.screenManager.hide('MULTIPLAYER_LOBBY');
+        }
+        
+        // Mantener compatibilidad
         this.game.ui.hideElement('multiplayer-lobby-overlay');
-        this.game.ui.showElement('main-menu-overlay');
+        const lobbyOverlay = document.getElementById('multiplayer-lobby-overlay');
+        if (lobbyOverlay) {
+            lobbyOverlay.classList.add('hidden');
+            lobbyOverlay.style.display = 'none';
+            lobbyOverlay.style.visibility = 'hidden';
+            lobbyOverlay.style.pointerEvents = 'none';
+        }
+        
+        // 🆕 NUEVO: Mostrar menú principal usando ScreenManager
+        if (this.game.screenManager) {
+            this.game.screenManager.show('MAIN_MENU');
+        }
+        
+        // Mantener compatibilidad
+        this.game.ui.showMainMenu();
+        
+        const menuOverlay = document.getElementById('main-menu-overlay');
+        if (menuOverlay) {
+            menuOverlay.classList.remove('hidden');
+            menuOverlay.style.display = 'block';
+            menuOverlay.style.visibility = 'visible';
+            menuOverlay.style.opacity = '1';
+            // El CSS ya maneja el z-index con variables
+            menuOverlay.style.pointerEvents = 'auto';
+            
+            // Asegurar que todos los botones dentro del menú también tengan pointer-events
+            const buttons = menuOverlay.querySelectorAll('button, a, .menu-btn');
+            buttons.forEach(btn => {
+                btn.style.pointerEvents = 'auto';
+            });
+        }
+        
+        console.log('✅ Menú principal mostrado');
     }
     
     async createMultiplayerRoom() {

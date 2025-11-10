@@ -96,8 +96,29 @@ export class ArsenalManager {
     
     show() {
         this.isVisible = true;
+        
+        // 🆕 FIX: Pausar renderizado ANTES de mostrar el arsenal (canvas sigue visible pero limpio)
+        if (this.game.canvasManager) {
+            this.game.canvasManager.pause();
+        }
+        
+        // 🆕 NUEVO: Usar ScreenManager para mostrar el arsenal
+        if (this.game.screenManager) {
+            this.game.screenManager.show('ARSENAL');
+        }
+        
+        // Mantener compatibilidad con código existente
         if (this.game.overlayManager.isOverlayVisible('main-menu-overlay')) {
             this.game.overlayManager.hideOverlay('main-menu-overlay');
+        }
+        
+        // Asegurar que el overlay del menú esté completamente oculto
+        const menuOverlay = document.getElementById('main-menu-overlay');
+        if (menuOverlay) {
+            menuOverlay.classList.add('hidden');
+            menuOverlay.style.display = 'none';
+            menuOverlay.style.visibility = 'hidden';
+            menuOverlay.style.pointerEvents = 'none';
         }
         
         // Asegurar que serverBuildingConfig esté inicializado antes de mostrar
@@ -107,13 +128,29 @@ export class ArsenalManager {
             setTimeout(() => {
                 this.loadSelectedDeck();
                 this.game.overlayManager.showOverlay('arsenal-overlay');
+                
+                // 🆕 FIX: Asegurar que el arsenal tenga z-index alto y sea interactivo
+                const arsenalOverlay = document.getElementById('arsenal-overlay');
+                if (arsenalOverlay) {
+                    arsenalOverlay.style.zIndex = '10';
+                    arsenalOverlay.style.pointerEvents = 'auto';
+                }
+                
                 this.populateArsenal();
                 this.updateDeckDisplay();
             }, 100);
         } else {
             this.loadSelectedDeck();
-        this.game.overlayManager.showOverlay('arsenal-overlay');
-        this.populateArsenal();
+            this.game.overlayManager.showOverlay('arsenal-overlay');
+            
+            // 🆕 FIX: Asegurar que el arsenal tenga z-index alto y sea interactivo
+            const arsenalOverlay = document.getElementById('arsenal-overlay');
+            if (arsenalOverlay) {
+                arsenalOverlay.style.zIndex = '10';
+                arsenalOverlay.style.pointerEvents = 'auto';
+            }
+            
+            this.populateArsenal();
             this.updateDeckDisplay();
         }
     }
@@ -138,9 +175,81 @@ export class ArsenalManager {
     
     hide() {
         this.isVisible = false;
+        
+        // 🆕 FIX: Si se abrió desde el menú, asegurar estado 'menu' ANTES de cambiar pantallas
+        if (this.openedFromMenu) {
+            // 🆕 FIX: Cambiar estado a menú PRIMERO (antes de ocultar arsenal)
+            // Esto asegura que el listener de ScreenManager pausará el canvas correctamente
+            if (this.game.setGameState) {
+                this.game.setGameState('menu');
+            }
+            
+            // 🆕 FIX: Pausar renderizado explícitamente ANTES de cambiar pantallas
+            if (this.game.canvasManager) {
+                this.game.canvasManager.pause();
+            }
+            
+            // 🆕 FIX: Si el estado es 'playing', limpiar el estado primero
+            if (this.game.state === 'playing') {
+                console.warn('⚠️ Estado es "playing" al ocultar arsenal, limpiando estado...');
+                if (this.game.clearGameState) {
+                    this.game.clearGameState();
+                }
+            }
+        }
+        
+        // 🆕 NUEVO: Usar ScreenManager para ocultar el arsenal
+        if (this.game.screenManager) {
+            this.game.screenManager.hide('ARSENAL');
+        }
+        
+        // Mantener compatibilidad
         this.game.overlayManager.hideOverlay('arsenal-overlay');
+        
+        // 🆕 FIX: Si se abrió desde el menú, mostrar el menú
         if (this.openedFromMenu && this.game.state === 'menu') {
+            // 🆕 FIX: Asegurar que el estado sea 'menu' (por si acaso)
+            if (this.game.setGameState) {
+                this.game.setGameState('menu');
+            }
+            
+            // 🆕 FIX: Pausar canvas explícitamente ANTES de mostrar el menú
+            // Esto previene cualquier problema de timing con el listener
+            if (this.game.canvasManager) {
+                this.game.canvasManager.pause();
+            }
+            
+            // Mostrar menú principal usando ScreenManager
+            // El listener de ScreenManager ya pausará el canvas porque hay pantalla activa
+            if (this.game.screenManager) {
+                this.game.screenManager.show('MAIN_MENU');
+            }
+            
+            // 🆕 FIX: Pausar canvas OTRA VEZ después de mostrar el menú (por si acaso)
+            // Esto asegura que el canvas esté pausado incluso si el listener se ejecuta de forma asíncrona
+            setTimeout(() => {
+                if (this.game.canvasManager && this.game.state === 'menu') {
+                    this.game.canvasManager.pause();
+                }
+            }, 0);
+            
+            // Mantener compatibilidad
             this.game.overlayManager.showOverlay('main-menu-overlay');
+            const menuOverlay = document.getElementById('main-menu-overlay');
+            if (menuOverlay) {
+                menuOverlay.classList.remove('hidden');
+                menuOverlay.style.display = 'block';
+                menuOverlay.style.visibility = 'visible';
+                menuOverlay.style.opacity = '1';
+                // El CSS ya maneja el z-index con variables
+                menuOverlay.style.pointerEvents = 'auto';
+                
+                // Asegurar que los botones sean interactivos
+                const buttons = menuOverlay.querySelectorAll('button, a, .menu-btn');
+                buttons.forEach(btn => {
+                    btn.style.pointerEvents = 'auto';
+                });
+            }
         }
         this.openedFromMenu = false;
     }

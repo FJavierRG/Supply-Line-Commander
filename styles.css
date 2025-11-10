@@ -1,3 +1,24 @@
+/* ===== VARIABLES CSS GLOBALES ===== */
+:root {
+    /* Z-Index Scale - Sistema de capas consistente */
+    --z-canvas: 1;           /* Canvas del juego (fondo) */
+    --z-game-hud: 5;         /* HUD durante el juego (timer, currency) */
+    --z-screens: 10;         /* Pantallas principales (menú, arsenal, lobby) */
+    --z-modals: 100;         /* Modales y overlays temporales */
+    --z-notifications: 1000; /* Notificaciones y tooltips */
+    
+    /* Colores principales */
+    --color-primary: #4ecca3;
+    --color-bg-dark: #1a1a2e;
+    --color-bg-darker: #16213e;
+    --color-text: #eee;
+    --color-danger: #e74c3c;
+    
+    /* Transiciones */
+    --transition-speed: 0.3s;
+    --border-radius: 8px;
+}
+
 .tooltip {
     position: relative;
     cursor: help;
@@ -19,7 +40,7 @@
     white-space: nowrap;
     border: 1px solid rgba(78, 204, 163, 0.3);
     pointer-events: none;
-    z-index: 9999;
+    z-index: var(--z-notifications);
 }
 
 .tooltip[data-tip]:hover::before {
@@ -62,6 +83,7 @@ body {
 }
 
 /* Ocultar todo el juego cuando el menú está abierto */
+/* Ocultar elementos del juego cuando el menú está abierto */
 body.menu-open #timer-display,
 body.menu-open #fob-currency-display,
 body.menu-open #camera-slider-container,
@@ -70,11 +92,30 @@ body.menu-open #dev-skip-btn,
 body.menu-open #dev-supply-enemy-btn,
 body.menu-open #back-to-editor-btn,
 body.menu-open #start-timer-btn {
-    display: none !important;
+    display: none;
+}
+
+/* Ocultar elementos del HUD por defecto - se mostrarán cuando el juego lo requiera */
+#timer-display,
+#fob-currency-display {
+    display: none;
+}
+
+/* Ocultar elementos del HUD durante la pantalla de carga */
+#loading-screen:not(.hidden) ~ *,
+body:has(#loading-screen:not(.hidden)) #timer-display,
+body:has(#loading-screen:not(.hidden)) #fob-currency-display,
+body:has(#loading-screen:not(.hidden)) #start-timer-btn {
+    display: none;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
 }
 
 body.menu-open #game-canvas {
     opacity: 0; /* evita ver el último frame detrás del overlay */
+    visibility: hidden; /* 🆕 FIX: Ocultar completamente el canvas en menú */
+    pointer-events: none; /* 🆕 FIX: Deshabilitar interacciones */
 }
 
 #main-game {
@@ -91,13 +132,13 @@ body.menu-open #game-canvas {
     position: absolute;
     top: 0;
     left: 0;
-    z-index: 1; /* Explícitamente bajo - capa del juego */
+    z-index: var(--z-canvas);
     pointer-events: auto; /* Activo por defecto */
 }
 
 /* Slider de cámara - DESACTIVADO (mundo 1:1 con viewport) */
 #camera-slider-container {
-    display: none !important;
+    display: none;
 }
 
 #camera-slider {
@@ -140,7 +181,7 @@ body.menu-open #game-canvas {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: 50;
+    z-index: var(--z-game-hud);
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -163,7 +204,7 @@ body.menu-open #game-canvas {
 }
 
 #pause-btn {
-    display: none !important;
+    display: none; /* Oculto por defecto, se muestra durante el juego */
 }
 
 
@@ -179,7 +220,7 @@ body.menu-open #game-canvas {
     border-radius: 15px;
     cursor: pointer;
     transition: all 0.3s ease;
-    z-index: 1000;
+    z-index: var(--z-modals);
     box-shadow: 0 5px 20px rgba(231, 76, 60, 0.4);
     display: none;
 }
@@ -194,7 +235,7 @@ body.menu-open #game-canvas {
     position: absolute;
     top: 24px;
     right: 24px;
-    z-index: 50;
+    z-index: var(--z-game-hud);
     background: rgba(10, 14, 39, 0.9);
     padding: 8px 16px;
     border-radius: 8px;
@@ -214,7 +255,7 @@ body.menu-open #game-canvas {
     position: absolute;
     top: 35px; /* Bajado 5 píxeles */
     left: 320px; /* Más separado del botón de tienda para que no se tape */
-    z-index: 50;
+    z-index: var(--z-game-hud);
     width: 210px; /* Mitad del ancho original (420/2) */
     height: 83px; /* Altura original (166/2) */
     background-image: url('assets/sprites/ui/UIFrames/currency_bton.png');
@@ -610,7 +651,7 @@ body.menu-open #game-canvas {
     font-weight: 600;
     font-size: 20px;
     cursor: pointer;
-    z-index: 1000;
+    z-index: var(--z-modals);
     box-shadow: 0 8px 32px rgba(78, 204, 163, 0.4);
     display: none;
     transition: all 0.3s ease;
@@ -632,7 +673,7 @@ body.menu-open #game-canvas {
     left: 0;
     width: 100vw;
     height: 100vh;
-    z-index: 1000; /* Siempre arriba del canvas */
+    z-index: var(--z-modals); /* Siempre arriba del canvas */
     pointer-events: none; /* Permite clicks a través cuando no hay overlay visible */
 }
 
@@ -647,7 +688,7 @@ body.menu-open #game-canvas {
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 100;
+    z-index: var(--z-screens);
     backdrop-filter: blur(5px);
     pointer-events: auto; /* Permitir interacción cuando está visible */
 }
@@ -667,7 +708,7 @@ body:has(#ui-layer .overlay:not(.hidden)) #game-canvas {
 
 /* Fallback más robusto: bloquear canvas directamente cuando hay overlay visible */
 #main-game:has(#ui-layer .overlay:not(.hidden)) #game-canvas {
-    pointer-events: none !important;
+    pointer-events: none;
 }
 
 /* Fallback: Overlays legacy fuera de ui-layer (compatibilidad) */
@@ -681,7 +722,7 @@ body:has(#ui-layer .overlay:not(.hidden)) #game-canvas {
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 100;
+    z-index: var(--z-screens);
     backdrop-filter: blur(5px);
     pointer-events: auto;
 }
@@ -937,7 +978,7 @@ body:has(#ui-layer .overlay:not(.hidden)) #game-canvas {
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    z-index: 50;
+    z-index: var(--z-game-hud);
     max-width: 360px;
     backdrop-filter: blur(10px);
 }
@@ -1054,7 +1095,7 @@ body:has(#ui-layer .overlay:not(.hidden)) #game-canvas {
     align-items: center;
     justify-content: space-between;
     padding: 0 16px;
-    z-index: 2000;
+    z-index: var(--z-modals);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -1175,7 +1216,7 @@ body:has(#ui-layer .overlay:not(.hidden)) #game-canvas {
     height: calc(100vh - 56px);
     background: #1e1e1e;
     border-left: 1px solid #333;
-    z-index: 1900;
+    z-index: var(--z-modals);
     display: flex;
     flex-direction: column;
     transition: transform 0.2s ease;
@@ -1436,7 +1477,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 1000;
+    z-index: var(--z-modals);
 }
 
 .options-content {
@@ -1551,9 +1592,9 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     pointer-events: auto;
 }
 
-/* Asegurar que el overlay del arsenal tenga z-index alto */
+/* Arsenal usa z-index de pantallas (ScreenManager lo maneja) */
 #arsenal-overlay {
-    z-index: 110 !important;
+    z-index: var(--z-screens);
 }
 
 /* Elementos clickeables específicos del arsenal */
@@ -1973,8 +2014,8 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 /* Item bloqueado en el mazo (HQ) */
 .deck-item-locked {
     opacity: 0.8;
-    background-color: rgba(78, 204, 163, 0.15) !important;
-    border-color: rgba(78, 204, 163, 0.4) !important;
+    background-color: rgba(78, 204, 163, 0.15);
+    border-color: rgba(78, 204, 163, 0.4);
 }
 
 .deck-item-locked .deck-item-remove {
@@ -2046,10 +2087,10 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 }
 
 /* ===== MODAL DE SELECCIÓN DE MAZOS ===== */
-/* Asegurar que el overlay del selector de mazos esté encima del arsenal */
+/* Selector de mazos es un modal sobre el arsenal */
 #deck-selector-overlay {
-    z-index: 120 !important;
-    pointer-events: auto !important;
+    z-index: var(--z-modals);
+    pointer-events: auto;
 }
 
 /* Cuando el selector de mazos está visible, el arsenal no debe bloquear */
@@ -2232,35 +2273,35 @@ body:has(#deck-selector-overlay:not(.hidden)) #arsenal-overlay {
 
 /* ===== MODAL DE NOMBRE DE MAZO ===== */
 #deck-name-modal-overlay {
-    z-index: 10002 !important; /* Encima del arsenal y selector de mazos */
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
+    z-index: var(--z-modals);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
     display: none; /* Oculto por defecto */
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.8) !important;
-    pointer-events: none !important;
+    background: rgba(0, 0, 0, 0.8);
+    pointer-events: none;
 }
 
 /* Mostrar el modal cuando NO tiene la clase hidden */
 #deck-name-modal-overlay:not(.hidden) {
-    display: flex !important;
-    pointer-events: auto !important;
+    display: flex;
+    pointer-events: auto;
 }
 
 /* Ocultar el modal cuando tiene la clase hidden */
 #deck-name-modal-overlay.hidden {
-    display: none !important;
-    pointer-events: none !important;
+    display: none;
+    pointer-events: none;
 }
 
-/* Asegurar que el contenedor del modal también esté visible */
+/* Contenedor del modal */
 #deck-name-modal-overlay .deck-name-modal-container {
-    position: relative !important;
-    z-index: 10003 !important;
+    position: relative;
+    z-index: var(--z-modals);
 }
 
 .deck-name-modal-container {
@@ -2346,7 +2387,7 @@ body:has(#deck-selector-overlay:not(.hidden)) #arsenal-overlay {
     position: fixed;
     top: 20px;
     right: 20px;
-    z-index: 10003;
+    z-index: var(--z-modals);
     display: flex;
     flex-direction: column;
     gap: 10px;

@@ -288,4 +288,15 @@ export class AntiDroneSystem {
             ).length
         };
     }
+    
+    /**
+     * 🆕 FIX: Limpia completamente el estado del sistema
+     */
+    clear() {
+        this.antiDroneBuildings = [];
+        this.lastShotTimes.clear();
+        this.alertSoundPlayed.clear();
+        if (this.allyAntiDrones) this.allyAntiDrones = [];
+        if (this.enemyAntiDrones) this.enemyAntiDrones = [];
+    }
 }
