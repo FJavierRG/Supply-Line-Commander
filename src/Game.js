@@ -30,6 +30,8 @@ import { RaceSelectionManager } from './systems/RaceSelectionManager.js';
 import { OverlayManager } from './systems/OverlayManager.js';
 import { GameStateManager } from './systems/GameStateManager.js';
 import { InputRouter } from './systems/InputRouter.js';
+import { ScreenManager } from './systems/ScreenManager.js';
+import { CanvasManager } from './systems/CanvasManager.js';
 import { GAME_CONFIG } from './config/constants.js';
 // ELIMINADO: MAP_CONFIG, calculateAbsolutePosition - Ya no se genera el mapa en el cliente
 import { getNodeConfig } from './config/nodes.js';
@@ -50,6 +52,24 @@ export class Game {
         this.overlayManager = new OverlayManager();
         this.gameStateManager = new GameStateManager();
         this.gameStateManager.setState('menu'); // Estado inicial
+        this.screenManager = new ScreenManager();
+        this.canvasManager = new CanvasManager(this);
+        
+        // 🆕 FIX: Configurar listener para pausar/reanudar canvas cuando cambian las pantallas
+        this.screenManager.onScreenChange((newScreen, oldScreen) => {
+            // Si se muestra una pantalla (menú, pausa, etc), pausar el canvas
+            if (newScreen) {
+                this.canvasManager.pause();
+            } else {
+                // Si no hay pantalla visible y estamos jugando, reanudar el canvas
+                if (this.state === 'playing') {
+                    this.canvasManager.resume();
+                }
+            }
+        });
+        
+        // 🆕 FIX: Pausar canvas inicialmente ya que empezamos en el menú
+        this.canvasManager.pause();
         
         // NUEVO: InputRouter necesita los managers antes de crearse
         this.inputRouter = new InputRouter(this.gameStateManager, this.overlayManager);
@@ -244,8 +264,6 @@ export class Game {
         });
         
         // Ocultar elementos UI inicialmente
-        this.ui.hideElement('timer-display');
-        this.ui.hideElement('fob-currency-display');
         this.ui.hideElement('dev-supply-enemy-btn');
         this.ui.hideElement('pause-btn');
         
@@ -267,6 +285,20 @@ export class Game {
     }
     
     startMission() {
+        // 🆕 FIX: Limpiar completamente el estado antes de iniciar una nueva partida
+        // Esto previene problemas cuando se inicia una partida después de terminar otra
+        this.clearGameState();
+        
+        // 🆕 FIX: Ocultar todas las pantallas antes de iniciar
+        if (this.screenManager) {
+            this.screenManager.hideAll();
+        }
+        
+        // 🆕 FIX: Reanudar el canvas para que se renderice el juego
+        if (this.canvasManager) {
+            this.canvasManager.resume();
+        }
+        
         this.setGameState('playing');
         this.score = 0;
         this.deliveries = 0;
@@ -357,6 +389,58 @@ export class Game {
         // Iniciar loop
         this.lastTime = Date.now();
         this.gameLoop();
+    }
+    
+    /**
+     * 🆕 FIX: Método centralizado para limpiar completamente el estado del juego
+     * Se usa cuando se sale de una partida o antes de iniciar una nueva
+     */
+    clearGameState() {
+        // Limpiar todas las entidades y sistemas
+        this.nodes = [];
+        this.helicopters = [];
+        this.convoyManager.clear();
+        this.particleSystem.clear();
+        this.droneSystem.clear();
+        this.tankSystem.clear();
+        
+        // Resetear sistemas
+        this.currency.reset();
+        this.buildSystem.resetLevel();
+        this.medicalSystem.reset();
+        this.frontMovement.resetLevel();
+        this.territory.reset();
+        this.audio.resetEventFlags();
+        this.camera.reset();
+        
+        // Limpiar background tiles
+        this.backgroundTiles = null;
+        
+        // Resetear estado del juego
+        this.score = 0;
+        this.deliveries = 0;
+        this.missionStarted = false;
+        this.countdown = 0;
+        this.matchStats = {
+            startTime: 0,
+            endTime: 0,
+            buildingsBuilt: 0,
+            buildingsLost: 0,
+            dronesLaunched: 0,
+            snipersLaunched: 0,
+            convoysDispatched: 0,
+            emergenciesResolved: 0,
+            emergenciesFailed: 0
+        };
+        
+        // Limpiar selecciones
+        this.selectedNode = null;
+        this.hoveredNode = null;
+        
+        // Limpiar canvas
+        if (this.renderer) {
+            this.renderer.clear();
+        }
     }
     
     /**
@@ -487,6 +571,14 @@ export class Game {
             // Lógica normal del juego
             if (this.state === 'playing' && !this.paused) {
                 this.update(dt);
+            }
+            
+            // 🆕 FIX: Solo renderizar si el canvasManager está corriendo
+            // Esto previene que se renderice el juego cuando hay menús visibles
+            if (this.canvasManager && !this.canvasManager.getRunning()) {
+                // Canvas pausado, no renderizar
+                requestAnimationFrame(() => this.gameLoop());
+                return;
             }
             
             // CRÍTICO: Renderizar siempre, incluso en estado 'menu' si hay pantalla de selección de raza
@@ -1031,10 +1123,22 @@ export class Game {
             pauseBtn.classList.remove('paused');
         }
         
-        // Ocultar overlays de victoria/derrota
+        // Ocultar overlays de victoria/derrota usando ScreenManager
+        if (this.screenManager) {
+            this.screenManager.hide('VICTORY');
+            this.screenManager.hide('DEFEAT');
+            this.screenManager.hide('PAUSE');
+        }
+        
+        // Mantener compatibilidad
         this.overlayManager.hideOverlay('victory-overlay');
         this.overlayManager.hideOverlay('defeat-overlay');
         this.overlayManager.hideOverlay('pause-overlay');
+        
+        // 🆕 FIX: Pausar canvas ANTES de limpiar el estado
+        if (this.canvasManager) {
+            this.canvasManager.pause();
+        }
         
         // === LIMPIAR COMPLETAMENTE EL ESTADO DEL JUEGO ===
         // Limpiar todas las entidades y sistemas
@@ -1043,6 +1147,7 @@ export class Game {
         this.convoyManager.clear();
         this.particleSystem.clear();
         this.droneSystem.clear();
+        this.tankSystem.clear();
         
         // Resetear sistemas
         this.currency.reset();
@@ -1052,6 +1157,9 @@ export class Game {
         this.territory.reset();
         this.audio.resetEventFlags();
         this.camera.reset();
+        
+        // Limpiar background tiles
+        this.backgroundTiles = null;
         
         // Resetear estado del juego
         this.score = 0;
@@ -1097,20 +1205,18 @@ export class Game {
             this.inputHandler.resetDifficultySelector();
         }
         
-        // Cambiar estado a menú ANTES de limpiar canvas
+        // Cambiar estado a menú ANTES de mostrar el menú
         this.setGameState('menu');
         
         // Limpiar canvas completamente para que no quede frame congelado
         this.renderer.clear();
         
-        // Ocultar elementos del juego
-        const timerDisplay = document.getElementById('timer-display');
-        if (timerDisplay) timerDisplay.style.display = 'none';
+        // 🆕 FIX: Mostrar menú principal usando ScreenManager (esto pausará el canvas automáticamente)
+        if (this.screenManager) {
+            this.screenManager.show('MAIN_MENU');
+        }
         
-        const fobCurrencyDisplay = document.getElementById('fob-currency-display');
-        if (fobCurrencyDisplay) fobCurrencyDisplay.style.display = 'none';
-        
-        // Mostrar menú principal
+        // Mantener compatibilidad
         this.showMainMenu();
     }
     

@@ -259,3 +259,4 @@ func _on_exit_pressed():
 **Recomendación:** Empezar con OverlayManager y UIManager primero, ya que son críticos para la navegación del juego.
 
 
+

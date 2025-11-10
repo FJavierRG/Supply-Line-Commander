@@ -928,24 +928,8 @@ export class NetworkManager {
             mainGame.style.opacity = '1';
         }
         
-        // 🆕 FIX: Asegurar que los elementos de UI del juego sean visibles
-        const fobCurrencyDisplay = document.getElementById('fob-currency-display');
-        if (fobCurrencyDisplay) {
-            fobCurrencyDisplay.style.display = 'flex';
-            fobCurrencyDisplay.style.visibility = 'visible';
-            fobCurrencyDisplay.style.opacity = '1';
-            // El CSS ya maneja el z-index con var(--z-game-hud)
-            fobCurrencyDisplay.style.pointerEvents = 'auto';
-        }
-        
-        const timerDisplay = document.getElementById('timer-display');
-        if (timerDisplay) {
-            timerDisplay.style.display = 'flex';
-            timerDisplay.style.visibility = 'visible';
-            timerDisplay.style.opacity = '1';
-            // El CSS ya maneja el z-index con var(--z-game-hud)
-            timerDisplay.style.pointerEvents = 'auto';
-        }
+        // 🆕 ELIMINADO: Los elementos timer-display y fob-currency-display fueron eliminados del HTML
+        // El HUD ahora se renderiza completamente desde el canvas
         
         // Verificar canvas
         const canvas = this.game.canvas;
@@ -1196,6 +1180,11 @@ export class NetworkManager {
             this.game.audio.resetEventFlags();
             this.game.camera.reset();
             this.game.renderer.clear();
+        }
+        
+        // 🆕 FIX: Ocultar todas las pantallas antes de cargar el estado inicial
+        if (this.game.screenManager) {
+            this.game.screenManager.hideAll();
         }
         
         // IMPORTANTE: Marcar como multijugador para desactivar IA
@@ -2319,6 +2308,16 @@ export class NetworkManager {
             overlay.remove();
         }
         
+        // 🆕 FIX: Ocultar todas las pantallas antes de iniciar
+        if (this.game.screenManager) {
+            this.game.screenManager.hideAll();
+        }
+        
+        // 🆕 FIX: Reanudar el canvas para que se renderice el juego
+        if (this.game.canvasManager) {
+            this.game.canvasManager.resume();
+        }
+        
         // Despausar el juego
         this.game.paused = false;
         this.game.setGameState('playing');
@@ -2420,35 +2419,12 @@ export class NetworkManager {
         // Ocultar slider de cámara inicialmente
         this.game.ui.hideElement('camera-slider-container');
         
-        // Mostrar timer y currency display
-        this.game.ui.showElement('timer-display');
-        this.game.ui.showElement('fob-currency-display');
-        
+        // 🆕 ELIMINADO: Los elementos timer-display y fob-currency-display fueron eliminados del HTML
+        // El HUD ahora se renderiza completamente desde el canvas
         
         // Forzar actualización inmediata del HUD
         setTimeout(() => {
             this.game.ui.updateHUD(this.game.getGameState());
-            
-            // DEBUG: Verificar que el elemento currency esté visible
-            const currencyDisplay = document.getElementById('fob-currency-display');
-            const currencyAmount = document.getElementById('fob-currency-amount');
-            
-            if (currencyDisplay) {
-                const styles = window.getComputedStyle(currencyDisplay);
-
-            } else {
-                console.error('❌ Currency Display NO ENCONTRADO en el DOM!');
-            }
-            
-            if (currencyAmount) {
-                console.log('💰 Currency Amount:', {
-                    exists: true,
-                    textContent: currencyAmount.textContent,
-                    display: window.getComputedStyle(currencyAmount).display
-                });
-            } else {
-                console.error('❌ Currency Amount NO ENCONTRADO en el DOM!');
-            }
         }, 100);
     }
     

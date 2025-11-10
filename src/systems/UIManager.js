@@ -46,6 +46,12 @@ export class UIManager {
      * Muestra el menú principal
      */
     showMainMenu() {
+        // 🆕 FIX: Usar ScreenManager para mostrar el menú (esto pausará el canvas automáticamente)
+        if (this.game.screenManager) {
+            this.game.screenManager.show('MAIN_MENU');
+        }
+        
+        // Mantener compatibilidad
         this.overlayManager.showOverlay('main-menu-overlay');
         document.body.classList.add('menu-open');
         
@@ -70,25 +76,8 @@ export class UIManager {
     
     
     updateHUD(gameState) {
-        // Actualizar cuenta atrás (invertida: 1, 2, 3)
-        const timerElement = document.getElementById('timer');
-        if (timerElement && gameState.countdown !== undefined) {
-            if (gameState.countdown > 0) {
-                // Invertir: si countdown es 3 mostrar 1, si es 2 mostrar 2, si es 1 mostrar 3
-                const invertedCount = 4 - Math.ceil(gameState.countdown);
-                timerElement.textContent = invertedCount;
-            } else {
-                timerElement.textContent = '';
-            }
-        }
-        
-        // Actualizar currency de FOB
-        const currencyAmountElement = document.getElementById('fob-currency-amount');
-        if (currencyAmountElement && gameState.fobCurrency !== undefined) {
-            const currentCurrency = Math.floor(gameState.fobCurrency);
-            const incomeRate = gameState.currencyRate || 0;
-            currencyAmountElement.textContent = `${currentCurrency} (+${incomeRate}/s)`;
-        }
+        // 🆕 ELIMINADO: Los elementos timer-display y fob-currency-display fueron eliminados del HTML
+        // El HUD ahora se renderiza completamente desde el canvas
     }
     
     showMissionBriefing(missionMetadata, onStart) {
@@ -304,14 +293,10 @@ export class UIManager {
     setupMissionUI(bases) {
         // Sistema de construcción SIEMPRE disponible
         this.showElement('build-store');
-        this.showElement('fob-currency-display');
         
         // Botón de desarrollo desactivado para producción
         // const hasEnemyFronts = bases.some(b => b.type === 'front' && b.team === 'player2');
         // this.toggleElement('dev-supply-enemy-btn', hasEnemyFronts);
-        
-        // Mostrar timer-display para la cuenta atrás
-        this.showElement('timer-display');
         
         // Ocultar elementos no necesarios
         this.hideElement('start-timer-btn');

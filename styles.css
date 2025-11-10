@@ -2089,8 +2089,23 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 /* ===== MODAL DE SELECCIÓN DE MAZOS ===== */
 /* Selector de mazos es un modal sobre el arsenal */
 #deck-selector-overlay {
-    z-index: var(--z-modals);
-    pointer-events: auto;
+    z-index: calc(var(--z-modals) + 10); /* 🆕 FIX: Asegurar que esté por encima de todo */
+    pointer-events: none; /* Por defecto no captura eventos */
+}
+
+/* Modal de selector de deck - asegurar que capture eventos incluso dentro de ui-layer */
+#deck-selector-overlay:not(.hidden) {
+    pointer-events: auto !important; /* 🆕 FIX: Forzar pointer-events incluso dentro de ui-layer */
+}
+
+/* Asegurar que el contenedor del selector capture eventos */
+#deck-selector-overlay:not(.hidden) .deck-selector-container {
+    pointer-events: auto !important; /* 🆕 FIX: Forzar pointer-events */
+}
+
+/* Asegurar que los elementos dentro del selector capturen eventos */
+#deck-selector-overlay:not(.hidden) * {
+    pointer-events: auto !important; /* 🆕 FIX: Forzar pointer-events en todos los elementos */
 }
 
 /* Cuando el selector de mazos está visible, el arsenal no debe bloquear */
@@ -2111,7 +2126,8 @@ body:has(#deck-selector-overlay:not(.hidden)) #arsenal-overlay {
     flex-direction: column;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     position: relative;
-    z-index: 1;
+    z-index: calc(var(--z-modals) + 1);
+    pointer-events: auto !important; /* 🆕 FIX: Asegurar que el contenedor capture eventos */
 }
 
 .deck-selector-header {
@@ -2286,10 +2302,21 @@ body:has(#deck-selector-overlay:not(.hidden)) #arsenal-overlay {
     pointer-events: none;
 }
 
-/* Mostrar el modal cuando NO tiene la clase hidden */
+/* Modal de nombre de deck - asegurar que capture eventos incluso dentro de ui-layer */
 #deck-name-modal-overlay:not(.hidden) {
     display: flex;
-    pointer-events: auto;
+    pointer-events: auto !important; /* 🆕 FIX: Forzar pointer-events incluso dentro de ui-layer */
+    z-index: calc(var(--z-modals) + 10); /* 🆕 FIX: Asegurar que esté por encima de todo */
+}
+
+/* Asegurar que el contenedor del modal capture eventos */
+#deck-name-modal-overlay:not(.hidden) .deck-name-modal-container {
+    pointer-events: auto !important; /* 🆕 FIX: Forzar pointer-events */
+}
+
+/* Asegurar que los elementos dentro del modal capturen eventos */
+#deck-name-modal-overlay:not(.hidden) * {
+    pointer-events: auto !important; /* 🆕 FIX: Forzar pointer-events en todos los elementos */
 }
 
 /* Ocultar el modal cuando tiene la clase hidden */
@@ -2301,7 +2328,8 @@ body:has(#deck-selector-overlay:not(.hidden)) #arsenal-overlay {
 /* Contenedor del modal */
 #deck-name-modal-overlay .deck-name-modal-container {
     position: relative;
-    z-index: var(--z-modals);
+    z-index: calc(var(--z-modals) + 1);
+    pointer-events: auto; /* 🆕 FIX: Asegurar que el contenedor capture eventos */
 }
 
 .deck-name-modal-container {
@@ -2312,6 +2340,7 @@ body:has(#deck-selector-overlay:not(.hidden)) #arsenal-overlay {
     min-width: 400px;
     max-width: 500px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    pointer-events: auto; /* 🆕 FIX: Asegurar que el contenedor capture eventos */
 }
 
 .deck-name-modal-header {

@@ -905,6 +905,10 @@ export class ArsenalManager {
         this.populateDeckSelector();
         overlay.classList.remove('hidden');
         
+        // 🆕 FIX: Asegurar que el overlay capture eventos explícitamente
+        overlay.style.pointerEvents = 'auto';
+        overlay.style.zIndex = '9999'; // Asegurar que esté por encima de todo
+        
         // Cerrar al hacer clic fuera del contenedor
         overlay.addEventListener('click', this.handleDeckSelectorClick);
     }
@@ -929,6 +933,9 @@ export class ArsenalManager {
         const overlay = document.getElementById('deck-selector-overlay');
         if (overlay) {
             overlay.classList.add('hidden');
+            // 🆕 FIX: Limpiar estilos inline al ocultar
+            overlay.style.pointerEvents = '';
+            overlay.style.zIndex = '';
             overlay.removeEventListener('click', this.handleDeckSelectorClick);
         }
     }
@@ -1075,9 +1082,15 @@ export class ArsenalManager {
             input.value = '';
             // Remover la clase hidden para mostrar el modal
             modal.classList.remove('hidden');
+            // 🆕 FIX: Asegurar que el modal capture eventos explícitamente
+            modal.style.pointerEvents = 'auto';
+            modal.style.zIndex = '9999'; // Asegurar que esté por encima de todo
+            
             // Enfocar el input después de un pequeño delay para asegurar que el modal esté visible
             setTimeout(() => {
                 input.focus();
+                // 🆕 FIX: Asegurar que el input capture eventos
+                input.style.pointerEvents = 'auto';
             }, 100);
         }
     }
@@ -1092,9 +1105,13 @@ export class ArsenalManager {
         if (modal) {
             // Agregar la clase hidden para ocultar el modal
             modal.classList.add('hidden');
+            // 🆕 FIX: Limpiar estilos inline al ocultar
+            modal.style.pointerEvents = '';
+            modal.style.zIndex = '';
         }
         if (input) {
             input.value = '';
+            input.style.pointerEvents = '';
         }
         this.deckNameCallback = null;
     }
