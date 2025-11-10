@@ -326,14 +326,10 @@ export class NetworkManager {
             // CRÍTICO: Desactivar tutorial ANTES de cargar estado
             if (this.game.tutorialManager) {
                 this.game.tutorialManager.active = false; // Modificar el flag interno
-                this.game.tutorialManager.enabled = false;
                 // Forzar estado del juego a NO tutorial
                 if (this.game.state === 'tutorial') {
                     this.game.state = 'menu';
                 }
-            }
-            if (this.game.tutorialSystem) {
-                this.game.tutorialSystem.enabled = false;
             }
             
             // Cargar estado inicial

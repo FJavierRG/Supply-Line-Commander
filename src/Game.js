@@ -24,7 +24,6 @@ import { RoadSystem } from './utils/RoadSystem.js';
 import { OptionsManager } from './systems/OptionsManager.js';
 import { ArsenalManager } from './systems/ArsenalManager.js';
 import { DeckManager } from './systems/DeckManager.js';
-import { TutorialSystem } from './systems/TutorialSystem.js';
 import { TutorialManager } from './systems/TutorialManager.js';
 import { NetworkManager } from './systems/NetworkManager.js';
 import { RaceSelectionManager } from './systems/RaceSelectionManager.js';
@@ -81,7 +80,6 @@ export class Game {
         // La IA ahora está completamente en el servidor (server/game/managers/AISystem.js)
         // No hay IA en el cliente - solo renderizado visual
         
-        this.tutorialSystem = new TutorialSystem(this);
         this.tutorialManager = new TutorialManager(this);
         
         // Sistema de selección de raza
@@ -482,10 +480,9 @@ export class Game {
         const dt = (now - this.lastTime) / 1000;
         this.lastTime = now;
         
-        // Manejar tutorial por separado
+        // Manejar tutorial por separado (ahora es solo UI, no necesita renderizado)
         if (this.state === 'tutorial') {
-            this.tutorialManager.update(dt);
-            this.tutorialManager.render();
+            // El tutorial simple no necesita update/render, todo es HTML
         } else {
             // Lógica normal del juego
             if (this.state === 'playing' && !this.paused) {

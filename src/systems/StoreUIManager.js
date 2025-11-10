@@ -190,11 +190,9 @@ export class StoreUIManager {
      * Muestra/oculta la tienda
      */
     toggleStore() {
-        // Tutorial: Verificar permisos
-        if (this.game.tutorialManager && this.game.tutorialManager.isTutorialActive) {
-            if (!this.game.tutorialManager.isActionAllowed('canOpenStore')) {
-                return;
-            }
+        // Tutorial simple: no hay interacción
+        if (this.game.state === 'tutorial') {
+            return;
         }
         
         this.isVisible = !this.isVisible;

@@ -48,6 +48,39 @@ export class ArsenalManager {
             confirmBtn.addEventListener('click', () => this.confirmDeck());
         }
         
+        // Event listeners del modal de nombre del mazo
+        const deckNameModal = document.getElementById('deck-name-modal-overlay');
+        const deckNameInput = document.getElementById('deck-name-input');
+        const deckNameCancelBtn = document.getElementById('deck-name-cancel-btn');
+        const deckNameConfirmBtn = document.getElementById('deck-name-confirm-btn');
+        
+        if (deckNameCancelBtn) {
+            deckNameCancelBtn.addEventListener('click', () => this.hideDeckNameModal());
+        }
+        
+        if (deckNameConfirmBtn) {
+            deckNameConfirmBtn.addEventListener('click', () => {
+                const name = deckNameInput?.value?.trim();
+                if (name && this.deckNameCallback) {
+                    this.deckNameCallback(name);
+                }
+                this.hideDeckNameModal();
+            });
+        }
+        
+        // Permitir Enter para confirmar
+        if (deckNameInput) {
+            deckNameInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    deckNameConfirmBtn?.click();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.hideDeckNameModal();
+                }
+            });
+        }
+        
         // Botón de cargar mazo
         const loadBtn = document.getElementById('arsenal-load-btn');
         if (loadBtn) {
@@ -158,7 +191,7 @@ export class ArsenalManager {
         const check = this.canAddToDeck(itemId);
         if (!check.canAdd) {
             console.log(check.reason);
-            alert(check.reason);
+            this.showNotification(check.reason, 'error');
             return false;
         }
         
@@ -206,18 +239,49 @@ export class ArsenalManager {
     }
     
     /**
+     * Muestra una notificación en lugar de alert()
+     * @param {string} message - Mensaje a mostrar
+     * @param {string} type - Tipo de notificación: 'success', 'error', 'info'
+     */
+    showNotification(message, type = 'info') {
+        const container = document.getElementById('notification-container');
+        if (!container) return;
+        
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+        
+        container.appendChild(notification);
+        
+        // Trigger animación
+        setTimeout(() => {
+            notification.classList.add('show');
+        }, 10);
+        
+        // Auto-ocultar después de 3 segundos
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+    }
+    
+    /**
      * Guarda el mazo actual usando DeckManager
      */
     saveDeck() {
         if (this.deck.length === 0) {
-            alert('El mazo está vacío');
+            this.showNotification('El mazo está vacío', 'error');
             return;
         }
         
         // 🆕 NUEVO: Validar límite de puntos antes de guardar
         const deckCost = this.getDeckCost();
         if (deckCost > this.deckPointLimit) {
-            alert(`El mazo excede el límite de puntos (${deckCost}/${this.deckPointLimit}). Elimina algunas unidades antes de guardar.`);
+            this.showNotification(`El mazo excede el límite de puntos (${deckCost}/${this.deckPointLimit}). Elimina algunas unidades antes de guardar.`, 'error');
             return;
         }
         
@@ -229,26 +293,27 @@ export class ArsenalManager {
             
             if (updated) {
                 console.log('Mazo actualizado:', updated.name);
-                alert(`Mazo "${updated.name}" guardado correctamente`);
+                this.showNotification(`Mazo "${updated.name}" guardado correctamente`, 'success');
             } else {
-                alert('Error al guardar el mazo');
+                this.showNotification('Error al guardar el mazo', 'error');
             }
         } else {
-            // Crear nuevo mazo
-            const name = prompt('Nombre del nuevo mazo:', 'Mi Mazo');
-            if (!name || name.trim() === '') {
-                return;
-            }
-            
-            const newDeck = this.deckManager.createDeck(name.trim(), [...this.deck]);
-            if (newDeck) {
-                this.currentDeckId = newDeck.id;
-                this.deckManager.selectDeck(newDeck.id);
-                console.log('Nuevo mazo creado:', newDeck.name);
-                alert(`Mazo "${newDeck.name}" creado y guardado`);
-            } else {
-                alert('Error al crear el mazo');
-            }
+            // Crear nuevo mazo - pedir nombre con modal
+            this.showDeckNameModal((name) => {
+                if (!name || name.trim() === '') {
+                    return;
+                }
+                
+                const newDeck = this.deckManager.createDeck(name.trim(), [...this.deck]);
+                if (newDeck) {
+                    this.currentDeckId = newDeck.id;
+                    this.deckManager.selectDeck(newDeck.id);
+                    console.log('Nuevo mazo creado:', newDeck.name);
+                    this.showNotification(`Mazo "${newDeck.name}" creado y guardado`, 'success');
+                } else {
+                    this.showNotification('Error al crear el mazo', 'error');
+                }
+            });
         }
     }
     
@@ -282,14 +347,14 @@ export class ArsenalManager {
      */
     confirmDeck() {
         if (this.deck.length === 0) {
-            alert('El mazo está vacío. Añade unidades antes de confirmar.');
+            this.showNotification('El mazo está vacío. Añade unidades antes de confirmar.', 'error');
             return;
         }
         
         // 🆕 NUEVO: Validar límite de puntos antes de confirmar
         const deckCost = this.getDeckCost();
         if (deckCost > this.deckPointLimit) {
-            alert(`El mazo excede el límite de puntos (${deckCost}/${this.deckPointLimit}). Elimina algunas unidades antes de confirmar.`);
+            this.showNotification(`El mazo excede el límite de puntos (${deckCost}/${this.deckPointLimit}). Elimina algunas unidades antes de confirmar.`, 'error');
             return;
         }
         
@@ -299,12 +364,27 @@ export class ArsenalManager {
                 units: [...this.deck]
             });
         } else {
-            // Si no hay mazo actual, crear uno con nombre por defecto
-            const defaultName = `Mazo ${new Date().toLocaleDateString()}`;
-            const newDeck = this.deckManager.createDeck(defaultName, [...this.deck]);
-            if (newDeck) {
-                this.currentDeckId = newDeck.id;
-            }
+            // Si no hay mazo actual, pedir nombre antes de crear
+            this.showDeckNameModal((name) => {
+                if (!name || name.trim() === '') {
+                    return;
+                }
+                
+                const newDeck = this.deckManager.createDeck(name.trim(), [...this.deck]);
+                if (newDeck) {
+                    this.currentDeckId = newDeck.id;
+                }
+                
+                // Seleccionar este mazo como el actual
+                if (this.currentDeckId) {
+                    this.deckManager.selectDeck(this.currentDeckId);
+                }
+                
+                // TODO: Enviar el mazo al servidor cuando se inicie la partida
+                console.log('Mazo confirmado:', this.deck);
+                this.hide();
+            });
+            return; // Salir aquí, el modal manejará el resto
         }
         
         // Seleccionar este mazo como el actual
@@ -871,6 +951,43 @@ export class ArsenalManager {
             // Actualizar la lista
             this.populateDeckSelector();
         }
+    }
+    
+    /**
+     * Muestra el modal para pedir el nombre del mazo
+     * @param {Function} callback - Función a llamar cuando se confirme el nombre
+     */
+    showDeckNameModal(callback) {
+        this.deckNameCallback = callback;
+        const modal = document.getElementById('deck-name-modal-overlay');
+        const input = document.getElementById('deck-name-input');
+        
+        if (modal && input) {
+            input.value = '';
+            // Remover la clase hidden para mostrar el modal
+            modal.classList.remove('hidden');
+            // Enfocar el input después de un pequeño delay para asegurar que el modal esté visible
+            setTimeout(() => {
+                input.focus();
+            }, 100);
+        }
+    }
+    
+    /**
+     * Oculta el modal de nombre del mazo
+     */
+    hideDeckNameModal() {
+        const modal = document.getElementById('deck-name-modal-overlay');
+        const input = document.getElementById('deck-name-input');
+        
+        if (modal) {
+            // Agregar la clase hidden para ocultar el modal
+            modal.classList.add('hidden');
+        }
+        if (input) {
+            input.value = '';
+        }
+        this.deckNameCallback = null;
     }
 }
 

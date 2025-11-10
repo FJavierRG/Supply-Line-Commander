@@ -404,7 +404,7 @@ export const SERVER_NODE_CONFIG = {
             campaignHospital: false,
             intelRadio: true,
             intelCenter: true,    // 🆕 Centro de Inteligencia - desbloquea comandos
-            aerialBase: true,
+            aerialBase: false,
             vigilanceTower: true,  // 🆕 Torre de Vigilancia - counterea comandos
             // 🆕 CONSUMIBLES/PROYECTILES
             drone: true,
@@ -473,7 +473,7 @@ export const SERVER_NODE_CONFIG = {
         },
         nuclearPlant: {
             name: 'Planta Nuclear',
-            description: 'Genera energía adicional (+2$/s de ingresos pasivos).'
+            description: 'Genera ingresos pasivos adicionales (+2$/s).'
         },
         machineNest: {
             name: 'Nido de Ametralladoras',
@@ -485,11 +485,11 @@ export const SERVER_NODE_CONFIG = {
         },
         intelRadio: {
             name: 'Radio Inteligencia',
-            description: 'Después de 12 segundos en el terreno devuelve el coste (50$) más 50$ de beneficio.'
+            description: 'Después de 12 segundos en el terreno devuelve el coste más 50$ de beneficio.'
         },
         intelCenter: {
             name: 'Centro de Inteligencia',
-            description: 'Centro de operaciones especiales. Desbloquea la capacidad de desplegar comandos especiales operativos.'
+            description: 'Centro de operaciones especiales. Desbloquea el Comando Especial.'
         },
         aerialBase: {
             name: 'Base Aérea',
@@ -497,11 +497,11 @@ export const SERVER_NODE_CONFIG = {
         },
         vigilanceTower: {
             name: 'Torre de Vigilancia',
-            description: 'Torre defensiva que detecta y elimina comandos enemigos en su área. Previene el despliegue de comandos enemigos cerca.'
+            description: 'Torre defensiva que detecta y elimina comandos enemigos en su área.'
         },
         drone: {
             name: 'Dron Bomba',
-            description: 'Destruye un objetivo enemigo. Puede ser interceptado por Anti-Drones. Requiere tener una lanzadera en el campo.'
+            description: 'Destruye un objetivo enemigo. Requiere tener una lanzadera en el campo.'
         },
         sniperStrike: {
             name: 'Disparo de Francotirador',
@@ -512,8 +512,8 @@ export const SERVER_NODE_CONFIG = {
             description: 'Sabotea los tres camiones siguientes de la FOB objetivo, disminuyendo su velocidad de movimiento.'
         },
         specopsCommando: {
-            name: 'Comando Especial Operativo',
-            description: 'Unidad especial que se despliega en territorio enemigo. Deshabilita todos los edificios enemigos dentro de su área de operaciones.'
+            name: 'Comando Especial',
+            description: 'Unidad especial que se despliega en territorio enemigo. Deshabilita los edificios dentro de su área de operaciones.'
         }
     }
 };

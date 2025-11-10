@@ -29,6 +29,9 @@
                 <span id="fob-currency-amount">0</span>
             </div>
             
+            <!-- Sistema de notificaciones -->
+            <div id="notification-container"></div>
+            
             
             <button id="start-timer-btn" class="game-start-overlay-btn">
                 Comenzar
@@ -292,6 +295,22 @@
                     <div class="deck-selector-body">
                         <div id="deck-selector-list" class="deck-selector-list">
                             <!-- La lista se generará dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal para pedir nombre del mazo -->
+            <div id="deck-name-modal-overlay" class="overlay hidden">
+                <div class="deck-name-modal-container">
+                    <div class="deck-name-modal-header">
+                        <h2 class="deck-name-modal-title">Nombre del Mazo</h2>
+                    </div>
+                    <div class="deck-name-modal-body">
+                        <input type="text" id="deck-name-input" class="deck-name-input" placeholder="Escribe el nombre del mazo..." maxlength="50" autofocus>
+                        <div class="deck-name-modal-actions">
+                            <button id="deck-name-cancel-btn" class="menu-btn secondary">Cancelar</button>
+                            <button id="deck-name-confirm-btn" class="menu-btn primary">Guardar</button>
                         </div>
                     </div>
                 </div>

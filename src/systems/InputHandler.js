@@ -473,23 +473,18 @@ export class InputHandler {
         
         // Detectar clic en selector de recursos del HQ - VERIFICAR ANTES DE getBaseAt
         // Porque los botones están FUERA del círculo del HQ
-        let hq;
-        if (this.game.state === 'tutorial' && this.game.tutorialManager && this.game.tutorialManager.tutorialNodes) {
-            hq = this.game.tutorialManager.tutorialNodes.find(b => b.type === 'hq');
-        } else {
-            hq = this.game.bases.find(b => b.type === 'hq' && b.team === this.game.myTeam);
+        // Tutorial simple: no hay interacción
+        if (this.game.state === 'tutorial') {
+            return; // El tutorial simple no permite interacción
         }
+        
+        const hq = this.game.bases.find(b => b.type === 'hq' && b.team === this.game.myTeam);
         
         if (hq) {
             const resourceButtonClick = this.checkResourceSelectorClick(x, y, hq);
             if (resourceButtonClick) {
                 hq.setResourceType(resourceButtonClick);
-                // En tutorial, mantener HQ seleccionado al cambiar tipo de recurso
-                if (this.game.state === 'tutorial' && this.game.tutorialManager && this.game.tutorialManager.isTutorialActive) {
-                    this.game.selectedBase = hq;
-                } else {
-                    this.game.selectedBase = hq;
-                }
+                this.game.selectedBase = hq;
                 console.log(`🎯 HQ seleccionado: ${resourceButtonClick === 'medical' ? 'Modo MÉDICO 🚑' : 'Modo MUNICIÓN 📦'}`);
                 return;
             }
@@ -546,15 +541,9 @@ export class InputHandler {
                     return;
                 }
                 
-                // Tutorial: Verificar permisos para seleccionar
-                if (this.game.tutorialManager && this.game.tutorialManager.isTutorialActive) {
-                    const canSelect = (clickedBase.type === 'hq' && this.game.tutorialManager.isActionAllowed('canSelectHQ')) ||
-                                     (clickedBase.type === 'fob' && this.game.tutorialManager.isActionAllowed('canSelectFOB'));
-                    
-                    if (!canSelect) {
-                        console.log('⚠️ Tutorial: No puedes seleccionar esto aún');
-                        return;
-                    }
+                // Tutorial simple: no hay interacción
+                if (this.game.state === 'tutorial') {
+                    return;
                 }
                 
                 // Intentar seleccionar una base
@@ -657,31 +646,13 @@ export class InputHandler {
                     } else {
                     }
                 } else {
-                    // Tutorial: Verificar permisos para enviar convoy
-                    if (this.game.tutorialManager && this.game.tutorialManager.isTutorialActive) {
-                        if (!this.game.tutorialManager.isActionAllowed('canSendConvoy')) {
-                            console.log('⚠️ Tutorial: No puedes enviar convoyes aún');
-                            return;
-                        }
+                    // Tutorial simple: no hay interacción
+                    if (this.game.state === 'tutorial') {
+                        return;
                     }
                     
                     // MODO MUNICIÓN: Convoy normal
                     this.game.convoyManager.createRoute(this.game.selectedBase, clickedBase);
-                    
-                    // Tutorial: Detectar acciones
-                    if (this.game.tutorialManager && this.game.tutorialManager.isTutorialActive) {
-                        if (clickedBase.type === 'front') {
-                            this.game.tutorialManager.notifyAction('convoy_sent_to_front', { 
-                                from: this.game.selectedBase.type, 
-                                to: clickedBase.type 
-                            });
-                        } else if (clickedBase.type === 'fob') {
-                            this.game.tutorialManager.notifyAction('convoy_sent_to_fob', { 
-                                from: this.game.selectedBase.type, 
-                                to: clickedBase.type 
-                            });
-                        }
-                    }
                     
                     // Deseleccionar solo si NO se mantiene Shift
                     if (!shiftPressed) {
@@ -1123,10 +1094,8 @@ export class InputHandler {
      * Encuentra un nodo en las coordenadas dadas
      */
     getNodeAt(x, y) {
-        // En modo tutorial, usar los nodos del tutorial
-        const nodes = (this.game.state === 'tutorial' && this.game.tutorialManager?.tutorialNodes)
-            ? this.game.tutorialManager.tutorialNodes
-            : this.game.nodes;
+        // Tutorial simple: no hay nodos interactivos
+        const nodes = this.game.nodes;
         
         for (const node of nodes) {
             if (!node.active) continue;

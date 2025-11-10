@@ -145,10 +145,7 @@ export class ConvoyManager {
                 convoy.target.id  // Pasar ID de la base para acumulación
             );
 
-            // Tutorial: disparar trigger cuando el convoy llega al frente
-            if (this.game.state === 'tutorial' && this.game.tutorialManager && convoy.target.type === 'front') {
-                this.game.tutorialManager.notifyAction('convoy_arrived_to_front', { targetId: convoy.target.id });
-            }
+            // Tutorial simple: no hay triggers
         } else if (convoy.target) {
             // Texto flotante para FOB también (con acumulación por baseId)
             this.game.particleSystem.createFloatingText(
@@ -159,10 +156,7 @@ export class ConvoyManager {
                 convoy.target.id  // Pasar ID de la base para acumulación
             );
 
-            // Tutorial: disparar trigger cuando el convoy llega a la FOB
-            if (this.game.state === 'tutorial' && this.game.tutorialManager && convoy.target.type === 'fob') {
-                this.game.tutorialManager.notifyAction('convoy_arrived_to_fob', { targetId: convoy.target.id });
-            }
+            // Tutorial simple: no hay triggers
         }
         
         // Sonido de entrega

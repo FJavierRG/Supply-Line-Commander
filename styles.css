@@ -2229,3 +2229,177 @@ body:has(#deck-selector-overlay:not(.hidden)) #arsenal-overlay {
         max-width: 95%;
     }
 }
+
+/* ===== MODAL DE NOMBRE DE MAZO ===== */
+#deck-name-modal-overlay {
+    z-index: 10002 !important; /* Encima del arsenal y selector de mazos */
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    display: none; /* Oculto por defecto */
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.8) !important;
+    pointer-events: none !important;
+}
+
+/* Mostrar el modal cuando NO tiene la clase hidden */
+#deck-name-modal-overlay:not(.hidden) {
+    display: flex !important;
+    pointer-events: auto !important;
+}
+
+/* Ocultar el modal cuando tiene la clase hidden */
+#deck-name-modal-overlay.hidden {
+    display: none !important;
+    pointer-events: none !important;
+}
+
+/* Asegurar que el contenedor del modal también esté visible */
+#deck-name-modal-overlay .deck-name-modal-container {
+    position: relative !important;
+    z-index: 10003 !important;
+}
+
+.deck-name-modal-container {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border: 2px solid #4ecca3;
+    border-radius: 12px;
+    padding: 30px;
+    min-width: 400px;
+    max-width: 500px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.deck-name-modal-header {
+    margin-bottom: 20px;
+}
+
+.deck-name-modal-title {
+    color: #4ecca3;
+    font-size: 24px;
+    text-align: center;
+    margin: 0;
+}
+
+.deck-name-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.deck-name-input {
+    width: 100%;
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 2px solid #4ecca3;
+    border-radius: 8px;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.deck-name-input:focus {
+    border-color: #6ed4b8;
+    box-shadow: 0 0 10px rgba(78, 204, 163, 0.3);
+}
+
+.deck-name-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.deck-name-modal-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: flex-end;
+}
+
+.deck-name-modal-actions .menu-btn {
+    min-width: 100px;
+}
+
+@media (max-width: 768px) {
+    .deck-name-modal-container {
+        min-width: 90%;
+        padding: 20px;
+    }
+    
+    .deck-name-modal-title {
+        font-size: 20px;
+    }
+    
+    .deck-name-modal-actions {
+        flex-direction: column;
+    }
+    
+    .deck-name-modal-actions .menu-btn {
+        width: 100%;
+    }
+}
+
+/* ===== SISTEMA DE NOTIFICACIONES ===== */
+#notification-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10003;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+    max-width: 400px;
+}
+
+.notification {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border: 2px solid #4ecca3;
+    border-radius: 8px;
+    padding: 16px 20px;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transform: translateX(400px);
+    transition: all 0.3s ease;
+    pointer-events: auto;
+    word-wrap: break-word;
+}
+
+.notification.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.notification-success {
+    border-color: #4ecca3;
+    background: linear-gradient(135deg, rgba(78, 204, 163, 0.1) 0%, rgba(61, 187, 143, 0.1) 100%);
+}
+
+.notification-error {
+    border-color: #e74c3c;
+    background: linear-gradient(135deg, rgba(231, 76, 60, 0.1) 0%, rgba(192, 57, 43, 0.1) 100%);
+}
+
+.notification-info {
+    border-color: #3498db;
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.1) 0%, rgba(41, 128, 185, 0.1) 100%);
+}
+
+@media (max-width: 768px) {
+    #notification-container {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
+    
+    .notification {
+        font-size: 12px;
+        padding: 12px 16px;
+    }
+}

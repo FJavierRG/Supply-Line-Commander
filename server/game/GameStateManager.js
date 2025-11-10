@@ -273,7 +273,7 @@ export class GameStateManager {
         } else if (type === 'fob') {
             node.hasSupplies = true;
             node.maxSupplies = 100;
-            node.supplies = supplies !== null ? supplies : 0;
+            node.supplies = supplies !== null ? supplies : 30;
             // 🆕 CENTRALIZADO: Usar configuración de vehículos según raza
             node.hasVehicles = vehicleConfig.hasVehicles;
             node.maxVehicles = vehicleConfig.hasVehicles ? 2 : 0;

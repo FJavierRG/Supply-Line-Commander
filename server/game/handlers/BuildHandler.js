@@ -221,7 +221,7 @@ export class BuildHandler {
         if (supplies === null) {
             // Valores por defecto según tipo
             if (type === 'fob') {
-                initialSupplies = 0;
+                initialSupplies = 30;
                 maxSupplies = 100;
             } else if (type === 'front') {
                 initialSupplies = 100;

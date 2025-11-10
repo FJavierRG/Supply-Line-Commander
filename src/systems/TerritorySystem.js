@@ -47,16 +47,8 @@ export class TerritorySystem {
         return 'enemy';
     }
     
-    // Fuente de bases: usa nodos del tutorial cuando el estado es 'tutorial'
+    // Fuente de bases: tutorial simple no tiene nodos
     getBases() {
-        if (this.game.state === 'tutorial' && this.game.tutorialManager && this.game.tutorialManager.tutorialNodes) {
-            // Filtrar como en Game.bases
-            return this.game.tutorialManager.tutorialNodes.filter(n => 
-                n.category === 'map_node' || 
-                n.category === 'enemy' || 
-                (n.category === 'buildable' && n.hasVehicles)
-            );
-        }
         return this.game.bases;
     }
     

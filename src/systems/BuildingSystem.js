@@ -103,16 +103,9 @@ export class BuildingSystem {
      * @param {string} buildingId - ID del edificio a construir
      */
     activateBuildMode(buildingId) {
-        // Tutorial: Verificar permisos
-        if (this.game.tutorialManager && this.game.tutorialManager.isTutorialActive) {
-            if (buildingId === 'fob' && !this.game.tutorialManager.isActionAllowed('canBuildFOB')) {
-                console.log('⚠️ Tutorial: No puedes construir FOBs aún');
-                return;
-            }
-            if (buildingId !== 'fob' && !this.game.tutorialManager.isActionAllowed('canBuildOther')) {
-                console.log('⚠️ Tutorial: No puedes construir esto aún');
-                return;
-            }
+        // Tutorial simple: no hay interacción
+        if (this.game.state === 'tutorial') {
+            return;
         }
         
         const building = getBuildingConfig(buildingId);
