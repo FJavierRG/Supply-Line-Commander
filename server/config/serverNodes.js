@@ -451,7 +451,7 @@ export const SERVER_NODE_CONFIG = {
         },
         droneLauncher: {
             name: 'Lanzador de Drones',
-            description: 'Lanza drones bomba hacia objetivos enemigos.'
+            description: 'Habilita el dron bomba en la tienda.'
         },
         razorNet: {
             name: 'Red de Alambre',
@@ -459,11 +459,11 @@ export const SERVER_NODE_CONFIG = {
         },
         truckFactory: {
             name: 'Fábrica de Camiones',
-            description: 'Aumenta la capacidad de vehículos del HQ y mejora los camiones pesados.'
+            description: 'Aumenta +1 vehículos del HQ y mejora +15 su capacidad.'
         },
         engineerCenter: {
             name: 'Centro de Ingenieros',
-            description: 'Mejora la velocidad de todos los convoyes.'
+            description: 'Asfalta el terreno del HQ a los FOBs, aumentando la velocidad de los convoyes pesados.'
         },
         nuclearPlant: {
             name: 'Planta Nuclear',
@@ -479,7 +479,7 @@ export const SERVER_NODE_CONFIG = {
         },
         intelRadio: {
             name: 'Radio Inteligencia',
-            description: 'Inversión temporal. Después de 12 segundos devuelve el coste (50$) más 50$ de beneficio.'
+            description: 'Después de 12 segundos en el terreno devuelve el coste (50$) más 50$ de beneficio.'
         },
         intelCenter: {
             name: 'Centro de Inteligencia',
@@ -499,11 +499,11 @@ export const SERVER_NODE_CONFIG = {
         },
         sniperStrike: {
             name: 'Disparo de Francotirador',
-            description: 'Ataque preciso que hiere temporalmente a unidades enemigas.'
+            description: 'Ataque preciso que provoca el efecto herido temporalmente a unidades enemigas.'
         },
         fobSabotage: {
             name: 'Sabotaje de FOB',
-            description: 'Operación especial que ralentiza temporalmente las operaciones enemigas.'
+            description: 'Sabotea los tres camiones siguientes de la FOB objetivo, disminuyendo su velocidad de movimiento.'
         },
         specopsCommando: {
             name: 'Comando Especial Operativo',

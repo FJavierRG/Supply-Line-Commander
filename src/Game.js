@@ -23,6 +23,7 @@ import { StoreUIManager } from './systems/StoreUIManager.js';
 import { RoadSystem } from './utils/RoadSystem.js';
 import { OptionsManager } from './systems/OptionsManager.js';
 import { ArsenalManager } from './systems/ArsenalManager.js';
+import { DeckManager } from './systems/DeckManager.js';
 import { TutorialSystem } from './systems/TutorialSystem.js';
 import { TutorialManager } from './systems/TutorialManager.js';
 import { NetworkManager } from './systems/NetworkManager.js';
@@ -64,6 +65,7 @@ export class Game {
         this.buildSystem = new BuildingSystem(this);
         this.storeUI = new StoreUIManager(this.assetManager, this.buildSystem, this);
         this.options = new OptionsManager(this.audio);
+        this.deckManager = new DeckManager(this);
         this.arsenal = new ArsenalManager(this.assetManager, this);
         this.convoyManager = new ConvoyManager(this);
         this.medicalSystem = new MedicalEmergencySystem(this);

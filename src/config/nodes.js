@@ -569,10 +569,25 @@ export function getMapNodes() {
  * Compatible con servidor como autoridad: enabled puede venir del servidor
  */
 export function getAllyNodes() {
-    return Object.values(NODE_CONFIG).filter(n => 
-        (n.category === 'map_node' || n.category === 'buildable') && 
-        (n.enabled === undefined || n.enabled !== false)
+    const allNodes = Object.values(NODE_CONFIG).filter(n => 
+        n.category === 'map_node' || n.category === 'buildable'
     );
+    
+    // Verificar enabled desde configuración del servidor si está disponible
+    if (window.game?.serverBuildingConfig?.behavior?.enabled) {
+        const serverEnabled = window.game.serverBuildingConfig.behavior.enabled;
+        return allNodes.filter(n => {
+            // Si el servidor tiene configuración de enabled, usarla
+            if (serverEnabled.hasOwnProperty(n.id)) {
+                return serverEnabled[n.id] === true;
+            }
+            // Si no está en el servidor, usar configuración local
+            return (n.enabled === undefined || n.enabled !== false);
+        });
+    }
+    
+    // Fallback: usar configuración local
+    return allNodes.filter(n => (n.enabled === undefined || n.enabled !== false));
 }
 
 /**

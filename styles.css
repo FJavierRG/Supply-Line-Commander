@@ -1538,41 +1538,46 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 }
 
 /* ===== MENÚ DE ARSENAL ===== */
+/* ===== MENÚ DE ARSENAL ===== */
 .arsenal-container {
-    max-width: 1200px;
+    max-width: 1400px;
     width: 95%;
     max-height: 85vh;
     margin: 0 auto;
     padding: 32px;
-    overflow-y: auto;
-    overflow-x: visible;
+    overflow: hidden;
     position: relative;
     box-sizing: border-box;
-    /* sin transform para evitar recortes del overlay */
-    pointer-events: auto; /* Asegurar que el contenedor sea clickeable */
+    pointer-events: auto;
 }
 
 /* Asegurar que el overlay del arsenal tenga z-index alto */
 #arsenal-overlay {
-    z-index: 110 !important; /* Mayor que otros overlays (100) */
+    z-index: 110 !important;
 }
 
-/* Asegurar que todos los elementos del arsenal sean clickeables */
-#arsenal-overlay * {
+/* Elementos clickeables específicos del arsenal */
+#arsenal-overlay .arsenal-item,
+#arsenal-overlay .deck-item,
+#arsenal-overlay .deck-item-remove,
+#arsenal-overlay .menu-btn,
+#arsenal-overlay .pagination-btn {
     pointer-events: auto;
 }
 
 .arsenal-header {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background: rgba(0, 0, 0, 0.95);
     display: flex;
     align-items: center;
-    gap: 20px;
-    margin-bottom: 32px;
+    justify-content: space-between;
+    margin-bottom: 24px;
     padding-bottom: 16px;
     border-bottom: 1px solid rgba(78, 204, 163, 0.2);
+}
+
+.arsenal-header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
 .arsenal-title {
@@ -1581,156 +1586,639 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     color: #4ecca3;
     margin: 0;
     letter-spacing: 0.5px;
+    flex: 1;
+    text-align: center;
 }
 
 .arsenal-body {
     display: grid;
-    grid-template-columns: 1fr 420px; /* mantener grid amplio; panel más ancho */
-    gap: 24px;
+    grid-template-columns: 1fr 400px; /* Izquierda más ancha, derecha fija */
+    gap: 32px;
+    height: calc(85vh - 140px);
 }
 
-.arsenal-content {
+/* Responsive: Stack en móvil */
+@media (max-width: 968px) {
+    .arsenal-body {
+        grid-template-columns: 1fr;
+        gap: 24px;
+        height: auto;
+    }
+    
+    .arsenal-container {
+        padding: 16px;
+        overflow-y: auto;
+    }
+}
+
+/* Aumentar gap en pantallas grandes */
+@media (min-width: 1200px) {
+    .arsenal-body {
+        gap: 48px;
+        grid-template-columns: 1fr 450px;
+    }
+}
+
+/* ===== PANEL IZQUIERDO: ELEMENTOS DISPONIBLES ===== */
+.available-panel {
     display: flex;
     flex-direction: column;
-    gap: 24px;
-    /* sin desplazamiento: el movimiento se hace en .arsenal-container */
+    background: rgba(46, 125, 50, 0.15); /* Verde suave */
+    border: 2px solid rgba(76, 175, 80, 0.4);
+    border-radius: 12px;
+    padding: 20px;
+    overflow: hidden;
 }
 
-.arsenal-category {
-    margin-bottom: 16px;
-}
-
-.arsenal-category-title {
-    font-size: 16px;
+.available-panel .panel-title {
+    font-size: 18px;
     font-weight: 700;
-    color: #4ecca3;
+    color: #66bb6a;
     margin: 0 0 16px 0;
-    padding: 8px 0;
-    letter-spacing: 0.5px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid rgba(76, 175, 80, 0.3);
     text-transform: uppercase;
-    border-bottom: 2px solid rgba(78, 204, 163, 0.3);
+    letter-spacing: 0.5px;
 }
 
+.available-panel .arsenal-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 8px;
+}
+
+/* Grid de cartas disponibles - 2x4 o similar */
 .arsenal-items {
     display: grid;
-    grid-template-columns: repeat(2, minmax(350px, 1fr)); /* forzar 2 columnas */
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 16px;
+    padding-bottom: 80px; /* Espacio para paginación */
 }
 
+@media (min-width: 768px) and (max-width: 1199px) {
+    .arsenal-items {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (min-width: 1200px) {
+    .arsenal-items {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* Carta individual en el grid */
 .arsenal-item {
-    background: none;
+    background-color: rgba(255, 255, 255, 0.05);
     background-image: url('assets/sprites/ui/UIFrames/medium_bton.png');
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: center;
-    padding: 23px 21px; /* +15% altura (20px → 23px), +5% ancho (20px → 21px) */
-    border-radius: 0;
+    padding: 16px;
+    border-radius: 8px;
+    border: 2px solid rgba(76, 175, 80, 0.3);
     transition: all 0.2s ease;
     display: flex;
-    gap: 16px;
-    align-items: center;
-    border: none;
-    min-height: 110px; /* Altura mínima para que quepan bien los textos */
-    cursor: pointer; /* Indicar que es clickeable */
-    pointer-events: auto; /* Asegurar que sea clickeable */
+    flex-direction: column;
+    gap: 12px;
+    cursor: pointer;
+    pointer-events: auto;
+    min-height: 336px; /* Ampliado 20% desde 280px (280 * 1.2 = 336) */
 }
 
-.arsenal-item:hover {
+.arsenal-item:hover:not(.in-deck) {
     filter: brightness(1.2);
-    transform: translateY(-2px);
+    transform: translateY(-4px);
+    border-color: rgba(76, 175, 80, 0.6);
 }
 
 .arsenal-item-icon {
-    width: 64px;
-    height: 64px;
-    flex-shrink: 0;
+    width: 100%;
+    height: 122px; /* Reducido 15% desde 144px (144 * 0.85 = 122.4) */
+    object-fit: contain;
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    padding: 8px;
 }
 
 .arsenal-item-info {
-    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-}
-
-/* Ocultar descripción en tarjetas */
-.arsenal-item-description { display: none; }
-
-/* Panel de detalle */
-.arsenal-detail {
-    position: sticky;
-    top: 64px;
-    height: fit-content;
-    padding: 16px;
-    background: rgba(0,0,0,0.85);
-    border: 1px solid rgba(78, 204, 163, 0.2);
-}
-
-.detail-canvas {
-    width: 307px;  /* -20% */
-    height: 205px; /* -20% */
-    image-rendering: pixelated;
-    display: block;
-    margin: 0 auto 8px auto;
-}
-
-.detail-info {
-    text-align: center;
-    background-image: url('assets/sprites/ui/UIFrames/medium_bton.png');
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
-    padding: 20px 18px; /* margen interno un pelín mayor para 10% más grande */
-    transform: scale(1.1); /* +10% tamaño del marco */
-    transform-origin: top center;
-}
-
-.detail-name {
-    font-size: 18px;
-    font-weight: 700;
-    color: #ffffff;
-    margin: 0 0 6px 0;
-}
-
-.detail-cost {
-    font-size: 14px;
-    font-weight: 700;
-    color: #f39c12;
-    margin: 0 0 6px 0;
-}
-
-.detail-desc {
-    font-size: 13px;
-    color: #ffffff; /* mismo color que el nombre para máxima legibilidad */
-    margin: 0 auto; /* centrar */
-    line-height: 1.4;
-    width: 75%; /* estrechar área de escritura un 25% */
+    gap: 8px;
+    flex: 1;
 }
 
 .arsenal-item-name {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     color: #ffffff;
     margin: 0;
-}
-
-.arsenal-item-description {
-    font-size: 13px;
-    color: #a0a0a0;
-    margin: 0;
-    line-height: 1.4;
+    text-align: center;
 }
 
 .arsenal-item-cost {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     color: #f39c12;
     margin: 0;
+    text-align: center;
 }
 
 .arsenal-item-cost.free {
     color: #4ecca3;
 }
 
+/* MOSTRAR descripción en tarjetas */
+.arsenal-item-description {
+    font-size: 12px;
+    color: #cccccc;
+    margin: 0;
+    line-height: 1.4;
+    text-align: center;
+    flex: 1;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    line-clamp: 4; /* Propiedad estándar para compatibilidad */
+    overflow: hidden;
+}
+
+/* Item ya añadido al mazo */
+.arsenal-item.in-deck {
+    opacity: 0.5;
+    cursor: not-allowed;
+    position: relative;
+}
+
+.arsenal-item.in-deck::after {
+    content: '✓';
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(76, 175, 80, 0.9);
+    color: #000;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+}
+
+/* Paginación en el panel izquierdo */
+.arsenal-pagination {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 12px 24px;
+    border-radius: 8px;
+    border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.pagination-btn {
+    background: rgba(76, 175, 80, 0.2);
+    border: 1px solid rgba(76, 175, 80, 0.5);
+    color: #66bb6a;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background: rgba(76, 175, 80, 0.4);
+    border-color: rgba(76, 175, 80, 0.8);
+}
+
+.pagination-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.pagination-info {
+    color: #66bb6a;
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 80px;
+    text-align: center;
+}
+
+/* ===== PANEL DERECHO: MAZO EQUIPADO ===== */
+.deck-panel {
+    display: flex;
+    flex-direction: column;
+    background: rgba(13, 71, 161, 0.15); /* Azul suave */
+    border: 2px solid rgba(33, 150, 243, 0.4);
+    border-radius: 12px;
+    padding: 20px;
+    overflow: hidden;
+}
+
+.deck-panel .panel-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #42a5f5;
+    margin: 0 0 16px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid rgba(33, 150, 243, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Contador de unidades en el mazo */
+.deck-counter {
+    margin-left: auto;
+    font-size: 16px;
+    font-weight: 700;
+    color: #42a5f5;
+    padding: 6px 12px;
+    background: rgba(33, 150, 243, 0.2);
+    border: 1px solid rgba(33, 150, 243, 0.4);
+    border-radius: 4px;
+}
+
+.deck-counter span {
+    color: #ffffff;
+}
+
+/* Lista del mazo */
+.deck-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 200px;
+    padding-right: 8px;
+}
+
+.deck-empty {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+    padding: 60px 20px;
+    font-style: italic;
+}
+
+/* Items del mazo - lista horizontal con botón X */
+.deck-item {
+    background-color: rgba(33, 150, 243, 0.1);
+    background-image: url('assets/sprites/ui/UIFrames/medium_bton.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    border: 2px solid rgba(33, 150, 243, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.deck-item:hover {
+    filter: brightness(1.15);
+    border-color: rgba(33, 150, 243, 0.5);
+}
+
+.deck-item-icon {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    padding: 4px;
+}
+
+.deck-item-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.deck-item-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.deck-item-cost {
+    font-size: 12px;
+    font-weight: 700;
+    color: #f39c12;
+}
+
+/* Botón X para eliminar */
+.deck-item-remove {
+    background: rgba(244, 67, 54, 0.3);
+    border: 2px solid rgba(244, 67, 54, 0.6);
+    color: #ff5252;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: 700;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.deck-item-remove:hover {
+    background: rgba(244, 67, 54, 0.5);
+    border-color: rgba(244, 67, 54, 0.9);
+    transform: scale(1.1);
+}
+
+/* Item bloqueado en el mazo (HQ) */
+.deck-item-locked {
+    opacity: 0.8;
+    background-color: rgba(78, 204, 163, 0.15) !important;
+    border-color: rgba(78, 204, 163, 0.4) !important;
+}
+
+.deck-item-locked .deck-item-remove {
+    display: none;
+}
+
+/* Botones de acción del mazo */
+.deck-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(33, 150, 243, 0.3);
+}
+
+.deck-actions .menu-btn {
+    flex: 1;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+/* Eliminar panel de detalle - ya no se usa */
+.arsenal-detail {
+    display: none;
+}
+
+/* Mejoras de accesibilidad */
+.arsenal-item:focus-visible,
+.deck-item:focus-visible,
+.deck-item-remove:focus-visible,
+.pagination-btn:focus-visible {
+    outline: 2px solid #4ecca3;
+    outline-offset: 2px;
+}
+
+/* Scrollbar personalizado */
+.available-panel .arsenal-content::-webkit-scrollbar,
+.deck-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.available-panel .arsenal-content::-webkit-scrollbar-track {
+    background: rgba(76, 175, 80, 0.1);
+    border-radius: 4px;
+}
+
+.available-panel .arsenal-content::-webkit-scrollbar-thumb {
+    background: rgba(76, 175, 80, 0.4);
+    border-radius: 4px;
+}
+
+.available-panel .arsenal-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(76, 175, 80, 0.6);
+}
+
+.deck-list::-webkit-scrollbar-track {
+    background: rgba(33, 150, 243, 0.1);
+    border-radius: 4px;
+}
+
+.deck-list::-webkit-scrollbar-thumb {
+    background: rgba(33, 150, 243, 0.4);
+    border-radius: 4px;
+}
+
+.deck-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(33, 150, 243, 0.6);
+}
+
+/* ===== MODAL DE SELECCIÓN DE MAZOS ===== */
+/* Asegurar que el overlay del selector de mazos esté encima del arsenal */
+#deck-selector-overlay {
+    z-index: 120 !important;
+    pointer-events: auto !important;
+}
+
+/* Cuando el selector de mazos está visible, el arsenal no debe bloquear */
+#arsenal-overlay:has(~ #deck-selector-overlay:not(.hidden)),
+body:has(#deck-selector-overlay:not(.hidden)) #arsenal-overlay {
+    pointer-events: none;
+}
+
+.deck-selector-container {
+    background: linear-gradient(135deg, rgba(20, 25, 35, 0.98) 0%, rgba(15, 20, 30, 0.98) 100%);
+    border: 2px solid rgba(78, 204, 163, 0.3);
+    border-radius: 12px;
+    padding: 32px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    position: relative;
+    z-index: 1;
+}
+
+.deck-selector-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(78, 204, 163, 0.2);
+}
+
+.deck-selector-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #4ecca3;
+    margin: 0;
+    letter-spacing: 0.5px;
+}
+
+.deck-selector-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 200px;
+}
+
+.deck-selector-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.deck-selector-item {
+    background: rgba(33, 150, 243, 0.1);
+    border: 1px solid rgba(33, 150, 243, 0.3);
+    border-radius: 8px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.deck-selector-item:hover {
+    background: rgba(33, 150, 243, 0.2);
+    border-color: rgba(33, 150, 243, 0.5);
+    transform: translateX(4px);
+}
+
+.deck-selector-item.selected {
+    background: rgba(78, 204, 163, 0.2);
+    border-color: rgba(78, 204, 163, 0.5);
+}
+
+.deck-selector-item-info {
+    flex: 1;
+}
+
+.deck-selector-item-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 4px;
+}
+
+.deck-selector-item-meta {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    display: flex;
+    gap: 12px;
+}
+
+.deck-selector-item-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(78, 204, 163, 0.2);
+    border: 1px solid rgba(78, 204, 163, 0.4);
+    border-radius: 4px;
+    font-size: 11px;
+    color: #4ecca3;
+    margin-left: 8px;
+}
+
+.deck-selector-item-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.deck-selector-item-btn {
+    background: rgba(33, 150, 243, 0.2);
+    border: 1px solid rgba(33, 150, 243, 0.4);
+    color: #42a5f5;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+
+.deck-selector-item-btn:hover {
+    background: rgba(33, 150, 243, 0.3);
+    border-color: rgba(33, 150, 243, 0.6);
+}
+
+.deck-selector-item-btn.delete {
+    background: rgba(231, 76, 60, 0.2);
+    border-color: rgba(231, 76, 60, 0.4);
+    color: #e74c3c;
+}
+
+.deck-selector-item-btn.delete:hover {
+    background: rgba(231, 76, 60, 0.3);
+    border-color: rgba(231, 76, 60, 0.6);
+}
+
+.deck-selector-empty {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+    padding: 60px 20px;
+    font-style: italic;
+}
+
+/* Scrollbar para el selector */
+.deck-selector-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.deck-selector-body::-webkit-scrollbar-track {
+    background: rgba(78, 204, 163, 0.1);
+    border-radius: 4px;
+}
+
+.deck-selector-body::-webkit-scrollbar-thumb {
+    background: rgba(78, 204, 163, 0.4);
+    border-radius: 4px;
+}
+
+.deck-selector-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(78, 204, 163, 0.6);
+}
+
+/* Ajuste para móvil */
+@media (max-width: 967px) {
+    .arsenal-items {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .deck-panel {
+        max-height: 400px;
+    }
+    
+    .deck-selector-container {
+        padding: 20px;
+        max-width: 95%;
+    }
+}

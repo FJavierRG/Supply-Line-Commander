@@ -229,27 +229,68 @@
             </div>
 
 
-            <!-- Menú de Arsenal -->
+            <!-- Constructor de Mazos (antes Arsenal) -->
             <div id="arsenal-overlay" class="overlay hidden">
                 <div class="arsenal-container">
                     <div class="arsenal-header">
                         <button id="arsenal-back-btn" class="back-btn">← Volver</button>
-                        <h2 class="arsenal-title">Arsenal</h2>
+                        <h2 class="arsenal-title">Constructor de Mazos</h2>
+                        <div class="arsenal-header-right">
+                            <button id="arsenal-load-btn" class="back-btn">Cargar</button>
+                            <div class="deck-counter">
+                                <span id="deck-count">0</span> / <span id="deck-limit">20</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="arsenal-body">
-                        <div class="arsenal-content" id="arsenal-content">
-                            <!-- El contenido se generará dinámicamente -->
+                        <!-- Panel izquierdo: Unidades disponibles -->
+                        <div class="deck-panel available-panel">
+                            <h3 class="panel-title">Unidades Disponibles</h3>
+                            <div class="arsenal-content" id="arsenal-content">
+                                <!-- El contenido se generará dinámicamente -->
+                            </div>
                         </div>
 
-                        <aside class="arsenal-detail" id="arsenal-detail">
-                            <canvas id="detail-canvas" class="detail-canvas" width="307" height="205"></canvas>
-                            <div class="detail-info ui-frame">
-                                <p class="detail-name">Pasa el ratón por un elemento</p>
-                                <p class="detail-cost"></p>
-                                <p class="detail-desc"></p>
+                        <!-- Panel derecho: Mazo actual -->
+                        <div class="deck-panel">
+                            <h3 class="panel-title">Tu Mazo</h3>
+                            <div class="deck-list" id="deck-list">
+                                <div class="deck-empty">Tu mazo está vacío. Haz clic en las unidades disponibles para añadirlas.</div>
                             </div>
-                        </aside>
+                            
+                            <!-- Panel de detalle (mantener pero adaptado) -->
+                            <aside class="arsenal-detail" id="arsenal-detail">
+                                <canvas id="detail-canvas" class="detail-canvas" width="307" height="205"></canvas>
+                                <div class="detail-info ui-frame">
+                                    <p class="detail-name">Pasa el ratón por un elemento</p>
+                                    <p class="detail-cost"></p>
+                                    <p class="detail-desc"></p>
+                                </div>
+                            </aside>
+                            
+                            <!-- Botones de acción del mazo -->
+                            <div class="deck-actions">
+                                <button id="deck-clear-btn" class="menu-btn secondary">Limpiar</button>
+                                <button id="deck-save-btn" class="menu-btn secondary">Guardar</button>
+                                <button id="deck-confirm-btn" class="menu-btn primary">Confirmar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal de selección de mazos -->
+            <div id="deck-selector-overlay" class="overlay hidden">
+                <div class="deck-selector-container">
+                    <div class="deck-selector-header">
+                        <h2 class="deck-selector-title">Seleccionar Mazo</h2>
+                        <button id="deck-selector-close-btn" class="back-btn">✕ Cerrar</button>
+                    </div>
+                    <div class="deck-selector-body">
+                        <div id="deck-selector-list" class="deck-selector-list">
+                            <!-- La lista se generará dinámicamente -->
+                        </div>
                     </div>
                 </div>
             </div>
