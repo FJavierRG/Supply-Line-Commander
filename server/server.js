@@ -328,7 +328,8 @@ io.on('connection', (socket) => {
             if (!room) throw new Error('Sala no encontrada');
             
             // Validar que la raza sea válida
-            const validRaces = ['A_Nation', 'B_Nation'];
+            // 🚧 TEMPORAL: Solo A_Nation disponible para migración a sistema de mazo
+            const validRaces = ['A_Nation'];
             if (!validRaces.includes(raceId)) {
                 throw new Error('Raza inválida');
             }

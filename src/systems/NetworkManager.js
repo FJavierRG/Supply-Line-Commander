@@ -932,6 +932,20 @@ export class NetworkManager {
             return;
         }
         
+        // 🆕 NUEVO: Limpiar cualquier estado anterior antes de crear una nueva sala
+        // Esto evita problemas si el jugador salió de una partida anterior
+        if (this.roomId) {
+            console.log('⚠️ Limpiando sala anterior antes de crear nueva...');
+            this.leaveRoom();
+        }
+        
+        // Asegurarse de que el estado esté limpio
+        this.roomId = null;
+        this.myTeam = null;
+        this.opponentTeam = null;
+        this.isReady = false;
+        this._startingGame = false;
+        
         this.socket.emit('create_room', { playerName });
     }
     
@@ -1648,6 +1662,9 @@ export class NetworkManager {
         // Limpiar lista
         playersList.innerHTML = '';
         
+        // Guardar datos del lobby para uso posterior (necesario para auto-selección de raza)
+        this.lastLobbyData = data;
+        
         // Renderizar cada jugador
         data.players.forEach(player => {
             const playerCard = document.createElement('div');
@@ -1706,9 +1723,8 @@ export class NetworkManager {
                                 font-size: 14px;
                                 width: 200px;
                             " ${player.ready ? 'disabled' : ''}>
-                                <option value="">Seleccionar nación</option>
-                                <option value="A_Nation" ${player.selectedRace === 'A_Nation' ? 'selected' : ''}>Fuerzas Unificadas</option>
-                                <option value="B_Nation" ${player.selectedRace === 'B_Nation' ? 'selected' : ''}>Fuerza de Asalto Directa</option>
+                                <option value="A_Nation" ${player.selectedRace === 'A_Nation' || !player.selectedRace ? 'selected' : ''}>Fuerzas Unificadas</option>
+                                <!-- 🚧 TEMPORAL: B_Nation deshabilitada para migración a sistema de mazo -->
                             </select>
                         ` : `
                             <div style="font-size: 14px; color: ${player.selectedRace ? '#2ecc71' : '#e74c3c'};">
@@ -1815,7 +1831,24 @@ export class NetworkManager {
             // Remover listeners anteriores para evitar duplicados
             select.removeEventListener('change', this.handleRaceSelect);
             
-            // Agregar nuevo listener
+            // 🆕 NUEVO: Si el selector ya tiene un valor seleccionado (A_Nation por defecto),
+            // enviarlo automáticamente al servidor
+            if (select.value && select.value === 'A_Nation') {
+                // Verificar si el jugador ya tiene esta raza seleccionada en el servidor
+                // usando los datos del lobby que acabamos de recibir
+                const playerId = select.id.replace('race-select-', '');
+                const playerData = this.lastLobbyData?.players?.find(p => p.id === playerId);
+                
+                // Solo enviar si el jugador actual no tiene raza seleccionada aún en el servidor
+                if (playerData && !playerData.selectedRace) {
+                    this.socket.emit('select_race', {
+                        roomId: this.roomId,
+                        raceId: select.value
+                    });
+                }
+            }
+            
+            // Agregar nuevo listener para cambios futuros
             select.addEventListener('change', (e) => {
                 const raceId = e.target.value;
                 if (raceId) {
@@ -1967,9 +2000,18 @@ export class NetworkManager {
         const chatMessages = document.getElementById('chat-messages');
         if (chatMessages) chatMessages.innerHTML = '';
         
-        // Resetear estado
+        // 🆕 NUEVO: Limpiar completamente el estado de la sala
         this.roomId = null;
+        this.myTeam = null;
+        this.opponentTeam = null;
         this.isReady = false;
+        this.lastLobbyData = null;
+        this._startingGame = false;
+        
+        // Notificar al servidor que salimos de la sala (si estamos conectados)
+        // El servidor manejará la desconexión automáticamente cuando el socket se desconecte,
+        // pero si solo estamos saliendo de la sala sin desconectar, el servidor lo manejará
+        // cuando el socket se desconecte o cuando se cree una nueva sala
     }
     
     /**
@@ -2588,11 +2630,41 @@ export class NetworkManager {
      * Desconectar del servidor
      */
     disconnect() {
+        // 🆕 NUEVO: Limpiar completamente el estado antes de desconectar
+        // Esto evita que al crear una nueva sala se reconecte a la anterior
+        
+        // Salir de la sala actual si existe
+        if (this.roomId) {
+            this.leaveRoom();
+        }
+        
+        // Limpiar estado de conexión
         if (this.socket) {
             this.socket.disconnect();
             this.socket = null;
-            this.connected = false;
         }
+        
+        // Limpiar completamente el estado
+        this.connected = false;
+        this.roomId = null;
+        this.myTeam = null;
+        this.opponentTeam = null;
+        this.isReady = false;
+        this.isMultiplayer = false;
+        this.lastLobbyData = null;
+        this._startingGame = false;
+        
+        // Limpiar UI del lobby
+        const initialView = document.getElementById('lobby-initial-view');
+        const roomView = document.getElementById('lobby-room-view');
+        if (initialView) initialView.style.display = 'block';
+        if (roomView) roomView.style.display = 'none';
+        
+        // Limpiar chat
+        const chatMessages = document.getElementById('chat-messages');
+        if (chatMessages) chatMessages.innerHTML = '';
+        
+        console.log('🔌 Desconectado y estado limpiado completamente');
     }
 }
 

@@ -408,12 +408,29 @@ export const NODE_CONFIG = {
         // cost: Definido por el servidor (autoridad)
         // cursorSprite, targetType: Definidos por el servidor (autoridad - ANTI-HACK)
         // detectionRadius: Definido por el servidor (autoridad)
+    },
+    
+    tank: {
+        id: 'tank',
+        name: 'Tanque',
+        description: 'Unidad blindada que destruye edificios enemigos. No puede atacar FOBs ni HQs. Se detiene en el borde del objetivo para disparar.',
+        spriteKey: 'vehicle-tank-1', // Sprite base del tanque
+        category: 'projectile',
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
+        
+        // Sistema de razas
+        
+        radius: 0,
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost: Definido por el servidor (autoridad)
+        sizeMultiplier: 1.0
     }
 };
 
 /**
  * Obtiene la configuración de un nodo por ID
- * SIEMPRE usa configuración del servidor (tanto en singleplayer como multiplayer)
+ * SIEMPRE usa configuración del servidor (autoridad)
  */
 export function getNodeConfig(nodeId) {
     const config = NODE_CONFIG[nodeId] || null;
@@ -423,7 +440,7 @@ export function getNodeConfig(nodeId) {
         return config;
     }
     
-    // Usar configuración del servidor (tanto en singleplayer como multiplayer)
+    // Usar configuración del servidor (autoridad)
     const serverConfig = window.game.serverBuildingConfig;
     
     if (config && serverConfig) {

@@ -45,7 +45,7 @@ export class StoreUIManager {
         let buildableNodes = [];
         let projectileNodes = [];
         
-        // Determinar team (multijugador usa myTeam, singleplayer usa 'player1')
+        // Determinar team del jugador
         const team = this.game?.myTeam || 'player1';
         
         // Verificar que existe la configuración del servidor
@@ -131,9 +131,9 @@ export class StoreUIManager {
     }
     
     /**
-     * 🆕 Crea configuración de raza para singleplayer desde el servidor
+     * Crea configuración de raza local desde el servidor (fallback temporal)
      */
-    async createSingleplayerRaceConfig(raceId) {
+    async createLocalRaceConfig(raceId) {
         try {
             // Importar configuración del servidor
             const raceConfigModule = await import('../../server/config/raceConfig.js');
@@ -146,7 +146,7 @@ export class StoreUIManager {
                     this.game.raceConfigs = {};
                 }
                 
-                // En singleplayer, el jugador es 'player1'
+                // El jugador es 'player1' por defecto
                 this.game.raceConfigs['player1'] = raceConfig;
                 this.game.myTeam = 'player1'; // Asegurar que myTeam esté establecido
                 
@@ -155,7 +155,7 @@ export class StoreUIManager {
                 this.updateCategories();
             }
         } catch (error) {
-            console.error(`❌ Error creando configuración de raza para singleplayer:`, error);
+            console.error(`❌ Error creando configuración de raza local:`, error);
         }
     }
     
@@ -774,19 +774,14 @@ export class StoreUIManager {
         if (this.currentRace !== raceId) {
             this.currentRace = raceId;
             
-            // 🎯 NUEVO: En singleplayer, crear configuración desde el servidor si no existe
-            if (this.game && (!this.game.isMultiplayer || this.game.isMultiplayer === false)) {
-                if (!this.game.raceConfigs || !this.game.raceConfigs['player1']) {
-                    this.createSingleplayerRaceConfig(raceId).then(() => {
-                        // Actualizar categorías después de crear la configuración
-                        this.updateCategories();
-                    });
-                } else {
-                    // Ya existe configuración, solo actualizar
+            // Crear configuración local desde el servidor si no existe (fallback temporal)
+            if (this.game && !this.game.raceConfigs?.['player1']) {
+                this.createLocalRaceConfig(raceId).then(() => {
+                    // Actualizar categorías después de crear la configuración
                     this.updateCategories();
-                }
+                });
             } else {
-                // Multijugador: solo actualizar categorías
+                // Ya existe configuración del servidor, solo actualizar
                 this.updateCategories();
             }
             

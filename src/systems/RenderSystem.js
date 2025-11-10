@@ -139,7 +139,18 @@ export class RenderSystem {
         // Determinar orientación dinámica basada en equipo
         // Los edificios deben mirar hacia el centro del mapa (hacia el enemigo)
         const myTeam = this.game?.myTeam || 'player1';
-        const isMyBuilding = node.team === myTeam;
+        
+        // Normalizar node.team a 'player1' o 'player2' para comparación
+        let nodeTeamNormalized = node.team;
+        if (node.team === 'ally') {
+            nodeTeamNormalized = 'player1';
+        } else if (node.team === 'enemy') {
+            nodeTeamNormalized = 'player2';
+        }
+        // Si node.team ya es 'player1' o 'player2', mantenerlo así
+        
+        // Comparación estricta para determinar si es mi edificio
+        const isMyBuilding = nodeTeamNormalized === myTeam;
         const worldWidth = this.game?.worldWidth || this.width;
         const centerX = worldWidth / 2;
         
@@ -147,7 +158,7 @@ export class RenderSystem {
         let nodeRaceId = null;
         if (game && game.playerRaces && node.team) {
             // En multiplayer, node.team puede ser 'player1' o 'player2'
-            // En singleplayer, puede ser 'ally' o 'enemy'
+            // Puede ser 'ally' o 'enemy' según el equipo
             let playerKey = node.team;
             if (node.team === 'ally') playerKey = 'player1';
             if (node.team === 'enemy') playerKey = 'player2';
@@ -225,6 +236,8 @@ export class RenderSystem {
         // Verificar si el frente está en retirada (sin munición)
         const hasNoAmmo = node.type === 'front' && node.hasEffect && node.hasEffect('no_supplies');
         
+        // isMyBuilding ya está definido arriba (línea 142)
+        
         // Obtener sprite
         let sprite = null;
         let spriteKey = node.spriteKey;
@@ -235,17 +248,24 @@ export class RenderSystem {
             sprite = this.assetManager.getSprite(spriteKey);
         } else {
             // Intentar usar getBaseSprite para nodos base (tiene lógica de estados)
-            if (node.category === 'map_node') {
-                sprite = this.assetManager?.getBaseSprite(node.type, false, false, isCritical, hasNoAmmo, node.team, nodeRaceId);
+            // También usar para FOBs que necesitan sprites diferentes según equipo
+            if (node.category === 'map_node' || node.type === 'fob') {
+                // Pasar 'ally' o 'enemy' según si es mi equipo
+                sprite = this.assetManager?.getBaseSprite(node.type, false, false, isCritical, hasNoAmmo, isMyBuilding ? 'ally' : 'enemy', nodeRaceId);
             } else {
                 // Para edificios construibles, usar spriteKey directamente
                 sprite = this.assetManager.getSprite(spriteKey);
             }
         }
         
-        // Solo HQs tienen resplandor
+        // Solo HQs tienen resplandor - determinar color según si es mi equipo
         const isHQ = node.type === 'hq';
-        this.ctx.shadowColor = isHQ ? node.shadowColor : 'transparent';
+        if (isHQ) {
+            // Azul para mi equipo, rojo para enemigo
+            this.ctx.shadowColor = isMyBuilding ? '#3498db' : '#e74c3c';
+        } else {
+            this.ctx.shadowColor = 'transparent';
+        }
         this.ctx.shadowBlur = isHQ ? 20 : 0;
         
         // Calcular tamaño del sprite
@@ -702,8 +722,20 @@ export class RenderSystem {
             nodeRaceId = game.playerRaces[playerKey];
         }
         
+        // Normalizar base.team a 'ally' o 'enemy' para getBaseSprite
+        const myTeam = this.game?.myTeam || game?.myTeam || 'player1';
+        let nodeTeamNormalized = base.team;
+        if (base.team === 'ally') {
+            nodeTeamNormalized = 'player1';
+        } else if (base.team === 'enemy') {
+            nodeTeamNormalized = 'player2';
+        }
+        // Determinar si es mi edificio para pasar 'ally' o 'enemy' a getBaseSprite
+        const isMyBuilding = nodeTeamNormalized === myTeam;
+        const teamForSprite = isMyBuilding ? 'ally' : 'enemy';
+        
         // Intentar usar sprite si está disponible (SIEMPRE usar sprite normal, no placeholder)
-        const sprite = this.assetManager?.getBaseSprite(base.type, false, false, isCritical, hasNoAmmo, base.team, nodeRaceId);
+        const sprite = this.assetManager?.getBaseSprite(base.type, false, false, isCritical, hasNoAmmo, teamForSprite, nodeRaceId);
         
         if (sprite) {
             // RENDERIZADO CON SPRITE
@@ -1379,7 +1411,7 @@ export class RenderSystem {
             this.ctx.shadowBlur = 0;
             
             // 🆕 NOTA: La barra de cargo para helicópteros ahora se renderiza en renderHelicopter()
-            // Los helicópteros en singleplayer ya no son convoys, sino entidades persistentes
+            // Los helicópteros ya no son convoys, sino entidades persistentes
         } else {
             // FALLBACK: RENDERIZADO PLACEHOLDER (código original)
             
@@ -1824,6 +1856,92 @@ export class RenderSystem {
         this.ctx.setLineDash([]);
     }
     
+    /**
+     * Renderiza un tanque
+     * 🆕 NUEVO: Renderiza el tanque con sprites alternantes y animación de disparo
+     */
+    renderTank(tank) {
+        // Determinar qué sprite usar según el estado
+        let spriteKey;
+        if (tank.state === 'shooting' || tank.showShotOnImpact) {
+            // Mostrar sprite de shot durante el estado shooting o cuando ocurre el impacto
+            spriteKey = 'vehicle-tank-shot';
+        } else {
+            // Alternar entre tank_1 y tank_2 mientras se mueve
+            spriteKey = tank.spriteFrame === 1 ? 'vehicle-tank-1' : 'vehicle-tank-2';
+        }
+        
+        const tankSprite = this.assetManager.getSprite(spriteKey);
+        const size = 100; // Tamaño del sprite del tanque (60 * 1.25 = 75)
+        
+        if (tankSprite) {
+            // Dibujar sprite del tanque con sombra
+            this.ctx.shadowColor = tank.team === 'player1' ? '#4ecca3' : '#e74c3c';
+            this.ctx.shadowBlur = 15;
+            
+            this.ctx.save();
+            this.ctx.translate(tank.x, tank.y);
+            
+            // Determinar dirección basada en movimiento hacia el objetivo
+            let shouldFlip = false;
+            if (tank.targetId) {
+                const targetNode = this.game?.nodes?.find(n => n.id === tank.targetId);
+                if (targetNode) {
+                    const dx = targetNode.x - tank.x;
+                    shouldFlip = dx < 0; // Si va hacia la izquierda, flip
+                }
+            }
+            
+            if (shouldFlip) {
+                this.ctx.scale(-1, 1);
+            }
+            
+            this.ctx.drawImage(
+                tankSprite,
+                -size/2,
+                -size/2,
+                size,
+                size
+            );
+            
+            this.ctx.restore();
+            this.ctx.shadowBlur = 0;
+        } else {
+            // Fallback: círculo con color del equipo
+            const color = tank.team === 'player1' ? '#4ecca3' : '#e74c3c';
+            this.ctx.shadowColor = color;
+            this.ctx.shadowBlur = 25;
+            this.ctx.fillStyle = color;
+            this.ctx.beginPath();
+            this.ctx.arc(tank.x, tank.y, 15, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.shadowBlur = 0;
+            
+            // Icono de tanque
+            this.ctx.font = '20px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillStyle = '#fff';
+            this.ctx.fillText('🛡️', tank.x, tank.y);
+        }
+        
+        // Línea hacia el objetivo (si está moviéndose)
+        if (tank.state === 'moving' && tank.targetId) {
+            const targetNode = this.game?.nodes?.find(n => n.id === tank.targetId);
+            if (targetNode) {
+                const color = tank.team === 'player1' ? '#4ecca3' : '#e74c3c';
+                this.ctx.strokeStyle = color + '80'; // 50% opacidad
+                this.ctx.lineWidth = 2;
+                this.ctx.setLineDash([6, 6]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(tank.x, tank.y);
+                this.ctx.lineTo(targetNode.x, targetNode.y);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+            }
+        }
+    }
+    
     renderRoutePreview(from, to) {
         this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)'; // Negro semi-transparente
         this.ctx.lineWidth = 3.6;  // +20% (3→3.6)
@@ -1847,6 +1965,8 @@ export class RenderSystem {
         
         // 🆕 NUEVO: El comando ignora límites de detección (solo verifica colisión física básica)
         const isCommando = buildingType === 'specopsCommando';
+        // 🆕 NUEVO: La torre de vigilancia puede construirse cerca de comandos enemigos
+        const isVigilanceTower = buildingType === 'vigilanceTower';
         
         if (isCommando) {
             // Solo verificar colisión física básica (no áreas de detección)
@@ -1895,6 +2015,21 @@ export class RenderSystem {
             
             for (const node of allNodes) {
                 if (!node.active) continue;
+                
+                // 🆕 NUEVO: Si estamos construyendo una torre de vigilancia, ignorar comandos enemigos
+                if (isVigilanceTower && node.isCommando) {
+                    // Solo verificar colisión física básica con comandos (no área de detección)
+                    const dist = Math.hypot(x - node.x, y - node.y);
+                    const existingConfig = getNodeConfig(node.type);
+                    const existingRadius = existingConfig?.radius || 25;
+                    const newRadius = config?.radius || 35;
+                    const minPhysicalSeparation = existingRadius + newRadius;
+                    if (dist < minPhysicalSeparation) {
+                        tooClose = true;
+                        break; // Solo bloquear si hay colisión física directa
+                    }
+                    continue; // Saltar la verificación de área de detección para comandos
+                }
                 
                 const dist = Math.hypot(x - node.x, y - node.y);
                 
@@ -2053,6 +2188,65 @@ export class RenderSystem {
             this.ctx.lineTo(x - crossSize, y + crossSize);
             this.ctx.stroke();
         }
+    }
+    
+    /**
+     * Renderiza preview del tanque (similar al dron pero solo para edificios válidos, NO FOBs ni HQs)
+     * 🆕 NUEVO
+     */
+    renderTankPreview(x, y, hoveredBase) {
+        const radius = 30;
+        
+        // 🎯 Validar objetivos permitidos para tanque (NO FOBs ni HQs)
+        let validTarget = false;
+        if (hoveredBase && hoveredBase.team !== this.game?.myTeam) {
+            // Obtener validTargets desde la configuración del servidor
+            const validTargets = this.game?.serverBuildingConfig?.actions?.tankLaunch?.validTargets || 
+                                 ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
+            validTarget = validTargets.includes(hoveredBase.type) && 
+                         hoveredBase.constructed && 
+                         !hoveredBase.isConstructing && 
+                         !hoveredBase.isAbandoning;
+        }
+        
+        // Círculo vacío con borde verde punteado (para diferenciarlo del dron)
+        this.ctx.strokeStyle = validTarget ? 'rgba(78, 204, 163, 0.8)' : 'rgba(255, 0, 0, 0.8)';
+        this.ctx.lineWidth = 3;
+        this.ctx.setLineDash([8, 8]);
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+        
+        // Si NO es un objetivo válido, mostrar X roja
+        if (!validTarget) {
+            this.ctx.strokeStyle = '#ff0000';
+            this.ctx.lineWidth = 4;
+            const crossSize = 15;
+            
+            // X roja
+            this.ctx.beginPath();
+            this.ctx.moveTo(x - crossSize, y - crossSize);
+            this.ctx.lineTo(x + crossSize, y + crossSize);
+            this.ctx.moveTo(x + crossSize, y - crossSize);
+            this.ctx.lineTo(x - crossSize, y + crossSize);
+            this.ctx.stroke();
+        }
+        
+        // Etiqueta específica para tanque
+        this.ctx.fillStyle = validTarget ? '#4ecca3' : '#ff0000';
+        this.ctx.font = 'bold 11px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        let label = 'TANQUE';
+        if (!validTarget) {
+            if (hoveredBase && (hoveredBase.type === 'fob' || hoveredBase.type === 'hq')) {
+                label = 'NO FOBs/HQs';
+            } else {
+                label = 'NO VÁLIDO';
+            }
+        }
+        this.ctx.fillText(label, x, y - radius - 12);
     }
     
     renderSniperCursor(x, y, hoveredBase) {

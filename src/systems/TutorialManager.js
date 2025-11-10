@@ -777,6 +777,8 @@ export class TutorialManager {
             const mousePos = this.game.inputHandler.getMousePosition();
             if (this.game.buildSystem.droneMode) {
                 this.game.renderer.renderDronePreview(mousePos.x, mousePos.y, this.game.hoveredNode);
+            } else if (this.game.buildSystem.tankMode) {
+                this.game.renderer.renderTankPreview(mousePos.x, mousePos.y, this.game.hoveredNode);
             } else if (this.game.buildSystem.sniperMode) {
                 this.game.renderer.renderSniperCursor(mousePos.x, mousePos.y, this.game.hoveredNode);
             } else if (this.game.buildSystem.fobSabotageMode) {

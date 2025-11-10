@@ -74,9 +74,8 @@ export class TerritorySystem {
      * Inicializa la frontera ALIADA basándose en los frentes aliados
      */
     initializeAllyFrontier() {
-        // En multiplayer, usar lógica basada en player1/player2 para estabilidad
-        // En singleplayer, usar myTeam dinámico para soportar 'ally'
-        const teamToFilter = this.game.isMultiplayer ? 'player1' : (this.game.myTeam || 'ally');
+        // Usar myTeam del jugador (siempre debería ser player1 o player2 en multiplayer)
+        const teamToFilter = this.game.myTeam || 'player1';
         const fronts = this.getBases().filter(b => b.type === 'front' && b.team === teamToFilter);
         
         if (fronts.length === 0) {
@@ -89,15 +88,20 @@ export class TerritorySystem {
         fronts.sort((a, b) => a.y - b.y);
         
         const worldHeight = this.game.worldHeight;
-        
-        // Offset: el vértice debe estar DELANTE del frente (a la derecha)
         const gap = TERRITORY_CONFIG.frontierGapPx;
-        const frontOffset = (fronts[0].radius || 40) + gap; // Offset delante del sprite
+        
+        // Determinar dirección del offset según el equipo
+        // Player1: frontera a la derecha del frente (x + offset)
+        // Player2: frontera a la izquierda del frente (x - offset) porque está en el lado derecho del mapa
+        const isPlayer2 = teamToFilter === 'player2';
+        const offsetDirection = isPlayer2 ? -1 : 1;
+        
+        const frontOffset = ((fronts[0].radius || 40) + gap) * offsetDirection;
         
         // Crear vértices: esquina superior izquierda → cada frente → esquina inferior izquierda
         this.allyFrontierVertices = [
             { x: fronts[0].x + frontOffset, y: 0, frontId: null }, // Vértice superior
-            ...fronts.map(f => ({ x: f.x + (f.radius || 40) + gap, y: f.y, frontId: f.id })), // Vértices delante del sprite
+            ...fronts.map(f => ({ x: f.x + ((f.radius || 40) + gap) * offsetDirection, y: f.y, frontId: f.id })), // Vértices delante del sprite
             { x: fronts[fronts.length - 1].x + frontOffset, y: worldHeight, frontId: null } // Vértice inferior
         ];
         
@@ -109,15 +113,10 @@ export class TerritorySystem {
      * ESPEJO de la frontera aliada: mira hacia la izquierda
      */
     initializeEnemyFrontier() {
-        // En multiplayer, siempre player2 es el enemigo
-        // En singleplayer, el enemigo es cualquier team que NO sea el mío
-        let enemyFronts;
-        if (this.game.isMultiplayer) {
-            enemyFronts = this.getBases().filter(b => b.type === 'front' && b.team === 'player2');
-        } else {
-            const myTeam = this.game.myTeam || 'ally';
-            enemyFronts = this.getBases().filter(b => b.type === 'front' && b.team !== myTeam);
-        }
+        // El enemigo es el equipo opuesto al del jugador
+        const myTeam = this.game.myTeam || 'player1';
+        const enemyTeam = myTeam === 'player1' ? 'player2' : 'player1';
+        const enemyFronts = this.getBases().filter(b => b.type === 'front' && b.team === enemyTeam);
         
         if (enemyFronts.length === 0) {
             this.enemyFrontierVertices = [];
@@ -129,17 +128,21 @@ export class TerritorySystem {
         enemyFronts.sort((a, b) => a.y - b.y);
         
         const worldHeight = this.game.worldHeight;
-        
-        // Offset: el vértice debe estar DELANTE del frente enemigo (a la IZQUIERDA - espejo)
         const gap = TERRITORY_CONFIG.frontierGapPx;
-        const frontOffset = (enemyFronts[0].radius || 40) + gap; // Offset delante del sprite
+        
+        // Determinar dirección del offset según el equipo enemigo
+        // Player1 (enemigo desde perspectiva de player2): frontera a la DERECHA del frente (x + offset) porque player1 está a la izquierda
+        // Player2 (enemigo desde perspectiva de player1): frontera a la IZQUIERDA del frente (x - offset) porque player2 está a la derecha
+        const offsetDirection = enemyTeam === 'player1' ? 1 : -1;
+        
+        const frontOffset = ((enemyFronts[0].radius || 40) + gap) * offsetDirection;
         
         // Crear vértices: esquina superior derecha → cada frente → esquina inferior derecha
-        // NOTA: Los vértices van a la IZQUIERDA del frente enemigo (espejo)
+        // NOTA: Los vértices van DELANTE del frente enemigo (hacia el centro del mapa)
         this.enemyFrontierVertices = [
-            { x: enemyFronts[0].x - frontOffset, y: 0, frontId: null }, // Vértice superior
-            ...enemyFronts.map(f => ({ x: f.x - (f.radius || 40) - gap, y: f.y, frontId: f.id })), // Vértices delante (izquierda) del sprite
-            { x: enemyFronts[enemyFronts.length - 1].x - frontOffset, y: worldHeight, frontId: null } // Vértice inferior
+            { x: enemyFronts[0].x + frontOffset, y: 0, frontId: null }, // Vértice superior
+            ...enemyFronts.map(f => ({ x: f.x + ((f.radius || 40) + gap) * offsetDirection, y: f.y, frontId: f.id })), // Vértices delante del sprite
+            { x: enemyFronts[enemyFronts.length - 1].x + frontOffset, y: worldHeight, frontId: null } // Vértice inferior
         ];
         
         this.enemyInitialized = true;
@@ -149,7 +152,8 @@ export class TerritorySystem {
      * Actualiza la posición X de los vértices ALIADOS basándose en los frentes aliados
      */
     updateAllyFrontierPositions() {
-        const teamToFilter = this.game.isMultiplayer ? 'player1' : (this.game.myTeam || 'ally');
+        // Usar myTeam del jugador (siempre debería ser player1 o player2 en multiplayer)
+        const teamToFilter = this.game.myTeam || 'player1';
         const fronts = this.getBases().filter(b => b.type === 'front' && b.team === teamToFilter);
         
         // Si no hay frentes o no está inicializado, reinicializar
@@ -158,12 +162,17 @@ export class TerritorySystem {
             return;
         }
         
+        // Determinar dirección del offset según el equipo
+        const isPlayer2 = teamToFilter === 'player2';
+        const offsetDirection = isPlayer2 ? -1 : 1;
+        const gap = TERRITORY_CONFIG.frontierGapPx;
+        
         // Actualizar posiciones de vértices basándose en frentes
         for (const vertex of this.allyFrontierVertices) {
             if (vertex.frontId !== null) {
                 const front = fronts.find(f => f.id === vertex.frontId);
                 if (front) {
-                    const frontOffset = (front.radius || 40) + TERRITORY_CONFIG.frontierGapPx;
+                    const frontOffset = ((front.radius || 40) + gap) * offsetDirection;
                     vertex.x = front.x + frontOffset; // DELANTE del frente con separación
                     vertex.y = front.y; // Actualizar también Y por si acaso
                 }
@@ -173,9 +182,8 @@ export class TerritorySystem {
         // Actualizar vértices superior e inferior para que sigan al frente más cercano
         if (this.allyFrontierVertices.length > 0 && fronts.length > 0) {
             const sortedFronts = [...fronts].sort((a, b) => a.y - b.y);
-            const gap = TERRITORY_CONFIG.frontierGapPx;
-            const offTop = (sortedFronts[0].radius || 40) + gap;
-            const offBottom = (sortedFronts[sortedFronts.length - 1].radius || 40) + gap;
+            const offTop = ((sortedFronts[0].radius || 40) + gap) * offsetDirection;
+            const offBottom = ((sortedFronts[sortedFronts.length - 1].radius || 40) + gap) * offsetDirection;
             this.allyFrontierVertices[0].x = sortedFronts[0].x + offTop; // Superior
             this.allyFrontierVertices[this.allyFrontierVertices.length - 1].x = sortedFronts[sortedFronts.length - 1].x + offBottom; // Inferior
         }
@@ -186,13 +194,10 @@ export class TerritorySystem {
      * ESPEJO de la actualización aliada (mirando a la izquierda)
      */
     updateEnemyFrontierPositions() {
-        let enemyFronts;
-        if (this.game.isMultiplayer) {
-            enemyFronts = this.getBases().filter(b => b.type === 'front' && b.team === 'player2');
-        } else {
-            const myTeam = this.game.myTeam || 'ally';
-            enemyFronts = this.getBases().filter(b => b.type === 'front' && b.team !== myTeam);
-        }
+        // El enemigo es el equipo opuesto al del jugador
+        const myTeam = this.game.myTeam || 'player1';
+        const enemyTeam = myTeam === 'player1' ? 'player2' : 'player1';
+        const enemyFronts = this.getBases().filter(b => b.type === 'front' && b.team === enemyTeam);
         
         // Si no hay frentes enemigos o no está inicializado, reinicializar
         if (!this.enemyInitialized || enemyFronts.length === 0) {
@@ -200,13 +205,17 @@ export class TerritorySystem {
             return;
         }
         
+        // Determinar dirección del offset según el equipo enemigo
+        const offsetDirection = enemyTeam === 'player1' ? 1 : -1;
+        const gap = TERRITORY_CONFIG.frontierGapPx;
+        
         // Actualizar posiciones de vértices basándose en frentes enemigos
         for (const vertex of this.enemyFrontierVertices) {
             if (vertex.frontId !== null) {
                 const enemyFront = enemyFronts.find(f => f.id === vertex.frontId);
                 if (enemyFront) {
-                    const frontOffset = (enemyFront.radius || 40) + TERRITORY_CONFIG.frontierGapPx;
-                    vertex.x = enemyFront.x - frontOffset; // DELANTE (izquierda) del frente enemigo
+                    const frontOffset = ((enemyFront.radius || 40) + gap) * offsetDirection;
+                    vertex.x = enemyFront.x + frontOffset; // DELANTE del frente enemigo
                     vertex.y = enemyFront.y; // Actualizar también Y por si acaso
                 }
             }
@@ -215,11 +224,10 @@ export class TerritorySystem {
         // Actualizar vértices superior e inferior para que sigan al frente más cercano
         if (this.enemyFrontierVertices.length > 0 && enemyFronts.length > 0) {
             const sortedEnemyFronts = [...enemyFronts].sort((a, b) => a.y - b.y);
-            const gap = TERRITORY_CONFIG.frontierGapPx;
-            const offTop = (sortedEnemyFronts[0].radius || 40) + gap;
-            const offBottom = (sortedEnemyFronts[sortedEnemyFronts.length - 1].radius || 40) + gap;
-            this.enemyFrontierVertices[0].x = sortedEnemyFronts[0].x - offTop; // Superior
-            this.enemyFrontierVertices[this.enemyFrontierVertices.length - 1].x = sortedEnemyFronts[sortedEnemyFronts.length - 1].x - offBottom; // Inferior
+            const offTop = ((sortedEnemyFronts[0].radius || 40) + gap) * offsetDirection;
+            const offBottom = ((sortedEnemyFronts[sortedEnemyFronts.length - 1].radius || 40) + gap) * offsetDirection;
+            this.enemyFrontierVertices[0].x = sortedEnemyFronts[0].x + offTop; // Superior
+            this.enemyFrontierVertices[this.enemyFrontierVertices.length - 1].x = sortedEnemyFronts[sortedEnemyFronts.length - 1].x + offBottom; // Inferior
         }
     }
     
@@ -237,37 +245,82 @@ export class TerritorySystem {
         const worldWidth = this.game.worldWidth;
         const worldHeight = this.game.worldHeight;
         
-        // === DIBUJAR TERRITORIO ALIADO (IZQUIERDA - AZUL) ===
+        // Determinar si estamos en mirror view (player2)
+        const myTeam = this.game.myTeam || 'player1';
+        const isPlayer2 = myTeam === 'player2';
+        const mirrorViewApplied = this.game.renderer && this.game.renderer.mirrorViewApplied;
+        
+        // IMPORTANTE: Con mirror view, las coordenadas X están invertidas
+        // Pero las fronteras se calculan correctamente basándose en myTeam
+        // allyFrontierVertices = frentes de MI equipo
+        // enemyFrontierVertices = frentes del ENEMIGO
+        
+        // === DIBUJAR TERRITORIO ALIADO (AZUL) ===
+        // Para player1: territorio aliado va desde izquierda hasta allyFrontierVertices
+        // Para player2 con mirror: territorio aliado va desde derecha (visual) hasta allyFrontierVertices
         if (this.allyFrontierVertices.length > 0) {
             ctx.beginPath();
-            ctx.moveTo(0, 0); // Esquina superior izquierda del mundo
             
-            // Seguir la frontera aliada (vértices de arriba a abajo)
-            for (const vertex of this.allyFrontierVertices) {
-                ctx.lineTo(vertex.x, vertex.y);
+            if (mirrorViewApplied) {
+                // Player2 con mirror view: territorio aliado desde la derecha visual (izquierda física)
+                ctx.moveTo(worldWidth, 0); // Esquina superior derecha del mundo (visual)
+                ctx.lineTo(worldWidth, worldHeight); // Esquina inferior derecha
+                
+                // Seguir la frontera aliada de abajo a arriba (orden inverso para cerrar correctamente)
+                for (let i = this.allyFrontierVertices.length - 1; i >= 0; i--) {
+                    ctx.lineTo(this.allyFrontierVertices[i].x, this.allyFrontierVertices[i].y);
+                }
+            } else {
+                // Player1: territorio aliado desde la izquierda hasta allyFrontierVertices
+                ctx.moveTo(0, 0); // Esquina superior izquierda del mundo
+                
+                // Seguir la frontera aliada (vértices de arriba a abajo)
+                for (const vertex of this.allyFrontierVertices) {
+                    ctx.lineTo(vertex.x, vertex.y);
+                }
+                
+                // Cerrar el polígono por el borde izquierdo
+                ctx.lineTo(0, worldHeight); // Esquina inferior izquierda
             }
             
-            // Cerrar el polígono por el borde izquierdo
-            ctx.lineTo(0, worldHeight); // Esquina inferior izquierda
             ctx.closePath();
             
+            // Siempre azul para mi territorio
             ctx.fillStyle = this.allyColor;
             ctx.fill();
         }
         
-        // === DIBUJAR TERRITORIO ENEMIGO (DERECHA - ROJO) ===
+        // === DIBUJAR TERRITORIO ENEMIGO (ROJO) ===
+        // Para player1: territorio enemigo va desde derecha hasta enemyFrontierVertices
+        // Para player2 con mirror: territorio enemigo va desde izquierda (visual) hasta enemyFrontierVertices
         if (this.enemyFrontierVertices.length > 0) {
             ctx.beginPath();
-            ctx.moveTo(worldWidth, 0); // Esquina superior derecha del mundo
-            ctx.lineTo(worldWidth, worldHeight); // Esquina inferior derecha
             
-            // Seguir la frontera enemiga de abajo a arriba (orden inverso)
-            for (let i = this.enemyFrontierVertices.length - 1; i >= 0; i--) {
-                ctx.lineTo(this.enemyFrontierVertices[i].x, this.enemyFrontierVertices[i].y);
+            if (mirrorViewApplied) {
+                // Player2 con mirror view: territorio enemigo desde la izquierda visual (derecha física)
+                ctx.moveTo(0, 0); // Esquina superior izquierda del mundo (visual)
+                
+                // Seguir la frontera enemiga (vértices de arriba a abajo)
+                for (const vertex of this.enemyFrontierVertices) {
+                    ctx.lineTo(vertex.x, vertex.y);
+                }
+                
+                // Cerrar el polígono por el borde izquierdo visual
+                ctx.lineTo(0, worldHeight); // Esquina inferior izquierda
+            } else {
+                // Player1: territorio enemigo desde la derecha hasta enemyFrontierVertices
+                ctx.moveTo(worldWidth, 0); // Esquina superior derecha del mundo
+                ctx.lineTo(worldWidth, worldHeight); // Esquina inferior derecha
+                
+                // Seguir la frontera enemiga de abajo a arriba (orden inverso)
+                for (let i = this.enemyFrontierVertices.length - 1; i >= 0; i--) {
+                    ctx.lineTo(this.enemyFrontierVertices[i].x, this.enemyFrontierVertices[i].y);
+                }
             }
             
             ctx.closePath();
             
+            // Siempre rojo para territorio enemigo
             ctx.fillStyle = this.enemyColor;
             ctx.fill();
         }
@@ -281,6 +334,7 @@ export class TerritorySystem {
                 ctx.lineTo(this.allyFrontierVertices[i].x, this.allyFrontierVertices[i].y);
             }
             
+            // Siempre azul para mi frontera
             ctx.strokeStyle = this.allyBorderColor;
             ctx.lineWidth = 4;
             ctx.stroke();
@@ -295,6 +349,7 @@ export class TerritorySystem {
                 ctx.lineTo(this.enemyFrontierVertices[i].x, this.enemyFrontierVertices[i].y);
             }
             
+            // Siempre rojo para frontera enemiga
             ctx.strokeStyle = this.enemyBorderColor;
             ctx.lineWidth = 4;
             ctx.stroke();
@@ -309,40 +364,40 @@ export class TerritorySystem {
      * @param {CanvasRenderingContext2D} ctx - Contexto de renderizado
      */
     renderTerritoryPercentages(ctx) {
-        // En multiplayer, usar lógica explícita player1/player2
-        // En singleplayer, usar detección dinámica de equipos
+        // Calcular porcentajes de territorio para ambos equipos
         const bases = this.getBases();
-        const myTeam = this.game.myTeam || 'ally'; // Definir aquí para que esté disponible en todo el método
+        const myTeam = this.game.myTeam || 'player1'; // Definir aquí para que esté disponible en todo el método
         
-        let player1Percentage, player2Percentage, topPlayer1Front, topPlayer2Front;
+        // IMPORTANTE: Verificar si somos player2 directamente, no mirrorViewApplied
+        // porque el mirror view ya se restauró antes de renderizar los porcentajes
+        const isPlayer2 = myTeam === 'player2';
         
-        if (this.game.isMultiplayer) {
-            // MULTIPLAYER: Lógica original (estable)
-            player1Percentage = this.calculateTerritoryPercentage('player1');
-            player2Percentage = this.calculateTerritoryPercentage('player2');
-            
-            const player1Fronts = bases.filter(b => b.type === 'front' && b.team === 'player1');
-            const player2Fronts = bases.filter(b => b.type === 'front' && b.team === 'player2');
-            player1Fronts.sort((a, b) => a.y - b.y);
-            player2Fronts.sort((a, b) => a.y - b.y);
-            topPlayer1Front = player1Fronts[0] || null;
-            topPlayer2Front = player2Fronts[0] || null;
-        } else {
-            // SINGLEPLAYER: Detección dinámica
-            const myFronts = bases.filter(b => b.type === 'front' && b.team === myTeam);
-            const enemyFronts = bases.filter(b => b.type === 'front' && b.team !== myTeam);
-            myFronts.sort((a, b) => a.y - b.y);
-            enemyFronts.sort((a, b) => a.y - b.y);
-            
-            player1Percentage = this.calculateTerritoryPercentage(myTeam);
-            player2Percentage = enemyFronts.length > 0 ? this.calculateTerritoryPercentage(enemyFronts[0].team) : 0;
-            topPlayer1Front = myFronts[0] || null;
-            topPlayer2Front = enemyFronts[0] || null;
-        }
+        // Calcular porcentajes para ambos equipos (siempre player1 y player2 en multiplayer)
+        const player1Percentage = this.calculateTerritoryPercentage('player1');
+        const player2Percentage = this.calculateTerritoryPercentage('player2');
+        
+        const player1Fronts = bases.filter(b => b.type === 'front' && b.team === 'player1');
+        const player2Fronts = bases.filter(b => b.type === 'front' && b.team === 'player2');
+        player1Fronts.sort((a, b) => a.y - b.y);
+        player2Fronts.sort((a, b) => a.y - b.y);
+        const topPlayer1Front = player1Fronts[0] || null;
+        const topPlayer2Front = player2Fronts[0] || null;
         
         const topY = 20; // parte superior del mundo
         const margin = 24;
-        const clamp = (x) => Math.max(margin, Math.min(this.game.worldWidth - margin, x));
+        const worldWidth = this.game.worldWidth;
+        const clamp = (x) => Math.max(margin, Math.min(worldWidth - margin, x));
+        
+        // Función para transformar coordenada X física a visual para player2
+        // Las coordenadas de los frentes son físicas, pero player2 ve el mundo volteado
+        const transformX = (x) => {
+            if (isPlayer2) {
+                // Para player2, las coordenadas físicas deben transformarse a visuales
+                // El mirror view invierte: visualX = worldWidth - physicalX
+                return worldWidth - x;
+            }
+            return x;
+        };
         
         // Colores: Azul para MI equipo, Rojo para ENEMIGO
         const myColor = 'rgba(0, 100, 255, 0.9)'; // Azul (mi equipo)
@@ -364,7 +419,7 @@ export class TerritorySystem {
             myTopFront = topPlayer2Front;
             enemyTopFront = topPlayer1Front;
         } else {
-            // Singleplayer: player1 = azul (yo), player2 = rojo (enemigo)
+            // Fallback: usar player1 como mi equipo
             myPercentage = player1Percentage;
             enemyPercentage = player2Percentage;
             myTopFront = topPlayer1Front;
@@ -373,7 +428,9 @@ export class TerritorySystem {
         
         // === MI PORCENTAJE (AZUL) - SIEMPRE SOBRE MI FRENTE ===
         if (myPercentage > 0 && myTopFront) {
-            let textX = clamp(myTopFront.x);
+            // Transformar coordenada X física a visual para player2
+            let textX = transformX(myTopFront.x);
+            textX = clamp(textX);
             
             ctx.save();
             ctx.fillStyle = myColor; // Azul (mi equipo)
@@ -386,7 +443,9 @@ export class TerritorySystem {
         
         // === PORCENTAJE ENEMIGO (ROJO) - SIEMPRE SOBRE FRENTE ENEMIGO ===
         if (enemyPercentage > 0 && enemyTopFront) {
-            let textX = clamp(enemyTopFront.x);
+            // Transformar coordenada X física a visual para player2
+            let textX = transformX(enemyTopFront.x);
+            textX = clamp(textX);
             
             ctx.save();
             ctx.fillStyle = enemyColor; // Rojo (enemigo)
@@ -443,17 +502,36 @@ export class TerritorySystem {
         if (this.allyFrontierVertices.length === 0) return 0;
         
         const worldHeight = this.game.worldHeight;
+        const worldWidth = this.game.worldWidth;
         let area = 0;
         
-        // Área desde el borde izquierdo (0) hasta la frontera aliada
-        for (let i = 0; i < this.allyFrontierVertices.length - 1; i++) {
-            const v1 = this.allyFrontierVertices[i];
-            const v2 = this.allyFrontierVertices[i + 1];
-            
-            // Área del trapecio entre dos vértices
-            const height = Math.abs(v2.y - v1.y);
-            const avgX = (v1.x + v2.x) / 2;
-            area += avgX * height;
+        // Determinar de qué lado está el territorio aliado según el equipo
+        const myTeam = this.game.myTeam || 'player1';
+        const isPlayer2 = myTeam === 'player2';
+        
+        if (isPlayer2) {
+            // Player2: territorio aliado va desde la derecha física (worldWidth) hasta la frontera aliada
+            for (let i = 0; i < this.allyFrontierVertices.length - 1; i++) {
+                const v1 = this.allyFrontierVertices[i];
+                const v2 = this.allyFrontierVertices[i + 1];
+                
+                // Área del trapecio entre dos vértices
+                const height = Math.abs(v2.y - v1.y);
+                const avgX = (v1.x + v2.x) / 2;
+                const width = worldWidth - avgX;
+                area += width * height;
+            }
+        } else {
+            // Player1: territorio aliado va desde el borde izquierdo (0) hasta la frontera aliada
+            for (let i = 0; i < this.allyFrontierVertices.length - 1; i++) {
+                const v1 = this.allyFrontierVertices[i];
+                const v2 = this.allyFrontierVertices[i + 1];
+                
+                // Área del trapecio entre dos vértices
+                const height = Math.abs(v2.y - v1.y);
+                const avgX = (v1.x + v2.x) / 2;
+                area += avgX * height;
+            }
         }
         
         return area;
@@ -470,16 +548,33 @@ export class TerritorySystem {
         const worldHeight = this.game.worldHeight;
         let area = 0;
         
-        // Área desde la frontera enemiga hasta el borde derecho (worldWidth)
-        for (let i = 0; i < this.enemyFrontierVertices.length - 1; i++) {
-            const v1 = this.enemyFrontierVertices[i];
-            const v2 = this.enemyFrontierVertices[i + 1];
-            
-            // Área del trapecio entre dos vértices
-            const height = Math.abs(v2.y - v1.y);
-            const avgX = (v1.x + v2.x) / 2;
-            const width = worldWidth - avgX;
-            area += width * height;
+        // Determinar de qué lado está el territorio enemigo según el equipo
+        const myTeam = this.game.myTeam || 'player1';
+        const isPlayer2 = myTeam === 'player2';
+        
+        if (isPlayer2) {
+            // Player2: territorio enemigo va desde el borde izquierdo físico (0) hasta la frontera enemiga
+            for (let i = 0; i < this.enemyFrontierVertices.length - 1; i++) {
+                const v1 = this.enemyFrontierVertices[i];
+                const v2 = this.enemyFrontierVertices[i + 1];
+                
+                // Área del trapecio entre dos vértices
+                const height = Math.abs(v2.y - v1.y);
+                const avgX = (v1.x + v2.x) / 2;
+                area += avgX * height;
+            }
+        } else {
+            // Player1: territorio enemigo va desde la frontera enemiga hasta el borde derecho (worldWidth)
+            for (let i = 0; i < this.enemyFrontierVertices.length - 1; i++) {
+                const v1 = this.enemyFrontierVertices[i];
+                const v2 = this.enemyFrontierVertices[i + 1];
+                
+                // Área del trapecio entre dos vértices
+                const height = Math.abs(v2.y - v1.y);
+                const avgX = (v1.x + v2.x) / 2;
+                const width = worldWidth - avgX;
+                area += width * height;
+            }
         }
         
         return area;

@@ -32,10 +32,12 @@ export function getRaceConfig(raceId) {
 
 /**
  * Obtiene todas las razas disponibles (SOLO VISUAL)
+ * 🚧 TEMPORAL: Solo devuelve A_Nation mientras se migra a sistema de mazo
  * @returns {Array} Array con todas las configuraciones visuales de razas
  */
 export function getAllRaces() {
-    return Object.values(RACE_CONFIG);
+    // 🚧 TEMPORAL: Solo devolver A_Nation - B_Nation deshabilitada para migración a sistema de mazo
+    return [RACE_CONFIG.A_Nation];
 }
 
 /**

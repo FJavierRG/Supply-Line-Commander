@@ -83,13 +83,8 @@ export class VisualNode {
         // ✅ SEGURO: Team (para diferenciar aliados de enemigos)
         this.team = config.team || 'ally';
         
-        // ✅ SEGURO: Ajustar spriteKey y shadowColor según team para nodos enemigos
-        if (this.team === 'player2' && (this.type === 'hq' || this.type === 'fob' || this.type === 'front')) {
-            this.spriteKey = `base-enemy-${this.type}`;
-            if (this.type === 'hq') {
-                this.shadowColor = '#e74c3c';
-            }
-        }
+        // ⚠️ NO establecer spriteKey aquí basado en team - se determina dinámicamente en RenderSystem
+        // basado en si es mi equipo o no (myTeam)
         
         // ✅ SEGURO: Propiedades de renderizado (solo visuales)
         if (!this.shadowColor) {

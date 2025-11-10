@@ -13,12 +13,12 @@ export const SERVER_RACE_CONFIG = {
         buildings: [
             'fob', 'antiDrone', 'droneLauncher',
             'truckFactory', 'engineerCenter', 'nuclearPlant',
-            'vigilanceTower'  // 🆕 Torre de Vigilancia - counterea comandos
+            'vigilanceTower', 'intelRadio', 'intelCenter'  // 🆕 Torre de Vigilancia - counterea comandos
         ],
         
         // 🚨 CRÍTICO: Consumibles disponibles (ANTI-HACK)
         consumables: [
-            'drone', 'sniperStrike'
+            'drone', 'sniperStrike', 'specopsCommando', 'fobSabotage'
         ],
         
         // 🚨 CRÍTICO: Mecánicas especiales (ANTI-HACK)

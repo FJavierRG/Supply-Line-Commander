@@ -18,6 +18,7 @@ export class BuildingSystem {
         this.game = game;
         this.buildMode = false;
         this.droneMode = false;
+        this.tankMode = false;
         this.sniperMode = false;
         this.fobSabotageMode = false;
         this.commandoMode = false; // 🆕 NUEVO: Modo de despliegue de comando especial operativo
@@ -150,6 +151,12 @@ export class BuildingSystem {
             return;
         }
         
+        // Si es tank, activar modo especial
+        if (buildingId === 'tank') {
+            this.toggleTankMode();
+            return;
+        }
+        
         // Activar modo construcción
         this.buildMode = true;
         this.currentBuildingType = buildingId;
@@ -190,17 +197,15 @@ export class BuildingSystem {
         
         const buildingId = this.currentBuildingType;
         
-        // Delegar TODO al servidor/pseudo-servidor
+        // Delegar TODO al servidor autoritativo
         // Esto maneja validaciones, currency, territorio, colisiones, etc.
-        if (this.game.isMultiplayer && this.game.network) {
-            // MULTIPLAYER: Servidor remoto
-            console.log(`🏗️ MULTIPLAYER: Enviando build_request: ${buildingId} en (${x}, ${y})`);
-            this.game.network.requestBuild(buildingId, x, y);
-        } else {
-            // SINGLEPLAYER: Pseudo-servidor local (Game.js)
-            console.log(`🏗️ SINGLEPLAYER: Enviando build_request a pseudo-servidor: ${buildingId} en (${x}, ${y})`);
-            this.game.handleBuildRequest(buildingId, x, y);
+        if (!this.game.network || !this.game.network.roomId) {
+            console.error('❌ No hay conexión al servidor. No se puede construir.');
+            return;
         }
+        
+        console.log(`🏗️ Enviando build_request: ${buildingId} en (${x}, ${y})`);
+        this.game.network.requestBuild(buildingId, x, y);
         
         // Desactivar modo construcción (optimista)
         this.deactivateBuildMode();
@@ -262,6 +267,7 @@ export class BuildingSystem {
     resetLevel() {
         this.deactivateBuildMode();
         this.droneMode = false;
+        this.tankMode = false;
         this.sniperMode = false;
         this.fobSabotageMode = false;
         this.currentBuildingType = null;
@@ -271,14 +277,14 @@ export class BuildingSystem {
      * Verifica si el modo construcción O drone está activo
      */
     isActive() {
-        return this.buildMode || this.droneMode || this.sniperMode || this.fobSabotageMode || this.commandoMode;
+        return this.buildMode || this.droneMode || this.tankMode || this.sniperMode || this.fobSabotageMode || this.commandoMode;
     }
     
     /**
      * Verifica si existe al menos una lanzadera de drones construida
      */
     hasDroneLauncher() {
-        // Obtener equipo del jugador (soporta singleplayer y multiplayer)
+        // Obtener equipo del jugador
         const myTeam = this.game.myTeam || 'ally';
         
         return this.game.nodes.some(n => 
@@ -293,7 +299,7 @@ export class BuildingSystem {
      * Verifica si existe al menos un centro de inteligencia construido
      */
     hasIntelCenter() {
-        // Obtener equipo del jugador (soporta singleplayer y multiplayer)
+        // Obtener equipo del jugador
         const myTeam = this.game.myTeam || 'ally';
         
         return this.game.nodes.some(n => 
@@ -336,7 +342,7 @@ export class BuildingSystem {
             this.game.canvas.style.cursor = 'crosshair';
             console.log('💣 Modo dron activado - Click en FOB enemigo');
         } else {
-            this.game.canvas.style.cursor = 'crosshair';
+            this.game.canvas.style.cursor = 'default';
             console.log('💣 Modo dron desactivado');
         }
     }
@@ -351,18 +357,107 @@ export class BuildingSystem {
             return;
         }
         
-        // Delegar TODO al servidor/pseudo-servidor
-        if (this.game.isMultiplayer && this.game.network) {
-            // MULTIPLAYER: Servidor remoto
-            console.log(`💣 MULTIPLAYER: Enviando drone_request al servidor: target=${targetBase.id}`);
-            this.game.network.requestDrone(targetBase.id);
-        } else {
-            // SINGLEPLAYER: Pseudo-servidor local
-            console.log(`💣 SINGLEPLAYER: Enviando drone_request a pseudo-servidor: target=${targetBase.id}`);
-            this.game.handleDroneRequest(targetBase);
+        // Delegar TODO al servidor autoritativo
+        if (!this.game.network || !this.game.network.roomId) {
+            console.error('❌ No hay conexión al servidor. No se puede lanzar dron.');
+            return;
         }
         
+        console.log(`💣 Enviando drone_request: target=${targetBase.id}`);
+        this.game.network.requestDrone(targetBase.id);
+        
         this.exitDroneMode();
+    }
+    
+    /**
+     * Activa/desactiva el modo tanque
+     * 🆕 NUEVO: Similar al modo dron pero para tanques
+     */
+    toggleTankMode() {
+        if (!this.canAffordTank()) {
+            console.log(`⚠️ No tienes suficiente currency para tanque (Necesitas: ${this.getTankCost()})`);
+            return;
+        }
+        
+        // Salir del modo construcción si estaba activo
+        if (this.buildMode) {
+            this.exitBuildMode();
+        }
+        
+        // Salir de otros modos
+        if (this.droneMode) {
+            this.exitDroneMode();
+        }
+        if (this.commandoMode) {
+            this.exitCommandoMode();
+        }
+        if (this.sniperMode) {
+            this.exitSniperMode();
+        }
+        if (this.fobSabotageMode) {
+            this.exitFobSabotageMode();
+        }
+        
+        this.tankMode = !this.tankMode;
+        
+        if (this.tankMode) {
+            this.game.selectedBase = null;
+            this.game.canvas.style.cursor = 'crosshair';
+            console.log('🛡️ Modo tanque activado - Click en edificio enemigo (NO FOBs ni HQs)');
+        } else {
+            this.game.canvas.style.cursor = 'default';
+            console.log('🛡️ Modo tanque desactivado');
+        }
+    }
+    
+    /**
+     * Lanza un tanque hacia un objetivo
+     * 🆕 NUEVO: Similar al dron pero no puede atacar FOBs ni HQs
+     */
+    launchTank(targetBase) {
+        if (!targetBase) {
+            console.log('⚠️ Objetivo no válido');
+            return;
+        }
+        
+        // Validar que NO sea FOB ni HQ
+        if (targetBase.type === 'fob' || targetBase.type === 'hq') {
+            console.log('⚠️ El tanque no puede atacar FOBs ni HQs');
+            return;
+        }
+        
+        // Delegar TODO al servidor autoritativo
+        if (!this.game.network || !this.game.network.roomId) {
+            console.error('❌ No hay conexión al servidor. No se puede lanzar tanque.');
+            return;
+        }
+        
+        console.log(`🛡️ Enviando tank_request: target=${targetBase.id}`);
+        this.game.network.requestTank(targetBase.id);
+        
+        this.exitTankMode();
+    }
+    
+    /**
+     * Sale del modo tanque
+     */
+    exitTankMode() {
+        this.tankMode = false;
+        this.game.canvas.style.cursor = 'default';
+    }
+    
+    /**
+     * Verifica si puede permitirse un tanque
+     */
+    canAffordTank() {
+        return this.game.canAffordBuilding('tank');
+    }
+    
+    /**
+     * Obtiene el costo del tanque
+     */
+    getTankCost() {
+        return this.getBuildingCost('tank');
     }
     
     /**
@@ -436,16 +531,14 @@ export class BuildingSystem {
             return;
         }
         
-        // Delegar TODO al servidor/pseudo-servidor
-        if (this.game.isMultiplayer && this.game.network) {
-            // MULTIPLAYER: Servidor remoto
-            console.log(`🎯 MULTIPLAYER: Enviando sniper_request al servidor: target=${targetFront.id}`);
-            this.game.network.requestSniper(targetFront.id);
-        } else {
-            // SINGLEPLAYER: Pseudo-servidor local
-            console.log(`🎯 SINGLEPLAYER: Enviando sniper_request a pseudo-servidor: target=${targetFront.id}`);
-            this.game.handleSniperRequest(targetFront);
+        // Delegar TODO al servidor autoritativo
+        if (!this.game.network || !this.game.network.roomId) {
+            console.error('❌ No hay conexión al servidor. No se puede lanzar sniper.');
+            return;
         }
+        
+        console.log(`🎯 Enviando sniper_request: target=${targetFront.id}`);
+        this.game.network.requestSniper(targetFront.id);
         
         this.exitSniperMode();
     }
@@ -499,16 +592,14 @@ export class BuildingSystem {
             return;
         }
         
-        // Delegar TODO al servidor/pseudo-servidor
-        if (this.game.isMultiplayer && this.game.network) {
-            // MULTIPLAYER: Servidor remoto
-            console.log(`⚡ MULTIPLAYER: Enviando fob_sabotage_request al servidor: target=${targetFOB.id}`);
-            this.game.network.requestFobSabotage(targetFOB.id);
-        } else {
-            // SINGLEPLAYER: Pseudo-servidor local
-            console.log(`⚡ SINGLEPLAYER: Enviando fob_sabotage_request a pseudo-servidor: target=${targetFOB.id}`);
-            this.game.handleFobSabotageRequest(targetFOB);
+        // Delegar TODO al servidor autoritativo
+        if (!this.game.network || !this.game.network.roomId) {
+            console.error('❌ No hay conexión al servidor. No se puede lanzar sabotaje.');
+            return;
         }
+        
+        console.log(`⚡ Enviando fob_sabotage_request: target=${targetFOB.id}`);
+        this.game.network.requestFobSabotage(targetFOB.id);
         
         this.exitFobSabotageMode();
     }
@@ -554,6 +645,9 @@ export class BuildingSystem {
         if (this.droneMode) {
             this.exitDroneMode();
         }
+        if (this.tankMode) {
+            this.exitTankMode();
+        }
         
         this.commandoMode = true;
         this.game.selectedBase = null;
@@ -569,16 +663,14 @@ export class BuildingSystem {
      * 🆕 NUEVO: Delega TODO al servidor
      */
     executeCommandoDeploy(x, y) {
-        // Delegar TODO al servidor/pseudo-servidor
-        if (this.game.isMultiplayer && this.game.network) {
-            // MULTIPLAYER: Servidor remoto
-            console.log(`🎖️ MULTIPLAYER: Enviando commando_deploy_request al servidor: x=${x}, y=${y}`);
-            this.game.network.requestCommandoDeploy(x, y);
-        } else {
-            // SINGLEPLAYER: Pseudo-servidor local
-            console.log(`🎖️ SINGLEPLAYER: Enviando commando_deploy_request a pseudo-servidor: x=${x}, y=${y}`);
-            this.game.handleCommandoDeployRequest(x, y);
+        // Delegar TODO al servidor autoritativo
+        if (!this.game.network || !this.game.network.roomId) {
+            console.error('❌ No hay conexión al servidor. No se puede desplegar comando.');
+            return;
         }
+        
+        console.log(`🎖️ Enviando commando_deploy_request: x=${x}, y=${y}`);
+        this.game.network.requestCommandoDeploy(x, y);
         
         this.exitCommandoMode();
     }

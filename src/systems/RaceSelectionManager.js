@@ -32,6 +32,12 @@ export class RaceSelectionManager {
      */
     show() {
         this.isVisible = true;
+        
+        // 🚧 TEMPORAL: Si solo hay una raza disponible (A_Nation), seleccionarla automáticamente
+        if (this.races.length === 1) {
+            this.selectedRace = this.races[0].id;
+        }
+        
         this.updateHitRegions();
         console.log('🏛️ Pantalla de selección de raza mostrada');
     }

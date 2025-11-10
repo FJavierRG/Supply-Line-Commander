@@ -105,14 +105,21 @@ export class CommandoSystem {
             // Solo actualizar si cambió (evitar spam de logs)
             if (hq.maxVehicles !== newMaxVehicles) {
                 const oldMax = hq.maxVehicles;
+                const oldAvailable = hq.availableVehicles || 0;
+                const difference = newMaxVehicles - oldMax;
                 hq.maxVehicles = newMaxVehicles;
                 
-                // Ajustar availableVehicles si excede el nuevo máximo
+                // ✅ CORREGIDO: Aumentar availableVehicles cuando el máximo aumenta
+                // Esto asegura que si una truckFactory se habilita (deja de estar disabled),
+                // el jugador reciba el camión adicional
+                hq.availableVehicles = oldAvailable + difference;
+                
+                // Asegurar que no exceda el máximo (por si acaso)
                 if (hq.availableVehicles > newMaxVehicles) {
                     hq.availableVehicles = newMaxVehicles;
                 }
                 
-                console.log(`🚚 HQ ${team}: maxVehicles recalculado ${oldMax} → ${newMaxVehicles} (${truckFactories} truckFactories activas)`);
+                console.log(`🚚 HQ ${team}: maxVehicles recalculado ${oldMax} → ${newMaxVehicles} (${truckFactories} truckFactories activas), availableVehicles: ${oldAvailable} → ${hq.availableVehicles}`);
             }
         }
     }

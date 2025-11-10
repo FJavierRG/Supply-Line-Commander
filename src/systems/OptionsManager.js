@@ -3,6 +3,10 @@
 export class OptionsManager {
     constructor(audioManager) {
         this.audioManager = audioManager;
+        // Establecer referencia bidireccional para que AudioManager pueda acceder al volumen maestro
+        if (audioManager) {
+            audioManager.optionsManager = this;
+        }
         this.isVisible = false;
         
         // Configuración por defecto
@@ -155,6 +159,11 @@ export class OptionsManager {
                 console.log(`  ${soundType}: ${this.baseVolumes[soundType]} → ${finalVolume}`);
                 this.audioManager.setVolume(soundType, finalVolume);
             });
+            
+            // Actualizar volumen de drones activos
+            if (this.audioManager.updateActiveDroneVolumes) {
+                this.audioManager.updateActiveDroneVolumes();
+            }
         } else {
             console.warn('⚠️ AudioManager no disponible');
         }

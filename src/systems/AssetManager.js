@@ -54,6 +54,9 @@ export class AssetManager {
             'helicopter2': 'assets/sprites/vehicles/chopper2.png',  // 🆕 NUEVO: Segundo frame para animación
             'ambulance': 'assets/sprites/vehicles/ambulance.png',
             'vehicle-drone': 'assets/sprites/vehicles/drone.png',
+            'vehicle-tank-1': 'assets/sprites/vehicles/tank_1.png', // 🆕 NUEVO: Tanque frame 1
+            'vehicle-tank-2': 'assets/sprites/vehicles/tank_2.png', // 🆕 NUEVO: Tanque frame 2
+            'vehicle-tank-shot': 'assets/sprites/vehicles/tank_shot.png', // 🆕 NUEVO: Tanque disparando
             'vehicle-sniper_shoot_icon': 'assets/sprites/vehicles/sniper_shoot_icon.png',
             'specops_unit': 'assets/sprites/vehicles/specops_unit.png',
             
@@ -343,8 +346,8 @@ export class AssetManager {
             return this.getSprite('base-B_Nation-front');
         }
         
-        // Determinar prefijo según equipo (lógica original)
-        const prefix = team === 'player2' ? 'base-enemy-' : 'base-';
+        // Determinar prefijo según si es aliado o enemigo (team ahora es 'ally' o 'enemy')
+        const prefix = team === 'enemy' ? 'base-enemy-' : 'base-';
         
         // Front crítico tiene prioridad
         if (type === 'front' && isCritical) {
@@ -354,7 +357,7 @@ export class AssetManager {
         
         // Front sin munición (retirada) tiene prioridad sobre seleccionado/hovered
         if (type === 'front' && hasNoAmmo) {
-            const spriteKey = team === 'player2' ? 'base-enemy-front-no-ammo' : 'base-front-no-ammo';
+            const spriteKey = team === 'enemy' ? 'base-enemy-front-no-ammo' : 'base-front-no-ammo';
             const sprite = this.getSprite(spriteKey);
             if (sprite) return sprite;
         }

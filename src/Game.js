@@ -11,6 +11,7 @@ import { BuildingSystem } from './systems/BuildingSystem.js';
 import { ConvoyManager } from './systems/ConvoyManager.js';
 import { MedicalEmergencySystem } from './systems/MedicalEmergencySystem.js';
 import { DroneSystem } from './systems/DroneSystem.js';
+import { TankSystem } from './systems/TankSystem.js';
 import { AntiDroneSystem } from './systems/AntiDroneSystem.js';
 import { FrontMovementSystem } from './systems/FrontMovementSystem.js';
 import { TerritorySystem } from './systems/TerritorySystem.js';
@@ -67,6 +68,7 @@ export class Game {
         this.convoyManager = new ConvoyManager(this);
         this.medicalSystem = new MedicalEmergencySystem(this);
         this.droneSystem = new DroneSystem(this);
+        this.tankSystem = new TankSystem(this);
         this.antiDroneSystem = new AntiDroneSystem(this);
         this.frontMovement = new FrontMovementSystem(this);
         this.territory = new TerritorySystem(this);
@@ -89,17 +91,17 @@ export class Game {
         // 🆕 NUEVO: Hacer NetworkManager disponible globalmente para botones HTML
         window.networkManager = this.network;
         this.isMultiplayer = false;
-        this.myTeam = 'ally'; // Por defecto en singleplayer
+        this.myTeam = 'ally'; // Por defecto antes de conectar al servidor
         
-        // 🆕 SERVIDOR COMO AUTORIDAD: Configuración de edificios para singleplayer
+        // 🆕 SERVIDOR COMO AUTORIDAD: Inicializar configuración de edificios localmente
         this.serverBuildingConfig = null;
         
         // Configurar canvas
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
         
-        // 🆕 SERVIDOR COMO AUTORIDAD: Inicializar configuración de edificios para singleplayer
-        this.initializeSingleplayerBuildingConfig();
+        // 🆕 SERVIDOR COMO AUTORIDAD: Inicializar configuración de edificios localmente
+        this.initializeLocalBuildingConfig();
         
         // Estado del juego
         this.state = 'menu'; // menu, playing, paused, editor
@@ -172,7 +174,7 @@ export class Game {
         this.selectedRace = raceId;
         console.log(`🏛️ Raza seleccionada: ${raceId}`);
         
-        // 🎯 NUEVO: Establecer myTeam en singleplayer
+        // Establecer myTeam cuando se selecciona raza
         if (!this.isMultiplayer) {
             this.myTeam = 'player1';
         }
@@ -272,6 +274,7 @@ export class Game {
         // const debugBtn = document.getElementById('toggle-debug-btn');
         // if (debugBtn) debugBtn.style.display = 'block';
         this.droneSystem.clear();
+        this.tankSystem.clear();
         this.paused = false;
         
         // Resetear currency
@@ -339,7 +342,7 @@ export class Game {
     }
     
     /**
-     * 🆕 NUEVO: Crea el helicóptero inicial para B_Nation en singleplayer
+     * Crea el helicóptero inicial para B_Nation
      */
     createInitialHelicopter() {
         // Buscar el HQ del jugador
@@ -371,7 +374,7 @@ export class Game {
     // El cliente recibe los nodos ya generados vía NetworkManager.loadInitialState
     
     /**
-     * 🆕 NUEVO: Despega un helicóptero desde un nodo hacia otro (singleplayer)
+     * Despega un helicóptero desde un nodo hacia otro
      */
     dispatchHelicopter(fromNodeId, toNodeId) {
         const fromNode = this.nodes.find(n => n.id === fromNodeId);
@@ -530,9 +533,21 @@ export class Game {
             }
         }
         
+        // Actualizar sistemas visuales (interpolación)
+        this.tankSystem.update(dt);
+        
         // Interpolación suave de drones (usando sistema centralizado)
         for (const drone of this.droneSystem.getDrones()) {
             interpolatePosition(drone, dt, { 
+                speed: 8.0,
+                threshold: 1.0,
+                snapThreshold: 0.1
+            });
+        }
+        
+        // Interpolación suave de tanques (usando sistema centralizado)
+        for (const tank of this.tankSystem.getTanks()) {
+            interpolatePosition(tank, dt, { 
                 speed: 8.0,
                 threshold: 1.0,
                 snapThreshold: 0.1
@@ -817,6 +832,9 @@ export class Game {
         // Renderizar drones
         this.droneSystem.getDrones().forEach(drone => this.renderer.renderDrone(drone));
         
+        // Renderizar tanques
+        this.tankSystem.getTanks().forEach(tank => this.renderer.renderTank(tank));
+        
         // Renderizar partículas
         this.particleSystem.getParticles().forEach(p => this.renderer.renderParticle(p));
         this.particleSystem.getExplosionSprites().forEach(e => this.renderer.renderExplosionSprite(e));
@@ -864,6 +882,9 @@ export class Game {
             if (this.buildSystem.droneMode) {
                 // Preview del dron: círculo vacío con X roja (o vacío si objetivo válido)
                 this.renderer.renderDronePreview(mousePos.x, mousePos.y, this.hoveredNode);
+            } else if (this.buildSystem.tankMode) {
+                // Preview del tanque: similar al dron pero solo para edificios válidos (NO FOBs ni HQs)
+                this.renderer.renderTankPreview(mousePos.x, mousePos.y, this.hoveredNode);
             } else if (this.buildSystem.sniperMode) {
                 // Preview del francotirador: mira con sprite de sniper
                 this.renderer.renderSniperCursor(mousePos.x, mousePos.y, this.hoveredNode);
@@ -1133,6 +1154,7 @@ export class Game {
         // const debugBtn = document.getElementById('toggle-debug-btn');
         // if (debugBtn) debugBtn.style.display = 'block';
         this.droneSystem.clear();
+        this.tankSystem.clear();
         this.paused = false;
         
         // Resetear currency con valor del tutorial
@@ -1312,6 +1334,43 @@ export class Game {
         this.droneSystem.launchDrone(droneStartX, droneStartY, targetBase);
         this.matchStats.dronesLaunched++;
         
+    }
+    
+    /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Maneja solicitud de tanque
+     * @param {Object} targetBase - Base objetivo del tanque
+     */
+    handleTankRequest(targetBase) {
+        
+        // Validar objetivo (no puede atacar FOBs ni HQs)
+        const validTargetTypes = ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
+        const isEnemyTarget = targetBase.team !== this.myTeam && validTargetTypes.includes(targetBase.type);
+        
+        if (!isEnemyTarget) {
+            return;
+        }
+        
+        // Validar currency
+        const tankCost = this.serverBuildingConfig?.costs?.tank || 0;
+        if (!this.canAffordBuilding('tank')) {
+            return;
+        }
+        
+        // Descontar currency
+        if (!this.spendMissionCurrency(tankCost)) {
+            return;
+        }
+        
+        // Lanzar tanque - delegar al servidor autoritativo
+        if (!this.network || !this.network.roomId) {
+            console.error('❌ No hay conexión al servidor. No se puede lanzar tanque.');
+            return;
+        }
+        
+        console.log(`🛡️ Enviando tank_request: target=${targetBase.id}`);
+        this.network.requestTank(targetBase.id);
+        
+        this.matchStats.tanksLaunched = (this.matchStats.tanksLaunched || 0) + 1;
     }
     
     /**
@@ -1683,9 +1742,9 @@ export class Game {
     }
     
     /**
-     * 🆕 SERVIDOR COMO AUTORIDAD: Inicializar configuración de edificios para singleplayer
+     * Inicializa la configuración de edificios desde el servidor (fallback local)
      */
-    initializeSingleplayerBuildingConfig() {
+    initializeLocalBuildingConfig() {
         // Importar la configuración del servidor directamente
         import('../server/config/serverNodes.js').then(module => {
             const { SERVER_NODE_CONFIG } = module;

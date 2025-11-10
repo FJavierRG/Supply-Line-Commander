@@ -435,6 +435,17 @@ export class InputHandler {
             return;
         }
         
+        // Modo tanque: seleccionar objetivo (NO FOBs ni HQs)
+        if (this.game.buildSystem.tankMode) {
+            const clickedBase = this.getBaseAt(x, y);
+            if (clickedBase && clickedBase.team !== this.game.myTeam && clickedBase.type !== 'fob' && clickedBase.type !== 'hq') {
+                this.game.buildSystem.launchTank(clickedBase);
+            } else if (clickedBase && (clickedBase.type === 'fob' || clickedBase.type === 'hq')) {
+                console.log('⚠️ El tanque no puede atacar FOBs ni HQs');
+            }
+            return;
+        }
+        
         // Modo francotirador: disparar a frente enemigo
         if (this.game.buildSystem.sniperMode) {
             const clickedBase = this.getBaseAt(x, y);
@@ -1206,6 +1217,11 @@ export class InputHandler {
                 console.log('🚫 Modo dron cancelado (click derecho)');
                 return;
             }
+            if (this.game.buildSystem.tankMode) {
+                this.game.buildSystem.exitTankMode();
+                console.log('🚫 Modo tanque cancelado (click derecho)');
+                return;
+            }
             if (this.game.buildSystem.sniperMode) {
                 this.game.buildSystem.exitSniperMode();
                 console.log('🚫 Modo francotirador cancelado (click derecho)');
@@ -1255,7 +1271,7 @@ export class InputHandler {
     
     // ===== FUNCIONES DE SELECTOR DE DIFICULTAD =====
     
-    // ELIMINADO: Selector de dificultad singleplayer (ahora se configura en el lobby)
+    // ELIMINADO: Selector de dificultad (ahora se configura en el lobby)
     
     // ===== FUNCIONES DE LOBBY UNIFICADO =====
     
@@ -1265,6 +1281,13 @@ export class InputHandler {
         
         // Mostrar lobby
         this.game.ui.showElement('multiplayer-lobby-overlay');
+        
+        // 🆕 NUEVO: Limpiar cualquier estado anterior de sala antes de conectar
+        // Esto evita problemas si el jugador salió de una partida anterior
+        if (this.game.network.roomId) {
+            console.log('⚠️ Limpiando estado de sala anterior...');
+            this.game.network.leaveRoom();
+        }
         
         // Conectar al servidor
         try {
@@ -1367,9 +1390,9 @@ export class InputHandler {
         this.game.ui.showElement('main-menu-overlay');
     }
     
-    createMultiplayerRoom() {
+    async createMultiplayerRoom() {
         const playerName = prompt('Tu nombre:', 'Jugador 1') || 'Jugador 1';
-        this.game.network.createRoom(playerName);
+        await this.game.network.createRoom(playerName);
         // La UI se actualiza automáticamente con room_created
     }
     
@@ -1379,7 +1402,7 @@ export class InputHandler {
         document.getElementById('room-code-input').focus();
     }
     
-    joinRoomWithCode() {
+    async joinRoomWithCode() {
         const roomCode = document.getElementById('room-code-input').value.toUpperCase().trim();
         
         if (roomCode.length !== 4) {
@@ -1388,7 +1411,7 @@ export class InputHandler {
         }
         
         const playerName = prompt('Tu nombre:', 'Jugador 2') || 'Jugador 2';
-        this.game.network.joinRoom(roomCode, playerName);
+        await this.game.network.joinRoom(roomCode, playerName);
     }
 }
 
