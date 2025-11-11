@@ -5,6 +5,7 @@ import { FrontMovementSystemServer } from '../systems/FrontMovementSystemServer.
 import { TerritorySystemServer } from '../systems/TerritorySystemServer.js';
 import { DroneSystemServer } from '../systems/DroneSystemServer.js';
 import { TankSystemServer } from '../systems/TankSystemServer.js';
+import { TrainSystemServer } from '../systems/TrainSystemServer.js';
 import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
 import { BuildHandler } from './handlers/BuildHandler.js';
@@ -31,6 +32,7 @@ export class GameStateManager {
         this.room = room;
         this.nodes = [];
         this.convoys = [];
+        this.trains = []; // 🆕 NUEVO: Array de trenes
         this.helicopters = []; // 🆕 NUEVO: Array de helicópteros persistentes
         this.currency = {
             player1: GAME_CONFIG.currency.initial,
@@ -61,6 +63,7 @@ export class GameStateManager {
         this.territory = new TerritorySystemServer(this);
         this.droneSystem = new DroneSystemServer(this);
         this.tankSystem = new TankSystemServer(this);
+        this.trainSystem = new TrainSystemServer(this); // 🆕 NUEVO: Sistema de trenes
         
         // Handlers de acciones
         this.buildHandler = new BuildHandler(this);
@@ -469,6 +472,9 @@ export class GameStateManager {
         // === ACTUALIZAR CONVOYES (MOVIMIENTO + LLEGADAS) ===
         this.convoyMovementManager.update(dt);
         
+        // === ACTUALIZAR TRENES (MOVIMIENTO + LLEGADAS) ===
+        this.trainSystem.update(dt);
+        
         // === CONSUMO DE SUPPLIES EN FRENTES ===
         this.supplyManager.update(dt);
         
@@ -611,6 +617,7 @@ export class GameStateManager {
             // SIEMPRE enviar todos los nodos activos - la optimización está en la frecuencia, no en filtrar nodos
             nodes: this.stateSerializer.serializeAllNodes(),
             convoys: this.stateSerializer.serializeAllConvoys(), // También todos los convoyes
+            trains: this.stateSerializer.serializeAllTrains(), // 🆕 NUEVO: Trenes
             helicopters: this.stateSerializer.serializeAllHelicopters(), // Helicópteros
             drones: this.droneSystem.getDrones(), // Drones activos con posiciones
             tanks: this.tankSystem.getTanks(), // Tanques activos con posiciones

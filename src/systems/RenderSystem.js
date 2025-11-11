@@ -1488,6 +1488,58 @@ export class RenderSystem {
     }
     
     /**
+     * 🆕 NUEVO: Renderizar tren
+     */
+    renderTrain(train) {
+        if (!train) return;
+        
+        const sprite = this.assetManager?.getSprite('train');
+        
+        if (sprite) {
+            this.ctx.save();
+            this.ctx.translate(train.x, train.y);
+            
+            // Determinar dirección basada en movimiento hacia el objetivo (igual que convoyes)
+            let shouldFlip = false;
+            
+            // Obtener nodo destino según estado (yendo o regresando)
+            const destinationNode = train.returning ? train.fromBase : train.toBase;
+            
+            if (destinationNode) {
+                const dx = destinationNode.x - train.x;
+                // Si va hacia la izquierda (dx < 0), flip horizontal
+                // Si va hacia la derecha (dx > 0), no flip
+                shouldFlip = dx < 0;
+            }
+            
+            if (shouldFlip) {
+                this.ctx.scale(-1, 1);
+            }
+            
+            // Dibujar sprite del tren (10% más pequeño: multiplicar por 0.9)
+            const baseSize = 32 * 2.5 * 0.9; // 10% más pequeño
+            const spriteWidth = baseSize * 1.5;
+            const spriteHeight = baseSize;
+            
+            this.ctx.drawImage(
+                sprite,
+                -spriteWidth / 2,
+                -spriteHeight / 2,
+                spriteWidth,
+                spriteHeight
+            );
+            
+            this.ctx.restore();
+        } else {
+            // Fallback: círculo gris
+            this.ctx.fillStyle = '#666';
+            this.ctx.beginPath();
+            this.ctx.arc(train.x, train.y, 20, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+    }
+    
+    /**
      * 🆕 NUEVO: Renderizar helicóptero persistente
      */
     renderHelicopter(heli) {
@@ -2353,17 +2405,63 @@ export class RenderSystem {
         // Indicador de objetivo inválido (si no es una FOB enemiga)
         const myTeam = this.game?.myTeam || 'player1';
         const validTarget = hoveredBase && hoveredBase.type === 'fob' && hoveredBase.team !== myTeam;
+        
+        // 🆕 NUEVO: Verificar si el FOB está protegido por una torre de vigilancia
+        let isProtected = false;
+        if (validTarget && hoveredBase) {
+            const vigilanceTowers = (this.game?.nodes || []).filter(n => 
+                (n.type === 'vigilanceTower' || n.isVigilanceTower) &&
+                n.team === hoveredBase.team && // Torre del mismo equipo que el FOB (protectora)
+                n.active &&
+                n.constructed &&
+                !n.isAbandoning
+            );
+            
+            for (const tower of vigilanceTowers) {
+                const detectionRadius = tower.detectionRadius || 400;
+                const dist = Math.hypot(hoveredBase.x - tower.x, hoveredBase.y - tower.y);
+                
+                if (dist <= detectionRadius) {
+                    isProtected = true;
+                    break;
+                }
+            }
+        }
+        
         if (!validTarget) {
+            // X roja para objetivo inválido
             this.ctx.strokeStyle = '#ff0000';
             this.ctx.lineWidth = 4;
             const crossSize = 15;
             
-            // X roja
             this.ctx.beginPath();
             this.ctx.moveTo(x - crossSize, y - crossSize);
             this.ctx.lineTo(x + crossSize, y + crossSize);
             this.ctx.moveTo(x + crossSize, y - crossSize);
             this.ctx.lineTo(x - crossSize, y + crossSize);
+            this.ctx.stroke();
+        } else if (isProtected) {
+            // 🆕 Indicador de protección: escudo o símbolo de bloqueo
+            this.ctx.strokeStyle = '#ffff00';
+            this.ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
+            this.ctx.lineWidth = 3;
+            
+            // Círculo amarillo alrededor del cursor
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, 50, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+            
+            // Símbolo de escudo/bloqueo
+            this.ctx.strokeStyle = '#ffff00';
+            this.ctx.lineWidth = 3;
+            this.ctx.beginPath();
+            // Escudo simple (forma de U con línea horizontal arriba)
+            this.ctx.moveTo(x, y - 10);
+            this.ctx.lineTo(x - 12, y + 5);
+            this.ctx.lineTo(x, y + 10);
+            this.ctx.lineTo(x + 12, y + 5);
+            this.ctx.closePath();
             this.ctx.stroke();
         }
     }

@@ -69,6 +69,24 @@ export class CombatHandler {
             return { success: false, reason: 'Solo puedes sabotear FOBs enemigas' };
         }
         
+        // 🆕 NUEVO: Validar que no haya torres de vigilancia enemigas protegiendo el FOB
+        const vigilanceTowers = this.gameState.nodes.filter(n => 
+            (n.type === 'vigilanceTower' || n.isVigilanceTower) &&
+            n.team === targetNode.team && // Torre del mismo equipo que el FOB (protectora)
+            n.active &&
+            n.constructed &&
+            !n.isAbandoning
+        );
+        
+        for (const tower of vigilanceTowers) {
+            const detectionRadius = tower.detectionRadius || 400;
+            const dist = Math.hypot(targetNode.x - tower.x, targetNode.y - tower.y);
+            
+            if (dist <= detectionRadius) {
+                return { success: false, reason: 'El FOB está protegido por una torre de vigilancia - no se puede sabotear' };
+            }
+        }
+        
         // Costo del sabotaje
         const sabotageCost = SERVER_NODE_CONFIG.actions.fobSabotage.cost;
         

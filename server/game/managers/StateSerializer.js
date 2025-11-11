@@ -294,6 +294,24 @@ export class StateSerializer {
     }
     
     /**
+     * 🆕 NUEVO: Serializa TODOS los trenes para envío inicial
+     */
+    serializeAllTrains() {
+        return this.gameState.trains.map(train => {
+            return {
+                id: train.id,
+                trainId: train.id, // Alias para compatibilidad con cliente
+                fromId: train.fromId,
+                toId: train.toId,
+                team: train.team,
+                progress: train.progress,
+                returning: train.returning,
+                cargo: train.cargo
+            };
+        });
+    }
+    
+    /**
      * Serializa helicópteros para envío incremental (solo los que han cambiado)
      */
     serializeHelicopters() {

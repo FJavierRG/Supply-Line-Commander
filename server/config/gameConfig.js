@@ -6,7 +6,6 @@ export const GAME_CONFIG = {
     // CONFIGURACIÓN DE PARTIDA
     // ═══════════════════════════════════════════════════════════════
     match: {
-        duration: 520,        // Duración máxima de partida (segundos) Legacy
         countdown: 3,         // Countdown antes de empezar (segundos)
         tickRate: 10,         // Ticks por segundo (TPS) - Optimización: reducido de 20 a 10
         worldWidth: 1920,     // Ancho del mundo (px)
@@ -38,11 +37,11 @@ export const GAME_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
     vehicles: {
         heavy_truck: {
-            capacity: 15,  // ✅ USADO: Cantidad de suministros por viaje
+            capacity: 10,  // ✅ USADO: Cantidad de suministros por viaje
             speed: 600     // ⚠️ LEGACY: No usado - usar convoy.vehicleSpeeds.heavy_truck
         },
         truck: {
-            capacity: 15,  // ✅ USADO: Cantidad de suministros por viaje
+            capacity: 20,  // ✅ USADO: Cantidad de suministros por viaje
             speed: 750     // ⚠️ LEGACY: No usado - usar convoy.vehicleSpeeds.truck
         },
         helicopter: {
@@ -61,8 +60,8 @@ export const GAME_CONFIG = {
     // MOVIMIENTO DE FRENTES (SERVIDOR COMO AUTORIDAD - ANTI-HACK)
     // ═══════════════════════════════════════════════════════════════
     frontMovement: {
-        advanceSpeed: 3,    // Velocidad de avance (px/s) cuando tiene recursos
-        retreatSpeed: 3     // Velocidad de retroceso (px/s) cuando NO tiene recursos
+        advanceSpeed: 4,    // Velocidad de avance (px/s) cuando tiene recursos
+        retreatSpeed: 4     // Velocidad de retroceso (px/s) cuando NO tiene recursos
     },
 
     // ═══════════════════════════════════════════════════════════════

@@ -39,12 +39,16 @@ export class AssetManager {
             'building-intel-center': 'assets/sprites/buildings/intel_center.png', // 🆕 Centro de Inteligencia
             'building-aerial-base': 'assets/sprites/buildings/aerial_base.png',
             'building-vigilance-tower': 'assets/sprites/buildings/vigilance_tower.png', // 🆕 Torre de Vigilancia
+            'building-train-station': 'assets/sprites/buildings/train_station.png', // 🆕 Estación de Tren
 
             // Carreteras (4 variantes)
             'road-1': 'assets/sprites/buildings/carretera1.png',
             'road-2': 'assets/sprites/buildings/carretera2.png',
             'road-3': 'assets/sprites/buildings/carretera3.png',
             'road-4': 'assets/sprites/buildings/carretera4.png',
+            
+            // Vías de tren
+            'rail-trail': 'assets/sprites/buildings/trails.png', // 🆕 Vías de tren
             
             // Vehículos (solo los que se usan)
             'heavy_truck': 'assets/sprites/vehicles/heavy_truck.png',
@@ -59,6 +63,7 @@ export class AssetManager {
             'vehicle-tank-shot': 'assets/sprites/vehicles/tank_shot.png', // 🆕 NUEVO: Tanque disparando
             'vehicle-sniper_shoot_icon': 'assets/sprites/vehicles/sniper_shoot_icon.png',
             'specops_unit': 'assets/sprites/vehicles/specops_unit.png',
+            'train': 'assets/sprites/vehicles/train.png', // 🆕 Tren
             
             // UI (solo los que se usan)
             'ui-supply-icon': 'assets/sprites/ui/resources.png',

@@ -326,6 +326,7 @@ export const NODE_CONFIG = {
         // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         radius: 35, // Tamaño visual del sprite
+        sizeMultiplier: 0.85, // 🆕 Reducir tamaño visual 15% (solo sprite, no afecta áreas)
         // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
         // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
         // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
@@ -338,6 +339,28 @@ export const NODE_CONFIG = {
         
         // Propiedades especiales
         isVigilanceTower: true // Flag para identificación
+    },
+    
+    trainStation: {
+        id: 'trainStation',
+        // name y description: Definidos por el servidor (autoridad)
+        spriteKey: 'building-train-station',
+        category: 'buildable',
+        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
+        
+        radius: 40, // Tamaño visual del sprite
+        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
+        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
+        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
+        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
+        // cost y constructionTime: Definidos por el servidor (autoridad)
+        
+        // No maneja suministros ni vehículos
+        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
+        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
+        
+        // Propiedades especiales
+        isTrainStation: true // Flag para identificación
     },
     
     // ========== PROYECTILES ==========

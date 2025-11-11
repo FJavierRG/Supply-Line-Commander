@@ -18,12 +18,13 @@ export const SERVER_NODE_CONFIG = {
         campaignHospital: 60,
         intelCenter: 150, // 🆕 Centro de Inteligencia - desbloquea comandos
         vigilanceTower: 120, // 🆕 Torre de Vigilancia - counterea comandos
+        trainStation: 170, // 🆕 Estación de Tren - envía trenes automáticamente
         // 🆕 CONSUMIBLES/PROYECTILES
         drone: 150,
         sniperStrike: 40,
         fobSabotage: 40,
         specopsCommando: 200,  // 🆕 NUEVO: Comando especial operativo
-        tank: 200  // 🆕 NUEVO: Tanque - similar al dron pero no puede atacar FOBs ni HQs
+        tank: 100  // 🆕 NUEVO: Tanque - similar al dron pero no puede atacar FOBs ni HQs
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -40,7 +41,8 @@ export const SERVER_NODE_CONFIG = {
         intelRadio: 2, // Construcción rápida
         aerialBase: 3, // 🆕 Base Aérea - 3 segundos
         intelCenter: 3,  // 🆕 Centro de Inteligencia - 3 segundos
-        vigilanceTower: 3  // 🆕 Torre de Vigilancia - 3 segundos
+        vigilanceTower: 3,  // 🆕 Torre de Vigilancia - 3 segundos
+        trainStation: 4  // 🆕 Estación de Tren - 4 segundos
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -64,6 +66,11 @@ export const SERVER_NODE_CONFIG = {
         aerialBase: {
             maxSupplies: 200,       // 🆕 Capacidad máxima de suministros
             autoDestroy: true       // 🆕 Se autodestruye cuando se agota
+        },
+        trainStation: {
+            trainInterval: 15,      // 🆕 Segundos entre envíos de tren
+            trainSpeed: 50,        // 🆕 Velocidad del tren (píxeles por segundo)
+            trainCargo: 25          // 🆕 Suministros que entrega cada tren
         }
     },
 
@@ -87,11 +94,11 @@ export const SERVER_NODE_CONFIG = {
         },
         droneLaunch: {
             cost: 150,
-            validTargets: ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase']
+            validTargets: ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'trainStation']
         },
         tankLaunch: {
             cost: 200,
-            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower']
+            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation']
             // No puede atacar FOBs ni HQs
         }
     },
@@ -150,7 +157,8 @@ export const SERVER_NODE_CONFIG = {
         intelRadio: 120,       // Valor original (sin +15%)
         intelCenter: 130,      // 🆕 Centro de Inteligencia
         aerialBase: 130,        // 🆕 Base Aérea
-        vigilanceTower: 400     // 🆕 Torre de Vigilancia (radio de protección para comandos - 400px)
+        vigilanceTower: 400,   // 🆕 Torre de Vigilancia (radio de protección para comandos - 400px)
+        trainStation: 130       // 🆕 Estación de Tren
     },
     
     // Radios base para fallback si no se define detectionRadius
@@ -167,7 +175,8 @@ export const SERVER_NODE_CONFIG = {
         intelRadio: 30,
         intelCenter: 35,       // 🆕 Centro de Inteligencia (tamaño visual 35px)
         aerialBase: 40,     // 🆕 Base Aérea (tamaño visual 40px)
-        vigilanceTower: 35     // 🆕 Torre de Vigilancia (tamaño visual 35px)
+        vigilanceTower: 35,   // 🆕 Torre de Vigilancia (tamaño visual 35px)
+        trainStation: 40       // 🆕 Estación de Tren (tamaño visual 40px)
     },
     
     // 🆕 NUEVO: Configuración de nodos especiales que se despliegan como unidades
@@ -260,6 +269,10 @@ export const SERVER_NODE_CONFIG = {
         vigilanceTower: {
             hasSupplies: false,
             hasVehicles: false
+        },
+        trainStation: {
+            hasSupplies: false,
+            hasVehicles: false
         }
     },
     
@@ -297,7 +310,8 @@ export const SERVER_NODE_CONFIG = {
             intelRadio: 36,      // +20% hitbox (30 * 1.2)
             intelCenter: 42,     // 🆕 +20% hitbox (35 * 1.2)
             aerialBase: 48,       // +20% hitbox (40 * 1.2)
-            vigilanceTower: 42    // 🆕 +20% hitbox (35 * 1.2)
+            vigilanceTower: 42,   // 🆕 +20% hitbox (35 * 1.2)
+            trainStation: 48       // 🆕 +20% hitbox (40 * 1.2)
     },
         
         // Propiedades de construcción
@@ -316,7 +330,8 @@ export const SERVER_NODE_CONFIG = {
             intelRadio: true,
             intelCenter: true,    // 🆕 Centro de Inteligencia
             aerialBase: true,
-            vigilanceTower: true  // 🆕 Torre de Vigilancia
+            vigilanceTower: true,  // 🆕 Torre de Vigilancia
+            trainStation: true     // 🆕 Estación de Tren
         },
         
         // Propiedades de destrucción
@@ -335,7 +350,8 @@ export const SERVER_NODE_CONFIG = {
             intelRadio: true,
             intelCenter: true,    // 🆕 Centro de Inteligencia
             aerialBase: true,
-            vigilanceTower: true  // 🆕 Torre de Vigilancia
+            vigilanceTower: true,  // 🆕 Torre de Vigilancia
+            trainStation: true     // 🆕 Estación de Tren
         }
     },
 
@@ -406,6 +422,7 @@ export const SERVER_NODE_CONFIG = {
             intelCenter: true,    // 🆕 Centro de Inteligencia - desbloquea comandos
             aerialBase: false,
             vigilanceTower: true,  // 🆕 Torre de Vigilancia - counterea comandos
+            trainStation: true,    // 🆕 Estación de Tren - envía trenes automáticamente
             // 🆕 CONSUMIBLES/PROYECTILES
             drone: true,
             sniperStrike: true,
@@ -497,7 +514,11 @@ export const SERVER_NODE_CONFIG = {
         },
         vigilanceTower: {
             name: 'Torre de Vigilancia',
-            description: 'Torre defensiva que detecta y elimina comandos enemigos en su área.'
+            description: 'Torre defensiva que impide le incursón de comandos y sabotajes enemigos.'
+        },
+        trainStation: {
+            name: 'Estación de Tren',
+            description: 'Estación que construye vías a los FOBs y les envía trenes de suministros periódicamente.'
         },
         drone: {
             name: 'Dron Bomba',

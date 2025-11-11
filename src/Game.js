@@ -21,6 +21,8 @@ import { LoadingScreenManager } from './systems/LoadingScreenManager.js';
 import { CurrencyManager } from './systems/CurrencyManager.js';
 import { StoreUIManager } from './systems/StoreUIManager.js';
 import { RoadSystem } from './utils/RoadSystem.js';
+import { RailSystem } from './utils/RailSystem.js';
+import { TrainSystem } from './systems/TrainSystem.js';
 import { OptionsManager } from './systems/OptionsManager.js';
 import { ArsenalManager } from './systems/ArsenalManager.js';
 import { DeckManager } from './systems/DeckManager.js';
@@ -81,12 +83,14 @@ export class Game {
         this.currency = new CurrencyManager(this);
         this.particleSystem = new ParticleSystem(this);
         this.roadSystem = new RoadSystem(this);
+        this.railSystem = new RailSystem(this);
         this.buildSystem = new BuildingSystem(this);
         this.storeUI = new StoreUIManager(this.assetManager, this.buildSystem, this);
         this.options = new OptionsManager(this.audio);
         this.deckManager = new DeckManager(this);
         this.arsenal = new ArsenalManager(this.assetManager, this);
         this.convoyManager = new ConvoyManager(this);
+        this.trainSystem = new TrainSystem(this);
         this.medicalSystem = new MedicalEmergencySystem(this);
         this.droneSystem = new DroneSystem(this);
         this.tankSystem = new TankSystem(this);
@@ -620,10 +624,20 @@ export class Game {
             this.roadSystem.update();
         }
         
+        // Actualizar sistema de vías de tren (renderizado)
+        if (this.railSystem) {
+            this.railSystem.update();
+        }
+        
         // CRÍTICO: Actualizar SOLO posiciones visuales de convoyes con interpolación suave
         // El progress viene del servidor, pero necesitamos interpolar suavemente entre frames
         for (const convoy of this.convoyManager.convoys) {
             convoy.update(dt); // Llama al método update() que maneja la interpolación
+        }
+        
+        // Actualizar trenes con interpolación suave
+        if (this.trainSystem) {
+            this.trainSystem.update(dt);
         }
         
         // Actualizar helicópteros con interpolación suave (igual que convoys)
@@ -898,6 +912,9 @@ export class Game {
         // Carreteras debajo del territorio y de todo lo demás (solo por encima del fondo)
         this.roadSystem.render(this.renderer.ctx, this.assetManager);
         
+        // Vías de tren debajo del territorio y de todo lo demás (solo por encima del fondo)
+        this.railSystem.render(this.renderer.ctx, this.assetManager);
+        
         // Renderizar territorio controlado (debajo de las bases, por encima de carreteras)
         this.territory.render(this.renderer.ctx);
         
@@ -925,6 +942,11 @@ export class Game {
             this._convoyRenderLogged = true;
         }
         convoys.forEach(convoy => this.renderer.renderConvoy(convoy));
+        
+        // Renderizar trenes
+        if (this.trainSystem && this.trainSystem.trains) {
+            this.trainSystem.trains.forEach(train => this.renderer.renderTrain(train));
+        }
         
         // 🆕 NUEVO: Renderizar helicópteros
         if (this.helicopters && this.helicopters.length > 0) {

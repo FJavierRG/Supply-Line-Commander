@@ -1,6 +1,7 @@
 // ===== GESTOR DE RED - Cliente Socket.IO =====
 import { BackgroundTileSystem } from './BackgroundTileSystem.js';
 import { Convoy } from '../entities/Convoy.js';
+import { Train } from '../entities/train.js';
 import { VisualNode } from '../entities/visualNode.js';
 import { getNodeConfig } from '../config/nodes.js';
 
@@ -646,6 +647,11 @@ export class NetworkManager {
         });
         
         this.socket.on('fob_sabotage_failed', (data) => {
+            console.warn(`⚠️ Sabotaje fallido: ${data.reason || 'Razón desconocida'}`);
+            // Opcional: mostrar mensaje visual al usuario
+            if (this.game && this.game.showNotification) {
+                this.game.showNotification(data.reason || 'No se pudo realizar el sabotaje', 'error');
+            }
         });
         
         /**
@@ -1123,6 +1129,19 @@ export class NetworkManager {
     }
     
     /**
+     * Solicita lanzamiento de tanque al servidor
+     */
+    requestTank(targetId) {
+        if (!this.isMultiplayer || !this.roomId) return;
+        
+        
+        this.socket.emit('tank_request', {
+            roomId: this.roomId,
+            targetId
+        });
+    }
+    
+    /**
      * Solicita despliegue de comando especial operativo al servidor
      * 🆕 NUEVO
      */
@@ -1538,6 +1557,42 @@ export class NetworkManager {
             }
         }
         
+        // === ACTUALIZAR TRENES ===
+        if (gameState.trains && gameState.trains.length > 0) {
+            // Sincronizar trenes: actualizar progress de los existentes
+            gameState.trains.forEach(trainData => {
+                const train = this.game.trainSystem.trains.find(t => t.id === trainData.id || t.id === trainData.trainId);
+                
+                if (train) {
+                    // Actualizar progress desde el servidor con interpolación suave
+                    if (train.updateServerProgress) {
+                        train.updateServerProgress(trainData.progress, trainData.returning || false);
+                    } else {
+                        // Fallback para compatibilidad
+                        train.progress = trainData.progress;
+                        train.targetProgress = trainData.progress;
+                        train.returning = trainData.returning || false;
+                    }
+                } else {
+                    // Crear nuevo tren si no existe
+                    this.game.trainSystem.addTrain(trainData);
+                }
+            });
+            
+            // Eliminar trenes que ya no existen en el servidor
+            const serverTrainIds = gameState.trains.map(t => t.id || t.trainId);
+            for (let i = this.game.trainSystem.trains.length - 1; i >= 0; i--) {
+                if (!serverTrainIds.includes(this.game.trainSystem.trains[i].id)) {
+                    this.game.trainSystem.removeTrain(this.game.trainSystem.trains[i].id);
+                }
+            }
+        } else {
+            // Si no hay trenes en el servidor, limpiar todos los trenes locales
+            if (this.game.trainSystem && this.game.trainSystem.trains) {
+                this.game.trainSystem.clear();
+            }
+        }
+        
         // === ACTUALIZAR DRONES ===
         if (gameState.drones) {
             // Actualizar drones existentes y crear nuevos
@@ -1921,7 +1976,7 @@ export class NetworkManager {
         
         return optionsHTML;
     }
-    
+    //
     /**
      * Obtiene el nombre del mazo para mostrar en la UI
      * @param {string} deckId - ID del mazo
