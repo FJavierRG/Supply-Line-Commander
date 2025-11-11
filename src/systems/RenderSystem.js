@@ -1,6 +1,7 @@
 // ===== SISTEMA DE RENDERIZADO =====
 import { GAME_CONFIG } from '../config/constants.js';
 import { getNodeConfig } from '../config/nodes.js';
+import { getBuildAreaVisual, getExclusionRadius } from '../config/buildAreaVisual.js';
 
 export class RenderSystem {
     constructor(canvas, assetManager = null, game = null) {
@@ -1245,8 +1246,22 @@ export class RenderSystem {
             for (const text of colorTexts) {
                 this.ctx.globalAlpha = text.alpha;
                 
-                // 🆕 NUEVO: Sombra negra para textos "Disabled" para mejor legibilidad
-                if (isDisabledText) {
+                // 🆕 Compensar Mirror View para textos "Disabled" (no deben verse volteados)
+                if (isDisabledText && this.mirrorViewApplied) {
+                    this.ctx.save();
+                    // Compensar el mirror view con un flip adicional
+                    const worldWidth = this.game?.worldWidth || this.width;
+                    this.ctx.scale(-1, 1);
+                    this.ctx.translate(-worldWidth, 0);
+                    
+                    // Contorno negro (stroke) para mejor legibilidad
+                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.strokeText(text.text, text.x, text.y);
+                    // Texto principal en rojo
+                    this.ctx.fillText(text.text, text.x, text.y);
+                    this.ctx.restore();
+                } else if (isDisabledText) {
                     this.ctx.save();
                     // Contorno negro (stroke) para mejor legibilidad
                     this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
@@ -1280,6 +1295,14 @@ export class RenderSystem {
             
             this.ctx.save();
             this.ctx.globalAlpha = sprite.alpha;
+            
+            // 🆕 Compensar Mirror View para sprites flotantes (no deben verse volteados)
+            if (this.mirrorViewApplied) {
+                // Compensar el mirror view con un flip adicional
+                const worldWidth = this.game?.worldWidth || this.width;
+                this.ctx.scale(-1, 1);
+                this.ctx.translate(-worldWidth, 0);
+            }
             
             const width = spriteImg.width * sprite.scale;
             const height = spriteImg.height * sprite.scale;
@@ -2003,6 +2026,130 @@ export class RenderSystem {
         this.ctx.lineTo(to.x, to.y);
         this.ctx.stroke();
         this.ctx.setLineDash([]);
+    }
+    
+    /**
+     * Renderiza el overlay visual de áreas válidas/inválidas para construcción
+     * @param {string} buildingType - Tipo de edificio que se está construyendo
+     */
+    renderBuildAreaOverlay(buildingType) {
+        if (!this.game || !buildingType) return;
+        
+        const rules = getBuildAreaVisual(buildingType);
+        const allNodes = [...(this.game.bases || []), ...(this.game.nodes || [])];
+        
+        // 1. Renderizar territorio válido en verde (solo si territoryType no es null)
+        if (rules.territoryType !== null) {
+            this.renderTerritoryOverlay(rules.territoryType);
+        }
+        
+        // 2. Renderizar áreas de exclusión en rojo según las reglas
+        for (const rule of rules.exclusionRules) {
+            const filteredNodes = allNodes.filter(node => 
+                node.active && rule.filter(node, this.game)
+            );
+            
+            for (const node of filteredNodes) {
+                const radius = getExclusionRadius(node, rule.radiusType, this.game);
+                this.renderExclusionCircle(node.x, node.y, radius, rule.color);
+            }
+        }
+    }
+    
+    /**
+     * Renderiza overlay del territorio válido (verde semi-transparente)
+     * @param {string} territoryType - 'ally' | 'enemy'
+     */
+    renderTerritoryOverlay(territoryType) {
+        if (!this.game || !this.game.territory) return;
+        
+        const worldWidth = this.game.worldWidth;
+        const worldHeight = this.game.worldHeight;
+        
+        // Determinar qué territorio mostrar
+        const showAllyTerritory = territoryType === 'ally';
+        const vertices = showAllyTerritory ? 
+            this.game.territory.allyFrontierVertices : 
+            this.game.territory.enemyFrontierVertices;
+        
+        if (vertices.length === 0) return;
+        
+        this.ctx.save();
+        
+        // Color verde semi-transparente para área válida
+        this.ctx.fillStyle = 'rgba(46, 204, 113, 0.15)'; // Verde claro semi-transparente
+        
+        // Determinar si estamos en mirror view
+        const myTeam = this.game.myTeam || 'player1';
+        const isPlayer2 = myTeam === 'player2';
+        const mirrorViewApplied = this.mirrorViewApplied;
+        
+        // Dibujar polígono del territorio válido
+        this.ctx.beginPath();
+        
+        if (showAllyTerritory) {
+            // Territorio aliado
+            if (mirrorViewApplied) {
+                // Player2 con mirror view: territorio aliado desde la derecha visual
+                this.ctx.moveTo(worldWidth, 0);
+                this.ctx.lineTo(worldWidth, worldHeight);
+                for (let i = vertices.length - 1; i >= 0; i--) {
+                    this.ctx.lineTo(vertices[i].x, vertices[i].y);
+                }
+            } else {
+                // Player1: territorio aliado desde la izquierda
+                this.ctx.moveTo(0, 0);
+                for (const vertex of vertices) {
+                    this.ctx.lineTo(vertex.x, vertex.y);
+                }
+                this.ctx.lineTo(0, worldHeight);
+            }
+        } else {
+            // Territorio enemigo
+            if (mirrorViewApplied) {
+                // Player2 con mirror view: territorio enemigo desde la izquierda visual
+                this.ctx.moveTo(0, 0);
+                for (const vertex of vertices) {
+                    this.ctx.lineTo(vertex.x, vertex.y);
+                }
+                this.ctx.lineTo(0, worldHeight);
+            } else {
+                // Player1: territorio enemigo desde la derecha
+                this.ctx.moveTo(worldWidth, 0);
+                this.ctx.lineTo(worldWidth, worldHeight);
+                for (let i = vertices.length - 1; i >= 0; i--) {
+                    this.ctx.lineTo(vertices[i].x, vertices[i].y);
+                }
+            }
+        }
+        
+        this.ctx.closePath();
+        this.ctx.fill();
+        
+        this.ctx.restore();
+    }
+    
+    /**
+     * Renderiza un círculo de exclusión (área donde no se puede construir)
+     * @param {number} x - Posición X del centro
+     * @param {number} y - Posición Y del centro
+     * @param {number} radius - Radio del círculo
+     * @param {string} color - Color del círculo (rgba)
+     */
+    renderExclusionCircle(x, y, radius, color) {
+        this.ctx.save();
+        
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Borde más oscuro para mejor visibilidad
+        this.ctx.strokeStyle = color.replace('0.2', '0.5').replace('0.15', '0.4').replace('0.3', '0.6');
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+        
+        this.ctx.restore();
     }
     
     renderBuildPreview(x, y, bases, buildingType = 'fob') {

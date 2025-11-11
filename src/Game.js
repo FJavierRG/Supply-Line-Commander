@@ -918,6 +918,22 @@ export class Game {
         // Renderizar territorio controlado (debajo de las bases, por encima de carreteras)
         this.territory.render(this.renderer.ctx);
         
+        // 🆕 NUEVO: Renderizar overlay de áreas válidas/inválidas cuando está en modo construcción
+        if (this.buildSystem.isActive()) {
+            if (this.buildSystem.buildMode && this.buildSystem.currentBuildingType) {
+                this.renderer.renderBuildAreaOverlay(this.buildSystem.currentBuildingType);
+            } else if (this.buildSystem.commandoMode) {
+                this.renderer.renderBuildAreaOverlay('specopsCommando');
+            }
+        }
+        
+        // 🆕 NUEVO: Renderizar overlay de áreas de exclusión para consumibles lanzables
+        if (this.buildSystem.droneMode) {
+            this.renderer.renderBuildAreaOverlay('drone');
+        } else if (this.buildSystem.fobSabotageMode) {
+            this.renderer.renderBuildAreaOverlay('fobSabotage');
+        }
+        
         // Renderizar marcas de impacto permanentes (debajo de los nodos)
         this.particleSystem.getImpactMarks().forEach(mark => this.renderer.renderImpactMark(mark));
         
