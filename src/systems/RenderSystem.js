@@ -114,23 +114,6 @@ export class RenderSystem {
         }
     }
     
-    renderBackgroundRoutes(bases) {
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-        this.ctx.lineWidth = 1;
-        
-        for (let i = 0; i < bases.length; i++) {
-            for (let j = i + 1; j < bases.length; j++) {
-                const dist = Math.hypot(bases[i].x - bases[j].x, bases[i].y - bases[j].y);
-                if (dist < 300) {
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(bases[i].x, bases[i].y);
-                    this.ctx.lineTo(bases[j].x, bases[j].y);
-                    this.ctx.stroke();
-                }
-            }
-        }
-    }
-    
     // ========== MÉTODO UNIFICADO ==========
     renderNode(node, isSelected = false, isHovered = false, game = null) {
         // Permitir renderizar nodos abandonando (necesitan animación de grises)
@@ -497,34 +480,15 @@ export class RenderSystem {
             const iconY = node.y - node.radius;
             const spriteSize = 28;
             
-            // Anillo circular de progreso alrededor del icono
+            // Anillo circular de progreso alrededor del icono (usando función genérica)
             const ringRadius = spriteSize / 2 + 4; // 4px de padding alrededor del sprite
-            const ringWidth = 3;
-            
-            this.ctx.save();
-            
-            // Anillo de fondo (gris oscuro)
-            this.ctx.beginPath();
-            this.ctx.arc(iconX, iconY, ringRadius, 0, Math.PI * 2);
-            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-            this.ctx.lineWidth = ringWidth;
-            this.ctx.stroke();
-            
-            // Anillo de progreso (amarillo a rojo según el tiempo)
-            if (progress < 1) {
-                this.ctx.beginPath();
-                // Empezar desde arriba (-PI/2) y dibujar en sentido horario
-                const startAngle = -Math.PI / 2;
-                const endAngle = startAngle + (Math.PI * 2 * (1 - progress));
-                this.ctx.arc(iconX, iconY, ringRadius, startAngle, endAngle);
-                // Color que va de amarillo (255,255,0) a rojo (255,0,0)
-                const green = Math.floor((1 - progress) * 255);
-                this.ctx.strokeStyle = `rgb(255, ${green}, 0)`;
-                this.ctx.lineWidth = ringWidth;
-                this.ctx.stroke();
-            }
-            
-            this.ctx.restore();
+            this.renderProgressRing(iconX, iconY, ringRadius, 1 - progress, {
+                width: 3,
+                colorStart: { r: 255, g: 255, b: 0 }, // Amarillo
+                colorEnd: { r: 255, g: 0, b: 0 },    // Rojo
+                reverse: true, // El progreso va en sentido contrario (se llena hacia atrás)
+                backgroundAlpha: 0.5
+            });
             
             // Renderizar sprite de emergencia médica encima del anillo
             const emergencySprite = this.assetManager?.getSprite('ui-emergency-medic');
@@ -550,6 +514,22 @@ export class RenderSystem {
         // Selector de recursos del HQ
         if ((isSelected || node === game?.hoveredNode) && node.type === 'hq') {
             this.renderResourceSelector(node);
+        }
+        
+        // 🆕 NUEVO: Anillo de duración del comando
+        if (node.isCommando && node.active) {
+            this.renderCommandoDurationRing(node, game);
+        }
+        
+        // 🆕 NUEVO: Anillo de progreso de inversión de intelRadio
+        if (node.type === 'intelRadio' && node.investmentStarted && !node.investmentCompleted) {
+            this.renderIntelRadioInvestmentRing(node, game);
+        }
+        
+        // 🆕 NUEVO: Anillo de efecto residual del comando eliminado
+        // La función renderCommandoResidualRing ya verifica correctamente el efecto activo
+        if (node.effects && node.effects.some(e => e.type === 'commandoResidual')) {
+            this.renderCommandoResidualRing(node, game);
         }
         
         // Efectos (debuffs/buffs)
@@ -822,34 +802,15 @@ export class RenderSystem {
             const iconY = base.y - base.radius;
             const spriteSize = 28;
             
-            // Anillo circular de progreso alrededor del icono
+            // Anillo circular de progreso alrededor del icono (usando función genérica)
             const ringRadius = spriteSize / 2 + 4; // 4px de padding alrededor del sprite
-            const ringWidth = 3;
-            
-            this.ctx.save();
-            
-            // Anillo de fondo (gris oscuro)
-            this.ctx.beginPath();
-            this.ctx.arc(iconX, iconY, ringRadius, 0, Math.PI * 2);
-            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-            this.ctx.lineWidth = ringWidth;
-            this.ctx.stroke();
-            
-            // Anillo de progreso (amarillo a rojo según el tiempo)
-            if (progress < 1) {
-                this.ctx.beginPath();
-                // Empezar desde arriba (-PI/2) y dibujar en sentido horario
-                const startAngle = -Math.PI / 2;
-                const endAngle = startAngle + (Math.PI * 2 * (1 - progress));
-                this.ctx.arc(iconX, iconY, ringRadius, startAngle, endAngle);
-                // Color que va de amarillo (255,255,0) a rojo (255,0,0)
-                const green = Math.floor((1 - progress) * 255);
-                this.ctx.strokeStyle = `rgb(255, ${green}, 0)`;
-                this.ctx.lineWidth = ringWidth;
-                this.ctx.stroke();
-            }
-            
-            this.ctx.restore();
+            this.renderProgressRing(iconX, iconY, ringRadius, 1 - progress, {
+                width: 3,
+                colorStart: { r: 255, g: 255, b: 0 }, // Amarillo
+                colorEnd: { r: 255, g: 0, b: 0 },    // Rojo
+                reverse: true, // El progreso va en sentido contrario (se llena hacia atrás)
+                backgroundAlpha: 0.5
+            });
             
             // Renderizar sprite de emergencia médica encima del anillo
             const emergencySprite = this.assetManager?.getSprite('ui-emergency-medic');
@@ -2196,7 +2157,7 @@ export class RenderSystem {
             
             for (const tower of enemyTowers) {
                 const towerConfig = getNodeConfig(tower.type);
-                const detectionRadius = towerConfig?.detectionRadius || tower.detectionRadius || 400;
+                const detectionRadius = towerConfig?.detectionRadius || tower.detectionRadius || 320;
                 const dist = Math.hypot(x - tower.x, y - tower.y);
                 
                 if (dist <= detectionRadius) {
@@ -2565,7 +2526,7 @@ export class RenderSystem {
             );
             
             for (const tower of vigilanceTowers) {
-                const detectionRadius = tower.detectionRadius || 400;
+                const detectionRadius = tower.detectionRadius || 320;
                 const dist = Math.hypot(hoveredBase.x - tower.x, hoveredBase.y - tower.y);
                 
                 if (dist <= detectionRadius) {
@@ -2611,6 +2572,189 @@ export class RenderSystem {
             this.ctx.closePath();
             this.ctx.stroke();
         }
+    }
+    
+    /**
+     * Renderiza el cursor de Comando Especial Operativo
+     * 🆕 NUEVO
+     */
+    /**
+     * 🆕 NUEVO: Función genérica para renderizar anillos de progreso (reutilizable)
+     * @param {number} x - Posición X del centro
+     * @param {number} y - Posición Y del centro
+     * @param {number} radius - Radio del anillo
+     * @param {number} progress - Progreso de 0 a 1 (1 = completo, 0 = vacío)
+     * @param {Object} options - Opciones de configuración
+     * @param {number} options.width - Grosor del anillo (default: 3)
+     * @param {Object} options.colorStart - Color inicial {r, g, b} (default: {255, 255, 0} - amarillo)
+     * @param {Object} options.colorEnd - Color final {r, g, b} (default: {255, 0, 0} - rojo)
+     * @param {boolean} options.reverse - Si true, el progreso va en sentido contrario (default: false)
+     * @param {boolean} options.pulse - Si true, añade efecto de pulso (default: false)
+     * @param {number} options.pulseSpeed - Velocidad del pulso en ms (default: 300)
+     * @param {number} options.pulseRange - Rango del pulso 0-1 (default: 0.3)
+     * @param {number} options.backgroundAlpha - Alpha del anillo de fondo (default: 0.5)
+     */
+    renderProgressRing(x, y, radius, progress, options = {}) {
+        const {
+            width = 3,
+            colorStart = { r: 255, g: 255, b: 0 }, // Amarillo
+            colorEnd = { r: 255, g: 0, b: 0 },     // Rojo
+            reverse = false,
+            pulse = false,
+            pulseSpeed = 300,
+            pulseRange = 0.3,
+            backgroundAlpha = 0.5
+        } = options;
+        
+        this.ctx.save();
+        
+        // Anillo de fondo (gris oscuro)
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+        this.ctx.strokeStyle = `rgba(0, 0, 0, ${backgroundAlpha})`;
+        this.ctx.lineWidth = width;
+        this.ctx.stroke();
+        
+        // Anillo de progreso
+        if (progress > 0) {
+            // Calcular pulso si está habilitado
+            let alphaMultiplier = 1;
+            if (pulse) {
+                const pulseValue = Math.sin(Date.now() / pulseSpeed) * pulseRange + (1 - pulseRange);
+                alphaMultiplier = pulseValue;
+            }
+            
+            // Calcular color interpolado
+            const r = Math.floor(colorStart.r + (colorEnd.r - colorStart.r) * (1 - progress));
+            const g = Math.floor(colorStart.g + (colorEnd.g - colorStart.g) * (1 - progress));
+            const b = Math.floor(colorStart.b + (colorEnd.b - colorStart.b) * (1 - progress));
+            const alpha = progress * alphaMultiplier;
+            
+            this.ctx.beginPath();
+            // Empezar desde arriba (-PI/2) y dibujar en sentido horario
+            const startAngle = -Math.PI / 2;
+            const progressAngle = reverse ? (1 - progress) : progress;
+            const endAngle = startAngle + (Math.PI * 2 * progressAngle);
+            this.ctx.arc(x, y, radius, startAngle, endAngle);
+            
+            this.ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            this.ctx.lineWidth = width;
+            this.ctx.stroke();
+        }
+        
+        this.ctx.restore();
+    }
+    
+    /**
+     * 🆕 NUEVO: Renderiza el anillo de efecto residual alrededor de un edificio afectado por comando eliminado
+     * @param {Object} node - Nodo edificio afectado
+     * @param {Object} game - Instancia del juego (para obtener gameTime)
+     */
+    renderCommandoResidualRing(node, game) {
+        // Obtener gameTime del servidor (a través de network.lastGameState)
+        const gameTime = game?.network?.lastGameState?.gameTime || 0;
+        
+        if (!gameTime) return; // No renderizar si no hay gameTime disponible
+        
+        // Encontrar el efecto residual activo
+        const residualEffect = node.effects?.find(e => 
+            e.type === 'commandoResidual' && 
+            e.keepsDisabled && 
+            e.spawnTime !== undefined &&
+            e.expiresAt !== undefined &&
+            gameTime >= e.spawnTime &&
+            gameTime < e.expiresAt
+        );
+        
+        if (!residualEffect) return;
+        
+        // Calcular progreso del efecto (0 a 1, donde 1 = recién aplicado, 0 = a punto de expirar)
+        const duration = residualEffect.expiresAt - residualEffect.spawnTime;
+        const elapsed = gameTime - residualEffect.spawnTime;
+        const progress = Math.max(0, Math.min(1, 1 - (elapsed / duration)));
+        
+        // No renderizar si el efecto ya expiró o el progreso es 0
+        if (progress <= 0) return;
+        
+        // Radio del anillo (alrededor del edificio completo)
+        const nodeRadius = node.radius || 30;
+        const ringRadius = nodeRadius + 8; // 8px de padding alrededor del edificio
+        
+        // Usar función genérica de anillo de progreso
+        // El progreso muestra el tiempo restante (1 = recién aplicado, 0 = a punto de expirar)
+        this.renderProgressRing(node.x, node.y, ringRadius, progress, {
+            width: 4,
+            colorStart: { r: 255, g: 100, b: 0 }, // Naranja (recién aplicado)
+            colorEnd: { r: 255, g: 0, b: 0 },     // Rojo (a punto de expirar)
+            pulse: true,
+            pulseSpeed: 300,
+            pulseRange: 0.3,
+            backgroundAlpha: 0.4
+        });
+    }
+    
+    /**
+     * 🆕 NUEVO: Renderiza el anillo de duración del comando
+     * @param {Object} node - Nodo comando
+     * @param {Object} game - Instancia del juego (para obtener gameTime)
+     */
+    renderCommandoDurationRing(node, game) {
+        if (!node.isCommando || !node.expiresAt) return;
+        
+        // Obtener gameTime del servidor (a través de network.lastGameState)
+        const gameTime = game?.network?.lastGameState?.gameTime || 0;
+        if (!gameTime) return;
+        
+        // Calcular progreso del comando (0 a 1, donde 1 = recién creado, 0 = a punto de expirar)
+        let progress = 1;
+        if (node.spawnTime && node.expiresAt) {
+            const duration = node.expiresAt - node.spawnTime;
+            const elapsed = gameTime - node.spawnTime;
+            progress = Math.max(0, Math.min(1, 1 - (elapsed / duration)));
+        }
+        
+        // Radio del anillo (alrededor del comando completo)
+        const nodeRadius = node.radius || 25;
+        const ringRadius = nodeRadius + 6; // 6px de padding alrededor del comando
+        
+        // Usar función genérica de anillo de progreso
+        this.renderProgressRing(node.x, node.y, ringRadius, progress, {
+            width: 3,
+            colorStart: { r: 0, g: 255, b: 0 },   // Verde (recién creado)
+            colorEnd: { r: 255, g: 165, b: 0 },  // Naranja (a punto de expirar)
+            pulse: true,
+            pulseSpeed: 400,
+            pulseRange: 0.2,
+            backgroundAlpha: 0.3
+        });
+    }
+    
+    /**
+     * 🆕 NUEVO: Renderiza el anillo de progreso de inversión de intelRadio
+     * @param {Object} node - Nodo intelRadio
+     * @param {Object} game - Instancia del juego (no se usa, pero se mantiene para consistencia)
+     */
+    renderIntelRadioInvestmentRing(node, game) {
+        if (!node.investmentStarted || node.investmentCompleted || !node.investmentTime) return;
+        
+        // Calcular progreso de la inversión (0 a 1, donde 1 = recién iniciado, 0 = a punto de completar)
+        const progress = Math.max(0, Math.min(1, (node.investmentTimer || 0) / node.investmentTime));
+        
+        // Radio del anillo (alrededor del edificio completo)
+        const nodeRadius = node.radius || 30;
+        const ringRadius = nodeRadius + 6; // 6px de padding alrededor del edificio
+        
+        // Usar función genérica de anillo de progreso
+        // El progreso va de 0 a 1, pero queremos mostrar el tiempo restante (1 - progress)
+        this.renderProgressRing(node.x, node.y, ringRadius, 1 - progress, {
+            width: 3,
+            colorStart: { r: 0, g: 200, b: 255 },  // Azul claro (recién iniciado)
+            colorEnd: { r: 0, g: 255, b: 0 },      // Verde (a punto de completar)
+            pulse: true,
+            pulseSpeed: 500,
+            pulseRange: 0.15,
+            backgroundAlpha: 0.3
+        });
     }
     
     /**

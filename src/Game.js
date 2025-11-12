@@ -906,8 +906,6 @@ export class Game {
         // Renderizar fondo del mundo expandido
         this.renderer.renderBackground();
         this.renderer.renderGrid();
-        this.renderer.renderBackgroundRoutes(this.nodes);
-        
         
         // Carreteras debajo del territorio y de todo lo demás (solo por encima del fondo)
         this.roadSystem.render(this.renderer.ctx, this.assetManager);
@@ -1499,9 +1497,14 @@ export class Game {
     
     /**
      * 🆕 SERVIDOR COMO AUTORIDAD: Maneja solicitud de tanque
+     * ⚠️ DEPRECATED: Este método ya no se usa. El flujo correcto es BuildingSystem.launchTank() → network.requestTank()
+     * El servidor maneja toda la validación y consumo de dinero autoritativamente.
      * @param {Object} targetBase - Base objetivo del tanque
      */
     handleTankRequest(targetBase) {
+        // ⚠️ DEPRECATED: Este método ya no se usa en el flujo normal
+        // El consumo de dinero y validación se hace en el servidor
+        // Solo mantener para compatibilidad si se llama desde algún lugar legacy
         
         // Validar objetivo (no puede atacar FOBs ni HQs)
         const validTargetTypes = ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
@@ -1511,14 +1514,10 @@ export class Game {
             return;
         }
         
-        // Validar currency
-        const tankCost = this.serverBuildingConfig?.costs?.tank || 0;
+        // ⚠️ NO CONSUMIR DINERO AQUÍ - El servidor lo hace autoritativamente
+        // Solo validar UI para feedback inmediato
         if (!this.canAffordBuilding('tank')) {
-            return;
-        }
-        
-        // Descontar currency
-        if (!this.spendMissionCurrency(tankCost)) {
+            console.log('⚠️ No tienes suficiente currency para tanque');
             return;
         }
         
@@ -1536,14 +1535,15 @@ export class Game {
     
     /**
      * 🆕 SERVIDOR COMO AUTORIDAD: Maneja solicitud de sniper
-     * @param {Object} targetFront - Frente objetivo del sniper
+     * @param {Object} targetFront - Frente o comando objetivo del sniper
      */
     handleSniperRequest(targetFront) {
         
-        // Validar objetivo
-        const isEnemyFront = targetFront.team !== this.myTeam && targetFront.type === 'front';
+        // 🆕 NUEVO: Validar objetivo (puede ser frente o comando enemigo)
+        const isValidTarget = targetFront.team !== this.myTeam && 
+                              (targetFront.type === 'front' || targetFront.type === 'specopsCommando');
         
-        if (!isEnemyFront) {
+        if (!isValidTarget) {
             return;
         }
         
@@ -1648,8 +1648,10 @@ export class Game {
             return;
         }
         
-        // Descontar currency
-        if (!this.spendMissionCurrency(commandoConfig.cost || 200)) {
+        // Descontar currency (el servidor es la autoridad)
+        // El costo viene de serverBuildingConfig.costs.specopsCommando
+        const commandoCost = this.serverBuildingConfig?.costs?.specopsCommando || commandoConfig.cost || 70;
+        if (!this.spendMissionCurrency(commandoCost)) {
             return;
         }
         

@@ -23,7 +23,7 @@ export const SERVER_NODE_CONFIG = {
         drone: 150,
         sniperStrike: 40,
         fobSabotage: 40,
-        specopsCommando: 200,  // 🆕 NUEVO: Comando especial operativo
+        specopsCommando: 70,  // 🆕 NUEVO: Comando especial operativo
         tank: 100  // 🆕 NUEVO: Tanque - similar al dron pero no puede atacar FOBs ni HQs
     },
 
@@ -80,14 +80,14 @@ export const SERVER_NODE_CONFIG = {
     actions: {
         sniperStrike: {
             cost: 40,
-            targetType: 'front'
+            targetType: ['front', 'specopsCommando'] // 🆕 NUEVO: Puede disparar a frentes (aplica wounded) o comandos (los elimina)
         },
         fobSabotage: {
             cost: 40, // Sincronizado con src/config/nodes.js
             targetType: 'fob'
         },
         specopsCommando: {
-            cost: 200,
+            // cost: Definido en costs.specopsCommando (línea 26) - NO duplicar aquí
             targetType: 'position', // Se despliega en una posición (no un nodo específico)
             detectionRadius: 200,  // Área de efecto que deshabilita edificios enemigos
             ignoreDetectionLimits: true // No afectado por límites de detección de otros edificios
@@ -157,7 +157,7 @@ export const SERVER_NODE_CONFIG = {
         intelRadio: 120,       // Valor original (sin +15%)
         intelCenter: 130,      // 🆕 Centro de Inteligencia
         aerialBase: 130,        // 🆕 Base Aérea
-        vigilanceTower: 400,   // 🆕 Torre de Vigilancia (radio de protección para comandos - 400px)
+        vigilanceTower: 320,   // 🆕 Torre de Vigilancia (radio de protección para comandos - 320px, reducido 20%)
         trainStation: 130       // 🆕 Estación de Tren
     },
     
@@ -382,10 +382,10 @@ export const SERVER_NODE_CONFIG = {
         },
         
         // Propiedades de radio inteligencia
-        intelRadio: {
-            investmentTime: 12,
-            investmentReturn: 100
-        },
+        // 🆕 NUEVO: investmentTime e investmentReturn están en effects.intelRadio (línea 62-64)
+        // NO duplicar aquí - usar effects.intelRadio como fuente única de verdad
+        // (Objeto vacío para mantener estructura, pero valores están en effects.intelRadio)
+        intelRadio: {},
         
         // Propiedades de sniper
         sniperStrike: {
@@ -402,7 +402,8 @@ export const SERVER_NODE_CONFIG = {
         // Propiedades de comando especial operativo
         specopsCommando: {
             detectionRadius: 200,  // Área de efecto en píxeles
-            disableDuration: -1    // -1 = permanente hasta que el comando sea destruido
+            duration: 10,           // Duración en segundos antes de que el comando expire (10s)
+            residualDisabledDuration: 3  // 🆕 NUEVO: Duración en segundos que los edificios permanecen disabled después de eliminar el comando (3s)
         },
         
         // Activar / Desactivar nodos por completo, usar para dev y testing
@@ -442,7 +443,7 @@ export const SERVER_NODE_CONFIG = {
                 showRangePreview: true
             },
             sniperStrike: {
-                targetType: 'front',
+                targetType: ['front', 'specopsCommando'], // 🆕 NUEVO: Puede disparar a frentes (aplica wounded) o comandos (los elimina)
                 cursorSprite: 'sniper'
             },
             fobSabotage: {

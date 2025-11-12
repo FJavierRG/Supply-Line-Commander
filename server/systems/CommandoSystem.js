@@ -1,32 +1,81 @@
 // ===== SISTEMA DE COMANDO ESPECIAL OPERATIVO =====
 // Maneja el efecto de deshabilitar edificios enemigos dentro del área del comando
 
+import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
+
 export class CommandoSystem {
     constructor(gameState) {
         this.gameState = gameState;
     }
     
     /**
+     * Obtiene el radio del hitbox de un nodo
+     * 🆕 NUEVO: Helper para calcular si un edificio está dentro del área del comando
+     * @param {Object} node - Nodo del juego
+     * @returns {number} Radio del hitbox en píxeles
+     */
+    getNodeHitboxRadius(node) {
+        // Intentar obtener hitboxRadius del servidor primero
+        const hitboxRadii = SERVER_NODE_CONFIG.security?.hitboxRadius || {};
+        if (hitboxRadii[node.type]) {
+            return hitboxRadii[node.type];
+        }
+        
+        // Fallback: usar radius del nodo o configuración por defecto
+        return node.radius || SERVER_NODE_CONFIG.radius?.[node.type] || 30;
+    }
+    
+    /**
      * Actualiza el sistema de comandos
      * Deshabilita edificios enemigos dentro del área de detección de cada comando
+     * 🆕 NUEVO: También verifica y elimina comandos expirados (optimizado: solo cuando se procesan)
      * @param {number} dt - Delta time en segundos
      */
     update(dt) {
-        // Encontrar todos los comandos activos
-        const commandos = this.gameState.nodes.filter(n => 
-            n.isCommando && 
-            n.active && 
-            n.constructed &&
-            !n.isAbandoning
-        );
+        // Encontrar todos los comandos activos y verificar expiración en el mismo paso (más eficiente)
+        const commandos = [];
+        const expiredCommandos = [];
+        
+        for (const node of this.gameState.nodes) {
+            if (!node.isCommando || !node.active || !node.constructed || node.isAbandoning) {
+                continue;
+            }
+            
+            // 🆕 NUEVO: Verificar expiración solo cuando procesamos comandos (no en loop separado)
+            if (node.expiresAt && this.gameState.gameTime >= node.expiresAt) {
+                // Comando expirado: marcar para eliminación
+                node.active = false;
+                node.isAbandoning = true;
+                expiredCommandos.push(node.id);
+                console.log(`⏰ Comando ${node.id} expirado después de ${(this.gameState.gameTime - node.spawnTime).toFixed(1)}s`);
+                continue; // No incluirlo en la lista de comandos activos
+            }
+            
+            // Comando activo y no expirado
+            commandos.push(node);
+        }
         
         if (commandos.length === 0) {
             // Si no hay comandos, resetear disabled de todos los nodos que fueron deshabilitados por comandos
             // (mantenemos disabledByCommando como tracking interno para saber qué resetear)
+            // 🆕 NUEVO: NO resetear si tiene efecto residual activo (commandoResidual)
             for (const node of this.gameState.nodes) {
                 if (node.disabledByCommando) {
-                    node.disabled = false;
-                    node.disabledByCommando = false;
+                    // Verificar si tiene efecto residual activo
+                    const hasResidualEffect = node.effects && node.effects.some(e => 
+                        e.type === 'commandoResidual' && 
+                        e.keepsDisabled && 
+                        (!e.expiresAt || this.gameState.gameTime < e.expiresAt)
+                    );
+                    
+                    // Solo resetear si NO tiene efecto residual activo
+                    if (!hasResidualEffect) {
+                        node.disabled = false;
+                        node.disabledByCommando = false;
+                    } else {
+                        // Mantener disabled si tiene efecto residual
+                        node.disabled = true;
+                    }
                 }
             }
             // Recalcular maxVehicles del HQ después de resetear disabled
@@ -37,10 +86,21 @@ export class CommandoSystem {
         // Resetear estado de deshabilitación de todos los edificios afectados anteriormente por comandos
         // (para recalcular desde cero cada frame)
         // NOTA: disabledByCommando es solo tracking interno; la propiedad principal es disabled
+        // 🆕 NUEVO: NO resetear si tiene efecto residual activo (commandoResidual)
         for (const node of this.gameState.nodes) {
             if (node.disabledByCommando) {
-                node.disabled = false;
-                node.disabledByCommando = false;
+                // Verificar si tiene efecto residual activo
+                const hasResidualEffect = node.effects && node.effects.some(e => 
+                    e.type === 'commandoResidual' && 
+                    e.keepsDisabled && 
+                    (!e.expiresAt || this.gameState.gameTime < e.expiresAt)
+                );
+                
+                // Solo resetear si NO tiene efecto residual activo
+                if (!hasResidualEffect) {
+                    node.disabled = false;
+                    node.disabledByCommando = false;
+                }
             }
         }
         
@@ -62,11 +122,13 @@ export class CommandoSystem {
                     continue;
                 }
                 
-                // Calcular distancia desde el comando
+                // 🆕 NUEVO: Calcular distancia considerando el hitbox del edificio
+                // Un edificio está afectado si cualquier parte de su hitbox está dentro del área del comando
                 const dist = Math.hypot(node.x - commando.x, node.y - commando.y);
+                const nodeHitboxRadius = this.getNodeHitboxRadius(node);
                 
-                // Si está dentro del área de detección, deshabilitar
-                if (dist <= detectionRadius) {
+                // Si el hitbox del edificio entra en el área de detección, deshabilitar
+                if (dist <= (detectionRadius + nodeHitboxRadius)) {
                     node.disabled = true;
                     node.disabledByCommando = true; // Tracking interno para saber qué resetear
                 }
@@ -152,8 +214,18 @@ export class CommandoSystem {
         );
         
         return commandos.filter(commando => {
+            // 🆕 NUEVO: Verificar que el comando no haya expirado
+            if (commando.expiresAt && this.gameState.gameTime >= commando.expiresAt) {
+                return false;
+            }
+            
+            // 🆕 NUEVO: Usar el mismo cálculo que en update() para consistencia
+            const detectionRadius = commando.detectionRadius || 200;
             const dist = Math.hypot(node.x - commando.x, node.y - commando.y);
-            return dist <= (commando.detectionRadius || 200);
+            const nodeHitboxRadius = this.getNodeHitboxRadius(node);
+            
+            // Un edificio está afectado si cualquier parte de su hitbox está dentro del área del comando
+            return dist <= (detectionRadius + nodeHitboxRadius);
         });
     }
 }

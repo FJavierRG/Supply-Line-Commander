@@ -8,6 +8,7 @@ export class CombatHandler {
     
     /**
      * Maneja disparo de francotirador
+     * 🆕 NUEVO: Puede disparar a frentes (aplica efecto wounded) o comandos (los elimina)
      */
     handleSniperStrike(playerTeam, targetId) {
         const targetNode = this.gameState.nodes.find(n => n.id === targetId);
@@ -16,9 +17,19 @@ export class CombatHandler {
             return { success: false, reason: 'Objetivo no encontrado' };
         }
         
-        // Validar que sea un frente enemigo
-        if (targetNode.type !== 'front' || targetNode.team === playerTeam) {
-            return { success: false, reason: 'Solo puedes disparar a frentes enemigos' };
+        // 🆕 NUEVO: Validar que sea un frente o comando enemigo
+        const isValidTarget = (targetNode.type === 'front' || targetNode.type === 'specopsCommando') && 
+                              targetNode.team !== playerTeam;
+        
+        if (!isValidTarget) {
+            return { success: false, reason: 'Solo puedes disparar a frentes o comandos enemigos' };
+        }
+        
+        // Validar que el objetivo esté activo y construido (si es comando)
+        if (targetNode.type === 'specopsCommando') {
+            if (!targetNode.active || !targetNode.constructed || targetNode.isAbandoning) {
+                return { success: false, reason: 'El comando no está disponible como objetivo' };
+            }
         }
         
         // Costo del sniper
@@ -32,26 +43,67 @@ export class CombatHandler {
         // Descontar currency
         this.gameState.currency[playerTeam] -= sniperCost;
         
-        // Aplicar efecto "wounded"
-        const woundedConfig = SERVER_NODE_CONFIG.temporaryEffects.wounded;
-        const originalConsumeRate = targetNode.consumeRate || 1.6;
-        targetNode.consumeRate = originalConsumeRate * woundedConfig.consumeMultiplier;
-        
-        // Añadir efecto con expiración
-        if (!targetNode.effects) targetNode.effects = [];
-        
-        const woundedEffect = {
-            type: 'wounded',
-            icon: woundedConfig.icon,
-            tooltip: woundedConfig.tooltip,
-            expiresAt: this.gameState.gameTime + woundedConfig.duration
-        };
-        
-        targetNode.effects.push(woundedEffect);
-        
-        console.log(`🎯 Sniper de ${playerTeam} disparó a frente ${targetId} - Consumo: ${originalConsumeRate} → ${targetNode.consumeRate} por ${woundedConfig.duration}s`);
-        
-        return { success: true, targetId, effect: woundedEffect };
+        // 🆕 NUEVO: Lógica condicional según el tipo de objetivo
+        if (targetNode.type === 'specopsCommando') {
+            // Guardar coordenadas antes de eliminar (para el feed de kill)
+            const targetX = targetNode.x;
+            const targetY = targetNode.y;
+            
+            // 🆕 NUEVO: Obtener todos los edificios afectados por este comando ANTES de eliminarlo
+            const affectedBuildings = this.getAffectedBuildingsByCommando(targetNode);
+            
+            // Eliminar el comando (marcar para abandono)
+            targetNode.active = false;
+            targetNode.isAbandoning = true;
+            // El AbandonmentSystem lo limpiará automáticamente cuando abandonPhase === 3
+            
+            // 🆕 NUEVO: Aplicar efecto residual de disabled a los edificios afectados
+            const residualDuration = SERVER_NODE_CONFIG.gameplay.specopsCommando.residualDisabledDuration;
+            this.applyResidualDisabledEffect(affectedBuildings, residualDuration);
+            
+            console.log(`🎯 Sniper de ${playerTeam} eliminó comando ${targetId} en (${targetX.toFixed(0)}, ${targetY.toFixed(0)}) - ${affectedBuildings.length} edificios afectados por ${residualDuration}s`);
+            if (affectedBuildings.length > 0) {
+                console.log(`   📋 Edificios afectados: ${affectedBuildings.map(b => `${b.type}(${b.id.substring(0, 8)})`).join(', ')}`);
+            }
+            
+            return { 
+                success: true, 
+                targetId, 
+                eliminated: true, 
+                targetType: 'commando',
+                targetX, // 🆕 Coordenadas para el feed de kill
+                targetY,
+                affectedBuildings: affectedBuildings.map(b => b.id) // 🆕 IDs de edificios afectados
+            };
+        } else {
+            // Aplicar efecto "wounded" al frente (lógica original)
+            const woundedConfig = SERVER_NODE_CONFIG.temporaryEffects.wounded;
+            const originalConsumeRate = targetNode.consumeRate || 1.6;
+            targetNode.consumeRate = originalConsumeRate * woundedConfig.consumeMultiplier;
+            
+            // Añadir efecto con expiración
+            if (!targetNode.effects) targetNode.effects = [];
+            
+            const woundedEffect = {
+                type: 'wounded',
+                icon: woundedConfig.icon,
+                tooltip: woundedConfig.tooltip,
+                expiresAt: this.gameState.gameTime + woundedConfig.duration
+            };
+            
+            targetNode.effects.push(woundedEffect);
+            
+            console.log(`🎯 Sniper de ${playerTeam} disparó a frente ${targetId} - Consumo: ${originalConsumeRate} → ${targetNode.consumeRate} por ${woundedConfig.duration}s`);
+            
+            return { 
+                success: true, 
+                targetId, 
+                effect: woundedEffect, 
+                targetType: 'front',
+                targetX: targetNode.x, // 🆕 Coordenadas para el feed de kill
+                targetY: targetNode.y
+            };
+        }
     }
     
     /**
@@ -79,7 +131,7 @@ export class CombatHandler {
         );
         
         for (const tower of vigilanceTowers) {
-            const detectionRadius = tower.detectionRadius || 400;
+            const detectionRadius = tower.detectionRadius || 320;
             const dist = Math.hypot(targetNode.x - tower.x, targetNode.y - tower.y);
             
             if (dist <= detectionRadius) {
@@ -226,7 +278,8 @@ export class CombatHandler {
      */
     handleCommandoDeploy(playerTeam, x, y) {
         const commandoConfig = SERVER_NODE_CONFIG.actions.specopsCommando;
-        const commandoCost = commandoConfig.cost;
+        // 🆕 NUEVO: Usar costo de costs.specopsCommando (igual que otros edificios)
+        const commandoCost = SERVER_NODE_CONFIG.costs.specopsCommando;
         const commandoDetectionRadius = commandoConfig.detectionRadius || SERVER_NODE_CONFIG.specialNodes?.specopsCommando?.detectionRadius || 200;
         
         // Verificar currency
@@ -250,7 +303,7 @@ export class CombatHandler {
         );
         
         for (const tower of vigilanceTowers) {
-            const detectionRadius = tower.detectionRadius || 400;
+            const detectionRadius = tower.detectionRadius || 320;
             const dist = Math.hypot(x - tower.x, y - tower.y);
             
             if (dist <= detectionRadius) {
@@ -277,12 +330,89 @@ export class CombatHandler {
         commandoNode.detectionRadius = commandoDetectionRadius;
         commandoNode.isCommando = true;
         
+        // 🆕 NUEVO: Añadir tiempo de expiración del comando
+        const commandoDuration = SERVER_NODE_CONFIG.gameplay?.specopsCommando?.duration || 10;
+        commandoNode.spawnTime = this.gameState.gameTime;
+        commandoNode.expiresAt = this.gameState.gameTime + commandoDuration;
+        
         // Agregar al estado del juego
         this.gameState.nodes.push(commandoNode);
         
-        console.log(`🎖️ Comando especial operativo desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)}) - Radio: ${commandoDetectionRadius}px`);
+        console.log(`🎖️ Comando especial operativo desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)}) - Radio: ${commandoDetectionRadius}px, Duración: ${commandoDuration}s`);
         
         return { success: true, commando: commandoNode };
+    }
+    
+    /**
+     * 🆕 NUEVO: Obtiene todos los edificios afectados por un comando específico
+     * @param {Object} commando - Nodo comando
+     * @returns {Array} Array de nodos edificios afectados
+     */
+    getAffectedBuildingsByCommando(commando) {
+        const detectionRadius = commando.detectionRadius || 200;
+        const commandoTeam = commando.team;
+        const affectedBuildings = [];
+        
+        // Obtener hitboxRadius del servidor (similar a CommandoSystem)
+        const hitboxRadii = SERVER_NODE_CONFIG.security?.hitboxRadius || {};
+        
+        for (const node of this.gameState.nodes) {
+            // Solo considerar edificios enemigos construidos y activos
+            if (node.team === commandoTeam || 
+                !node.active || 
+                !node.constructed ||
+                node.isAbandoning ||
+                node.type === 'hq' ||
+                node.type === 'front' ||
+                node.type === 'specopsCommando') {
+                continue;
+            }
+            
+            // Calcular distancia considerando el hitbox del edificio
+            const dist = Math.hypot(node.x - commando.x, node.y - commando.y);
+            const nodeHitboxRadius = hitboxRadii[node.type] || node.radius || SERVER_NODE_CONFIG.radius?.[node.type] || 30;
+            
+            // Si el hitbox del edificio entra en el área de detección, está afectado
+            if (dist <= (detectionRadius + nodeHitboxRadius)) {
+                affectedBuildings.push(node);
+            }
+        }
+        
+        return affectedBuildings;
+    }
+    
+    /**
+     * 🆕 NUEVO: Aplica efecto residual de disabled a edificios después de eliminar un comando
+     * @param {Array} buildings - Array de nodos edificios afectados
+     * @param {number} duration - Duración del efecto en segundos
+     */
+    applyResidualDisabledEffect(buildings, duration) {
+        const spawnTime = this.gameState.gameTime;
+        const expiresAt = spawnTime + duration;
+        
+        console.log(`🔄 Aplicando efecto residual a ${buildings.length} edificios (duración: ${duration}s, expira en: ${expiresAt.toFixed(1)}s, gameTime actual: ${spawnTime.toFixed(1)}s)`);
+        
+        for (const building of buildings) {
+            // Añadir efecto temporal
+            if (!building.effects) building.effects = [];
+            
+            const residualEffect = {
+                type: 'commandoResidual',
+                icon: 'ui-disabled',
+                tooltip: `Comando eliminado: Deshabilitado por ${duration}s`,
+                spawnTime: spawnTime, // 🆕 Tiempo de creación del efecto
+                expiresAt: expiresAt,
+                keepsDisabled: true // Flag para indicar que mantiene disabled
+            };
+            
+            building.effects.push(residualEffect);
+            
+            // Mantener disabled durante el efecto
+            building.disabled = true;
+            building.disabledByCommando = true; // Tracking interno
+            
+            console.log(`   ✅ Efecto aplicado a ${building.type}(${building.id.substring(0, 8)}): disabled=${building.disabled}, efectos=${building.effects.length}, commandoResidual=${building.effects.some(e => e.type === 'commandoResidual')}`);
+        }
     }
 }
 

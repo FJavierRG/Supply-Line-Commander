@@ -19,7 +19,7 @@ export const GAME_CONFIG = {
     // MAZOS (DECKS)
     // ═══════════════════════════════════════════════════════════════
     deck: {
-        pointLimit: 650  // 🎯 Límite de puntos por mazo (ANTI-HACK: validado en servidor)
+        pointLimit: 700  // 🎯 Límite de puntos por mazo (ANTI-HACK: validado en servidor)
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -37,7 +37,7 @@ export const GAME_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
     vehicles: {
         heavy_truck: {
-            capacity: 10,  // ✅ USADO: Cantidad de suministros por viaje
+            capacity: 15,  // ✅ USADO: Cantidad de suministros por viaje
             speed: 600     // ⚠️ LEGACY: No usado - usar convoy.vehicleSpeeds.heavy_truck
         },
         truck: {

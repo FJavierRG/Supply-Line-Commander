@@ -598,23 +598,35 @@ export class NetworkManager {
          */
         this.socket.on('sniper_fired', (data) => {
             
-            // Buscar el frente objetivo
-            const targetFront = this.game.nodes.find(n => n.id === data.targetId);
+            // Reproducir sonido de disparo
+            this.game.audio.sounds.sniperShoot.play();
             
-            if (targetFront) {
-                // Reproducir sonido de disparo
-                this.game.audio.sounds.sniperShoot.play();
-                
-                // Crear sprite flotante de sniper kill feed
-                this.game.particleSystem.createFloatingSprite(
-                    targetFront.x, 
-                    targetFront.y - 40, 
-                    'ui-sniper-kill'
-                );
-                
+            // 🆕 NUEVO: Usar coordenadas del servidor si están disponibles (más confiable)
+            // Esto asegura que el feed aparezca incluso si el nodo ya fue eliminado
+            let feedX, feedY;
+            
+            if (data.targetX !== undefined && data.targetY !== undefined) {
+                // Usar coordenadas del servidor (más confiable)
+                feedX = data.targetX;
+                feedY = data.targetY;
             } else {
-                console.warn(`⚠️ Frente objetivo ${data.targetId} no encontrado`);
+                // Fallback: buscar el nodo localmente
+                const target = this.game.nodes.find(n => n.id === data.targetId);
+                if (target) {
+                    feedX = target.x;
+                    feedY = target.y;
+                } else {
+                    console.warn(`⚠️ Objetivo sniper ${data.targetId} no encontrado y sin coordenadas del servidor`);
+                    return;
+                }
             }
+            
+            // Mostrar sprite flotante de kill feed sobre el objetivo
+            this.game.particleSystem.createFloatingSprite(
+                feedX, 
+                feedY - 40, // 40px arriba del objetivo
+                'ui-sniper-kill'
+            );
         });
         
         /**
@@ -688,6 +700,14 @@ export class NetworkManager {
                 newNode.active = true;
                 newNode.detectionRadius = data.detectionRadius || 200;
                 newNode.isCommando = true;
+                
+                // 🆕 NUEVO: Sincronizar tiempo de expiración del comando
+                if (data.spawnTime !== undefined) {
+                    newNode.spawnTime = data.spawnTime;
+                }
+                if (data.expiresAt !== undefined) {
+                    newNode.expiresAt = data.expiresAt;
+                }
                 
                 // Inicializar propiedades de interpolación para multijugador
                 if (newNode.updateServerPosition) {
@@ -810,6 +830,41 @@ export class NetworkManager {
                 }, 2000);
             }
             
+        });
+        
+        /**
+         * Manejo de lanzamiento de tanque
+         */
+        this.socket.on('tank_launched', (data) => {
+            // El servidor ya lo tiene en el estado, solo reproducir sonido si es necesario
+            console.log(`🛡️ Tanque ${data.tankId} lanzado por ${data.team} → ${data.targetId}`);
+        });
+        
+        /**
+         * Manejo de fallo en lanzamiento de tanque
+         */
+        this.socket.on('tank_failed', (data) => {
+            console.log(`⚠️ Tanque rechazado: ${data.reason}`);
+            // TODO: Mostrar mensaje visual al usuario cuando se implemente showMessage en UIManager
+        });
+        
+        /**
+         * Manejo de impacto de tanque
+         */
+        this.socket.on('tank_impact', (impact) => {
+            // Reproducir sonido de explosión
+            this.game.audio.playExplosionSound();
+            
+            // Crear explosión grande con partículas grises
+            this.game.particleSystem.createExplosion(impact.x, impact.y, '#808080', 40);
+            
+            // Añadir sprite de explosión animado
+            this.game.particleSystem.createExplosionSprite(impact.x, impact.y);
+            
+            // Crear marca de impacto permanente (cráter grande)
+            this.game.particleSystem.createImpactMark(impact.x, impact.y, 'impact_icon', 1.2);
+            
+            console.log(`💥 Tanque ${impact.tankId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`);
         });
         
         this.socket.on('cheat_success', (data) => {
@@ -1234,6 +1289,9 @@ export class NetworkManager {
             node.availableVehicles = nodeData.availableVehicles;
             
             // 🆕 NUEVO: Sincronizar propiedades de inversión (intelRadio)
+            if (nodeData.investmentTime !== undefined) {
+                node.investmentTime = nodeData.investmentTime;
+            }
             if (nodeData.investmentTimer !== undefined) {
                 node.investmentTimer = nodeData.investmentTimer;
             }
@@ -1478,6 +1536,9 @@ export class NetworkManager {
                     }
                     
                     // 🆕 NUEVO: Actualizar propiedades de inversión (intelRadio)
+                    if (nodeData.investmentTime !== undefined) {
+                        node.investmentTime = nodeData.investmentTime;
+                    }
                     if (nodeData.investmentTimer !== undefined) {
                         node.investmentTimer = nodeData.investmentTimer;
                     }
@@ -1503,6 +1564,19 @@ export class NetworkManager {
                                 'Disabled',
                                 '#ff0000' // Rojo
                             );
+                        }
+                    }
+                    
+                    // 🆕 NUEVO: Sincronizar tiempo de comando (spawnTime y expiresAt)
+                    if (node.isCommando) {
+                        if (nodeData.spawnTime !== undefined) {
+                            node.spawnTime = nodeData.spawnTime;
+                        }
+                        if (nodeData.expiresAt !== undefined) {
+                            node.expiresAt = nodeData.expiresAt;
+                        }
+                        if (nodeData.detectionRadius !== undefined) {
+                            node.detectionRadius = nodeData.detectionRadius;
                         }
                     }
                 } else {
@@ -1635,6 +1709,37 @@ export class NetworkManager {
                     // Detener sonido antes de eliminar
                     this.game.audio.stopDroneSound(this.game.droneSystem.drones[i].id);
                     this.game.droneSystem.drones.splice(i, 1);
+                }
+            }
+        }
+        
+        // === ACTUALIZAR TANQUES ===
+        if (gameState.tanks) {
+            // Actualizar tanques existentes y crear nuevos
+            gameState.tanks.forEach(tankData => {
+                let tank = this.game.tankSystem.tanks.find(t => t.id === tankData.id);
+                
+                if (tank) {
+                    // Interpolación suave: guardar posición objetivo del servidor
+                    tank.serverX = tankData.x;
+                    tank.serverY = tankData.y;
+                    tank.targetId = tankData.targetId;
+                    tank.state = tankData.state || tank.state;
+                    tank.spriteFrame = tankData.spriteFrame || tank.spriteFrame;
+                    tank.waitTimer = tankData.waitTimer || 0;
+                    tank.shootTimer = tankData.shootTimer || 0;
+                    tank.lastServerUpdate = Date.now();
+                } else {
+                    // Tanque nuevo del servidor - crear localmente usando TankSystem
+                    this.game.tankSystem.createTank(tankData);
+                }
+            });
+            
+            // Eliminar tanques que ya no existen en el servidor (completaron su misión)
+            const serverTankIds = gameState.tanks.map(t => t.id);
+            for (let i = this.game.tankSystem.tanks.length - 1; i >= 0; i--) {
+                if (!serverTankIds.includes(this.game.tankSystem.tanks[i].id)) {
+                    this.game.tankSystem.tanks.splice(i, 1);
                 }
             }
         }

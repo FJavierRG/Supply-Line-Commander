@@ -816,14 +816,20 @@ io.on('connection', (socket) => {
             const result = room.gameState.handleSniperStrike(playerTeam, targetId);
             
             if (result.success) {
-                // Broadcast a todos
+                // 🆕 NUEVO: Broadcast a todos con información completa del objetivo
                 io.to(roomId).emit('sniper_fired', {
                     shooterId: playerTeam,
                     targetId: result.targetId,
-                    effect: result.effect
+                    effect: result.effect,
+                    targetType: result.targetType || 'front', // 'front' o 'commando'
+                    eliminated: result.eliminated || false, // true si se eliminó un comando
+                    targetX: result.targetX, // 🆕 Coordenadas del objetivo (para feed de kill)
+                    targetY: result.targetY
                 });
                 
-                console.log(`🎯 Sniper disparado por ${playerTeam} → frente ${targetId}`);
+                // 🆕 NUEVO: Mensaje de log más descriptivo
+                const targetTypeName = result.targetType === 'commando' ? 'comando' : 'frente';
+                console.log(`🎯 Sniper disparado por ${playerTeam} → ${targetTypeName} ${targetId}`);
             } else {
                 socket.emit('sniper_failed', { reason: result.reason });
                 console.log(`⚠️ Sniper rechazado: ${result.reason}`);
@@ -884,7 +890,9 @@ io.on('connection', (socket) => {
                     team: playerTeam,
                     x: result.commando.x,
                     y: result.commando.y,
-                    detectionRadius: result.commando.detectionRadius
+                    detectionRadius: result.commando.detectionRadius,
+                    spawnTime: result.commando.spawnTime, // 🆕 NUEVO: Tiempo de creación
+                    expiresAt: result.commando.expiresAt  // 🆕 NUEVO: Tiempo de expiración
                 });
                 
                 console.log(`🎖️ Comando desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)})`);

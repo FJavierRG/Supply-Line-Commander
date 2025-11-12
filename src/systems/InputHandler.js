@@ -1091,11 +1091,106 @@ export class InputHandler {
     }
     
     /**
-     * Encuentra un nodo en las coordenadas dadas
+     * Calcula la prioridad de un nodo para selección según el contexto actual
+     * @param {Object} node - Nodo a evaluar
+     * @param {Object} selectedNode - Nodo actualmente seleccionado (puede ser null)
+     * @param {string} myTeam - Equipo del jugador
+     * @returns {number} Prioridad (mayor = más prioridad)
+     */
+    calculateNodePriority(node, selectedNode, myTeam) {
+        const isAlly = node.team === myTeam;
+        const isEnemy = !isAlly;
+        
+        // Base priority según tipo
+        let priority = 0;
+        
+        if (isAlly) {
+            // === REGLAS PARA NODOS ALIADOS ===
+            if (!selectedNode) {
+                // Sin selección: FOB tiene prioridad sobre Front
+                if (node.type === 'fob') return 100;
+                if (node.type === 'front') return 50;
+                if (node.type === 'hq') return 90;
+                return 10; // Otros nodos aliados
+            }
+            
+            // Con nodo seleccionado: prioridad según acciones posibles
+            if (selectedNode.type === 'fob') {
+                // Con FOB seleccionado: Front tiene prioridad (puedo enviar convoy FOB→Front)
+                if (node.type === 'front') return 100;
+                if (node.type === 'fob') return 50;
+                return 10;
+            }
+            
+            if (selectedNode.type === 'hq') {
+                // Con HQ seleccionado: FOB tiene prioridad (puedo enviar convoy HQ→FOB)
+                if (node.type === 'fob') return 100;
+                if (node.type === 'front') return 50;
+                return 10;
+            }
+            
+            // Otros nodos seleccionados: prioridad normal
+            if (node.type === 'fob') return 100;
+            if (node.type === 'front') return 50;
+            return 10;
+        } else {
+            // === REGLAS PARA NODOS ENEMIGOS ===
+            // Verificar qué acciones son posibles según el modo activo
+            const buildSystem = this.game.buildSystem;
+            
+            // Modo tanque: puede atacar edificios pero NO FOBs ni HQs
+            if (buildSystem.tankMode) {
+                const validTargetTypes = ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
+                if (validTargetTypes.includes(node.type)) {
+                    // Puede atacar este tipo, pero no FOBs ni Fronts
+                    return 100;
+                }
+                if (node.type === 'fob' || node.type === 'front') {
+                    return 0; // No puede atacar estos
+                }
+                return 10;
+            }
+            
+            // Modo sniper: puede atacar Fronts Y Comandos enemigos
+            if (buildSystem.sniperMode) {
+                if (node.type === 'front') return 100;
+                // 🆕 NUEVO: Permitir seleccionar comandos enemigos como objetivo
+                if (node.type === 'specopsCommando' && node.team !== this.game.myTeam && node.active && !node.isAbandoning) return 90;
+                if (node.type === 'fob') return 50;
+                return 10;
+            }
+            
+            // Modo drone: puede atacar cualquier nodo enemigo (incluyendo FOBs)
+            if (buildSystem.droneMode) {
+                if (node.type === 'fob' || node.type === 'hq') return 100;
+                if (node.type === 'front') return 50;
+                return 10;
+            }
+            
+            // Modo fobSabotage: solo puede atacar FOBs
+            if (buildSystem.fobSabotageMode) {
+                if (node.type === 'fob') return 100;
+                return 0; // No puede atacar otros tipos
+            }
+            
+            // Sin modo especial: prioridad normal (FOB > Front)
+            if (node.type === 'fob') return 100;
+            if (node.type === 'front') return 50;
+            return 10;
+        }
+    }
+    
+    /**
+     * Encuentra un nodo en las coordenadas dadas con prioridad dinámica
      */
     getNodeAt(x, y) {
         // Tutorial simple: no hay nodos interactivos
         const nodes = this.game.nodes;
+        const myTeam = this.game.myTeam || 'player1';
+        const selectedNode = this.game.selectedNode;
+        
+        // Encontrar TODOS los nodos que están dentro del hitbox
+        const overlappingNodes = [];
         
         for (const node of nodes) {
             if (!node.active) continue;
@@ -1108,10 +1203,33 @@ export class InputHandler {
             const dist = Math.hypot(x - node.x, y - node.y);
             const effectiveHitboxRadius = (node.hitboxRadius || node.radius) * hitboxMultiplier;
             if (dist < effectiveHitboxRadius) {
-                return node;
+                overlappingNodes.push(node);
             }
         }
-        return null;
+        
+        // Si no hay nodos superpuestos, retornar null
+        if (overlappingNodes.length === 0) {
+            return null;
+        }
+        
+        // Si solo hay uno, retornarlo directamente
+        if (overlappingNodes.length === 1) {
+            return overlappingNodes[0];
+        }
+        
+        // Si hay múltiples nodos superpuestos, calcular prioridad y retornar el de mayor prioridad
+        let bestNode = null;
+        let bestPriority = -1;
+        
+        for (const node of overlappingNodes) {
+            const priority = this.calculateNodePriority(node, selectedNode, myTeam);
+            if (priority > bestPriority) {
+                bestPriority = priority;
+                bestNode = node;
+            }
+        }
+        
+        return bestNode;
     }
     
     /**

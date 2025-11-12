@@ -68,6 +68,14 @@ export class StateSerializer {
             return true;
         }
         
+        // 🆕 NUEVO: Cambios en tiempo de comando (spawnTime y expiresAt)
+        if (node.isCommando) {
+            if (node.spawnTime !== lastNodeState.spawnTime ||
+                node.expiresAt !== lastNodeState.expiresAt) {
+                return true;
+            }
+        }
+        
         return false;
     }
     
@@ -96,7 +104,10 @@ export class StateSerializer {
                     abandonPhase: node.abandonPhase,
                     abandonStartTime: node.abandonStartTime || 0, // Timestamp para calcular tiempo transcurrido
                     effects: node.effects ? [...node.effects] : [],
-                    disabled: node.disabled || false // 🆕 NUEVO: Estado disabled
+                    disabled: node.disabled || false, // 🆕 NUEVO: Estado disabled
+                    // 🆕 NUEVO: Tiempo de comando
+                    spawnTime: node.spawnTime,
+                    expiresAt: node.expiresAt
                 });
                 
                 return {
@@ -138,7 +149,11 @@ export class StateSerializer {
                     investmentCompleted: node.investmentCompleted || false,
                     abandonPhase1Duration: node.abandonPhase1Duration || 2000,
                     abandonPhase2Duration: node.abandonPhase2Duration || 3000,
-                    disabled: node.disabled || false // 🆕 NUEVO: Estado disabled (genérico)
+                    disabled: node.disabled || false, // 🆕 NUEVO: Estado disabled (genérico)
+                    // 🆕 NUEVO: Propiedades de comando (spawnTime y expiresAt)
+                    spawnTime: node.isCommando ? node.spawnTime : undefined,
+                    expiresAt: node.isCommando ? node.expiresAt : undefined,
+                    detectionRadius: node.isCommando ? node.detectionRadius : undefined
                 };
             });
     }
@@ -220,7 +235,10 @@ export class StateSerializer {
                     ambulanceAvailable: node.ambulanceAvailable,
                     isAbandoning: node.isAbandoning,
                     effects: node.effects ? [...node.effects] : [],
-                    disabled: node.disabled || false // 🆕 NUEVO: Estado disabled
+                    disabled: node.disabled || false, // 🆕 NUEVO: Estado disabled
+                    // 🆕 NUEVO: Tiempo de comando
+                    spawnTime: node.spawnTime,
+                    expiresAt: node.expiresAt
                 });
                 
                 return {
@@ -262,7 +280,11 @@ export class StateSerializer {
                     investmentCompleted: node.investmentCompleted || false,
                     abandonPhase1Duration: node.abandonPhase1Duration || 2000,
                     abandonPhase2Duration: node.abandonPhase2Duration || 3000,
-                    disabled: node.disabled || false // 🆕 NUEVO: Estado disabled (genérico)
+                    disabled: node.disabled || false, // 🆕 NUEVO: Estado disabled (genérico)
+                    // 🆕 NUEVO: Propiedades de comando (spawnTime y expiresAt)
+                    spawnTime: node.isCommando ? node.spawnTime : undefined,
+                    expiresAt: node.isCommando ? node.expiresAt : undefined,
+                    detectionRadius: node.isCommando ? node.detectionRadius : undefined
                 };
             });
     }

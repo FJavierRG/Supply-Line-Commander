@@ -105,7 +105,7 @@ export const BUILD_AREA_VISUAL = {
                                          !node.isAbandoning;
                     return isEnemyTower;
                 },
-                radiusType: 'detectionRadius', // Usar radio de detección de la torre (400px)
+                radiusType: 'detectionRadius', // Usar radio de detección de la torre (320px, reducido 20%)
                 color: 'rgba(255, 0, 0, 0.25)' // Rojo semi-transparente para áreas bloqueadas
             }
         ]

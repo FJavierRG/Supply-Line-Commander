@@ -616,10 +616,10 @@ export class BuildingSystem {
             return;
         }
         
-        // Verificar currency
-        const commandoConfig = getNodeConfig('specopsCommando');
+        // Verificar currency (usa serverBuildingConfig.costs.specopsCommando)
         if (!this.canAffordBuilding('specopsCommando')) {
-            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${commandoConfig?.cost || 200})`);
+            const commandoCost = this.getBuildingCost('specopsCommando');
+            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${commandoCost})`);
             return;
         }
         

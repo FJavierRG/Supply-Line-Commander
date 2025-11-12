@@ -299,7 +299,7 @@ export class BuildHandler {
         } else if (type === 'vigilanceTower') {
             // 🆕 NUEVO: Torre de Vigilancia - counterea comandos
             node.isVigilanceTower = true;
-            node.detectionRadius = SERVER_NODE_CONFIG.detectionRadius.vigilanceTower || 400;
+            node.detectionRadius = SERVER_NODE_CONFIG.detectionRadius.vigilanceTower || 320;
             node.hasSupplies = false;
             node.hasVehicles = false;
             
@@ -320,7 +320,7 @@ export class BuildHandler {
      * @param {Object} tower - Nodo de la torre de vigilancia
      */
     eliminateEnemyCommandosInRange(tower) {
-        const detectionRadius = tower.detectionRadius || 400;
+        const detectionRadius = tower.detectionRadius || 320;
         const towerTeam = tower.team;
         
         // Buscar comandos enemigos dentro del área

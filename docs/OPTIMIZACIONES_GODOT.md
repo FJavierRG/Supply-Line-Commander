@@ -304,3 +304,5 @@ No fuerces la lógica de JavaScript si Godot tiene una mejor manera de hacerlo.
 
 
 
+
+
