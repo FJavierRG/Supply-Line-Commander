@@ -190,6 +190,16 @@ export const NODE_CONFIG = {
         isDroneWorkshop: true // Flag para identificación
     },
     
+    vehicleWorkshop: {
+        id: 'vehicleWorkshop',
+        spriteKey: 'vehicle_workshop',
+        category: 'buildable',
+        
+        radius: 35, // Tamaño visual del sprite
+        
+        isVehicleWorkshop: true // Flag para identificación
+    },
+    
     // ========== PROYECTILES ==========
     drone: {
         id: 'drone',
@@ -229,6 +239,16 @@ export const NODE_CONFIG = {
         
         
         radius: 25, // 🆕 Radio físico del comando
+       
+    },
+    
+    truckAssault: {
+        id: 'truckAssault',
+        spriteKey: 'truckassault', // 🆕 NUEVO: Sprite del truck assault
+        category: 'projectile',
+        
+        
+        radius: 25, // Radio físico del truck assault
        
     },
     

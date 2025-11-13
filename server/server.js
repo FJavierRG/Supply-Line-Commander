@@ -906,6 +906,41 @@ io.on('connection', (socket) => {
     });
     
     /**
+     * 🆕 NUEVO: Despliegue de truck assault
+     */
+    socket.on('truck_assault_deploy_request', (data) => {
+        const { roomId, x, y } = data;
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room || !room.gameState) throw new Error('Partida no iniciada');
+            
+            const playerTeam = roomManager.getPlayerTeam(roomId, socket.id);
+            const result = room.gameState.combatHandler.handleTruckAssaultDeploy(playerTeam, x, y);
+            
+            if (result.success) {
+                // Broadcast a todos
+                io.to(roomId).emit('truck_assault_deployed', {
+                    truckAssaultId: result.truckAssault.id,
+                    team: playerTeam,
+                    x: result.truckAssault.x,
+                    y: result.truckAssault.y,
+                    detectionRadius: result.truckAssault.detectionRadius,
+                    spawnTime: result.truckAssault.spawnTime,
+                    expiresAt: result.truckAssault.expiresAt
+                });
+                
+                console.log(`🚛 Truck Assault desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)})`);
+            } else {
+                socket.emit('truck_assault_deploy_failed', { reason: result.reason });
+                console.log(`⚠️ Despliegue de truck assault rechazado: ${result.reason}`);
+            }
+        } catch (error) {
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
+    /**
      * CHEAT: Dar currency (solo para testing)
      */
     socket.on('cheat_add_currency', (data) => {

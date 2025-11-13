@@ -862,6 +862,9 @@ export class ArsenalManager {
         // Verificar si el comando está bloqueado (solo si buildSystem está disponible)
         const isCommandoLocked = this.buildSystem && item.id === 'specopsCommando' && !this.buildSystem.hasIntelCenter();
         
+        // Verificar si el truck assault está bloqueado (solo si buildSystem está disponible)
+        const isTruckAssaultLocked = this.buildSystem && item.id === 'truckAssault' && !this.buildSystem.hasIntelCenter();
+        
         // 🆕 NUEVO: Verificar si se puede añadir sin exceder límite de puntos
         let canAddCheck = { canAdd: true, reason: '' };
         try {
@@ -871,17 +874,26 @@ export class ArsenalManager {
             // Si hay error, permitir añadir (fallback)
         }
         const cannotAdd = !canAddCheck.canAdd && !isInDeck;
+        const isLocked = isDroneLocked || isCommandoLocked || isTruckAssaultLocked;
         
         if (isInDeck) {
             div.classList.add('in-deck');
             div.style.opacity = '0.5';
             div.style.cursor = 'not-allowed';
-        } else if (cannotAdd) {
-            // No se puede añadir (excede límite o ya está)
+        } else if (cannotAdd || isLocked) {
+            // No se puede añadir (excede límite, ya está, o está bloqueado)
             div.classList.add('disabled');
             div.style.opacity = '0.4';
             div.style.cursor = 'not-allowed';
-            div.title = canAddCheck.reason;
+            if (isLocked) {
+                if (isDroneLocked) {
+                    div.title = 'Necesitas construir una Lanzadera de Drones primero';
+                } else if (isCommandoLocked || isTruckAssaultLocked) {
+                    div.title = 'Necesitas construir un Centro de Inteligencia primero';
+                }
+            } else {
+                div.title = canAddCheck.reason;
+            }
         } else {
             // Marcar que este item tiene el listener de click
             div.dataset.hasClickListener = 'true';

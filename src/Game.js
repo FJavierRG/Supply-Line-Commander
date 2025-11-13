@@ -922,6 +922,8 @@ export class Game {
                 this.renderer.renderBuildAreaOverlay(this.buildSystem.currentBuildingType);
             } else if (this.buildSystem.commandoMode) {
                 this.renderer.renderBuildAreaOverlay('specopsCommando');
+            } else if (this.buildSystem.truckAssaultMode) {
+                this.renderer.renderBuildAreaOverlay('truckAssault');
             }
         }
         
@@ -1039,6 +1041,9 @@ export class Game {
             } else if (this.buildSystem.commandoMode) {
                 // Preview del comando: usar preview normal de construcción
                 this.renderer.renderBuildPreview(mousePos.x, mousePos.y, this.nodes, 'specopsCommando');
+            } else if (this.buildSystem.truckAssaultMode) {
+                // Preview del truck assault: usar preview normal de construcción
+                this.renderer.renderBuildPreview(mousePos.x, mousePos.y, this.nodes, 'truckAssault');
             } else {
                 // Preview del edificio actual
                 const buildingType = this.buildSystem.currentBuildingType || 'fob';

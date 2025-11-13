@@ -22,6 +22,7 @@ export class BuildingSystem {
         this.sniperMode = false;
         this.fobSabotageMode = false;
         this.commandoMode = false; // 🆕 NUEVO: Modo de despliegue de comando especial operativo
+        this.truckAssaultMode = false; // 🆕 NUEVO: Modo de despliegue de truck assault
         this.currentBuildingType = null; // Tipo de edificio que se está construyendo actualmente
         this.currentRace = getDefaultRace(); // Raza actual (por defecto 'default')
         this.minDistance = 80; // Distancia mínima entre bases
@@ -183,6 +184,12 @@ export class BuildingSystem {
             return;
         }
         
+        // Si es truckAssault, activar modo especial
+        if (buildingId === 'truckAssault') {
+            this.activateTruckAssaultMode();
+            return;
+        }
+        
         // Si es tank, activar modo especial
         if (buildingId === 'tank') {
             this.toggleTankMode();
@@ -309,7 +316,7 @@ export class BuildingSystem {
      * Verifica si el modo construcción O drone está activo
      */
     isActive() {
-        return this.buildMode || this.droneMode || this.tankMode || this.sniperMode || this.fobSabotageMode || this.commandoMode;
+        return this.buildMode || this.droneMode || this.tankMode || this.sniperMode || this.fobSabotageMode || this.commandoMode || this.truckAssaultMode;
     }
     
     /**
@@ -422,6 +429,9 @@ export class BuildingSystem {
         }
         if (this.commandoMode) {
             this.exitCommandoMode();
+        }
+        if (this.truckAssaultMode) {
+            this.exitTruckAssaultMode();
         }
         if (this.sniperMode) {
             this.exitSniperMode();
@@ -713,6 +723,81 @@ export class BuildingSystem {
      */
     exitCommandoMode() {
         this.commandoMode = false;
+        this.game.canvas.style.cursor = 'default';
+    }
+    
+    /**
+     * Activa el modo truck assault
+     * 🆕 NUEVO
+     */
+    activateTruckAssaultMode() {
+        // Verificar requisito de centro de inteligencia
+        if (!this.hasIntelCenter()) {
+            console.log(`⚠️ Necesitas construir un Centro de Inteligencia primero`);
+            return;
+        }
+        
+        // Verificar currency
+        if (!this.canAffordBuilding('truckAssault')) {
+            const truckAssaultCost = this.getBuildingCost('truckAssault');
+            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${truckAssaultCost})`);
+            return;
+        }
+        
+        // Salir del modo construcción si estaba activo
+        if (this.buildMode) {
+            this.exitBuildMode();
+        }
+        
+        // Salir de otros modos de consumibles
+        if (this.fobSabotageMode) {
+            this.exitFobSabotageMode();
+        }
+        if (this.sniperMode) {
+            this.exitSniperMode();
+        }
+        if (this.droneMode) {
+            this.exitDroneMode();
+        }
+        if (this.tankMode) {
+            this.exitTankMode();
+        }
+        if (this.commandoMode) {
+            this.exitCommandoMode();
+        }
+        
+        this.truckAssaultMode = true;
+        this.game.selectedBase = null;
+        
+        // Usar cursor normal de construcción
+        this.game.canvas.style.cursor = 'crosshair';
+        
+        console.log('🚛 Modo truck assault activado - Selecciona una posición en territorio enemigo para desplegar');
+    }
+    
+    /**
+     * Ejecuta el despliegue del truck assault
+     * 🆕 NUEVO: Delega TODO al servidor
+     */
+    executeTruckAssaultDeploy(x, y) {
+        // Delegar TODO al servidor autoritativo
+        if (!this.game.network || !this.game.network.roomId) {
+            console.error('❌ No hay conexión al servidor. No se puede desplegar truck assault.');
+            return;
+        }
+        
+        console.log(`🚛 Enviando truck_assault_deploy_request: x=${x}, y=${y}`);
+        this.game.network.requestTruckAssaultDeploy(x, y);
+        
+        this.exitTruckAssaultMode();
+    }
+    
+    /**
+     * Sale del modo truck assault
+     * 🆕 NUEVO
+     */
+    exitTruckAssaultMode() {
+        this.truckAssaultMode = false;
         this.game.canvas.style.cursor = 'default';
     }
     

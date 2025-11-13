@@ -178,23 +178,38 @@ export class RenderSystem {
                 shouldFlipBuilding = isEnemy; // Enemigos se voltean, propios no
             }
         } else {
-            // Otros edificios: lógica basada en posición
-            if (isMyBuilding) {
-                // Mi edificio: si está a la izquierda del centro, mirar derecha (no flip)
-                // si está a la derecha del centro, mirar izquierda (flip)
-                shouldFlipBuilding = node.x > centerX;
+            // 🆕 NUEVO: Comando y truck assault siempre miran hacia el oponente
+            if (node.isCommando || node.isTruckAssault) {
+                // Determinar dirección hacia el oponente:
+                // - Player1 → debe mirar hacia la derecha (hacia player2) → no flip
+                // - Player2 → debe mirar hacia la izquierda (hacia player1) → flip
+                const nodeTeam = nodeTeamNormalized || node.team;
+                if (nodeTeam === 'player1') {
+                    // Player1: mirar hacia la derecha (no flip)
+                    shouldFlipBuilding = false;
+                } else {
+                    // Player2: mirar hacia la izquierda (flip)
+                    shouldFlipBuilding = true;
+                }
             } else {
-                // Edificio enemigo: lógica basada en posición
-                // Los edificios enemigos deben mirar hacia el centro (hacia el jugador)
-                shouldFlipBuilding = node.x < centerX;
-                
-                // Si el sprite necesita volteo adicional por ser enemigo (naciones específicas),
-                // aplicar volteo adicional para compensar que estos sprites no tienen versión enemiga volteada
-                if (needsEnemyFlip) {
-                    // Los sprites de naciones específicas (como B_Nation) no tienen versión enemiga volteada,
-                    // por lo que necesitan volteo adicional para que miren hacia el jugador
-                    // Invertir la lógica de posición para estos sprites
+                // Otros edificios: lógica basada en posición
+                if (isMyBuilding) {
+                    // Mi edificio: si está a la izquierda del centro, mirar derecha (no flip)
+                    // si está a la derecha del centro, mirar izquierda (flip)
                     shouldFlipBuilding = node.x > centerX;
+                } else {
+                    // Edificio enemigo: lógica basada en posición
+                    // Los edificios enemigos deben mirar hacia el centro (hacia el jugador)
+                    shouldFlipBuilding = node.x < centerX;
+                    
+                    // Si el sprite necesita volteo adicional por ser enemigo (naciones específicas),
+                    // aplicar volteo adicional para compensar que estos sprites no tienen versión enemiga volteada
+                    if (needsEnemyFlip) {
+                        // Los sprites de naciones específicas (como B_Nation) no tienen versión enemiga volteada,
+                        // por lo que necesitan volteo adicional para que miren hacia el jugador
+                        // Invertir la lógica de posición para estos sprites
+                        shouldFlipBuilding = node.x > centerX;
+                    }
                 }
             }
         }
@@ -519,6 +534,11 @@ export class RenderSystem {
         // 🆕 NUEVO: Anillo de duración del comando
         if (node.isCommando && node.active) {
             this.renderCommandoDurationRing(node, game);
+        }
+        
+        // 🆕 NUEVO: Anillo de duración del truck assault
+        if (node.isTruckAssault && node.active) {
+            this.renderTruckAssaultDurationRing(node, game);
         }
         
         // 🆕 NUEVO: Anillo de progreso de inversión de intelRadio
@@ -1257,17 +1277,15 @@ export class RenderSystem {
             this.ctx.save();
             this.ctx.globalAlpha = sprite.alpha;
             
-            // 🆕 Compensar Mirror View para sprites flotantes (no deben verse volteados)
-            if (this.mirrorViewApplied) {
-                // Compensar el mirror view con un flip adicional
-                const worldWidth = this.game?.worldWidth || this.width;
-                this.ctx.scale(-1, 1);
-                this.ctx.translate(-worldWidth, 0);
-            }
-            
             const width = spriteImg.width * sprite.scale;
             const height = spriteImg.height * sprite.scale;
             
+            // Las coordenadas del sprite están en coordenadas del mundo del servidor
+            // Cuando Mirror View está activo, el canvas está volteado con ctx.scale(-1, 1)
+            // después de ctx.translate(worldWidth, 0), lo que significa que un punto en x del mundo
+            // se renderiza visualmente en worldWidth - x. Pero como el canvas está volteado,
+            // necesitamos usar las coordenadas directamente sin transformación adicional.
+            // El sprite se renderiza correctamente porque el canvas ya está volteado.
             this.ctx.drawImage(
                 spriteImg,
                 sprite.x - width / 2,
@@ -2004,8 +2022,8 @@ export class RenderSystem {
             this.renderTerritoryOverlay(rules.territoryType);
         }
         
-        // 🆕 NUEVO: Para el taller de drones, mostrar áreas válidas de FOBs aliados
-        if (buildingType === 'droneWorkshop' && rules.showFobAreas) {
+        // 🆕 NUEVO: Para el taller de drones y taller de vehículos, mostrar áreas válidas de FOBs aliados
+        if ((buildingType === 'droneWorkshop' || buildingType === 'vehicleWorkshop') && rules.showFobAreas) {
             const myTeam = this.game?.myTeam || 'player1';
             const buildRadii = this.game?.serverBuildingConfig?.buildRadii || {};
             const fobBuildRadius = buildRadii.fob || 140; // Radio de construcción del FOB
@@ -2151,12 +2169,16 @@ export class RenderSystem {
         
         // 🆕 NUEVO: El comando ignora límites de detección (solo verifica colisión física básica)
         const isCommando = buildingType === 'specopsCommando';
+        // 🆕 NUEVO: El truck assault ignora límites de detección (solo verifica colisión física básica)
+        const isTruckAssault = buildingType === 'truckAssault';
         // 🆕 NUEVO: La torre de vigilancia puede construirse cerca de comandos enemigos
         const isVigilanceTower = buildingType === 'vigilanceTower';
         // 🆕 NUEVO: El taller de drones puede construirse cerca de FOBs aliados
         const isDroneWorkshop = buildingType === 'droneWorkshop';
+        // 🆕 NUEVO: El taller de vehículos puede construirse cerca de FOBs aliados
+        const isVehicleWorkshop = buildingType === 'vehicleWorkshop';
         
-        if (isCommando) {
+        if (isCommando || isTruckAssault) {
             // Solo verificar colisión física básica (no áreas de detección)
             for (const node of allNodes) {
                 if (!node.active) continue;
@@ -2219,9 +2241,9 @@ export class RenderSystem {
                     continue; // Saltar la verificación de área de detección para comandos
                 }
                 
-                // 🆕 NUEVO: Si estamos construyendo un taller de drones, ignorar FOBs aliados en la validación de colisiones
+                // 🆕 NUEVO: Si estamos construyendo un taller de drones o taller de vehículos, ignorar FOBs aliados en la validación de colisiones
                 // (solo verificar colisión física básica, no área de construcción)
-                if (isDroneWorkshop && node.type === 'fob') {
+                if ((isDroneWorkshop || isVehicleWorkshop) && node.type === 'fob') {
                     const myTeam = this.game?.myTeam || 'player1';
                     if (node.team === myTeam && node.constructed && !node.isAbandoning) {
                         const dist = Math.hypot(x - node.x, y - node.y);
@@ -2259,9 +2281,9 @@ export class RenderSystem {
         const inAllyTerritory = this.game && this.game.territory && this.game.territory.isInAllyTerritory(x, y);
         const inEnemyTerritory = this.game && this.game.territory && !inAllyTerritory;
         
-        // 🆕 NUEVO: Para el taller de drones, verificar que esté en el área de detección de un FOB aliado
+        // 🆕 NUEVO: Para el taller de drones y taller de vehículos, verificar que esté en el área de detección de un FOB aliado
         let isInFobArea = false;
-        if (isDroneWorkshop) {
+        if (isDroneWorkshop || isVehicleWorkshop) {
             const myTeam = this.game?.myTeam || 'player1';
             const buildRadii = this.game?.serverBuildingConfig?.buildRadii || {};
             const fobBuildRadius = buildRadii.fob || 140;
@@ -2287,13 +2309,13 @@ export class RenderSystem {
         const radius = config ? config.radius : 30;
         
         // Color del preview (rojo si está fuera o muy cerca, verde si es válido)
-        // Para comando: válido si está en territorio enemigo y no muy cerca
-        // Para taller de drones: válido si está en territorio aliado, no muy cerca Y en área de FOB
+        // Para comando y truck assault: válido si está en territorio enemigo y no muy cerca
+        // Para taller de drones y taller de vehículos: válido si está en territorio aliado, no muy cerca Y en área de FOB
         // Para otros: válido si está en territorio aliado y no muy cerca
         let isValid;
-        if (isCommando) {
+        if (isCommando || isTruckAssault) {
             isValid = !tooClose && inEnemyTerritory;
-        } else if (isDroneWorkshop) {
+        } else if (isDroneWorkshop || isVehicleWorkshop) {
             isValid = !tooClose && inAllyTerritory && isInFobArea;
         } else {
             isValid = !tooClose && inAllyTerritory;
@@ -2346,17 +2368,25 @@ export class RenderSystem {
         let label = config.name || buildingType.toUpperCase();
         if (tooClose) {
             label = '⚠️ MUY CERCA';
-        } else if (isCommando && !inEnemyTerritory) {
+        } else if ((isCommando || isTruckAssault) && !inEnemyTerritory) {
             label = '⚠️ DEBE SER EN TERRITORIO ENEMIGO';
-        } else if (isDroneWorkshop && !isInFobArea) {
+        } else if ((isDroneWorkshop || isVehicleWorkshop) && !isInFobArea) {
             label = '⚠️ DEBE ESTAR EN ÁREA DE FOB';
-        } else if (!isCommando && !inAllyTerritory) {
+        } else if (!isCommando && !isTruckAssault && !inAllyTerritory) {
             label = '⚠️ FUERA DE TERRITORIO';
         }
         this.ctx.fillText(label, x, y - radius - 10);
         
         // Círculo de área de detección (naranja) - siempre visible para dev
-        const detectionRadius = config?.detectionRadius || (config?.radius || 30) * 2.5;
+        // ✅ Para comando y truck assault, usar specialNodes del servidor (fuente única de verdad)
+        let detectionRadius;
+        if (buildingType === 'specopsCommando' || buildingType === 'truckAssault') {
+            const specialNodes = this.game?.serverBuildingConfig?.specialNodes || {};
+            const specialNodeConfig = specialNodes[buildingType];
+            detectionRadius = specialNodeConfig?.detectionRadius || 200;
+        } else {
+            detectionRadius = config?.detectionRadius || (config?.radius || 30) * 2.5;
+        }
         this.ctx.strokeStyle = 'rgba(255, 165, 0, 0.6)'; // Naranja
         this.ctx.lineWidth = 2;
         this.ctx.setLineDash([8, 8]);
@@ -2810,6 +2840,42 @@ export class RenderSystem {
     }
     
     /**
+     * 🆕 NUEVO: Renderiza el anillo de duración del truck assault
+     * @param {Object} node - Nodo truck assault
+     * @param {Object} game - Instancia del juego (para obtener gameTime)
+     */
+    renderTruckAssaultDurationRing(node, game) {
+        if (!node.isTruckAssault || !node.expiresAt) return;
+        
+        // Obtener gameTime del servidor (a través de network.lastGameState)
+        const gameTime = game?.network?.lastGameState?.gameTime || 0;
+        if (!gameTime) return;
+        
+        // Calcular progreso del truck assault (0 a 1, donde 1 = recién creado, 0 = a punto de expirar)
+        let progress = 1;
+        if (node.spawnTime && node.expiresAt) {
+            const duration = node.expiresAt - node.spawnTime;
+            const elapsed = gameTime - node.spawnTime;
+            progress = Math.max(0, Math.min(1, 1 - (elapsed / duration)));
+        }
+        
+        // Radio del anillo (alrededor del truck assault completo)
+        const nodeRadius = node.radius || 25;
+        const ringRadius = nodeRadius + 6; // 6px de padding alrededor del truck assault
+        
+        // Usar función genérica de anillo de progreso
+        this.renderProgressRing(node.x, node.y, ringRadius, progress, {
+            width: 3,
+            colorStart: { r: 0, g: 255, b: 0 },   // Verde (recién creado)
+            colorEnd: { r: 255, g: 165, b: 0 },  // Naranja (a punto de expirar)
+            pulse: true,
+            pulseSpeed: 400,
+            pulseRange: 0.2,
+            backgroundAlpha: 0.3
+        });
+    }
+    
+    /**
      * 🆕 NUEVO: Renderiza el anillo de progreso de inversión de intelRadio
      * @param {Object} node - Nodo intelRadio
      * @param {Object} game - Instancia del juego (no se usa, pero se mantiene para consistencia)
@@ -2870,8 +2936,8 @@ export class RenderSystem {
             this.ctx.stroke();
         }
         
-        // ✅ Renderizar área de efecto - leer del servidor (gameplay.specopsCommando.detectionRadius)
-        const detectionRadius = this.game?.serverBuildingConfig?.gameplay?.specopsCommando?.detectionRadius || 200;
+        // ✅ Renderizar área de efecto - leer del servidor (specialNodes.specopsCommando.detectionRadius)
+        const detectionRadius = this.game?.serverBuildingConfig?.specialNodes?.specopsCommando?.detectionRadius || 200;
         this.ctx.strokeStyle = '#e74c3c';
         this.ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
         this.ctx.lineWidth = 2;

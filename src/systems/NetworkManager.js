@@ -730,6 +730,64 @@ export class NetworkManager {
         });
         
         /**
+         * 🆕 NUEVO: Manejo de despliegue de truck assault
+         */
+        this.socket.on('truck_assault_deployed', (data) => {
+            // Verificar que no exista ya (evitar duplicados)
+            const exists = this.game.nodes.find(n => n.id === data.truckAssaultId);
+            if (exists) {
+                console.warn(`⚠️ Nodo ${data.truckAssaultId} ya existe, ignorando truck_assault_deployed`);
+                return;
+            }
+            
+            // Crear el nodo del truck assault en el cliente (ya construido, no necesita construcción)
+            const config = getNodeConfig('truckAssault');
+            const newNode = new VisualNode(
+                data.x,
+                data.y,
+                'truckAssault',
+                {
+                    ...config,
+                    team: data.team,
+                    isConstructed: true // Ya está construido
+                },
+                this.game
+            );
+            
+            if (newNode) {
+                // Sobrescribir ID y estado desde el servidor
+                newNode.id = data.truckAssaultId;
+                newNode.constructed = true;
+                newNode.isConstructing = false;
+                newNode.active = true;
+                newNode.detectionRadius = data.detectionRadius || 200;
+                newNode.isTruckAssault = true;
+                
+                // Sincronizar tiempo de expiración del truck assault
+                if (data.spawnTime !== undefined) {
+                    newNode.spawnTime = data.spawnTime;
+                }
+                if (data.expiresAt !== undefined) {
+                    newNode.expiresAt = data.expiresAt;
+                }
+                
+                // Inicializar propiedades de interpolación para multijugador
+                if (newNode.updateServerPosition) {
+                    newNode.updateServerPosition(data.x, data.y);
+                }
+                
+                this.game.nodes.push(newNode);
+            }
+        });
+        
+        /**
+         * 🆕 NUEVO: Manejo de fallo de despliegue de truck assault
+         */
+        this.socket.on('truck_assault_deploy_failed', (data) => {
+            // TODO: Mostrar mensaje visual al usuario cuando se implemente showMessage en UIManager
+        });
+        
+        /**
          * Manejo de lanzamiento de dron
          */
         this.socket.on('drone_launched', (data) => {
@@ -1210,6 +1268,21 @@ export class NetworkManager {
     }
     
     /**
+     * 🆕 NUEVO: Solicita despliegue de truck assault al servidor
+     * @param {number} x - Posición X
+     * @param {number} y - Posición Y
+     */
+    requestTruckAssaultDeploy(x, y) {
+        if (!this.isMultiplayer || !this.roomId) return;
+        
+        this.socket.emit('truck_assault_deploy_request', {
+            roomId: this.roomId,
+            x,
+            y
+        });
+    }
+    
+    /**
      * CHEAT: Añade currency al jugador (solo para testing)
      */
     addCurrency(amount = 500) {
@@ -1455,6 +1528,10 @@ export class NetworkManager {
                     // Actualizar suministros
                     node.supplies = nodeData.supplies;
                     node.availableVehicles = nodeData.availableVehicles;
+                    // 🆕 NUEVO: Actualizar maxVehicles desde el servidor (para vehicleWorkshop)
+                    if (nodeData.maxVehicles !== undefined) {
+                        node.baseMaxVehicles = nodeData.maxVehicles;
+                    }
                     
                     // 🆕 CENTRALIZADO: Actualizar propiedades de helicópteros según raza
                     if (nodeData.hasHelicopters !== undefined) {

@@ -25,6 +25,8 @@ import { ConstructionSystem } from './systems/ConstructionSystem.js';
 import { EffectsSystem } from './systems/EffectsSystem.js';
 import { AbandonmentSystem } from '../systems/AbandonmentSystem.js';
 import { CommandoSystem } from '../systems/CommandoSystem.js';
+import { TruckAssaultSystem } from '../systems/TruckAssaultSystem.js';
+import { VehicleWorkshopSystem } from '../systems/VehicleWorkshopSystem.js';
 import { MAP_CONFIG, calculateAbsolutePosition } from '../utils/mapGenerator.js';
 
 export class GameStateManager {
@@ -88,6 +90,8 @@ export class GameStateManager {
         this.effectsSystem = new EffectsSystem(this);
         this.abandonmentSystem = new AbandonmentSystem(this);
         this.commandoSystem = new CommandoSystem(this); // 🆕 NUEVO: Sistema de comandos
+        this.truckAssaultSystem = new TruckAssaultSystem(this); // 🆕 NUEVO: Sistema de truck assault
+        this.vehicleWorkshopSystem = new VehicleWorkshopSystem(this); // 🆕 NUEVO: Sistema de taller de vehículos
         
         // Sistema de eventos de sonido
         this.soundEvents = [];
@@ -204,7 +208,8 @@ export class GameStateManager {
                 buildRadii: this.buildHandler.getBuildRadii(), // 🆕 Radio de construcción (proximidad)
                 detectionRadii: this.buildHandler.getDetectionRadii(),
                 security: this.buildHandler.getSecurityProperties(),
-                behavior: this.buildHandler.getBehaviorProperties()
+                behavior: this.buildHandler.getBehaviorProperties(),
+                specialNodes: this.buildHandler.getSpecialNodes() // 🆕 Configuración de nodos especiales (comando, truck assault)
             }
         };
     }
@@ -459,6 +464,8 @@ export class GameStateManager {
         
         // === SISTEMA DE COMANDOS ESPECIALES OPERATIVOS ===
         this.commandoSystem.update(dt);
+        this.truckAssaultSystem.update(dt); // 🆕 NUEVO: Actualizar sistema de truck assault
+        this.vehicleWorkshopSystem.update(dt); // 🆕 NUEVO: Actualizar sistema de taller de vehículos
         
         // === SISTEMA DE IA (solo si hay IA en la partida) ===
         if (this.room?.hasAI) {
@@ -528,6 +535,24 @@ export class GameStateManager {
             this.tankImpacts = tankResult.impacts;
         }
         
+        // 🆕 NUEVO: Verificar talleres cuando se destruyen FOBs
+        const destroyedFOBs = [];
+        if (droneResult.impacts.length > 0 || tankResult.impacts.length > 0) {
+            // Encontrar FOBs que fueron destruidos en este tick
+            const allImpacts = [...droneResult.impacts, ...tankResult.impacts];
+            for (const impact of allImpacts) {
+                const destroyedNode = this.nodes.find(n => n.id === impact.targetId && n.type === 'fob' && !n.active);
+                if (destroyedNode) {
+                    destroyedFOBs.push(destroyedNode);
+                }
+            }
+        }
+        
+        // Verificar talleres afectados por FOBs destruidos
+        if (destroyedFOBs.length > 0) {
+            this.checkWorkshopsAfterFobDestroyed(destroyedFOBs);
+        }
+        
         // Limpiar nodos destruidos del servidor (eliminados del array)
         let nodesChanged = false;
         if (droneResult.impacts.length > 0 || droneResult.interceptions.length > 0 || tankResult.impacts.length > 0) {
@@ -557,10 +582,17 @@ export class GameStateManager {
         }
         
         // Limpiar nodos en abandono (centralizado en AbandonmentSystem)
+        // 🆕 NUEVO: Capturar FOBs que van a ser eliminados por abandono antes de limpiarlos
+        const fobsBeforeCleanup = this.nodes.filter(n => n.type === 'fob' && n.isAbandoning && n.abandonPhase === 3);
         const abandonmentNodesChanged = this.abandonmentSystem.cleanup();
         if (abandonmentNodesChanged) {
             this.optimizationTracker.cleanupNodeTracking();
             nodesChanged = true;
+            
+            // 🆕 NUEVO: Verificar talleres si se eliminaron FOBs por abandono
+            if (fobsBeforeCleanup.length > 0) {
+                this.checkWorkshopsAfterFobDestroyed(fobsBeforeCleanup);
+            }
         }
         
         // === ACTUALIZAR EFECTOS TEMPORALES ===
@@ -762,6 +794,62 @@ export class GameStateManager {
      */
     isInTeamTerritory(x, team) {
         return this.territoryCalculator.isInTeamTerritory(x, team);
+    }
+    
+    /**
+     * 🆕 NUEVO: Verifica y destruye talleres que quedan sin FOBs en su área después de que se destruye un FOB
+     * @param {Array} destroyedFOBs - Array de FOBs que fueron destruidos
+     */
+    checkWorkshopsAfterFobDestroyed(destroyedFOBs) {
+        if (destroyedFOBs.length === 0) return;
+        
+        // Helper: Obtiene el radio de construcción del FOB
+        function getBuildRadius(buildingType) {
+            const buildRadii = SERVER_NODE_CONFIG.buildRadius || {};
+            if (buildRadii[buildingType]) {
+                return buildRadii[buildingType];
+            }
+            const radius = SERVER_NODE_CONFIG.radius?.[buildingType] || 30;
+            return radius * 2.5;
+        }
+        
+        const fobBuildRadius = getBuildRadius('fob'); // Radio de construcción del FOB (140px)
+        
+        // Encontrar todos los talleres activos (drones y vehículos)
+        const workshops = this.nodes.filter(n => 
+            (n.type === 'droneWorkshop' || n.type === 'vehicleWorkshop') && 
+            n.active && 
+            n.constructed &&
+            !n.isAbandoning
+        );
+        
+        // Para cada taller, verificar si todavía tiene FOBs en su área
+        for (const workshop of workshops) {
+            const nearbyFOBs = this.nodes.filter(n => 
+                n.type === 'fob' && 
+                n.team === workshop.team && 
+                n.active && 
+                n.constructed &&
+                !n.isAbandoning
+            );
+            
+            let hasFobInArea = false;
+            for (const fob of nearbyFOBs) {
+                const dist = Math.hypot(workshop.x - fob.x, workshop.y - fob.y);
+                if (dist <= fobBuildRadius) {
+                    hasFobInArea = true;
+                    break;
+                }
+            }
+            
+            if (!hasFobInArea) {
+                // No hay FOBs en el área, marcar para destrucción
+                workshop.active = false;
+                workshop.isAbandoning = true;
+                const workshopType = workshop.type === 'droneWorkshop' ? 'Drone Workshop' : 'Vehicle Workshop';
+                console.log(`🗑️ ${workshopType} ${workshop.id} destruido - no hay FOBs en su área`);
+            }
+        }
     }
     
 }

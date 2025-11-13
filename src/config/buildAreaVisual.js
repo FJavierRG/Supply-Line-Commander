@@ -70,6 +70,19 @@ export const BUILD_AREA_VISUAL = {
         ]
     },
     
+    // Truck Assault: territorio enemigo, similar al comando
+    truckAssault: {
+        territoryType: 'enemy', // Territorio enemigo en verde
+        exclusionRules: [
+            {
+                // Todos los nodos solo bloquean con colisión física
+                filter: (node, game) => true,
+                radiusType: 'physical', // Solo radio físico
+                color: 'rgba(231, 76, 60, 0.15)' // Rojo más tenue
+            }
+        ]
+    },
+    
     // 🆕 NUEVO: Dron - muestra áreas de torretas antidrones enemigas que bloquean el lanzamiento
     drone: {
         territoryType: null, // No mostrar territorio válido (solo áreas de exclusión)
@@ -113,6 +126,27 @@ export const BUILD_AREA_VISUAL = {
     
     // 🆕 NUEVO: Taller de drones - solo se puede construir en el área de detección de FOBs aliados
     droneWorkshop: {
+        territoryType: 'ally', // Territorio aliado en verde
+        exclusionRules: [
+            {
+                // Todos los nodos EXCEPTO FOBs aliados bloquean construcción con su área de construcción
+                // Los FOBs aliados NO bloquean porque el taller DEBE construirse cerca de ellos
+                filter: (node, game) => {
+                    const myTeam = game?.myTeam || 'player1';
+                    // Excluir FOBs aliados de las áreas de exclusión
+                    const isAllyFob = node.type === 'fob' && node.team === myTeam;
+                    return !isAllyFob; // Bloquear todos excepto FOBs aliados
+                },
+                radiusType: 'buildRadius', // Usar buildRadius o detectionRadius como fallback
+                color: 'rgba(231, 76, 60, 0.2)' // Rojo semi-transparente
+            }
+        ],
+        // 🆕 Función especial para mostrar áreas válidas de FOBs aliados
+        showFobAreas: true // Indicador para el renderer de que debe mostrar áreas de FOBs
+    },
+    
+    // 🆕 NUEVO: Taller de vehículos - solo se puede construir en el área de detección de FOBs aliados
+    vehicleWorkshop: {
         territoryType: 'ally', // Territorio aliado en verde
         exclusionRules: [
             {

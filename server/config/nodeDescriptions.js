@@ -74,6 +74,10 @@ export const NODE_DESCRIPTIONS = {
         name: 'Taller de Drones',
         description: 'Consume 10 suministros de un FOB aliado a cambio de un 50% de descuento el siguiente dron bomba.'
     },
+    vehicleWorkshop: {
+        name: 'Taller de Vehículos',
+        description: 'Aumenta en +1 los vehículos máximos y disponibles de los FOBs en cuyo área esté. Solo se puede construir en el área de un FOB aliado.'
+    },
     
     // Consumibles/Proyectiles
     drone: {
@@ -91,6 +95,10 @@ export const NODE_DESCRIPTIONS = {
     specopsCommando: {
         name: 'Comando Especial',
         description: 'Despliega un comando que deshabilita los edificios enemigos dentro de su área de efecto. Requiere el Centro de Inteligencia.'
+    },
+    truckAssault: {
+        name: 'Truck Assault',
+        description: 'Despliega un dispositivo que ralentiza todos los vehículos enemigos que pasan por su área de efecto en un 25%. Dura 25 segundos y puede ser eliminado con disparo de sniper. Requiere el Centro de Inteligencia.'
     },
     tank: {
         name: 'Tanque',

@@ -21,13 +21,15 @@ export const SERVER_NODE_CONFIG = {
         intelCenter: 150, 
         vigilanceTower: 120, 
         trainStation: 170,
-        droneWorkshop: 85, 
+        droneWorkshop: 85,
+        vehicleWorkshop: 100,
         // 🆕 CONSUMIBLES/PROYECTILES
         drone: 150,
         sniperStrike: 40,
         fobSabotage: 40,
         specopsCommando: 70,  
-        tank: 100
+        tank: 100,
+        truckAssault: 45
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -46,7 +48,8 @@ export const SERVER_NODE_CONFIG = {
         intelCenter: 3, 
         vigilanceTower: 3, 
         trainStation: 4,
-        droneWorkshop: 3  
+        droneWorkshop: 3,
+        vehicleWorkshop: 3
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -77,6 +80,9 @@ export const SERVER_NODE_CONFIG = {
             discountMultiplier: 0.5,     // 🆕 Multiplicador de descuento (50% = 0.5)
             requiredSupplies: 15,       // 🆕 Suministros mínimos requeridos en FOB
             suppliesCost: 15             // 🆕 Suministros que se sustraen del FOB al usar el descuento
+        },
+        vehicleWorkshop: {
+            vehicleBonus: 1              // 🆕 +1 vehículo máximo y disponible a FOBs en su área
         }
     },
 
@@ -87,7 +93,7 @@ export const SERVER_NODE_CONFIG = {
     // - costs.sniperStrike, costs.fobSabotage, costs.drone, costs.tank, costs.specopsCommando
     actions: {
         sniperStrike: {
-            targetType: ['front', 'specopsCommando']
+            targetType: ['front', 'specopsCommando', 'truckAssault']
         },
         fobSabotage: {
             targetType: 'fob'
@@ -96,11 +102,15 @@ export const SERVER_NODE_CONFIG = {
             targetType: 'position', // Se despliega en una posición (no un nodo específico)
             ignoreDetectionLimits: true // No afectado por límites de detección de otros edificios
         },
+        truckAssault: {
+            targetType: 'position', // Se despliega en una posición (no un nodo específico)
+            ignoreDetectionLimits: true // No afectado por límites de detección de otros edificios
+        },
         droneLaunch: {
-            validTargets: ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'trainStation']
+            validTargets: ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'trainStation','vigilanceTower','vehicleWorkshop', 'droneWorkshop']
         },
         tankLaunch: {
-            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation']
+            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation', 'vehicleWorkshop', 'droneWorkshop']
         }
     },
 
@@ -143,7 +153,8 @@ export const SERVER_NODE_CONFIG = {
         aerialBase: 130,       
         vigilanceTower: 130,   
         trainStation: 130,
-        droneWorkshop: 130       
+        droneWorkshop: 130,
+        vehicleWorkshop: 130
     },
     
     // ═══════════════════════════════════════════════════════════════
@@ -173,7 +184,8 @@ export const SERVER_NODE_CONFIG = {
         aerialBase: 40,    
         vigilanceTower: 35,   
         trainStation: 40,
-        droneWorkshop: 35     
+        droneWorkshop: 35,
+        vehicleWorkshop: 35
     },
     
     // 🆕 NUEVO: Configuración de nodos especiales que se despliegan como unidades
@@ -183,6 +195,12 @@ export const SERVER_NODE_CONFIG = {
             detectionRadius: 200,           // Área de efecto que deshabilita edificios
             health: 50,                     // Vida del comando (puede ser destruido)
             sprite: 'specops_observer'      // Sprite del comando
+        },
+        truckAssault: {
+            radius: 25,                    // Radio físico del truck assault
+            detectionRadius: 200,           // Área de efecto que ralentiza vehículos (25% de reducción)
+            health: 50,                     // Vida del truck assault (puede ser destruido)
+            sprite: 'truckassault'          // Sprite del truck assault
         }
     },
 
@@ -284,9 +302,16 @@ export const SERVER_NODE_CONFIG = {
         
         // Propiedades de comando especial operativo
         specopsCommando: {
-            detectionRadius: 200,  // Área visual de efecto (para mostrar en el cliente) - valor funcional está en specialNodes.specopsCommando.detectionRadius
+            // ✅ detectionRadius está en specialNodes.specopsCommando.detectionRadius (fuente única de verdad)
             duration: 10,           // Duración en segundos antes de que el comando expire (10s)
             residualDisabledDuration: 3  // 🆕 NUEVO: Duración en segundos que los edificios permanecen disabled después de eliminar el comando (3s)
+        },
+        
+        // Propiedades de truck assault
+        truckAssault: {
+            // ✅ detectionRadius está en specialNodes.truckAssault.detectionRadius (fuente única de verdad)
+            duration: 25,          // Duración en segundos antes de que el truck assault expire (25s)
+            speedPenalty: 0.1     // Multiplicador de velocidad (0.75 = 25% de ralentización)
         },
         
         // Activar / Desactivar nodos por completo, usar para dev y testing
@@ -307,13 +332,15 @@ export const SERVER_NODE_CONFIG = {
             aerialBase: false,
             vigilanceTower: false,  
             trainStation: true,
-            droneWorkshop: true,    
+            droneWorkshop: true,
+            vehicleWorkshop: true,
             // 🆕 CONSUMIBLES/PROYECTILES
             drone: true,
             sniperStrike: true,
             fobSabotage: true,
             specopsCommando: true,
-            tank: true
+            tank: true,
+            truckAssault: true
         },
         
         // Propiedades de comportamiento
@@ -338,6 +365,13 @@ export const SERVER_NODE_CONFIG = {
             specopsCommando: {
                 targetType: 'position',
                 cursorSprite: 'specops_observer',
+                canPlaceInEnemyTerritory: true,
+                ignoreDetectionLimits: true,
+                showRangePreview: true
+            },
+            truckAssault: {
+                targetType: 'position',
+                cursorSprite: 'truckassault',
                 canPlaceInEnemyTerritory: true,
                 ignoreDetectionLimits: true,
                 showRangePreview: true

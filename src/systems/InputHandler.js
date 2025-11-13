@@ -471,6 +471,13 @@ export class InputHandler {
             return;
         }
         
+        // Modo truck assault: desplegar truck assault en territorio enemigo
+        if (this.game.buildSystem.truckAssaultMode) {
+            // El truck assault se despliega en una posición (no requiere click en un nodo específico)
+            this.game.buildSystem.executeTruckAssaultDeploy(x, y);
+            return;
+        }
+        
         // Detectar clic en selector de recursos del HQ - VERIFICAR ANTES DE getBaseAt
         // Porque los botones están FUERA del círculo del HQ
         // Tutorial simple: no hay interacción

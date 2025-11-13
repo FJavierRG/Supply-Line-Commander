@@ -590,6 +590,9 @@ export class StoreUIManager {
         // Verificar si el comando está bloqueado (requiere centro de inteligencia)
         const isCommandoLocked = itemId === 'specopsCommando' && !this.buildSystem.hasIntelCenter();
         
+        // Verificar si el truck assault está bloqueado (requiere centro de inteligencia)
+        const isTruckAssaultLocked = itemId === 'truckAssault' && !this.buildSystem.hasIntelCenter();
+        
         // Fondo del botón usando el sprite bton_background
         const buttonBg = this.assetManager.getSprite('ui-button-background');
         
@@ -622,7 +625,7 @@ export class StoreUIManager {
             const iconY = y + (size - iconSize) / 2 - 8; // Ajustado para el precio
             
             // Si está bloqueado, renderizar en gris
-            const isLocked = isDroneLocked || isCommandoLocked;
+            const isLocked = isDroneLocked || isCommandoLocked || isTruckAssaultLocked;
             if (isLocked) {
                 ctx.save();
                 ctx.globalAlpha = 0.4;
@@ -640,13 +643,13 @@ export class StoreUIManager {
         // 🆕 NUEVO: Para el dron, usar el costo real con descuento
         let canAfford = false;
         if (itemId === 'drone' && this.buildSystem) {
-            canAfford = !isDroneLocked && !isCommandoLocked && this.game.currency.canAfford(displayCost);
+            canAfford = !isDroneLocked && !isCommandoLocked && !isTruckAssaultLocked && this.game.currency.canAfford(displayCost);
         } else {
-            canAfford = !isDroneLocked && !isCommandoLocked && this.buildSystem.canAffordBuilding(itemId);
+            canAfford = !isDroneLocked && !isCommandoLocked && !isTruckAssaultLocked && this.buildSystem.canAffordBuilding(itemId);
         }
         
         // Precio (más legible) - color rojo si no se puede permitir, gris si está bloqueado
-        if (isDroneLocked || isCommandoLocked) {
+        if (isDroneLocked || isCommandoLocked || isTruckAssaultLocked) {
             ctx.fillStyle = '#888888';
         } else {
             ctx.fillStyle = canAfford ? '#ffffff' : '#ff4444';
@@ -682,6 +685,21 @@ export class StoreUIManager {
         }
         
         if (isCommandoLocked) {
+            ctx.fillStyle = '#ff6666';
+            ctx.font = 'bold 9px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            
+            const lockText = 'Necesita centro';
+            const lockY = y + size + 2;
+            
+            ctx.strokeText(lockText, priceX, lockY);
+            ctx.fillText(lockText, priceX, lockY);
+        }
+        
+        if (isTruckAssaultLocked) {
             ctx.fillStyle = '#ff6666';
             ctx.font = 'bold 9px Arial';
             ctx.textAlign = 'center';

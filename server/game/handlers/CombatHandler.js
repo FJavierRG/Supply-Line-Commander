@@ -17,18 +17,18 @@ export class CombatHandler {
             return { success: false, reason: 'Objetivo no encontrado' };
         }
         
-        // 🆕 NUEVO: Validar que sea un frente o comando enemigo
-        const isValidTarget = (targetNode.type === 'front' || targetNode.type === 'specopsCommando') && 
+        // 🆕 NUEVO: Validar que sea un frente, comando o truck assault enemigo
+        const isValidTarget = (targetNode.type === 'front' || targetNode.type === 'specopsCommando' || targetNode.type === 'truckAssault') && 
                               targetNode.team !== playerTeam;
         
         if (!isValidTarget) {
-            return { success: false, reason: 'Solo puedes disparar a frentes o comandos enemigos' };
+            return { success: false, reason: 'Solo puedes disparar a frentes, comandos o truck assaults enemigos' };
         }
         
-        // Validar que el objetivo esté activo y construido (si es comando)
-        if (targetNode.type === 'specopsCommando') {
+        // Validar que el objetivo esté activo y construido (si es comando o truck assault)
+        if (targetNode.type === 'specopsCommando' || targetNode.type === 'truckAssault') {
             if (!targetNode.active || !targetNode.constructed || targetNode.isAbandoning) {
-                return { success: false, reason: 'El comando no está disponible como objetivo' };
+                return { success: false, reason: 'El objetivo no está disponible' };
             }
         }
         
@@ -44,37 +44,57 @@ export class CombatHandler {
         this.gameState.currency[playerTeam] -= sniperCost;
         
         // 🆕 NUEVO: Lógica condicional según el tipo de objetivo
-        if (targetNode.type === 'specopsCommando') {
+        if (targetNode.type === 'specopsCommando' || targetNode.type === 'truckAssault') {
             // Guardar coordenadas antes de eliminar (para el feed de kill)
             const targetX = targetNode.x;
             const targetY = targetNode.y;
             
-            // 🆕 NUEVO: Obtener todos los edificios afectados por este comando ANTES de eliminarlo
-            const affectedBuildings = this.getAffectedBuildingsByCommando(targetNode);
+            const isCommando = targetNode.type === 'specopsCommando';
+            const isTruckAssault = targetNode.type === 'truckAssault';
             
-            // Eliminar el comando (marcar para abandono)
-            targetNode.active = false;
-            targetNode.isAbandoning = true;
-            // El AbandonmentSystem lo limpiará automáticamente cuando abandonPhase === 3
-            
-            // 🆕 NUEVO: Aplicar efecto residual de disabled a los edificios afectados
-            const residualDuration = SERVER_NODE_CONFIG.gameplay.specopsCommando.residualDisabledDuration;
-            this.applyResidualDisabledEffect(affectedBuildings, residualDuration);
-            
-            console.log(`🎯 Sniper de ${playerTeam} eliminó comando ${targetId} en (${targetX.toFixed(0)}, ${targetY.toFixed(0)}) - ${affectedBuildings.length} edificios afectados por ${residualDuration}s`);
-            if (affectedBuildings.length > 0) {
-                console.log(`   📋 Edificios afectados: ${affectedBuildings.map(b => `${b.type}(${b.id.substring(0, 8)})`).join(', ')}`);
+            if (isCommando) {
+                // 🆕 NUEVO: Obtener todos los edificios afectados por este comando ANTES de eliminarlo
+                const affectedBuildings = this.getAffectedBuildingsByCommando(targetNode);
+                
+                // Eliminar el comando (marcar para abandono)
+                targetNode.active = false;
+                targetNode.isAbandoning = true;
+                // El AbandonmentSystem lo limpiará automáticamente cuando abandonPhase === 3
+                
+                // 🆕 NUEVO: Aplicar efecto residual de disabled a los edificios afectados
+                const residualDuration = SERVER_NODE_CONFIG.gameplay.specopsCommando.residualDisabledDuration;
+                this.applyResidualDisabledEffect(affectedBuildings, residualDuration);
+                
+                console.log(`🎯 Sniper de ${playerTeam} eliminó comando ${targetId} en (${targetX.toFixed(0)}, ${targetY.toFixed(0)}) - ${affectedBuildings.length} edificios afectados por ${residualDuration}s`);
+                if (affectedBuildings.length > 0) {
+                    console.log(`   📋 Edificios afectados: ${affectedBuildings.map(b => `${b.type}(${b.id.substring(0, 8)})`).join(', ')}`);
+                }
+                
+                return { 
+                    success: true, 
+                    targetId, 
+                    eliminated: true, 
+                    targetType: 'commando',
+                    targetX, // 🆕 Coordenadas para el feed de kill
+                    targetY,
+                    affectedBuildings: affectedBuildings.map(b => b.id) // 🆕 IDs de edificios afectados
+                };
+            } else if (isTruckAssault) {
+                // Eliminar el truck assault (marcar para abandono)
+                targetNode.active = false;
+                targetNode.isAbandoning = true;
+                
+                console.log(`🎯 Sniper de ${playerTeam} eliminó truck assault ${targetId} en (${targetX.toFixed(0)}, ${targetY.toFixed(0)})`);
+                
+                return { 
+                    success: true, 
+                    targetId, 
+                    eliminated: true, 
+                    targetType: 'truckAssault',
+                    targetX,
+                    targetY
+                };
             }
-            
-            return { 
-                success: true, 
-                targetId, 
-                eliminated: true, 
-                targetType: 'commando',
-                targetX, // 🆕 Coordenadas para el feed de kill
-                targetY,
-                affectedBuildings: affectedBuildings.map(b => b.id) // 🆕 IDs de edificios afectados
-            };
         } else {
             // Aplicar efecto "wounded" al frente (lógica original)
             const woundedConfig = SERVER_NODE_CONFIG.temporaryEffects.wounded;
@@ -401,6 +421,71 @@ export class CombatHandler {
         console.log(`🎖️ Comando especial operativo desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)}) - Radio: ${commandoDetectionRadius}px, Duración: ${commandoDuration}s`);
         
         return { success: true, commando: commandoNode };
+    }
+    
+    /**
+     * Maneja despliegue de truck assault
+     * 🆕 NUEVO: Crea un nodo especial que ralentiza vehículos enemigos dentro de su área
+     */
+    handleTruckAssaultDeploy(playerTeam, x, y) {
+        const truckAssaultConfig = SERVER_NODE_CONFIG.actions.truckAssault;
+        const truckAssaultCost = SERVER_NODE_CONFIG.costs.truckAssault;
+        const truckAssaultDetectionRadius = SERVER_NODE_CONFIG.specialNodes?.truckAssault?.detectionRadius || 200;
+        
+        // Verificar currency
+        if (this.gameState.currency[playerTeam] < truckAssaultCost) {
+            return { success: false, reason: 'Currency insuficiente' };
+        }
+        
+        // 🆕 Validar requisito de Centro de Inteligencia
+        const hasIntelCenter = this.gameState.nodes.some(n => 
+            n.type === 'intelCenter' && 
+            n.team === playerTeam && 
+            n.active && 
+            n.constructed &&
+            !n.isAbandoning
+        );
+        
+        if (!hasIntelCenter) {
+            return { success: false, reason: 'Necesitas construir un Centro de Inteligencia primero' };
+        }
+        
+        // 🆕 Validar que esté en territorio enemigo (NO en territorio propio)
+        const inOwnTerritory = this.gameState.territoryCalculator.isInTeamTerritory(x, playerTeam);
+        if (inOwnTerritory) {
+            return { success: false, reason: 'El truck assault solo puede desplegarse en territorio enemigo' };
+        }
+        
+        // Validar ubicación (ignorando límites de detección)
+        if (!this.gameState.buildHandler.isValidLocation(x, y, 'truckAssault', {
+            ignoreDetectionLimits: true,
+            allowEnemyTerritory: true
+        })) {
+            return { success: false, reason: 'Ubicación no válida' };
+        }
+        
+        // Descontar currency
+        this.gameState.currency[playerTeam] -= truckAssaultCost;
+        
+        // Crear nodo del truck assault
+        const truckAssaultNode = this.gameState.buildHandler.createNode('truckAssault', playerTeam, x, y);
+        truckAssaultNode.constructed = true; // No necesita construcción
+        truckAssaultNode.isConstructing = false;
+        truckAssaultNode.active = true;
+        truckAssaultNode.detectionRadius = truckAssaultDetectionRadius;
+        truckAssaultNode.isTruckAssault = true;
+        
+        // 🆕 NUEVO: Añadir tiempo de expiración del truck assault
+        const truckAssaultDuration = SERVER_NODE_CONFIG.gameplay?.truckAssault?.duration || 25;
+        truckAssaultNode.spawnTime = this.gameState.gameTime;
+        truckAssaultNode.expiresAt = this.gameState.gameTime + truckAssaultDuration;
+        
+        // Agregar al estado del juego
+        this.gameState.nodes.push(truckAssaultNode);
+        
+        console.log(`🚛 Truck Assault desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)}) - Radio: ${truckAssaultDetectionRadius}px, Duración: ${truckAssaultDuration}s`);
+        
+        return { success: true, truckAssault: truckAssaultNode };
     }
     
     /**

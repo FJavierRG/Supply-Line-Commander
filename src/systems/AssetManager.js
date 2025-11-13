@@ -82,6 +82,8 @@ export class AssetManager {
             // Sprite del cursor para Fob Sabotaje
             'specops_selector': 'assets/sprites/ui/specops_selector.png',
             'specops_observer': 'assets/sprites/buildings/specops_observer.png', // 🆕 NUEVO: Sprite del comando especial operativo
+            'truckassault': 'assets/sprites/buildings/truckassault.png', // 🆕 NUEVO: Sprite del truck assault
+            'vehicle_workshop': 'assets/sprites/buildings/vehicle_workshop.png', // 🆕 NUEVO: Sprite del taller de vehículos
             
             // Nueva UI de tienda
             'ui-store-main': 'assets/sprites/ui/UIFrames/store_main_window.png',

@@ -1,10 +1,12 @@
 // ===== MANAGER DE MOVIMIENTO DE CONVOYES =====
 import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 import { GAME_CONFIG } from '../../config/gameConfig.js';
+import { TruckAssaultSystem } from '../../systems/TruckAssaultSystem.js';
 
 export class ConvoyMovementManager {
     constructor(gameState) {
         this.gameState = gameState;
+        this.truckAssaultSystem = new TruckAssaultSystem(gameState);
     }
     
     /**
@@ -26,6 +28,14 @@ export class ConvoyMovementManager {
                 continue;
             }
             
+            // 🆕 NUEVO: Si el nodo origen o destino está destruido (inactivo), eliminar convoy
+            // Esto evita que los camiones se queden atascados cuando un FOB es destruido
+            if (fromNode.active === false || toNode.active === false) {
+                console.warn(`⚠️ Convoy ${convoy.id} tiene nodo destruido (fromId: ${convoy.fromId}, toId: ${convoy.toId}), eliminando`);
+                this.gameState.convoys.splice(i, 1);
+                continue;
+            }
+            
             // Usar distancia inicial fija (no recalcular cada frame)
             const distance = convoy.initialDistance || 1; // Fallback a 1 para convoys viejos
             
@@ -43,6 +53,9 @@ export class ConvoyMovementManager {
             // La penalización se aplica siempre que el convoy tenga el flag sabotagePenaltyApplied
             // Esto asegura que el efecto se aplique tanto al ir como al volver
             vehicleSpeed = this.applySabotagePenalty(convoy, fromNode, vehicleSpeed);
+            
+            // 🆕 NUEVO: Penalización por truck assault enemigo (25% de ralentización)
+            vehicleSpeed = this.applyTruckAssaultPenalty(convoy, vehicleSpeed);
             
             // Bonus de EngineerCenter: +50% velocidad
             vehicleSpeed = this.applyEngineerCenterBonus(convoy, vehicleSpeed);
@@ -108,6 +121,26 @@ export class ConvoyMovementManager {
                 console.log(`🐌 Convoy ${convoy.id} afectado por sabotaje FOB ${fromNode.id} - velocidad reducida a 50% (ida y vuelta)`);
             }
         }
+        return vehicleSpeed;
+    }
+    
+    /**
+     * 🆕 NUEVO: Aplica penalización por truck assault enemigo
+     * Ralentiza vehículos enemigos que pasan por el área de efecto del truck assault
+     * @param {Object} convoy - Convoy
+     * @param {number} vehicleSpeed - Velocidad actual
+     * @returns {number} Velocidad con penalización aplicada
+     */
+    applyTruckAssaultPenalty(convoy, vehicleSpeed) {
+        // Verificar si el convoy está dentro del área de efecto de algún truck assault enemigo
+        const affectingAssault = this.truckAssaultSystem.getAffectingTruckAssault(convoy);
+        
+        if (affectingAssault) {
+            // Aplicar penalización de velocidad (25% de reducción = multiplicador 0.75)
+            const speedPenalty = SERVER_NODE_CONFIG.gameplay?.truckAssault?.speedPenalty || 0.75;
+            vehicleSpeed *= speedPenalty;
+        }
+        
         return vehicleSpeed;
     }
     
