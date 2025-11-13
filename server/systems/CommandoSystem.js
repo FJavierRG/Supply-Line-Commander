@@ -9,20 +9,14 @@ export class CommandoSystem {
     }
     
     /**
-     * Obtiene el radio del hitbox de un nodo
-     * 🆕 NUEVO: Helper para calcular si un edificio está dentro del área del comando
+     * ✅ Obtiene el radio del hitbox de un nodo (calculado dinámicamente)
+     * Hitbox = radius * 1.2 (+20% para mejor detección de colisiones)
      * @param {Object} node - Nodo del juego
      * @returns {number} Radio del hitbox en píxeles
      */
     getNodeHitboxRadius(node) {
-        // Intentar obtener hitboxRadius del servidor primero
-        const hitboxRadii = SERVER_NODE_CONFIG.security?.hitboxRadius || {};
-        if (hitboxRadii[node.type]) {
-            return hitboxRadii[node.type];
-        }
-        
-        // Fallback: usar radius del nodo o configuración por defecto
-        return node.radius || SERVER_NODE_CONFIG.radius?.[node.type] || 30;
+        const baseRadius = node.radius || SERVER_NODE_CONFIG.radius?.[node.type] || 30;
+        return baseRadius * 1.2; // +20% hitbox para mejor detección de colisiones
     }
     
     /**
@@ -160,8 +154,8 @@ export class CommandoSystem {
                 n.active
             ).length;
             
-            // Calcular nuevo maxVehicles: base (4) + bonus de truckFactories
-            const baseVehicles = 4;
+            // ✅ Usar configuración de serverNodes (fuente única de verdad)
+            const baseVehicles = SERVER_NODE_CONFIG.capacities.hq.maxVehicles || 4;
             const newMaxVehicles = baseVehicles + truckFactories;
             
             // Solo actualizar si cambió (evitar spam de logs)

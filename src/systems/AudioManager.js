@@ -53,7 +53,8 @@ export class AudioManager {
             sniperSpotted: 0.84, // Sonido de francotirador detectando objetivo (+110%)
             chopper: 0.2, // Sonido de chopper (muy reducido, era demasiado alto)
             whisper: 0.9, // Sonido de whisper para specops (+30%: 0.3 * 1.3 = 0.39)
-            commando: 0.6 // Sonido de despliegue de comando (+20% respecto a 0.5)
+            commando: 0.6, // Sonido de despliegue de comando (+20% respecto a 0.5)
+            menuHover: 0.4 // Sonido de hover en botones del menú
         };
         
         this.loadSounds();
@@ -140,7 +141,7 @@ export class AudioManager {
         
         // Sonido de hover en menú - TEST: probar con sonido más pequeño
         const menuHoverUrl = SOUNDS_BASE_URL + 'menu_choice.wav';
-        this.sounds.menuHover = this.createAudio(menuHoverUrl, 0.4, false);
+        this.sounds.menuHover = this.createAudio(menuHoverUrl, this.volumes.menuHover, false);
     }
     
     createAudio(src, volume, loop) {

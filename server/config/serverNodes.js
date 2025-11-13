@@ -2,9 +2,11 @@
 // Contiene SOLO valores numéricos y stats para balanceo de juego
 // NO incluye información visual (sprites, colores) - eso está en src/config/nodes.js
 
+import { NODE_DESCRIPTIONS } from './nodeDescriptions.js';
+
 export const SERVER_NODE_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
-    // COSTOS DE EDIFICIOS
+    // COSTES DE EDIFICIOS
     // ═══════════════════════════════════════════════════════════════
     costs: {
         fob: 120,
@@ -13,18 +15,18 @@ export const SERVER_NODE_CONFIG = {
         nuclearPlant: 200,
         truckFactory: 100,
         engineerCenter: 120,
-        intelRadio: 70, // Costo de inversión
-        aerialBase: 150, // 🆕 Base Aérea para recarga de helicópteros
+        intelRadio: 70, 
+        aerialBase: 150, 
         campaignHospital: 60,
-        intelCenter: 150, // 🆕 Centro de Inteligencia - desbloquea comandos
-        vigilanceTower: 120, // 🆕 Torre de Vigilancia - counterea comandos
-        trainStation: 170, // 🆕 Estación de Tren - envía trenes automáticamente
+        intelCenter: 150, 
+        vigilanceTower: 120, 
+        trainStation: 170, 
         // 🆕 CONSUMIBLES/PROYECTILES
         drone: 150,
         sniperStrike: 40,
         fobSabotage: 40,
-        specopsCommando: 70,  // 🆕 NUEVO: Comando especial operativo
-        tank: 100  // 🆕 NUEVO: Tanque - similar al dron pero no puede atacar FOBs ni HQs
+        specopsCommando: 70,  
+        tank: 100
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -32,17 +34,17 @@ export const SERVER_NODE_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
     buildTimes: {
         fob: 4,
-        antiDrone: 4.5,
+        antiDrone: 4,
         droneLauncher: 2,
         nuclearPlant: 4,
         truckFactory: 2,
         engineerCenter: 4,
         campaignHospital: 2,
-        intelRadio: 2, // Construcción rápida
-        aerialBase: 3, // 🆕 Base Aérea - 3 segundos
-        intelCenter: 3,  // 🆕 Centro de Inteligencia - 3 segundos
-        vigilanceTower: 3,  // 🆕 Torre de Vigilancia - 3 segundos
-        trainStation: 4  // 🆕 Estación de Tren - 4 segundos
+        intelRadio: 2, 
+        aerialBase: 3, 
+        intelCenter: 3, 
+        vigilanceTower: 3, 
+        trainStation: 4  
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -57,49 +59,41 @@ export const SERVER_NODE_CONFIG = {
             capacityBonus: 15     // +15 capacidad para heavy_trucks
         },
         engineerCenter: {
-            speedBonus: 0.5 // +50% velocidad de convoyes
+            speedMultiplier: 1.5,        // +50% velocidad para heavy_truck
+            affectedVehicles: ['heavy_truck']
         },
-        intelRadio: {
-            investmentTime: 20,   // Tiempo en segundos antes de pagar
-            investmentReturn: 75 // Total a pagar (coste + beneficio)
-        },
-        aerialBase: {
-            maxSupplies: 200,       // 🆕 Capacidad máxima de suministros
+        aerialBase: { // En dev aún, probablemente a descartar
+            // ✅ maxSupplies movido a capacities.aerialBase (fuente única de verdad)
             autoDestroy: true       // 🆕 Se autodestruye cuando se agota
         },
         trainStation: {
-            trainInterval: 15,      // 🆕 Segundos entre envíos de tren
-            trainSpeed: 50,        // 🆕 Velocidad del tren (píxeles por segundo)
+            trainInterval: 12,      // 🆕 Segundos entre envíos de tren
+            trainSpeed: 55,        // 🆕 Velocidad del tren (píxeles por segundo)
             trainCargo: 25          // 🆕 Suministros que entrega cada tren
         }
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // COSTOS DE ACCIONES
+    // CONFIGURACIÓN DE ACCIONES
     // ═══════════════════════════════════════════════════════════════
+    // ✅ NOTA: Los costos están en costs.* (fuente única de verdad)
+    // - costs.sniperStrike, costs.fobSabotage, costs.drone, costs.tank, costs.specopsCommando
     actions: {
         sniperStrike: {
-            cost: 40,
-            targetType: ['front', 'specopsCommando'] // 🆕 NUEVO: Puede disparar a frentes (aplica wounded) o comandos (los elimina)
+            targetType: ['front', 'specopsCommando']
         },
         fobSabotage: {
-            cost: 40, // Sincronizado con src/config/nodes.js
             targetType: 'fob'
         },
         specopsCommando: {
-            // cost: Definido en costs.specopsCommando (línea 26) - NO duplicar aquí
             targetType: 'position', // Se despliega en una posición (no un nodo específico)
-            detectionRadius: 200,  // Área de efecto que deshabilita edificios enemigos
             ignoreDetectionLimits: true // No afectado por límites de detección de otros edificios
         },
         droneLaunch: {
-            cost: 150,
             validTargets: ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'trainStation']
         },
         tankLaunch: {
-            cost: 200,
             validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation']
-            // No puede atacar FOBs ni HQs
         }
     },
 
@@ -115,14 +109,6 @@ export const SERVER_NODE_CONFIG = {
         }
     },
 
-    // ═══════════════════════════════════════════════════════════════
-    // ⚠️ DEPRECATED: Vehículos movidos a server/config/gameConfig.js (centralizado)
-    // vehicles: {
-    //     truck: { baseCapacity: 15, speed: 120 },
-    //     heavy_truck: { baseCapacity: 15, speed: 100 },
-    //     helicopter: { baseCapacity: 100, speed: 150, deliveryAmount: 50 },
-    //     ambulance: { speed: 140 }
-    // },
 
     // ═══════════════════════════════════════════════════════════════
     // RANGOS Y DETECCIÓN
@@ -134,34 +120,36 @@ export const SERVER_NODE_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
     // RADIOS DE CONSTRUCCIÓN (proximidad para evitar stacking)
     // ═══════════════════════════════════════════════════════════════
+    // Radio usado para validar proximidad al construir (evitar stacking de edificios)
     buildRadius: {
-        // Radio usado para validar proximidad al construir (evitar stacking)
-        // Si no se define, se usa detectionRadius como fallback
-        vigilanceTower: 130  // 🆕 Torre de Vigilancia: radio de construcción más pequeño (130px)
-        // Otros edificios usan detectionRadius como buildRadius por defecto
+        fob: 140,              
+        antiDrone: 120,        
+        droneLauncher: 120,    
+        razorNet: 100,       
+        truckFactory: 130,   
+        engineerCenter: 130,   
+        nuclearPlant: 140,    
+        machineNest: 120,     
+        campaignHospital: 130,
+        intelRadio: 120,      
+        intelCenter: 130,     
+        aerialBase: 130,       
+        vigilanceTower: 130,   
+        trainStation: 130       
     },
     
     // ═══════════════════════════════════════════════════════════════
-    // RADIOS DE DETECCIÓN (SERVIDOR COMO AUTORIDAD - CRÍTICO PARA SEGURIDAD)
+    // RADIOS DE DETECCIÓN (Solo para edificios que realmente detectan algo)
     // ═══════════════════════════════════════════════════════════════
+    // ✅ Solo para edificios con capacidad de detección real (no para prevenir stacking)
     detectionRadius: {
-        fob: 140,              // Valor original (sin +15%)
-        antiDrone: 120,        // Valor original (sin +15%)
-        droneLauncher: 120,    // Valor original (sin +15%)
-        razorNet: 100,         // Valor original calculado
-        truckFactory: 130,     // Valor original (sin +15%)
-        engineerCenter: 130,   // Valor original (sin +15%)
-        nuclearPlant: 140,     // Valor original (sin +15%)
-        machineNest: 120,      // Valor original calculado
-        campaignHospital: 130, // Valor original (sin +15%)
-        intelRadio: 120,       // Valor original (sin +15%)
-        intelCenter: 130,      // 🆕 Centro de Inteligencia
-        aerialBase: 130,        // 🆕 Base Aérea
-        vigilanceTower: 320,   // 🆕 Torre de Vigilancia (radio de protección para comandos - 320px, reducido 20%)
-        trainStation: 130       // 🆕 Estación de Tren
+        vigilanceTower: 320   // Área de protección contra comandos enemigos
     },
     
-    // Radios base para fallback si no se define detectionRadius
+    // ═══════════════════════════════════════════════════════════════
+    // TAMAÑO VISUAL / HITBOX (radio del sprite)
+    // ═══════════════════════════════════════════════════════════════
+    // Radio base del sprite del edificio (tamaño visual y hitbox para colisiones físicas)
     radius: {
         fob: 40,
         antiDrone: 30,
@@ -173,10 +161,10 @@ export const SERVER_NODE_CONFIG = {
         machineNest: 30,
         campaignHospital: 35,
         intelRadio: 30,
-        intelCenter: 35,       // 🆕 Centro de Inteligencia (tamaño visual 35px)
-        aerialBase: 40,     // 🆕 Base Aérea (tamaño visual 40px)
-        vigilanceTower: 35,   // 🆕 Torre de Vigilancia (tamaño visual 35px)
-        trainStation: 40       // 🆕 Estación de Tren (tamaño visual 40px)
+        intelCenter: 35,      
+        aerialBase: 40,    
+        vigilanceTower: 35,   
+        trainStation: 40     
     },
     
     // 🆕 NUEVO: Configuración de nodos especiales que se despliegan como unidades
@@ -190,14 +178,14 @@ export const SERVER_NODE_CONFIG = {
     },
 
     // ═══════════════════════════════════════════════════════════════
-    // CAPACIDADES DINÁMICAS (SERVIDOR COMO AUTORIDAD)
+    // CAPACIDADES DE EDIFICIOS (SERVIDOR COMO AUTORIDAD)
     // ═══════════════════════════════════════════════════════════════
+    // Los valores por defecto son: hasSupplies=false, hasVehicles=false, hasHelicopters=false
     capacities: {
         // Capacidades base de nodos
         hq: {
             maxVehicles: 4,
             maxAmbulances: 1,
-            hasSupplies: false,
             hasVehicles: true,
             hasMedicalSystem: true
         },
@@ -211,147 +199,33 @@ export const SERVER_NODE_CONFIG = {
             maxSupplies: 100,
             maxHelicopters: 1,
             hasSupplies: true,
-            hasVehicles: false,
-            hasHelicopters: false
+            hasHelicopters: true  // ✅ Agregado para soporte de helicópteros en frentes
         },
         aerialBase: {
             maxSupplies: 200,
-            hasSupplies: true,
-            hasVehicles: false
-        },
-        
-        // Capacidades de edificios construibles
-        antiDrone: {
-            hasSupplies: false,
-            hasVehicles: false
-        },
-        droneLauncher: {
-            hasSupplies: false,
-            hasVehicles: false
-        },
-        razorNet: {
-            hasSupplies: false,
-            hasVehicles: false
-        },
-        truckFactory: {
-            hasSupplies: false,
-            hasVehicles: false
-        },
-        engineerCenter: {
-            hasSupplies: false,
-            hasVehicles: false
-        },
-        nuclearPlant: {
-            hasSupplies: false,
-            hasVehicles: false
-        },
-        machineNest: {
-            hasSupplies: false,
-            hasVehicles: false
+            hasSupplies: true
         },
         campaignHospital: {
             maxVehicles: 1,
-            hasSupplies: false,
             hasVehicles: true
-        },
-        intelRadio: {
-            hasSupplies: false,
-            hasVehicles: false
-        },
-        intelCenter: {
-            hasSupplies: false,
-            hasVehicles: false
-        },
-        aerialBase: {
-            hasSupplies: true,
-            hasVehicles: false
-        },
-        vigilanceTower: {
-            hasSupplies: false,
-            hasVehicles: false
-        },
-        trainStation: {
-            hasSupplies: false,
-            hasVehicles: false
         }
     },
     
-    // ═══════════════════════════════════════════════════════════════
-    // BONUSES DE EDIFICIOS (SERVIDOR COMO AUTORIDAD)
-    // ═══════════════════════════════════════════════════════════════
-    bonuses: {
-        truckFactory: {
-            hqVehicleBonus: 1,           // +1 vehículo al HQ por cada fábrica
-            heavyTruckCapacityBonus: 15,  // +15 capacidad a camiones pesados
-            effect: 'increaseHQVehicles'  // Tipo de efecto
-        },
-        engineerCenter: {
-            heavyTruckSpeedMultiplier: 1.5 // +50% velocidad a camiones pesados
-        }
-    },
 
     // ═══════════════════════════════════════════════════════════════
     // PROPIEDADES DE SEGURIDAD (SERVIDOR COMO AUTORIDAD - ANTI-HACK)
     // ═══════════════════════════════════════════════════════════════
+    // Propiedades críticas enviadas al cliente para prevenir manipulación
     security: {
-        // Propiedades que afectan hitboxes y colisiones
-        hitboxRadius: {
-            hq: 60,              // +20% hitbox (50 * 1.2)
-            fob: 48,             // +20% hitbox (40 * 1.2)
-            front: 42,           // +20% hitbox (35 * 1.2)
-            antiDrone: 36,       // +20% hitbox (30 * 1.2)
-            droneLauncher: 36,   // +20% hitbox (30 * 1.2)
-            razorNet: 30,        // +20% hitbox (25 * 1.2)
-            truckFactory: 42,    // +20% hitbox (35 * 1.2)
-            engineerCenter: 42,  // +20% hitbox (35 * 1.2)
-            nuclearPlant: 48,    // +20% hitbox (40 * 1.2)
-            machineNest: 36,     // +20% hitbox (30 * 1.2)
-            campaignHospital: 42, // +20% hitbox (35 * 1.2)
-            intelRadio: 36,      // +20% hitbox (30 * 1.2)
-            intelCenter: 42,     // 🆕 +20% hitbox (35 * 1.2)
-            aerialBase: 48,       // +20% hitbox (40 * 1.2)
-            vigilanceTower: 42,   // 🆕 +20% hitbox (35 * 1.2)
-            trainStation: 48       // 🆕 +20% hitbox (40 * 1.2)
-    },
-        
-        // Propiedades de construcción
+        // Propiedades de construcción (solo excepciones - valor por defecto: true)
         needsConstruction: {
-            hq: false,
-            front: false,
-            fob: true,
-            antiDrone: true,
-            droneLauncher: true,
-            razorNet: true,
-            truckFactory: true,
-            engineerCenter: true,
-            nuclearPlant: true,
-            machineNest: true,
-            campaignHospital: true,
-            intelRadio: true,
-            intelCenter: true,    // 🆕 Centro de Inteligencia
-            aerialBase: true,
-            vigilanceTower: true,  // 🆕 Torre de Vigilancia
-            trainStation: true     // 🆕 Estación de Tren
+            hq: false,      // HQ ya está construido al inicio
+            front: false    // Front ya está construido al inicio
         },
         
-        // Propiedades de destrucción
+        // Propiedades de destrucción (solo excepciones - valor por defecto: true)
         canBeDestroyed: {
-            hq: false,
-            fob: true,
-            front: true,
-            antiDrone: true,
-            droneLauncher: true,
-            razorNet: true,
-            truckFactory: true,
-            engineerCenter: true,
-            nuclearPlant: true,
-            machineNest: true,
-            campaignHospital: true,
-            intelRadio: true,
-            intelCenter: true,    // 🆕 Centro de Inteligencia
-            aerialBase: true,
-            vigilanceTower: true,  // 🆕 Torre de Vigilancia
-            trainStation: true     // 🆕 Estación de Tren
+            hq: false    // HQ no puede ser destruido
         }
     },
 
@@ -382,10 +256,10 @@ export const SERVER_NODE_CONFIG = {
         },
         
         // Propiedades de radio inteligencia
-        // 🆕 NUEVO: investmentTime e investmentReturn están en effects.intelRadio (línea 62-64)
-        // NO duplicar aquí - usar effects.intelRadio como fuente única de verdad
-        // (Objeto vacío para mantener estructura, pero valores están en effects.intelRadio)
-        intelRadio: {},
+        intelRadio: {
+            investmentTime: 20,      // Tiempo en segundos antes de pagar
+            investmentBonus: 25       // Beneficio adicional (se suma al costo del edificio)
+        },
         
         // Propiedades de sniper
         sniperStrike: {
@@ -401,7 +275,7 @@ export const SERVER_NODE_CONFIG = {
         
         // Propiedades de comando especial operativo
         specopsCommando: {
-            detectionRadius: 200,  // Área de efecto en píxeles
+            detectionRadius: 200,  // Área visual de efecto (para mostrar en el cliente) - valor funcional está en specialNodes.specopsCommando.detectionRadius
             duration: 10,           // Duración en segundos antes de que el comando expire (10s)
             residualDisabledDuration: 3  // 🆕 NUEVO: Duración en segundos que los edificios permanecen disabled después de eliminar el comando (3s)
         },
@@ -420,10 +294,10 @@ export const SERVER_NODE_CONFIG = {
             machineNest: false,
             campaignHospital: false,
             intelRadio: true,
-            intelCenter: true,    // 🆕 Centro de Inteligencia - desbloquea comandos
+            intelCenter: true,   
             aerialBase: false,
-            vigilanceTower: true,  // 🆕 Torre de Vigilancia - counterea comandos
-            trainStation: true,    // 🆕 Estación de Tren - envía trenes automáticamente
+            vigilanceTower: false,  
+            trainStation: true,    
             // 🆕 CONSUMIBLES/PROYECTILES
             drone: true,
             sniperStrike: true,
@@ -443,7 +317,7 @@ export const SERVER_NODE_CONFIG = {
                 showRangePreview: true
             },
             sniperStrike: {
-                targetType: ['front', 'specopsCommando'], // 🆕 NUEVO: Puede disparar a frentes (aplica wounded) o comandos (los elimina)
+                targetType: ['front', 'specopsCommando'], 
                 cursorSprite: 'sniper'
             },
             fobSabotage: {
@@ -464,79 +338,24 @@ export const SERVER_NODE_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
     // DESCRIPCIONES DE EDIFICIOS (SERVIDOR COMO AUTORIDAD)
     // ═══════════════════════════════════════════════════════════════
-    descriptions: {
-        fob: {
-            name: 'FOB (Base Avanzada)',
-            description: 'Base de operaciones avanzada. Genera y envía convoyes al frente.'
-        },
-        antiDrone: {
-            name: 'Anti-Dron',
-            description: 'Defensa contra drones enemigos. Tiene un solo proyectil.'
-        },
-        droneLauncher: {
-            name: 'Lanzador de Drones',
-            description: 'Habilita el dron bomba en la tienda.'
-        },
-        razorNet: {
-            name: 'Red de Alambre',
-            description: 'Defensa contra unidades terrestres enemigas.'
-        },
-        truckFactory: {
-            name: 'Fábrica de Camiones',
-            description: 'Aumenta +1 vehículos del HQ y mejora +15 su capacidad.'
-        },
-        engineerCenter: {
-            name: 'Centro de Ingenieros',
-            description: 'Asfalta el terreno del HQ a los FOBs, aumentando la velocidad de los convoyes pesados.'
-        },
-        nuclearPlant: {
-            name: 'Planta Nuclear',
-            description: 'Genera ingresos pasivos adicionales (+2$/s).'
-        },
-        machineNest: {
-            name: 'Nido de Ametralladoras',
-            description: 'Defensa pesada contra unidades terrestres.'
-        },
-        campaignHospital: {
-            name: 'Hospital de Campaña',
-            description: 'Proporciona atención médica a unidades heridas en el área.'
-        },
-        intelRadio: {
-            name: 'Radio Inteligencia',
-            description: 'Después de 12 segundos en el terreno devuelve el coste más 50$ de beneficio.'
-        },
-        intelCenter: {
-            name: 'Centro de Inteligencia',
-            description: 'Centro de operaciones especiales. Desbloquea el Comando Especial.'
-        },
-        aerialBase: {
-            name: 'Base Aérea',
-            description: 'Base especializada para recarga de helicópteros. Almacena suministros para transporte aéreo.'
-        },
-        vigilanceTower: {
-            name: 'Torre de Vigilancia',
-            description: 'Torre defensiva que impide le incursón de comandos y sabotajes enemigos.'
-        },
-        trainStation: {
-            name: 'Estación de Tren',
-            description: 'Estación que construye vías a los FOBs y les envía trenes de suministros periódicamente.'
-        },
-        drone: {
-            name: 'Dron Bomba',
-            description: 'Destruye un objetivo enemigo. Requiere tener una lanzadera en el campo.'
-        },
-        sniperStrike: {
-            name: 'Disparo de Francotirador',
-            description: 'Ataque preciso que provoca el efecto herido temporalmente a unidades enemigas.'
-        },
-        fobSabotage: {
-            name: 'Sabotaje de FOB',
-            description: 'Sabotea los tres camiones siguientes de la FOB objetivo, disminuyendo su velocidad de movimiento.'
-        },
-        specopsCommando: {
-            name: 'Comando Especial',
-            description: 'Unidad especial que se despliega en territorio enemigo. Deshabilita los edificios dentro de su área de operaciones.'
-        }
-    }
+    // Importado desde nodeDescriptions.js para mejorar modularidad
+    descriptions: NODE_DESCRIPTIONS
 };
+
+/**
+ * ✅ Helper: Obtiene el radio de construcción de un edificio con fallback
+ * Prioridad: buildRadius → (radius * 2.5)
+ * @param {string} buildingType - Tipo de edificio
+ * @returns {number} Radio de construcción en píxeles
+ */
+export function getBuildRadius(buildingType) {
+    // 1. Si tiene buildRadius específico, usarlo
+    if (SERVER_NODE_CONFIG.buildRadius?.[buildingType]) {
+        return SERVER_NODE_CONFIG.buildRadius[buildingType];
+    }
+    
+    // 2. Fallback final: calcular desde radius base (tamaño visual)
+    const baseRadius = SERVER_NODE_CONFIG.radius?.[buildingType] || 30;
+    return baseRadius * 2.5;
+}
 

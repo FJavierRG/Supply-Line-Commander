@@ -138,30 +138,26 @@ export class GameStateManager {
         );
         this.nodes.push(this.createNode('hq', 'player2', hq2Pos.x, hq2Pos.y));
         
-        // 3. 🆕 CENTRALIZADO: FOBs solo para jugadores que pueden usarlos
-        if (this.raceManager.canPlayerUseFOBs('player1')) {
-            MAP_CONFIG.fobs.player1.forEach(fobPos => {
-                const absPos = calculateAbsolutePosition(
-                    fobPos.xPercent,
-                    fobPos.yPercent,
-                    baseWidth,
-                    baseHeight
-                );
-                this.nodes.push(this.createNode('fob', 'player1', absPos.x, absPos.y, 50));
-            });
-        }
+        // 3. ✅ SIMPLIFICADO: FOBs siempre se crean (ya no hay sistema de naciones)
+        MAP_CONFIG.fobs.player1.forEach(fobPos => {
+            const absPos = calculateAbsolutePosition(
+                fobPos.xPercent,
+                fobPos.yPercent,
+                baseWidth,
+                baseHeight
+            );
+            this.nodes.push(this.createNode('fob', 'player1', absPos.x, absPos.y, 50));
+        });
         
-        if (this.raceManager.canPlayerUseFOBs('player2')) {
-            MAP_CONFIG.fobs.player2.forEach(fobPos => {
-                const absPos = calculateAbsolutePosition(
-                    fobPos.xPercent,
-                    fobPos.yPercent,
-                    baseWidth,
-                    baseHeight
-                );
-                this.nodes.push(this.createNode('fob', 'player2', absPos.x, absPos.y, 50));
-            });
-        }
+        MAP_CONFIG.fobs.player2.forEach(fobPos => {
+            const absPos = calculateAbsolutePosition(
+                fobPos.xPercent,
+                fobPos.yPercent,
+                baseWidth,
+                baseHeight
+            );
+            this.nodes.push(this.createNode('fob', 'player2', absPos.x, absPos.y, 50));
+        });
         
         // 4. Generar Frentes Jugador 1
         MAP_CONFIG.fronts.player1.forEach(frontPos => {
@@ -185,27 +181,7 @@ export class GameStateManager {
             this.nodes.push(this.createNode('front', 'player2', absPos.x, absPos.y, 100));
         });
         
-        // 🆕 NUEVO: Crear helicópteros iniciales para B_Nation
-        const player1Config = this.raceManager.getPlayerRaceConfig('player1');
-        const player2Config = this.raceManager.getPlayerRaceConfig('player2');
-        
-        if (player1Config?.specialMechanics?.transportSystem === 'aerial') {
-            const hqNode = this.nodes.find(n => n.type === 'hq' && n.team === 'player1');
-            if (hqNode) {
-                const heli = this.helicopterManager.createHelicopter('player1', hqNode.id);
-                if (!hqNode.landedHelicopters) hqNode.landedHelicopters = [];
-                hqNode.landedHelicopters.push(heli.id);
-            }
-        }
-        
-        if (player2Config?.specialMechanics?.transportSystem === 'aerial') {
-            const hqNode = this.nodes.find(n => n.type === 'hq' && n.team === 'player2');
-            if (hqNode) {
-                const heli = this.helicopterManager.createHelicopter('player2', hqNode.id);
-                if (!hqNode.landedHelicopters) hqNode.landedHelicopters = [];
-                hqNode.landedHelicopters.push(heli.id);
-            }
-        }
+        // ✅ SIMPLIFICADO: Ya no hay sistema de naciones, no se crean helicópteros iniciales
         
         return {
             nodes: this.stateSerializer.serializeNodes(),
@@ -214,12 +190,8 @@ export class GameStateManager {
             duration: this.duration,
             worldWidth: baseWidth,
             worldHeight: baseHeight,
-            // 🆕 CENTRALIZADO: Incluir información de razas en estado inicial
+            // ✅ ELIMINADO: Ya no hay sistema de naciones, solo se mantiene playerRaces para compatibilidad
             playerRaces: { ...this.playerRaces },
-            raceConfigs: {
-                player1: this.raceManager.getPlayerRaceConfig('player1'),
-                player2: this.raceManager.getPlayerRaceConfig('player2')
-            },
             // 🆕 SERVIDOR COMO AUTORIDAD: Configuración de edificios
             buildingConfig: {
                 costs: this.buildHandler.getBuildingCosts(),
@@ -262,12 +234,12 @@ export class GameStateManager {
         if (type === 'hq') {
             node.hasSupplies = false;
             node.supplies = null; // Infinitos
-            // 🆕 CENTRALIZADO: Usar configuración de vehículos según raza
+            // ✅ CONSOLIDADO: Usar configuración de vehículos desde vehicleConfig (lee de SERVER_NODE_CONFIG.capacities)
             node.hasVehicles = vehicleConfig.hasVehicles;
-            node.maxVehicles = vehicleConfig.hasVehicles ? 4 : 0;
+            node.maxVehicles = vehicleConfig.hasVehicles ? vehicleConfig.availableVehicles : 0;
             node.availableVehicles = vehicleConfig.availableVehicles;
             node.hasHelicopters = vehicleConfig.hasHelicopters;
-            node.maxHelicopters = vehicleConfig.hasHelicopters ? 1 : 0;
+            node.maxHelicopters = vehicleConfig.hasHelicopters ? vehicleConfig.availableHelicopters : 0;
             node.availableHelicopters = vehicleConfig.availableHelicopters;
             // Sistema médico para ambulancias
             node.hasMedicalSystem = true;
@@ -277,12 +249,12 @@ export class GameStateManager {
             node.hasSupplies = true;
             node.maxSupplies = 100;
             node.supplies = supplies !== null ? supplies : 30;
-            // 🆕 CENTRALIZADO: Usar configuración de vehículos según raza
+            // ✅ CONSOLIDADO: Usar configuración de vehículos desde vehicleConfig (lee de SERVER_NODE_CONFIG.capacities)
             node.hasVehicles = vehicleConfig.hasVehicles;
-            node.maxVehicles = vehicleConfig.hasVehicles ? 2 : 0;
+            node.maxVehicles = vehicleConfig.hasVehicles ? vehicleConfig.availableVehicles : 0;
             node.availableVehicles = vehicleConfig.availableVehicles;
             node.hasHelicopters = vehicleConfig.hasHelicopters;
-            node.maxHelicopters = vehicleConfig.hasHelicopters ? 1 : 0;
+            node.maxHelicopters = vehicleConfig.hasHelicopters ? vehicleConfig.availableHelicopters : 0;
             node.availableHelicopters = vehicleConfig.availableHelicopters;
         } else if (type === 'front') {
             node.hasSupplies = true;
@@ -290,12 +262,12 @@ export class GameStateManager {
             node.supplies = supplies !== null ? supplies : 100;
             node.consumeRate = 1.6;
             node.maxXReached = x;
-            // 🆕 CENTRALIZADO: Usar configuración de vehículos según raza
+            // ✅ CONSOLIDADO: Usar configuración de vehículos desde vehicleConfig (lee de SERVER_NODE_CONFIG.capacities)
             node.hasVehicles = vehicleConfig.hasVehicles;
-            node.maxVehicles = vehicleConfig.hasVehicles ? 1 : 0;
+            node.maxVehicles = vehicleConfig.hasVehicles ? vehicleConfig.availableVehicles : 0;
             node.availableVehicles = vehicleConfig.availableVehicles;
             node.hasHelicopters = vehicleConfig.hasHelicopters;
-            node.maxHelicopters = vehicleConfig.hasHelicopters ? 1 : 0;
+            node.maxHelicopters = vehicleConfig.hasHelicopters ? vehicleConfig.availableHelicopters : 0;
             node.availableHelicopters = vehicleConfig.availableHelicopters;
         }
         
@@ -714,15 +686,6 @@ export class GameStateManager {
      */
     canPlayerUseFOBs(team) {
         return this.raceManager.canPlayerUseFOBs(team);
-    }
-    
-    /**
-     * Obtiene el sistema de transporte del jugador según su raza
-     * @param {string} team - Equipo del jugador
-     * @returns {string} Tipo de sistema de transporte (standard/aerial)
-     */
-    getPlayerTransportSystem(team) {
-        return this.raceManager.getPlayerTransportSystem(team);
     }
     
     /**

@@ -9,6 +9,16 @@ import AIConfig from './AIConfig.js';
  */
 const RACE_AI_CONFIG = {
     A_Nation: {
+        // === UNIDADES DISPONIBLES PARA LA IA ===
+        buildings: [
+            'fob', 'antiDrone', 'droneLauncher',
+            'truckFactory', 'engineerCenter', 'nuclearPlant',
+            'vigilanceTower', 'intelRadio', 'intelCenter'
+        ],
+        consumables: [
+            'drone', 'sniperStrike', 'specopsCommando', 'fobSabotage'
+        ],
+        
         // === SCORES DE CONSTRUCCIÓN ===
         buildingScores: {
             intelRadio: null, // No disponible para A_Nation

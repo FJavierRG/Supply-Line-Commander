@@ -7,30 +7,12 @@ export const NODE_CONFIG = {
     // ========== NODOS BASE DEL MAPA ==========
     hq: {
         id: 'hq',
-        name: 'HQ (Cuartel General)',
-        description: 'Nodo principal: gestiona recursos, vehículos y ambulancias.',
         spriteKey: 'base-hq',
         category: 'map_node',
         
         
         // Propiedades
         radius: 50,
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost: Definido por el servidor (autoridad)
-        
-        // Sistema de suministros
-        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
-        // maxSupplies: Definido por el servidor (autoridad)
-        
-        // Sistema de vehículos
-        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
-        // maxVehicles: Definido por el servidor (autoridad)
-        
-        // Sistema médico
-        // hasMedicalSystem: Definido por el servidor (autoridad - ANTI-HACK)
-        // maxAmbulances: Definido por el servidor (autoridad)
         
         // Renderizado
         shadowColor: '#3498db'
@@ -38,415 +20,216 @@ export const NODE_CONFIG = {
     
     fob: {
         id: 'fob',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'base-fob',
         category: 'buildable', // Puede construirse Y aparecer en el mapa
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         
         radius: 40, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
-        
-        // Sistema de suministros
-        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
-        // maxSupplies: Definido por el servidor (autoridad)
-        
-        // Sistema de vehículos
-        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
-        // maxVehicles: Definido por el servidor (autoridad)
         
         shadowColor: '#2ecc71'
     },
     
     front: {
         id: 'front',
-        name: 'Frente',
-        description: 'Nodo de avance en el frente. Consume suministros para empujar. Asegúrate de que tenga más recursos que el frente enemigo.',
         spriteKey: 'base-front',
         category: 'map_node',
         
         
         radius: 35, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost: Definido por el servidor (autoridad)
-        
-        // Sistema de suministros
-        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
-        // maxSupplies: Definido por el servidor (autoridad)
-        // consumeRate: Definido por el servidor (autoridad)
-        
-        // Sistema de vehículos
-        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
-        // maxVehicles: Definido por el servidor (autoridad)
-        
-        // 🆕 NUEVO: Sistema de helicópteros para segunda nación
-        // hasHelicopters: Definido por el servidor (autoridad - ANTI-HACK)
-        // maxHelicopters: Definido por el servidor (autoridad)
-        
+    
         shadowColor: '#e67e22'
     },
     
     // ========== EDIFICIOS CONSTRUIBLES ==========
     antiDrone: {
         id: 'antiDrone',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-anti-drone',
         category: 'buildable',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
-        
-        // Sistema de razas
-        
+                
         radius: 30, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
-        sizeMultiplier: 0.85,
         
-        // Propiedades específicas anti-drone
-        // detectionRange, alertRange, cooldownTime: Definidos por el servidor (autoridad)
-        // isConsumable, showRangePreview: Definidos por el servidor (autoridad - ANTI-HACK)
+        sizeMultiplier: 0.85,
+       
     },
     
     droneLauncher: {
         id: 'droneLauncher',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-drone-launcher',
         category: 'buildable',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
         radius: 30, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
+        
         sizeMultiplier: 0.9
     },
     
     razorNet: {
         id: 'razorNet',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-razor-net',
         category: 'buildable',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
         radius: 25, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
+        
     },
     
     truckFactory: {
         id: 'truckFactory',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-truck-factory',
         category: 'buildable',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
         radius: 35, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
-        
-        // Efectos:
-        // effect, vehicleBonus, heavyTruckCapacityBonus: Definidos por el servidor (autoridad)
+       
     },
     
     engineerCenter: {
         id: 'engineerCenter',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-engineer-center',
         category: 'buildable',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
         radius: 35, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
+        
     },
     
     nuclearPlant: {
         id: 'nuclearPlant',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-nuclear-plant',
         category: 'buildable',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
         radius: 40, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
-        
-        // passiveIncomeBonus: Definido por el servidor (autoridad)
+       
     },
     
     machineNest: {
         id: 'machineNest',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-machine-nest',
         category: 'buildable',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
         radius: 30, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
+        
         sizeMultiplier: 1.15,
         flipHorizontal: true
     },
     
     campaignHospital: {
         id: 'campaignHospital',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-campaign-hospital',
         category: 'buildable',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
-        radius: 35, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
-        sizeMultiplier: 0.8, // Reducir sprite 20%
+        radius: 35, 
+        sizeMultiplier: 0.8, 
         
-        // Hospital NO tiene suministros, solo ambulancias
-        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
-        
-        // maxVehicles: Definido por el servidor (autoridad)
-        // actionRange: Definido por el servidor (autoridad)
-        // canDispatchMedical: Definido por el servidor (autoridad - ANTI-HACK)
-        // showRangePreview: Definido por el servidor (autoridad - ANTI-HACK)
     },
     
     intelRadio: {
         id: 'intelRadio',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-intel-radio', // Sprite específico para intelRadio
         category: 'buildable',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
-        radius: 30, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
-        
-        // Propiedades de inversión
-        // investmentTime, investmentReturn: Definidos por el servidor (autoridad)
-        
-        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
-        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
+        radius: 30, 
+       
     },
     
     intelCenter: {
         id: 'intelCenter',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-intel-center', // 🆕 Sprite del centro de inteligencia
         category: 'buildable',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
         radius: 35, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
+        
     },
     
     aerialBase: {
         id: 'aerialBase',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-aerial-base',
         category: 'buildable', // ✅ RESTAURADO: Para que aparezca en la tienda
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         radius: 40, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
+        
         sizeMultiplier: 0.66, // 🆕 AUMENTADO: 50% más grande (0.44 * 1.5 = 0.66)
         
-        // Sistema de suministros (para recarga de helicópteros)
-        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
-        // maxSupplies: Definido por el servidor (autoridad)
-        
-        // No maneja vehículos tradicionales
-        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
-        
-        // Propiedades especiales
         isAerialBase: true, // Flag para identificación
         autoDestroy: true // Se destruye cuando supplies llega a 0
     },
     
     vigilanceTower: {
         id: 'vigilanceTower',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-vigilance-tower',
         category: 'buildable',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         radius: 35, // Tamaño visual del sprite
         sizeMultiplier: 0.85, // 🆕 Reducir tamaño visual 15% (solo sprite, no afecta áreas)
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
-        
-        // No maneja suministros ni vehículos
-        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
-        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
-        
-        // Propiedades especiales
+       
         isVigilanceTower: true // Flag para identificación
     },
     
     trainStation: {
         id: 'trainStation',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'building-train-station',
         category: 'buildable',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
         radius: 40, // Tamaño visual del sprite
-        // hitboxRadius: Definido por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad - CRÍTICO PARA SEGURIDAD)
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost y constructionTime: Definidos por el servidor (autoridad)
         
-        // No maneja suministros ni vehículos
-        // hasSupplies: Definido por el servidor (autoridad - ANTI-HACK)
-        // hasVehicles: Definido por el servidor (autoridad - ANTI-HACK)
-        
-        // Propiedades especiales
         isTrainStation: true // Flag para identificación
     },
     
     // ========== PROYECTILES ==========
     drone: {
         id: 'drone',
-        name: 'Dron Bomba',
-        description: 'Destruye un objetivo enemigo. Puede ser interceptado por Anti-Drones. Requiere tener una lanzadera en el campo.',
         spriteKey: 'vehicle-drone',
         category: 'projectile',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
         radius: 0,
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost: Definido por el servidor (autoridad)
+        
         sizeMultiplier: 1.15
     },
     
     sniperStrike: {
         id: 'sniperStrike',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'vehicle-sniper_shoot_icon',
         category: 'projectile',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
         radius: 0,
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost: Definido por el servidor (autoridad)
-        // cursorSprite, targetType: Definidos por el servidor (autoridad - ANTI-HACK)
-        // effectDuration, spottedSoundCooldown: Definidos por el servidor (autoridad)
+       
     },
     
     fobSabotage: {
         id: 'fobSabotage',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'specops_unit', // Sprite del consumible
         category: 'projectile',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
         radius: 0,
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost: Definido por el servidor (autoridad)
-        // cursorSprite, targetType: Definidos por el servidor (autoridad - ANTI-HACK)
-        // speedPenalty, truckCount: Definidos por el servidor (autoridad)
-        // effectIcon: Definido por el servidor (autoridad - ANTI-HACK)
+        
     },
     
     specopsCommando: {
         id: 'specopsCommando',
-        // name y description: Definidos por el servidor (autoridad)
         spriteKey: 'specops_observer', // 🆕 NUEVO: Sprite del comando especial operativo
         category: 'projectile',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
         radius: 25, // 🆕 Radio físico del comando
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost: Definido por el servidor (autoridad)
-        // cursorSprite, targetType: Definidos por el servidor (autoridad - ANTI-HACK)
-        // detectionRadius: Definido por el servidor (autoridad)
+       
     },
     
     tank: {
         id: 'tank',
-        name: 'Tanque',
-        description: 'Unidad blindada que destruye edificios enemigos. No puede atacar FOBs ni HQs. Se detiene en el borde del objetivo para disparar.',
         spriteKey: 'vehicle-tank-1', // Sprite base del tanque
         category: 'projectile',
-        // enabled: Definido por el servidor (autoridad - ANTI-HACK)
         
-        // Sistema de razas
         
         radius: 0,
-        // canBeDestroyed: Definido por el servidor (autoridad - ANTI-HACK)
-        // needsConstruction: Definido por el servidor (autoridad - ANTI-HACK)
-        // cost: Definido por el servidor (autoridad)
+       
         sizeMultiplier: 1.0
     }
 };

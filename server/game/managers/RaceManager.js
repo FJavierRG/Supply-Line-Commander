@@ -1,12 +1,5 @@
 // ===== MANAGER DE RAZAS =====
-import { 
-    getServerRaceConfig, 
-    getServerRaceTransportSystem, 
-    canServerRaceUseFOBs,
-    getServerInitialVehiclesForRace,
-    getServerRaceBuildings,
-    getServerRaceConsumables
-} from '../../config/raceConfig.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 import { GAME_CONFIG } from '../../config/gameConfig.js';
 
 export class RaceManager {
@@ -15,103 +8,70 @@ export class RaceManager {
     }
     
     /**
-     * Obtiene la configuración de raza del jugador
+     * ⚠️ LEGACY: Obtiene la configuración de raza del jugador
+     * Ya no hay sistema de naciones, siempre devuelve null
      * @param {string} team - Equipo del jugador (player1/player2)
-     * @returns {Object|null} Configuración de la raza
+     * @returns {null} Siempre null (mantenido para compatibilidad)
      */
     getPlayerRaceConfig(team) {
-        const raceId = this.gameState.playerRaces[team];
-        if (!raceId) return null;
-        
-        // 🆕 SERVIDOR COMO AUTORIDAD: Usar configuración del servidor
-        return getServerRaceConfig(raceId);
+        // ✅ ELIMINADO: Ya no hay sistema de naciones, siempre devuelve null
+        return null;
     }
     
     /**
-     * Verifica si el jugador puede usar FOBs según su raza
+     * Verifica si el jugador puede usar FOBs
+     * ✅ SIMPLIFICADO: Siempre devuelve true (ya no hay sistema de naciones)
      * @param {string} team - Equipo del jugador
-     * @returns {boolean} True si puede usar FOBs
+     * @returns {boolean} Siempre true
      */
     canPlayerUseFOBs(team) {
-        const raceConfig = this.getPlayerRaceConfig(team);
-        return raceConfig ? canServerRaceUseFOBs(raceConfig.id) : true; // Fallback a true para compatibilidad
+        return true; // ✅ SIMPLIFICADO: Siempre se pueden usar FOBs
     }
     
     /**
-     * Obtiene el sistema de transporte del jugador según su raza
-     * @param {string} team - Equipo del jugador
-     * @returns {string} Tipo de sistema de transporte (standard/aerial)
-     */
-    getPlayerTransportSystem(team) {
-        const raceConfig = this.getPlayerRaceConfig(team);
-        return raceConfig ? getServerRaceTransportSystem(raceConfig.id) : 'standard'; // Fallback a standard
-    }
-    
-    /**
-     * Obtiene rutas válidas para una raza específica
+     * Obtiene rutas válidas para un tipo de nodo
+     * ✅ SIMPLIFICADO: Ya no hay rutas especiales por raza
      * @param {string} fromType - Tipo de nodo origen
      * @param {string} team - Equipo del jugador
      * @returns {Array} Array de tipos de nodos válidos
      */
     getValidRoutesForPlayer(fromType, team) {
-        const raceConfig = this.getPlayerRaceConfig(team);
-        
-        if (!raceConfig) return GAME_CONFIG.routes.valid[fromType] || [];
-        
-        // Si la raza tiene rutas especiales (aerial), usarlas
-        if (raceConfig.specialMechanics?.transportSystem === 'aerial') {
-            return GAME_CONFIG.routes.raceSpecial[raceConfig.id]?.[fromType] || GAME_CONFIG.routes.valid[fromType] || [];
-        }
-        
-        // Si no, usar rutas normales
         return GAME_CONFIG.routes.valid[fromType] || [];
     }
     
     /**
      * Configura un nodo según la raza del jugador
+     * ✅ SIMPLIFICADO: Ya no hay configuraciones especiales por raza
      * @param {Object} node - Nodo a configurar
      * @param {string} team - Equipo del jugador
-     * @returns {Object} Nodo configurado
+     * @returns {Object} Nodo configurado (sin cambios)
      */
     configureNodeForRace(node, team) {
-        const raceConfig = this.getPlayerRaceConfig(team);
-        
-        if (!raceConfig) {
-            // Fallback a configuración tradicional
-            return node;
-        }
-        
-        // Configurar según mecánicas especiales
-        if (raceConfig.specialMechanics?.transportSystem === 'aerial') {
-            // Sistema aéreo: Agregar helicópteros
-            node.hasHelicopters = true;
-            node.availableHelicopters = node.type === 'hq' ? 1 : 0;
-        }
-        
+        // ✅ SIMPLIFICADO: Ya no hay configuraciones especiales por raza
         return node;
     }
     
     /**
-     * Obtiene vehículos iniciales según la raza del jugador (SERVIDOR COMO AUTORIDAD)
-     * @param {string} team - Equipo del jugador
+     * Obtiene vehículos iniciales según el tipo de nodo
+     * ✅ REDISTRIBUIDO: Lee directamente de SERVER_NODE_CONFIG.capacities (movido desde raceConfig.js)
+     * @param {string} team - Equipo del jugador (no usado, mantenido para compatibilidad)
      * @param {string} nodeType - Tipo de nodo
      * @returns {Object} Configuración de vehículos iniciales
      */
     getInitialVehiclesForRace(team, nodeType) {
-        const raceConfig = this.getPlayerRaceConfig(team);
+        const capacityConfig = SERVER_NODE_CONFIG.capacities[nodeType];
         
-        if (!raceConfig) {
-            // Fallback a configuración tradicional
-            return {
-                hasVehicles: nodeType === 'hq',
-                availableVehicles: nodeType === 'hq' ? 2 : 0,
-                hasHelicopters: false,
-                availableHelicopters: 0
-            };
-        }
+        const hasVehicles = capacityConfig?.hasVehicles ?? false;
+        const maxVehicles = capacityConfig?.maxVehicles ?? 0;
+        const hasHelicopters = capacityConfig?.hasHelicopters ?? false;
+        const maxHelicopters = capacityConfig?.maxHelicopters ?? 0;
         
-        // 🆕 SERVIDOR COMO AUTORIDAD: Usar configuración centralizada del servidor
-        return getServerInitialVehiclesForRace(raceConfig.id, nodeType);
+        return {
+            hasVehicles: hasVehicles,
+            availableVehicles: hasVehicles ? maxVehicles : 0,
+            hasHelicopters: hasHelicopters,
+            availableHelicopters: hasHelicopters ? maxHelicopters : 0
+        };
     }
     
     /**
@@ -159,12 +119,7 @@ export class RaceManager {
     canPlayerUseUnit(team, unitId) {
         const deck = this.getPlayerDeck(team);
         if (!deck || !deck.units) {
-            // Fallback: Si no hay mazo, usar validación por raza (compatibilidad)
-            const raceId = this.getPlayerRace(team);
-            if (raceId) {
-                const availableBuildings = getServerRaceBuildings(raceId);
-                return availableBuildings.includes(unitId);
-            }
+            // ✅ ELIMINADO: Ya no hay fallback por raza, siempre hay mazo
             return false;
         }
         
@@ -179,11 +134,7 @@ export class RaceManager {
     getPlayerAvailableUnits(team) {
         const deck = this.getPlayerDeck(team);
         if (!deck || !deck.units) {
-            // Fallback: Si no hay mazo, usar edificios de raza (compatibilidad)
-            const raceId = this.getPlayerRace(team);
-            if (raceId) {
-                return getServerRaceBuildings(raceId);
-            }
+            // ✅ ELIMINADO: Ya no hay fallback por raza, siempre hay mazo
             return [];
         }
         
@@ -200,9 +151,7 @@ export class RaceManager {
         console.log(`🏛️ Raza establecida: ${team} = ${raceId}`);
         console.log(`🏛️ playerRaces actual:`, this.gameState.playerRaces);
         
-        // Debug: Verificar configuración
-        const raceConfig = this.getPlayerRaceConfig(team);
-        console.log(`🏛️ Configuración de raza para ${team}:`, raceConfig);
+        // ✅ ELIMINADO: Ya no hay configuración de raza que verificar
     }
     
     /**

@@ -26,7 +26,8 @@ export class VisualNode {
         
         // ✅ SEGURO: Propiedades de estado básicas (solo para compatibilidad)
         this.canBeDestroyed = config.canBeDestroyed !== false;
-        this.needsConstruction = config.needsConstruction || false;
+        // ✅ Valor por defecto: true (todos necesitan construcción excepto hq y front que vienen como false del servidor)
+        this.needsConstruction = config.needsConstruction !== undefined ? config.needsConstruction : true;
         this.active = true;
         this.isConstructing = false;
         this.constructed = true;

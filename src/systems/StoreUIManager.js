@@ -82,35 +82,10 @@ export class StoreUIManager {
             
             // console.log(`🎴 Tienda cargada desde mazo "${selectedDeck.name}": ${buildableNodes.length} edificios, ${projectileNodes.length} consumibles`);
         } else {
-            // 🎯 FALLBACK: Si no hay mazo disponible, usar configuración del servidor (compatibilidad temporal)
-            const team = this.game?.myTeam || 'player1';
-            
-            if (this.game && this.game.raceConfigs && this.game.raceConfigs[team]) {
-                const myRaceConfig = this.game.raceConfigs[team];
-                if (myRaceConfig && myRaceConfig.buildings && myRaceConfig.consumables) {
-                    const availableBuildings = myRaceConfig.buildings || [];
-                    const availableConsumables = myRaceConfig.consumables || [];
-                    
-                    const allBuildableNodes = getBuildableNodes();
-                    buildableNodes = allBuildableNodes.filter(node => 
-                        availableBuildings.includes(node.id)
-                    );
-                    
-                    const allProjectiles = getProjectiles();
-                    projectileNodes = allProjectiles.filter(node => 
-                        availableConsumables.includes(node.id)
-                    );
-                } else {
-                    console.warn('⚠️ No hay configuración de raza disponible, usando fallback');
-                    // Fallback genérico: mostrar todos
-                    buildableNodes = getBuildableNodes();
-                    projectileNodes = getProjectiles();
-                }
-            } else {
-                // Fallback genérico: mostrar todos
-                buildableNodes = getBuildableNodes();
-                projectileNodes = getProjectiles();
-            }
+            // ✅ ELIMINADO: Ya no hay fallback por raza, siempre hay mazo
+            // Fallback genérico: mostrar todos los nodos disponibles
+            buildableNodes = getBuildableNodes();
+            projectileNodes = getProjectiles();
         }
         
         // console.log(`🏛️ Edificios mostrados en tienda: ${buildableNodes.map(n => n.id).join(', ')}`); // Log removido
@@ -132,35 +107,6 @@ export class StoreUIManager {
         
         // Hitboxes para interacción
         this.hitRegions = [];
-    }
-    
-    /**
-     * Crea configuración de raza local desde el servidor (fallback temporal)
-     */
-    async createLocalRaceConfig(raceId) {
-        try {
-            // Importar configuración del servidor
-            const raceConfigModule = await import('../../server/config/raceConfig.js');
-            const { getServerRaceConfig } = raceConfigModule;
-            
-            const raceConfig = getServerRaceConfig(raceId);
-            if (raceConfig) {
-                // Crear raceConfigs en el formato esperado
-                if (!this.game.raceConfigs) {
-                    this.game.raceConfigs = {};
-                }
-                
-                // El jugador es 'player1' por defecto
-                this.game.raceConfigs['player1'] = raceConfig;
-                this.game.myTeam = 'player1'; // Asegurar que myTeam esté establecido
-                
-                
-                // Actualizar categorías después de crear la configuración
-                this.updateCategories();
-            }
-        } catch (error) {
-            console.error(`❌ Error creando configuración de raza local:`, error);
-        }
     }
     
     /**
@@ -793,16 +739,8 @@ export class StoreUIManager {
         if (this.currentRace !== raceId) {
             this.currentRace = raceId;
             
-            // Crear configuración local desde el servidor si no existe (fallback temporal)
-            if (this.game && !this.game.raceConfigs?.['player1']) {
-                this.createLocalRaceConfig(raceId).then(() => {
-                    // Actualizar categorías después de crear la configuración
-                    this.updateCategories();
-                });
-            } else {
-                // Ya existe configuración del servidor, solo actualizar
-                this.updateCategories();
-            }
+            // ✅ ELIMINADO: Ya no hay sistema de naciones, solo actualizar categorías
+            this.updateCategories();
             
             this.selectedCategory = null; // Limpiar selección actual
             // console.log(`🏛️ Tienda actualizada para raza: ${raceId}`); // Log removido

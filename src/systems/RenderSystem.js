@@ -2790,8 +2790,8 @@ export class RenderSystem {
             this.ctx.stroke();
         }
         
-        // Renderizar área de efecto (radio de 200px)
-        const detectionRadius = 200;
+        // ✅ Renderizar área de efecto - leer del servidor (gameplay.specopsCommando.detectionRadius)
+        const detectionRadius = this.game?.serverBuildingConfig?.gameplay?.specopsCommando?.detectionRadius || 200;
         this.ctx.strokeStyle = '#e74c3c';
         this.ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
         this.ctx.lineWidth = 2;

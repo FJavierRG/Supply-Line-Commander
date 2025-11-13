@@ -144,11 +144,9 @@ export const GAME_CONFIG = {
             engineerCenter: {
                 speedMultiplier: 1.5,    // +50% velocidad para heavy_truck
                 affectedVehicles: ['heavy_truck']
-            },
-            truckFactory: {
-                capacityBonus: 15,       // +15 capacidad por fábrica
-                maxBonus: 60            // Máximo +60 capacidad (4 fábricas)
             }
+            // ✅ truckFactory bonuses movidos a serverNodes.js (effects.truckFactory) - fuente única de verdad
+            // Nota: capacityBonus ahora está en SERVER_NODE_CONFIG.effects.truckFactory.capacityBonus
         },
 
         // Configuración de cargo

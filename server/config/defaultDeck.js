@@ -3,20 +3,35 @@
 // Este mazo se crea automáticamente si no hay mazos guardados
 
 import { SERVER_NODE_CONFIG } from './serverNodes.js';
-import { getServerRaceBuildings, getServerRaceConsumables } from './raceConfig.js';
 
 /**
- * Obtiene todas las unidades habilitadas para A_Nation
+ * ✅ REDISTRIBUIDO: Edificios disponibles para el mazo predeterminado
+ * Movido desde raceConfig.js ya que solo se usa aquí
+ */
+const DEFAULT_DECK_BUILDINGS = [
+    'fob', 'antiDrone', 'droneLauncher',
+    'truckFactory', 'engineerCenter', 'nuclearPlant',
+    'vigilanceTower', 'intelRadio', 'intelCenter'
+];
+
+/**
+ * ✅ REDISTRIBUIDO: Consumibles disponibles para el mazo predeterminado
+ * Movido desde raceConfig.js ya que solo se usa aquí
+ */
+const DEFAULT_DECK_CONSUMABLES = [
+    'drone', 'sniperStrike', 'specopsCommando', 'fobSabotage'
+];
+
+/**
+ * Obtiene todas las unidades habilitadas para el mazo predeterminado
  * @returns {Array<string>} Array de IDs de unidades habilitadas
  */
 function getEnabledUnits() {
     const enabled = SERVER_NODE_CONFIG.gameplay.enabled;
-    const buildings = getServerRaceBuildings('A_Nation');
-    const consumables = getServerRaceConsumables('A_Nation');
     
     // Filtrar solo las unidades que están habilitadas en el servidor
-    const enabledBuildings = buildings.filter(id => enabled[id] === true);
-    const enabledConsumables = consumables.filter(id => enabled[id] === true);
+    const enabledBuildings = DEFAULT_DECK_BUILDINGS.filter(id => enabled[id] === true);
+    const enabledConsumables = DEFAULT_DECK_CONSUMABLES.filter(id => enabled[id] === true);
     
     return [...enabledBuildings, ...enabledConsumables];
 }

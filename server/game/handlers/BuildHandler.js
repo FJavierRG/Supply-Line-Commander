@@ -1,7 +1,6 @@
 // ===== HANDLER DE CONSTRUCCIÓN =====
 import { v4 as uuidv4 } from 'uuid';
-import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
-import { getServerRaceBuildings } from '../../config/raceConfig.js';
+import { SERVER_NODE_CONFIG, getBuildRadius } from '../../config/serverNodes.js';
 
 export class BuildHandler {
     constructor(gameState) {
@@ -155,7 +154,9 @@ export class BuildHandler {
                 const hq = this.gameState.nodes.find(n => n.type === 'hq' && n.team === node.team);
                 const bonus = SERVER_NODE_CONFIG.effects.truckFactory.vehicleBonus;
                 if (hq && hq.hasVehicles) {
-                    const oldMax = hq.maxVehicles || 4;
+                    // ✅ Usar configuración de serverNodes (fuente única de verdad)
+                    const baseVehicles = SERVER_NODE_CONFIG.capacities.hq.maxVehicles || 4;
+                    const oldMax = hq.maxVehicles || baseVehicles;
                     const oldAvailable = hq.availableVehicles || 0;
                     hq.maxVehicles = oldMax + bonus;
                     // ✅ CORREGIDO: Aumentar availableVehicles cuando se construye la truckFactory
@@ -171,8 +172,9 @@ export class BuildHandler {
                 
             case 'engineerCenter':
                 // El bonus de velocidad se aplica automáticamente al calcular velocidad de convoyes
-                const speedBonus = SERVER_NODE_CONFIG.effects.engineerCenter.speedBonus;
-                console.log(`🔧 EngineerCenter completado - ${node.team} tendrá +${speedBonus * 100}% velocidad en convoyes`);
+                const engineerConfig = SERVER_NODE_CONFIG.effects.engineerCenter;
+                const speedMultiplier = engineerConfig.speedMultiplier;
+                console.log(`🔧 EngineerCenter completado - ${node.team} tendrá +${(speedMultiplier - 1) * 100}% velocidad en ${engineerConfig.affectedVehicles.join(', ')}`);
                 break;
                 
             case 'nuclearPlant':
@@ -196,7 +198,10 @@ export class BuildHandler {
                 if (node.investmentTime > 0) {
                     node.investmentStarted = true;
                     node.investmentTimer = 0;
-                    console.log(`💰 intelRadio ${node.id} iniciando inversión - ${node.investmentTime}s para obtener ${node.investmentReturn}$`);
+                    const intelConfig = SERVER_NODE_CONFIG.gameplay.intelRadio;
+                    const intelCost = SERVER_NODE_CONFIG.costs.intelRadio || 70;
+                    const totalReturn = intelCost + intelConfig.investmentBonus;
+                    console.log(`💰 intelRadio ${node.id} iniciando inversión - ${node.investmentTime}s para obtener ${totalReturn}$ (costo: ${intelCost}$ + beneficio: ${intelConfig.investmentBonus}$)`);
                 }
                 break;
                 
@@ -214,21 +219,26 @@ export class BuildHandler {
     createNode(type, team, x, y, supplies = null) {
         const nodeId = `node_${uuidv4().substring(0, 8)}`;
         
-        // Establecer valores por defecto según tipo de nodo
+        // ✅ Establecer valores por defecto según tipo de nodo (lee de capacities)
         let initialSupplies = supplies;
         let maxSupplies = supplies;
         
         if (supplies === null) {
             // Valores por defecto según tipo
+            const capacity = SERVER_NODE_CONFIG.capacities[type];
             if (type === 'fob') {
                 initialSupplies = 30;
-                maxSupplies = 100;
+                maxSupplies = capacity?.maxSupplies ?? 100;
             } else if (type === 'front') {
-                initialSupplies = 100;
-                maxSupplies = 100;
+                initialSupplies = capacity?.maxSupplies ?? 100;
+                maxSupplies = capacity?.maxSupplies ?? 100;
             } else if (type === 'hq') {
                 initialSupplies = null; // Infinitos
                 maxSupplies = null;
+            } else if (capacity?.maxSupplies) {
+                // Si tiene maxSupplies definido en capacities, usarlo
+                maxSupplies = capacity.maxSupplies;
+                initialSupplies = capacity.maxSupplies;
             }
         }
         
@@ -252,18 +262,16 @@ export class BuildHandler {
         
         // Propiedades específicas por tipo de edificio
         if (type === 'campaignHospital') {
-            node.hasVehicles = true;
-            node.maxVehicles = 1;
-            node.availableVehicles = 1;
+            // ✅ hasVehicles y maxVehicles ya están establecidos por los métodos helper
+            node.availableVehicles = this.getInitialVehicles(type);
             node.actionRange = 240; // rango del hospital
             node.canDispatchMedical = true;
             node.lastAutoResponse = 0; // Para cooldown de respuesta automática
         } else if (type === 'aerialBase') {
             // 🆕 NUEVO: Base Aérea - suministros limitados para recarga de helicópteros
+            // ✅ hasSupplies y maxSupplies ya están establecidos por los métodos helper y createNode
             const aerialConfig = SERVER_NODE_CONFIG.effects.aerialBase;
-            node.hasSupplies = true;
-            node.supplies = aerialConfig.maxSupplies; // Iniciar con suministros máximos
-            node.maxSupplies = aerialConfig.maxSupplies;
+            node.supplies = node.maxSupplies; // Iniciar con suministros máximos (ya establecido arriba)
             node.isAerialBase = true;
             node.autoDestroy = aerialConfig.autoDestroy;
             node.landedHelicopters = []; // Array para helicópteros aterrizados
@@ -274,10 +282,12 @@ export class BuildHandler {
             node.abandonPhase2Duration = 3000; // 3 segundos - fase 2
             console.log(`🚁 AerialBase creada ${nodeId} por ${team}: supplies=${node.supplies}/${node.maxSupplies}`);
         } else if (type === 'intelRadio') {
-            // Propiedades específicas para intelRadio
-            const intelConfig = SERVER_NODE_CONFIG.effects.intelRadio;
+            // ✅ Propiedades específicas para intelRadio (lee de gameplay.intelRadio)
+            const intelConfig = SERVER_NODE_CONFIG.gameplay.intelRadio;
+            const intelCost = SERVER_NODE_CONFIG.costs.intelRadio || 70;
             node.investmentTime = intelConfig.investmentTime;
-            node.investmentReturn = intelConfig.investmentReturn;
+            // ✅ Calcular investmentReturn como costo + beneficio
+            node.investmentReturn = intelCost + intelConfig.investmentBonus;
             node.investmentTimer = 0;
             node.investmentStarted = false;
             node.investmentCompleted = false;
@@ -287,21 +297,19 @@ export class BuildHandler {
             node.abandonPhase2Duration = 500; // 0.5 segundos (rápido)
         } else if (type === 'specopsCommando') {
             // 🆕 NUEVO: Propiedades del comando especial operativo
+            // ✅ hasSupplies y hasVehicles ya están establecidos por los métodos helper (ambos false por defecto)
             const commandoConfig = SERVER_NODE_CONFIG.specialNodes?.specopsCommando || {};
             node.isCommando = true;
             node.detectionRadius = commandoConfig.detectionRadius || 200;
             node.health = commandoConfig.health || 50;
             node.maxHealth = commandoConfig.health || 50;
-            node.hasSupplies = false;
-            node.hasVehicles = false;
             node.constructed = true; // No necesita construcción
             node.isConstructing = false;
         } else if (type === 'vigilanceTower') {
             // 🆕 NUEVO: Torre de Vigilancia - counterea comandos
+            // ✅ hasSupplies y hasVehicles ya están establecidos por los métodos helper (ambos false por defecto)
             node.isVigilanceTower = true;
             node.detectionRadius = SERVER_NODE_CONFIG.detectionRadius.vigilanceTower || 320;
-            node.hasSupplies = false;
-            node.hasVehicles = false;
             
             // Eliminar comandos enemigos dentro del área de detección
             this.eliminateEnemyCommandosInRange(node);
@@ -361,27 +369,24 @@ export class BuildHandler {
     }
     
     /**
-     * Determina si un tipo de nodo tiene suministros
+     * ✅ Determina si un tipo de nodo tiene suministros (lee de capacities)
      */
     hasSupplies(type) {
-        return type === 'hq' || type === 'fob' || type === 'front' || type === 'aerialBase';
+        return SERVER_NODE_CONFIG.capacities[type]?.hasSupplies ?? false;
     }
     
     /**
-     * Determina si un tipo de nodo tiene vehículos
+     * ✅ Determina si un tipo de nodo tiene vehículos (lee de capacities)
      */
     hasVehicles(type) {
-        return type === 'hq' || type === 'fob' || type === 'campaignHospital';
+        return SERVER_NODE_CONFIG.capacities[type]?.hasVehicles ?? false;
     }
     
     /**
-     * Obtiene vehículos iniciales según tipo de nodo
+     * ✅ Obtiene vehículos iniciales según tipo de nodo (lee de capacities)
      */
     getInitialVehicles(type) {
-        if (type === 'hq') return 4;
-        if (type === 'fob') return 2;
-        if (type === 'campaignHospital') return 1;
-        return 0;
+        return SERVER_NODE_CONFIG.capacities[type]?.maxVehicles ?? 0;
     }
     
     /**
@@ -419,11 +424,8 @@ export class BuildHandler {
         const isVigilanceTower = buildingType === 'vigilanceTower';
         
         // Lógica normal de detección
-        // 🆕 NUEVO: Usar buildRadius para construcción (proximidad), detectionRadius para detección de comandos
-        // Obtener radio de construcción del edificio que se está construyendo
-        const newBuildRadius = SERVER_NODE_CONFIG.buildRadius?.[buildingType] || 
-                              SERVER_NODE_CONFIG.detectionRadius[buildingType] || 
-                              (SERVER_NODE_CONFIG.radius[buildingType] || 30) * 2.5;
+        // ✅ Usar función helper centralizada para obtener buildRadius con fallback
+        const newBuildRadius = getBuildRadius(buildingType);
         
         // Verificar colisiones con todos los nodos existentes (incluye bases iniciales y edificios construidos)
         for (const node of this.gameState.nodes) {
@@ -443,10 +445,8 @@ export class BuildHandler {
             
             const dist = Math.hypot(x - node.x, y - node.y);
             
-            // Obtener radio de construcción del nodo existente (usar buildRadius si existe)
-            const existingBuildRadius = SERVER_NODE_CONFIG.buildRadius?.[node.type] || 
-                                       SERVER_NODE_CONFIG.detectionRadius[node.type] || 
-                                       (SERVER_NODE_CONFIG.radius[node.type] || 30) * 2.5;
+            // ✅ Obtener radio de construcción del nodo existente usando función helper centralizada
+            const existingBuildRadius = getBuildRadius(node.type);
             
             // Verificar colisión: ningún edificio puede estar dentro del área de construcción del otro
             const minSeparation = Math.max(existingBuildRadius, newBuildRadius);
@@ -477,25 +477,10 @@ export class BuildHandler {
             return canBuild;
         }
         
-        // Fallback: Si no hay mazo, usar validación por raza (compatibilidad)
-        const raceId = this.gameState.getPlayerRace(team);
-        if (!raceId) {
-            console.log(`⚠️ No hay mazo ni raza para ${team}, permitiendo construcción (fallback)`);
-            return true; // Fallback: permitir construcción
-        }
-        
-        // 🎯 USAR CONFIGURACIÓN CENTRALIZADA: Obtener edificios disponibles desde raceConfig
-        const availableBuildings = getServerRaceBuildings(raceId);
-        
-        if (!availableBuildings || availableBuildings.length === 0) {
-            console.log(`⚠️ Configuración de raza no encontrada o sin edificios: ${raceId}`);
-            return true; // Fallback: permitir construcción
-        }
-        
-        const canBuild = availableBuildings.includes(buildingType);
-        console.log(`🏗️ ${raceId} intenta construir ${buildingType}: ${canBuild ? 'PERMITIDO' : 'DENEGADO'} (disponibles: ${availableBuildings.join(', ')})`);
-        
-        return canBuild;
+        // ✅ ELIMINADO: Ya no hay fallback por raza, siempre hay mazo
+        // Si no hay mazo, permitir construcción (fallback de seguridad)
+        console.log(`⚠️ No hay mazo para ${team}, permitiendo construcción (fallback de seguridad)`);
+        return true;
     }
 }
 

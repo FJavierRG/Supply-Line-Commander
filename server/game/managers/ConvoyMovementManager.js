@@ -125,8 +125,8 @@ export class ConvoyMovementManager {
             !n.disabled // 🆕 NUEVO: No aplicar bonus si está disabled
         );
         if (hasEngineerCenter) {
-            // 🆕 SERVIDOR COMO AUTORIDAD: Usar configuración centralizada
-            const bonusConfig = GAME_CONFIG.convoy.bonuses.engineerCenter;
+            // ✅ SERVIDOR COMO AUTORIDAD: Usar configuración de serverNodes (fuente única de verdad)
+            const bonusConfig = SERVER_NODE_CONFIG.effects.engineerCenter;
             if (bonusConfig.affectedVehicles.includes(convoy.vehicleType)) {
                 vehicleSpeed *= bonusConfig.speedMultiplier;
             }

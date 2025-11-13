@@ -314,9 +314,7 @@ export class NetworkManager {
                 this.game.playerRaces = data.initialState.playerRaces;
             }
             
-            if (data.initialState && data.initialState.raceConfigs) {
-                this.game.raceConfigs = data.initialState.raceConfigs;
-            }
+                // ✅ ELIMINADO: Ya no hay raceConfigs en el estado inicial
             
             // 🆕 NUEVO: Establecer raza seleccionada desde el servidor
             if (data.selectedRace) {
@@ -2884,22 +2882,14 @@ export class NetworkManager {
             
             // 🆕 SERVIDOR COMO AUTORIDAD: Actualizar propiedades de seguridad (ANTI-HACK)
             if (serverConfig.security) {
-                // Actualizar hitboxRadius
-                if (serverConfig.security.hitboxRadius) {
-                    Object.keys(serverConfig.security.hitboxRadius).forEach(nodeType => {
-                        if (NODE_CONFIG[nodeType]) {
-                            NODE_CONFIG[nodeType].hitboxRadius = serverConfig.security.hitboxRadius[nodeType];
-                        }
-                    });
-                }
-                
-                // Actualizar needsConstruction
+                // ✅ Actualizar needsConstruction (solo los que están definidos, el resto usa true por defecto)
                 if (serverConfig.security.needsConstruction) {
                     Object.keys(serverConfig.security.needsConstruction).forEach(nodeType => {
                         if (NODE_CONFIG[nodeType]) {
                             NODE_CONFIG[nodeType].needsConstruction = serverConfig.security.needsConstruction[nodeType];
                         }
                     });
+                    // Los nodos que no están en la lista usan true por defecto (ya está en el código de visualNode)
                 }
                 
                 // Actualizar canBeDestroyed

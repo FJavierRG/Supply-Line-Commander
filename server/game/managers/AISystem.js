@@ -160,8 +160,10 @@ export class AISystem {
             return [];
         }
         
-        const raceConfig = raceManager.getPlayerRaceConfig(team);
-        const buildings = raceConfig?.buildings || [];
+        // ✅ REDISTRIBUIDO: Obtener edificios desde RaceAIConfig en lugar de raceConfig
+        const raceId = playerRace || 'A_Nation';
+        const aiConfig = getRaceAIConfig(raceId);
+        const buildings = aiConfig?.buildings || [];
         
         if (AIConfig.debug.logActions) {
         }
@@ -179,8 +181,10 @@ export class AISystem {
         
         if (!playerRace) return [];
         
-        const raceConfig = raceManager.getPlayerRaceConfig(team);
-        return raceConfig?.consumables || [];
+        // ✅ REDISTRIBUIDO: Obtener consumibles desde RaceAIConfig en lugar de raceConfig
+        const raceId = playerRace || 'A_Nation';
+        const aiConfig = getRaceAIConfig(raceId);
+        return aiConfig?.consumables || [];
     }
     
     /**

@@ -1,11 +1,7 @@
 // ===== HANDLER DE CONVOYES Y AMBULANCIAS =====
 import { v4 as uuidv4 } from 'uuid';
 import { GAME_CONFIG } from '../../config/gameConfig.js';
-import { 
-    getServerRaceConfig, 
-    getServerRaceTransportSystem, 
-    canServerRaceUseFOBs 
-} from '../../config/raceConfig.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 
 export class ConvoyHandler {
     constructor(gameState) {
@@ -15,76 +11,35 @@ export class ConvoyHandler {
     // ===== FUNCIONES CENTRALIZADAS MODULARES =====
     
     /**
-     * Obtiene la configuración de raza del jugador
-     * @param {string} playerTeam - Equipo del jugador
-     * @returns {Object|null} Configuración de la raza
-     */
-    getPlayerRaceConfig(playerTeam) {
-        const raceId = this.gameState.playerRaces[playerTeam];
-        return getServerRaceConfig(raceId);
-    }
-    
-    /**
-     * Obtiene rutas válidas para una raza específica
+     * Obtiene rutas válidas para un tipo de nodo
+     * ✅ SIMPLIFICADO: Ya no hay rutas especiales por raza
      * @param {string} fromType - Tipo de nodo origen
-     * @param {Object} raceConfig - Configuración de la raza
+     * @param {Object} raceConfig - Configuración de la raza (no usado, mantenido para compatibilidad)
      * @returns {Array} Array de tipos de nodos válidos
      */
     getValidRoutesForRace(fromType, raceConfig) {
-        if (!raceConfig) return GAME_CONFIG.routes.valid[fromType] || [];
-        
-        // Si la raza tiene rutas especiales (aerial), usarlas
-        if (raceConfig.specialMechanics?.transportSystem === 'aerial') {
-            return GAME_CONFIG.routes.raceSpecial[raceConfig.id]?.[fromType] || GAME_CONFIG.routes.valid[fromType] || [];
-        }
-        
-        // Si no, usar rutas normales
         return GAME_CONFIG.routes.valid[fromType] || [];
     }
     
     /**
-     * Selecciona el tipo de vehículo según la raza
+     * Selecciona el tipo de vehículo según el nodo origen
+     * ✅ SIMPLIFICADO: Ya no hay sistema aéreo por raza
      * @param {Object} fromNode - Nodo origen
-     * @param {Object} raceConfig - Configuración de la raza
+     * @param {Object} raceConfig - Configuración de la raza (no usado, mantenido para compatibilidad)
      * @returns {string} Tipo de vehículo
      */
     selectVehicleTypeForRace(fromNode, raceConfig) {
-        if (!raceConfig) {
-            // Fallback al sistema tradicional
-            return fromNode.type === 'hq' ? 'heavy_truck' : 'truck';
-        }
-        
-        // Si es HQ y la raza tiene transporte aéreo
-        if (fromNode.type === 'hq' && raceConfig.specialMechanics?.transportSystem === 'aerial') {
-            return 'helicopter';
-        }
-        
-        // Si es Front y la raza tiene transporte aéreo
-        if (fromNode.type === 'front' && raceConfig.specialMechanics?.transportSystem === 'aerial') {
-            return 'helicopter';
-        }
-        
-        // Sistema tradicional
+        // ✅ SIMPLIFICADO: Sistema tradicional siempre
         return fromNode.type === 'hq' ? 'heavy_truck' : 'truck';
     }
     
     /**
-     * Obtiene el sistema de cargo según la raza
-     * @param {Object} raceConfig - Configuración de la raza
+     * Obtiene el sistema de cargo
+     * ✅ SIMPLIFICADO: Siempre tradicional
+     * @param {Object} raceConfig - Configuración de la raza (no usado, mantenido para compatibilidad)
      * @returns {Object} Configuración del sistema de cargo
      */
     getCargoSystemForRace(raceConfig) {
-        if (!raceConfig) {
-            return { type: 'traditional', requiresSupplies: true };
-        }
-        
-        if (raceConfig.specialMechanics?.transportSystem === 'aerial') {
-            return { 
-                type: 'aerial', 
-                requiresSupplies: false
-            };
-        }
-        
         return { type: 'traditional', requiresSupplies: true };
     }
     
@@ -109,11 +64,8 @@ export class ConvoyHandler {
             return { success: false, reason: 'No puedes enviar a nodos enemigos' };
         }
         
-        // 🆕 CENTRALIZADO: Obtener configuración de raza
-        const raceConfig = this.getPlayerRaceConfig(playerTeam);
-        
-        // 🆕 CENTRALIZADO: Validar rutas según la raza
-        const validRoutes = this.getValidRoutesForRace(fromNode.type, raceConfig);
+        // ✅ ELIMINADO: Ya no hay configuración de raza, usar rutas estándar
+        const validRoutes = this.getValidRoutesForRace(fromNode.type, null);
         if (!validRoutes.includes(toNode.type)) {
             return { success: false, reason: 'Ruta no válida para tu raza' };
         }
@@ -125,10 +77,10 @@ export class ConvoyHandler {
         }
         
         // Sistema tradicional de camiones
-        const vehicleType = this.selectVehicleTypeForRace(fromNode, raceConfig);
+        const vehicleType = this.selectVehicleTypeForRace(fromNode, null);
         
-        // 🆕 CENTRALIZADO: Obtener sistema de cargo según la raza
-        const cargoSystem = this.getCargoSystemForRace(raceConfig);
+        // ✅ ELIMINADO: Ya no hay sistema de cargo por raza, siempre tradicional
+        const cargoSystem = this.getCargoSystemForRace(null);
         
         // Validar vehículos disponibles
         if (!fromNode.hasVehicles || fromNode.availableVehicles <= 0) {
@@ -168,8 +120,8 @@ export class ConvoyHandler {
                 ).length;
                 
                 if (truckFactories > 0) {
-                    // Usar configuración de GAME_CONFIG (correcta)
-                    const bonusPerFactory = GAME_CONFIG.convoy.bonuses.truckFactory.capacityBonus;
+                    // ✅ Usar configuración de serverNodes (fuente única de verdad)
+                    const bonusPerFactory = SERVER_NODE_CONFIG.effects.truckFactory.capacityBonus;
                     capacity += truckFactories * bonusPerFactory;
                 }
             }

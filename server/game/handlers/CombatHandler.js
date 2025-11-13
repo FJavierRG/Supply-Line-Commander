@@ -32,8 +32,8 @@ export class CombatHandler {
             }
         }
         
-        // Costo del sniper
-        const sniperCost = SERVER_NODE_CONFIG.actions.sniperStrike.cost;
+        // ✅ Costo del sniper (lee de costs - fuente única de verdad)
+        const sniperCost = SERVER_NODE_CONFIG.costs.sniperStrike;
         
         // Verificar currency
         if (this.gameState.currency[playerTeam] < sniperCost) {
@@ -140,7 +140,8 @@ export class CombatHandler {
         }
         
         // Costo del sabotaje
-        const sabotageCost = SERVER_NODE_CONFIG.actions.fobSabotage.cost;
+        // ✅ Costo del sabotaje (lee de costs - fuente única de verdad)
+        const sabotageCost = SERVER_NODE_CONFIG.costs.fobSabotage;
         
         // Verificar currency
         if (this.gameState.currency[playerTeam] < sabotageCost) {
@@ -207,8 +208,8 @@ export class CombatHandler {
             return { success: false, reason: 'Necesitas construir una Lanzadera de Drones' };
         }
         
-        // Costo del dron
-        const droneCost = SERVER_NODE_CONFIG.actions.droneLaunch.cost;
+        // ✅ Costo del dron (lee de costs - fuente única de verdad)
+        const droneCost = SERVER_NODE_CONFIG.costs.drone;
         
         // Verificar currency
         if (this.gameState.currency[playerTeam] < droneCost) {
@@ -253,8 +254,8 @@ export class CombatHandler {
             return { success: false, reason: 'No puedes atacar edificios en construcción' };
         }
         
-        // Costo del tanque
-        const tankCost = SERVER_NODE_CONFIG.actions.tankLaunch.cost;
+        // ✅ Costo del tanque (lee de costs - fuente única de verdad)
+        const tankCost = SERVER_NODE_CONFIG.costs.tank;
         
         // Verificar currency
         if (this.gameState.currency[playerTeam] < tankCost) {
@@ -280,7 +281,8 @@ export class CombatHandler {
         const commandoConfig = SERVER_NODE_CONFIG.actions.specopsCommando;
         // 🆕 NUEVO: Usar costo de costs.specopsCommando (igual que otros edificios)
         const commandoCost = SERVER_NODE_CONFIG.costs.specopsCommando;
-        const commandoDetectionRadius = commandoConfig.detectionRadius || SERVER_NODE_CONFIG.specialNodes?.specopsCommando?.detectionRadius || 200;
+        // ✅ Usar specialNodes como fuente única de verdad para detectionRadius funcional
+        const commandoDetectionRadius = SERVER_NODE_CONFIG.specialNodes?.specopsCommando?.detectionRadius || 200;
         
         // Verificar currency
         if (this.gameState.currency[playerTeam] < commandoCost) {
@@ -353,9 +355,6 @@ export class CombatHandler {
         const commandoTeam = commando.team;
         const affectedBuildings = [];
         
-        // Obtener hitboxRadius del servidor (similar a CommandoSystem)
-        const hitboxRadii = SERVER_NODE_CONFIG.security?.hitboxRadius || {};
-        
         for (const node of this.gameState.nodes) {
             // Solo considerar edificios enemigos construidos y activos
             if (node.team === commandoTeam || 
@@ -368,9 +367,10 @@ export class CombatHandler {
                 continue;
             }
             
-            // Calcular distancia considerando el hitbox del edificio
+            // ✅ Calcular distancia considerando el hitbox del edificio (radius * 1.2)
             const dist = Math.hypot(node.x - commando.x, node.y - commando.y);
-            const nodeHitboxRadius = hitboxRadii[node.type] || node.radius || SERVER_NODE_CONFIG.radius?.[node.type] || 30;
+            const baseRadius = node.radius || SERVER_NODE_CONFIG.radius?.[node.type] || 30;
+            const nodeHitboxRadius = baseRadius * 1.2; // +20% hitbox para mejor detección
             
             // Si el hitbox del edificio entra en el área de detección, está afectado
             if (dist <= (detectionRadius + nodeHitboxRadius)) {
