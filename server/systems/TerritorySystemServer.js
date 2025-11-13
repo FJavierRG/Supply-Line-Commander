@@ -52,14 +52,15 @@ export class TerritorySystemServer {
         
         // Verificar TODOS los edificios de player1 (todos excepto HQ y frentes)
         // Los edificios con abandono automático (aerialBase, intelRadio) también pueden abandonarse por territorio
-        // 🆕 Excluir specopsCommando y truckAssault: están diseñados para desplegarse en territorio enemigo
+        // 🆕 Excluir specopsCommando, truckAssault y cameraDrone: están diseñados para desplegarse en territorio enemigo
         const player1Buildings = this.gameState.nodes.filter(n => 
             n.team === 'player1' && 
             n.constructed && 
             n.type !== 'hq' && 
             n.type !== 'front' &&
             n.type !== 'specopsCommando' && // 🆕 Excluir comando - puede estar en territorio enemigo
-            n.type !== 'truckAssault' // 🆕 Excluir truck assault - puede estar en territorio enemigo
+            n.type !== 'truckAssault' && // 🆕 Excluir truck assault - puede estar en territorio enemigo
+            n.type !== 'cameraDrone' // 🆕 Excluir camera drone - puede estar en territorio enemigo
         );
         
         for (const building of player1Buildings) {
@@ -101,13 +102,15 @@ export class TerritorySystemServer {
         // Verificar TODOS los edificios de player2 (todos excepto HQ y frentes)
         // Los edificios con abandono automático (aerialBase, intelRadio) también pueden abandonarse por territorio
         // 🆕 Excluir specopsCommando y truckAssault: están diseñados para desplegarse en territorio enemigo
-        const player2Buildings = this.gameState.nodes.filter(n => 
+        // 🆕 Excluir specopsCommando, truckAssault y cameraDrone: están diseñados para desplegarse en territorio enemigo
+        const player2Buildings = this.gameState.nodes.filter(n =>
             n.team === 'player2' && 
             n.constructed && 
             n.type !== 'hq' && 
             n.type !== 'front' &&
             n.type !== 'specopsCommando' && // 🆕 Excluir comando - puede estar en territorio enemigo
-            n.type !== 'truckAssault' // 🆕 Excluir truck assault - puede estar en territorio enemigo
+            n.type !== 'truckAssault' && // 🆕 Excluir truck assault - puede estar en territorio enemigo
+            n.type !== 'cameraDrone' // 🆕 Excluir camera drone - puede estar en territorio enemigo
         );
         
         for (const building of player2Buildings) {

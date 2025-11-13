@@ -17,16 +17,16 @@ export class CombatHandler {
             return { success: false, reason: 'Objetivo no encontrado' };
         }
         
-        // 🆕 NUEVO: Validar que sea un frente, comando o truck assault enemigo
-        const isValidTarget = (targetNode.type === 'front' || targetNode.type === 'specopsCommando' || targetNode.type === 'truckAssault') && 
+        // 🆕 NUEVO: Validar que sea un frente, comando, truck assault o camera drone enemigo
+        const isValidTarget = (targetNode.type === 'front' || targetNode.type === 'specopsCommando' || targetNode.type === 'truckAssault' || targetNode.type === 'cameraDrone') && 
                               targetNode.team !== playerTeam;
         
         if (!isValidTarget) {
-            return { success: false, reason: 'Solo puedes disparar a frentes, comandos o truck assaults enemigos' };
+            return { success: false, reason: 'Solo puedes disparar a frentes, comandos, truck assaults o camera drones enemigos' };
         }
         
-        // Validar que el objetivo esté activo y construido (si es comando o truck assault)
-        if (targetNode.type === 'specopsCommando' || targetNode.type === 'truckAssault') {
+        // Validar que el objetivo esté activo y construido (si es comando, truck assault o camera drone)
+        if (targetNode.type === 'specopsCommando' || targetNode.type === 'truckAssault' || targetNode.type === 'cameraDrone') {
             if (!targetNode.active || !targetNode.constructed || targetNode.isAbandoning) {
                 return { success: false, reason: 'El objetivo no está disponible' };
             }
@@ -44,13 +44,14 @@ export class CombatHandler {
         this.gameState.currency[playerTeam] -= sniperCost;
         
         // 🆕 NUEVO: Lógica condicional según el tipo de objetivo
-        if (targetNode.type === 'specopsCommando' || targetNode.type === 'truckAssault') {
+        if (targetNode.type === 'specopsCommando' || targetNode.type === 'truckAssault' || targetNode.type === 'cameraDrone') {
             // Guardar coordenadas antes de eliminar (para el feed de kill)
             const targetX = targetNode.x;
             const targetY = targetNode.y;
             
             const isCommando = targetNode.type === 'specopsCommando';
             const isTruckAssault = targetNode.type === 'truckAssault';
+            const isCameraDrone = targetNode.type === 'cameraDrone';
             
             if (isCommando) {
                 // 🆕 NUEVO: Obtener todos los edificios afectados por este comando ANTES de eliminarlo
@@ -91,6 +92,21 @@ export class CombatHandler {
                     targetId, 
                     eliminated: true, 
                     targetType: 'truckAssault',
+                    targetX,
+                    targetY
+                };
+            } else if (isCameraDrone) {
+                // Eliminar el camera drone (marcar para abandono)
+                targetNode.active = false;
+                targetNode.isAbandoning = true;
+                
+                console.log(`🎯 Sniper de ${playerTeam} eliminó camera drone ${targetId} en (${targetX.toFixed(0)}, ${targetY.toFixed(0)})`);
+                
+                return { 
+                    success: true, 
+                    targetId, 
+                    eliminated: true, 
+                    targetType: 'cameraDrone',
                     targetX,
                     targetY
                 };
@@ -486,6 +502,76 @@ export class CombatHandler {
         console.log(`🚛 Truck Assault desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)}) - Radio: ${truckAssaultDetectionRadius}px, Duración: ${truckAssaultDuration}s`);
         
         return { success: true, truckAssault: truckAssaultNode };
+    }
+    
+    /**
+     * Maneja despliegue de camera drone
+     * 🆕 NUEVO: Crea un dron de vigilancia que detecta vehículos y permite construir en territorio enemigo
+     */
+    handleCameraDroneDeploy(playerTeam, x, y) {
+        const cameraDroneCost = SERVER_NODE_CONFIG.costs.cameraDrone;
+        const cameraDroneConfig = SERVER_NODE_CONFIG.specialNodes?.cameraDrone || {};
+        const detectionRadius = cameraDroneConfig.detectionRadius || 200;
+        
+        // Verificar currency
+        if (this.gameState.currency[playerTeam] < cameraDroneCost) {
+            return { success: false, reason: 'Currency insuficiente' };
+        }
+        
+        // 🆕 Validar requisito de Lanzadera de Drones
+        const hasDroneLauncher = this.gameState.nodes.some(n => 
+            n.type === 'droneLauncher' && 
+            n.team === playerTeam && 
+            n.active && 
+            n.constructed &&
+            !n.isAbandoning
+        );
+        
+        if (!hasDroneLauncher) {
+            return { success: false, reason: 'Necesitas construir una Lanzadera de Drones primero' };
+        }
+        
+        // 🆕 Validar que esté en territorio enemigo (NO en territorio propio)
+        const inOwnTerritory = this.gameState.territoryCalculator.isInTeamTerritory(x, playerTeam);
+        if (inOwnTerritory) {
+            return { success: false, reason: 'El camera drone solo puede desplegarse en territorio enemigo' };
+        }
+        
+        // Validar ubicación (ignorando límites de detección)
+        if (!this.gameState.buildHandler.isValidLocation(x, y, 'cameraDrone', {
+            ignoreDetectionLimits: true,
+            allowEnemyTerritory: true
+        })) {
+            return { success: false, reason: 'Ubicación no válida' };
+        }
+        
+        // Descontar currency
+        this.gameState.currency[playerTeam] -= cameraDroneCost;
+        
+        // 🆕 CRÍTICO: Camera drone sale desde el EXTREMO del mapa del jugador (igual que drones bomba)
+        // Player1 (izquierda) → x=0
+        // Player2 (derecha) → x=1920 (worldWidth)
+        const worldWidth = 1920;
+        const droneStartX = playerTeam === 'player1' ? 0 : worldWidth;
+        const droneStartY = y; // Altura del objetivo
+        
+        // Crear nodo del camera drone (inicialmente como dron en vuelo)
+        const cameraDroneNode = this.gameState.buildHandler.createNode('cameraDrone', playerTeam, droneStartX, droneStartY);
+        cameraDroneNode.constructed = false; // Se construye cuando llega al destino
+        cameraDroneNode.isConstructing = false;
+        cameraDroneNode.active = true;
+        cameraDroneNode.detectionRadius = detectionRadius;
+        cameraDroneNode.isCameraDrone = true;
+        cameraDroneNode.deployed = false; // Aún no está desplegado
+        cameraDroneNode.targetX = x; // Posición objetivo
+        cameraDroneNode.targetY = y;
+        
+        // Agregar al estado del juego
+        this.gameState.nodes.push(cameraDroneNode);
+        
+        console.log(`📹 Camera Drone desplegado por ${playerTeam} desde extremo (${droneStartX}, ${droneStartY}) hacia (${x.toFixed(0)}, ${y.toFixed(0)}) - Radio: ${detectionRadius}px`);
+        
+        return { success: true, cameraDrone: cameraDroneNode };
     }
     
     /**

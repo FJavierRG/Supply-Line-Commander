@@ -123,9 +123,26 @@ export class BuildHandler {
         
         // Validar que esté dentro del territorio del jugador
         const inOwnTerritory = this.gameState.territoryCalculator.isInTeamTerritory(x, playerTeam);
+        
+        // 🆕 NUEVO: Permitir construcción en territorio enemigo si hay un camera drone cerca
+        // Solo para edificios específicos: vigilanceTower, specopsCommando, truckAssault
+        const canBuildInEnemyTerritory = ['vigilanceTower', 'specopsCommando', 'truckAssault'].includes(buildingType);
+        
         if (!inOwnTerritory) {
-            console.log(`❌ Construcción rechazada: fuera de territorio (${playerTeam} en x=${x})`);
-            return { success: false, reason: 'Fuera de tu territorio' };
+            if (canBuildInEnemyTerritory && this.gameState.cameraDroneSystem) {
+                // Verificar si hay un camera drone que permita construir aquí
+                const canBuild = this.gameState.cameraDroneSystem.canBuildInEnemyTerritory(x, y, playerTeam);
+                if (canBuild) {
+                    console.log(`✅ Construcción permitida en territorio enemigo por camera drone (${playerTeam} en x=${x})`);
+                    // Continuar con la validación
+                } else {
+                    console.log(`❌ Construcción rechazada: fuera de territorio y sin camera drone cercano (${playerTeam} en x=${x})`);
+                    return { success: false, reason: 'Fuera de tu territorio. Necesitas un camera drone cercano para construir aquí.' };
+                }
+            } else {
+                console.log(`❌ Construcción rechazada: fuera de territorio (${playerTeam} en x=${x})`);
+                return { success: false, reason: 'Fuera de tu territorio' };
+            }
         }
         
         // 🆕 NUEVO: Validar que el taller de drones esté en el área de detección de un FOB aliado
@@ -210,23 +227,11 @@ export class BuildHandler {
         
         switch(node.type) {
             case 'truckFactory':
-                // Añadir vehículo al HQ del equipo
-                const hq = this.gameState.nodes.find(n => n.type === 'hq' && n.team === node.team);
-                const bonus = SERVER_NODE_CONFIG.effects.truckFactory.vehicleBonus;
-                if (hq && hq.hasVehicles) {
-                    // ✅ Usar configuración de serverNodes (fuente única de verdad)
-                    const baseVehicles = SERVER_NODE_CONFIG.capacities.hq.maxVehicles || 4;
-                    const oldMax = hq.maxVehicles || baseVehicles;
-                    const oldAvailable = hq.availableVehicles || 0;
-                    hq.maxVehicles = oldMax + bonus;
-                    // ✅ CORREGIDO: Aumentar availableVehicles cuando se construye la truckFactory
-                    // Esto da el camión adicional inmediatamente al jugador
-                    hq.availableVehicles = oldAvailable + bonus;
-                    // Asegurar que no exceda el máximo (por si acaso)
-                    if (hq.availableVehicles > hq.maxVehicles) {
-                        hq.availableVehicles = hq.maxVehicles;
-                    }
-                    console.log(`🚚 TruckFactory completada - ${node.team} HQ ahora tiene ${hq.maxVehicles} vehículos máximos (disponibles: ${hq.availableVehicles}, +${bonus})`);
+                // 🆕 FIX: El efecto de truckFactory se maneja en CommandoSystem.recalculateHQVehicles()
+                // para evitar duplicación y manejar correctamente cuando se habilita/deshabilita
+                // Solo necesitamos disparar el recálculo
+                if (this.gameState.commandoSystem) {
+                    this.gameState.commandoSystem.recalculateHQVehicles();
                 }
                 break;
                 

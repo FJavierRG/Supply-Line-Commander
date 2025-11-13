@@ -27,6 +27,7 @@ import { AbandonmentSystem } from '../systems/AbandonmentSystem.js';
 import { CommandoSystem } from '../systems/CommandoSystem.js';
 import { TruckAssaultSystem } from '../systems/TruckAssaultSystem.js';
 import { VehicleWorkshopSystem } from '../systems/VehicleWorkshopSystem.js';
+import { CameraDroneSystem } from '../systems/CameraDroneSystem.js';
 import { MAP_CONFIG, calculateAbsolutePosition } from '../utils/mapGenerator.js';
 
 export class GameStateManager {
@@ -92,6 +93,7 @@ export class GameStateManager {
         this.commandoSystem = new CommandoSystem(this); // 🆕 NUEVO: Sistema de comandos
         this.truckAssaultSystem = new TruckAssaultSystem(this); // 🆕 NUEVO: Sistema de truck assault
         this.vehicleWorkshopSystem = new VehicleWorkshopSystem(this); // 🆕 NUEVO: Sistema de taller de vehículos
+        this.cameraDroneSystem = new CameraDroneSystem(this); // 🆕 NUEVO: Sistema de camera drone
         
         // Sistema de eventos de sonido
         this.soundEvents = [];
@@ -367,6 +369,60 @@ export class GameStateManager {
     }
     
     /**
+     * Maneja despliegue de camera drone
+     * 🆕 NUEVO
+     */
+    handleCameraDroneDeploy(playerTeam, x, y) {
+        return this.combatHandler.handleCameraDroneDeploy(playerTeam, x, y);
+    }
+    
+    /**
+     * Actualiza el vuelo de camera drones hacia su objetivo
+     * 🆕 NUEVO: Maneja el movimiento inicial de camera drones antes de desplegarse
+     */
+    updateCameraDronesFlight(dt) {
+        const cameraDroneSpeed = 300; // Velocidad del camera drone (px/s) - igual que drones bomba
+        
+        // Buscar todos los camera drones que aún no están desplegados
+        const cameraDrones = this.nodes.filter(n => 
+            n.isCameraDrone && 
+            n.active && 
+            !n.deployed &&
+            n.targetX !== undefined &&
+            n.targetY !== undefined
+        );
+        
+        for (const cameraDrone of cameraDrones) {
+            // Calcular distancia al objetivo
+            const dx = cameraDrone.targetX - cameraDrone.x;
+            const dy = cameraDrone.targetY - cameraDrone.y;
+            const distance = Math.hypot(dx, dy);
+            
+            // Calcular cuánto se movería este frame
+            const speed = cameraDroneSpeed * dt;
+            
+            // Si está muy cerca O si el próximo movimiento lo pasaría, desplegar
+            if (distance < 5 || distance <= speed) {
+                // Llegó al destino - desplegar
+                cameraDrone.x = cameraDrone.targetX;
+                cameraDrone.y = cameraDrone.targetY;
+                cameraDrone.deployed = true;
+                cameraDrone.constructed = true;
+                cameraDrone.isConstructing = false;
+                
+                console.log(`📹 Camera Drone ${cameraDrone.id.substring(0, 8)} desplegado en (${cameraDrone.x.toFixed(0)}, ${cameraDrone.y.toFixed(0)})`);
+            } else {
+                // Mover hacia el objetivo
+                const vx = (dx / distance) * cameraDroneSpeed * dt;
+                const vy = (dy / distance) * cameraDroneSpeed * dt;
+                
+                cameraDrone.x += vx;
+                cameraDrone.y += vy;
+            }
+        }
+    }
+    
+    /**
      * Inicia el loop de actualización del juego
      */
     startGameLoop(updateCallback, victoryCallback = null) {
@@ -465,6 +521,8 @@ export class GameStateManager {
         // === SISTEMA DE COMANDOS ESPECIALES OPERATIVOS ===
         this.commandoSystem.update(dt);
         this.truckAssaultSystem.update(dt); // 🆕 NUEVO: Actualizar sistema de truck assault
+        this.updateCameraDronesFlight(dt); // 🆕 NUEVO: Actualizar vuelo de camera drones
+        this.cameraDroneSystem.update(dt); // 🆕 NUEVO: Actualizar sistema de camera drone (detección)
         this.vehicleWorkshopSystem.update(dt); // 🆕 NUEVO: Actualizar sistema de taller de vehículos
         
         // === SISTEMA DE IA (solo si hay IA en la partida) ===

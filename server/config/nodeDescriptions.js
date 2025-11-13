@@ -72,11 +72,11 @@ export const NODE_DESCRIPTIONS = {
     },
     droneWorkshop: {
         name: 'Taller de Drones',
-        description: 'Consume 10 suministros de un FOB aliado a cambio de un 50% de descuento el siguiente dron bomba.'
+        description: 'Consume 10 suministros de un FOB aliado a cambio de un 50% de descuento del siguiente dron bomba.'
     },
     vehicleWorkshop: {
         name: 'Taller de Vehículos',
-        description: 'Aumenta en +1 los vehículos máximos y disponibles de los FOBs en cuyo área esté. Solo se puede construir en el área de un FOB aliado.'
+        description: 'Aumenta en +1 los vehículos máximos y disponibles en todos los FOBs cercanos.'
     },
     
     // Consumibles/Proyectiles
@@ -98,11 +98,15 @@ export const NODE_DESCRIPTIONS = {
     },
     truckAssault: {
         name: 'Truck Assault',
-        description: 'Despliega un dispositivo que ralentiza todos los vehículos enemigos que pasan por su área de efecto en un 25%. Dura 25 segundos y puede ser eliminado con disparo de sniper. Requiere el Centro de Inteligencia.'
+        description: 'Ralentiza los vehículos enemigos cercanos. Requiere el Centro de Inteligencia.'
     },
     tank: {
         name: 'Tanque',
         description: 'Unidad blindada que destruye edificios enemigos. No puede atacar FOBs ni HQs.'
+    },
+    cameraDrone: {
+        name: 'Dron Cámara',
+        description: 'Despliega un dron de vigilancia en territorio enemigo. Detecta camiones ligeros y otorga currency. Permite construir edificios en territorio enemigo. Requiere lanzadera de drones.'
     }
 };
 

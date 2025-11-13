@@ -29,7 +29,8 @@ export const SERVER_NODE_CONFIG = {
         fobSabotage: 40,
         specopsCommando: 70,  
         tank: 100,
-        truckAssault: 45
+        truckAssault: 45,
+        cameraDrone: 40
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -91,9 +92,9 @@ export const SERVER_NODE_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
     // ✅ NOTA: Los costos están en costs.* (fuente única de verdad)
     // - costs.sniperStrike, costs.fobSabotage, costs.drone, costs.tank, costs.specopsCommando
-    actions: {
+        actions: {
         sniperStrike: {
-            targetType: ['front', 'specopsCommando', 'truckAssault']
+            targetType: ['front', 'specopsCommando', 'truckAssault', 'cameraDrone']
         },
         fobSabotage: {
             targetType: 'fob'
@@ -201,6 +202,14 @@ export const SERVER_NODE_CONFIG = {
             detectionRadius: 200,           // Área de efecto que ralentiza vehículos (25% de reducción)
             health: 50,                     // Vida del truck assault (puede ser destruido)
             sprite: 'truckassault'          // Sprite del truck assault
+        },
+        cameraDrone: {
+            radius: 25,                    // Radio físico del camera drone
+            detectionRadius: 120,           // Área de detección de vehículos ligeros
+            buildRadius: 300,               // Radio para permitir construcción en territorio enemigo
+            health: 50,                     // Vida del camera drone (puede ser destruido por sniper)
+            currencyReward: 10,              // Currency otorgado por cada camión ligero detectado
+            sprite: 'camera-drone'          // Sprite del camera drone
         }
     },
 
@@ -340,7 +349,8 @@ export const SERVER_NODE_CONFIG = {
             fobSabotage: true,
             specopsCommando: true,
             tank: true,
-            truckAssault: true
+            truckAssault: true,
+            cameraDrone: true
         },
         
         // Propiedades de comportamiento
@@ -372,6 +382,13 @@ export const SERVER_NODE_CONFIG = {
             truckAssault: {
                 targetType: 'position',
                 cursorSprite: 'truckassault',
+                canPlaceInEnemyTerritory: true,
+                ignoreDetectionLimits: true,
+                showRangePreview: true
+            },
+            cameraDrone: {
+                targetType: 'position',
+                cursorSprite: 'camera-drone',
                 canPlaceInEnemyTerritory: true,
                 ignoreDetectionLimits: true,
                 showRangePreview: true

@@ -153,7 +153,8 @@ export class StateSerializer {
                     // 🆕 NUEVO: Propiedades de comando (spawnTime y expiresAt)
                     spawnTime: node.isCommando ? node.spawnTime : undefined,
                     expiresAt: node.isCommando ? node.expiresAt : undefined,
-                    detectionRadius: node.isCommando ? node.detectionRadius : undefined
+                    // 🆕 NUEVO: detectionRadius para comandos, truck assaults y camera drones
+                    detectionRadius: (node.isCommando || node.isTruckAssault || node.isCameraDrone) ? node.detectionRadius : undefined
                 };
             });
     }
@@ -284,7 +285,8 @@ export class StateSerializer {
                     // 🆕 NUEVO: Propiedades de comando (spawnTime y expiresAt)
                     spawnTime: node.isCommando ? node.spawnTime : undefined,
                     expiresAt: node.isCommando ? node.expiresAt : undefined,
-                    detectionRadius: node.isCommando ? node.detectionRadius : undefined
+                    // 🆕 NUEVO: detectionRadius para comandos, truck assaults y camera drones
+                    detectionRadius: (node.isCommando || node.isTruckAssault || node.isCameraDrone) ? node.detectionRadius : undefined
                 };
             });
     }

@@ -898,7 +898,43 @@ io.on('connection', (socket) => {
                 console.log(`🎖️ Comando desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)})`);
             } else {
                 socket.emit('commando_deploy_failed', { reason: result.reason });
-                console.log(`⚠️ Despliegue de comando rechazado: ${result.reason}`);
+                console.log(`⚠️ Comando rechazado: ${result.reason}`);
+            }
+        } catch (error) {
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
+    /**
+     * 🆕 NUEVO: Despliegue de camera drone
+     */
+    socket.on('camera_drone_deploy_request', (data) => {
+        const { roomId, x, y } = data;
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room || !room.gameState) throw new Error('Partida no iniciada');
+            
+            const playerTeam = roomManager.getPlayerTeam(roomId, socket.id);
+            const result = room.gameState.handleCameraDroneDeploy(playerTeam, x, y);
+            
+            if (result.success) {
+                // Broadcast a todos
+                io.to(roomId).emit('camera_drone_deployed', {
+                    cameraDroneId: result.cameraDrone.id,
+                    team: playerTeam,
+                    x: result.cameraDrone.x,
+                    y: result.cameraDrone.y,
+                    targetX: result.cameraDrone.targetX,
+                    targetY: result.cameraDrone.targetY,
+                    detectionRadius: result.cameraDrone.detectionRadius,
+                    deployed: result.cameraDrone.deployed
+                });
+                
+                console.log(`📹 Camera Drone desplegado por ${playerTeam} hacia (${x.toFixed(0)}, ${y.toFixed(0)})`);
+            } else {
+                socket.emit('camera_drone_deploy_failed', { reason: result.reason });
+                console.log(`⚠️ Despliegue de camera drone rechazado: ${result.reason}`);
             }
         } catch (error) {
             socket.emit('error', { message: error.message });
