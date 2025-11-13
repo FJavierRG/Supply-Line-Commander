@@ -1460,7 +1460,13 @@ export class Game {
      * Verifica si se puede pagar un edificio
      */
     canAffordBuilding(buildingId) {
-        const cost = this.serverBuildingConfig?.costs?.[buildingId] || 0;
+        // 🆕 NUEVO: Para el dron, usar getDroneCost() que incluye el descuento del taller de drones
+        let cost;
+        if (buildingId === 'drone' && this.buildSystem) {
+            cost = this.buildSystem.getDroneCost();
+        } else {
+            cost = this.serverBuildingConfig?.costs?.[buildingId] || 0;
+        }
         return this.getMissionCurrency() >= cost;
     }
     
@@ -1476,7 +1482,8 @@ export class Game {
         
         
         // Validar currency
-        const droneCost = this.serverBuildingConfig?.costs?.drone || 0;
+        // 🆕 NUEVO: Usar getDroneCost() que incluye el descuento del taller de drones
+        const droneCost = this.buildSystem ? this.buildSystem.getDroneCost() : (this.serverBuildingConfig?.costs?.drone || 0);
         if (!this.canAffordBuilding('drone')) {
             return;
         }
@@ -1916,6 +1923,7 @@ export class Game {
             this.serverBuildingConfig = {
                 costs: SERVER_NODE_CONFIG.costs,
                 buildTimes: SERVER_NODE_CONFIG.buildTimes,
+                effects: SERVER_NODE_CONFIG.effects, // 🆕 Efectos de edificios (incluye taller de drones)
                 descriptions: SERVER_NODE_CONFIG.descriptions,
                 capacities: SERVER_NODE_CONFIG.capacities,
                 gameplay: SERVER_NODE_CONFIG.gameplay,

@@ -202,7 +202,7 @@ io.on('connection', (socket) => {
     (async () => {
         const { GAME_CONFIG } = await import('./config/gameConfig.js');
         socket.emit('game_config', {
-            deckPointLimit: GAME_CONFIG.deck.pointLimit || 650
+            deckPointLimit: GAME_CONFIG.deck.pointLimit
         });
     })();
     
@@ -357,7 +357,7 @@ io.on('connection', (socket) => {
                 const { GAME_CONFIG } = await import('./config/gameConfig.js');
                 const enabled = SERVER_NODE_CONFIG.gameplay.enabled || {};
                 const costs = SERVER_NODE_CONFIG.costs || {};
-                const deckPointLimit = GAME_CONFIG.deck.pointLimit || 650;
+                const deckPointLimit = GAME_CONFIG.deck.pointLimit;
                 
                 // Verificar que todas las unidades estén habilitadas en el servidor
                 const validUnits = deckUnits.filter(unitId => {

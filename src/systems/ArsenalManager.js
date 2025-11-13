@@ -81,6 +81,12 @@ export class ArsenalManager {
             });
         }
         
+        // Botón de nuevo mazo
+        const newBtn = document.getElementById('arsenal-new-btn');
+        if (newBtn) {
+            newBtn.addEventListener('click', () => this.createNewDeck());
+        }
+        
         // Botón de cargar mazo
         const loadBtn = document.getElementById('arsenal-load-btn');
         if (loadBtn) {
@@ -171,6 +177,26 @@ export class ArsenalManager {
             this.currentDeckId = null;
             this.deck = ['hq'];
         }
+    }
+    
+    /**
+     * 🆕 NUEVO: Crea un nuevo mazo vacío (solo con HQ)
+     */
+    createNewDeck() {
+        // Limpiar el mazo actual y empezar con uno nuevo (solo HQ)
+        this.currentDeckId = null;
+        this.deck = ['hq'];
+        
+        // Actualizar la visualización
+        this.updateDeckDisplay();
+        
+        // 🆕 NUEVO: Actualizar el estado de los items disponibles para que se puedan añadir
+        this.updateAvailableItemsState();
+        
+        // Mostrar notificación
+        this.showNotification('Nuevo mazo creado. Empieza añadiendo unidades.', 'info');
+        
+        console.log('📝 Nuevo mazo creado (vacío)');
     }
     
     hide() {
@@ -573,6 +599,7 @@ export class ArsenalManager {
     /**
      * Actualiza el estado visual de los items disponibles según si están en el mazo
      * 🆕 ACTUALIZADO: También verifica si se puede añadir sin exceder límite de puntos
+     * 🆕 FIX: Re-añade event listeners si faltan para permitir añadir items
      */
     updateAvailableItemsState() {
         const items = document.querySelectorAll('.arsenal-item');
@@ -597,14 +624,66 @@ export class ArsenalManager {
                     itemDiv.style.opacity = '0.4';
                     itemDiv.style.cursor = 'not-allowed';
                     itemDiv.title = check.reason; // Mostrar razón en tooltip
+                    itemDiv.style.pointerEvents = 'none';
                 } else {
                     itemDiv.classList.remove('disabled');
                     itemDiv.style.opacity = '1';
                     itemDiv.style.cursor = 'pointer';
                     itemDiv.title = ''; // Limpiar tooltip
+                    itemDiv.style.pointerEvents = 'auto';
+                    
+                    // 🆕 FIX: Re-añadir event listener si no existe (necesario cuando se crea un nuevo mazo)
+                    // Usar una marca para evitar añadir listeners duplicados
+                    if (!itemDiv.dataset.hasClickListener) {
+                        // Obtener la configuración del item para re-añadir listeners
+                        const itemConfig = this.getItemConfig(itemId);
+                        if (itemConfig) {
+                            // Remover listeners antiguos clonando el elemento (sin listeners)
+                            const newDiv = itemDiv.cloneNode(false);
+                            // Copiar todos los hijos (canvas, etc.)
+                            while (itemDiv.firstChild) {
+                                newDiv.appendChild(itemDiv.firstChild);
+                            }
+                            // Copiar atributos y estilos
+                            Array.from(itemDiv.attributes).forEach(attr => {
+                                if (attr.name !== 'data-has-click-listener') {
+                                    newDiv.setAttribute(attr.name, attr.value);
+                                }
+                            });
+                            newDiv.style.cssText = itemDiv.style.cssText;
+                            
+                            // Asegurar que se remueva la clase 'in-deck' antes de reemplazar
+                            newDiv.classList.remove('in-deck');
+                            
+                            // Reemplazar el elemento
+                            itemDiv.parentNode.replaceChild(newDiv, itemDiv);
+                            
+                            // Marcar que ya tiene listener
+                            newDiv.dataset.hasClickListener = 'true';
+                            
+                            // Añadir event listener de click
+                            newDiv.addEventListener('click', () => {
+                                if (this.addToDeck(itemId)) {
+                                    // Feedback visual
+                                    newDiv.style.transform = 'scale(0.95)';
+                                    setTimeout(() => {
+                                        newDiv.style.transform = '';
+                                        newDiv.classList.add('in-deck');
+                                        newDiv.style.opacity = '0.5';
+                                        newDiv.style.cursor = 'not-allowed';
+                                    }, 150);
+                                }
+                            });
+                            
+                            // Re-añadir hover listeners
+                            newDiv.addEventListener('mouseenter', () => this.showDetail(itemConfig));
+                            newDiv.addEventListener('focus', () => this.showDetail(itemConfig));
+                        }
+                    } else {
+                        // Si ya tiene listener, solo asegurar que no tenga la clase 'in-deck'
+                        itemDiv.classList.remove('in-deck');
+                    }
                 }
-                itemDiv.classList.remove('in-deck');
-                itemDiv.style.pointerEvents = 'auto';
             }
         });
     }
@@ -804,6 +883,9 @@ export class ArsenalManager {
             div.style.cursor = 'not-allowed';
             div.title = canAddCheck.reason;
         } else {
+            // Marcar que este item tiene el listener de click
+            div.dataset.hasClickListener = 'true';
+            
             div.addEventListener('click', () => {
                 if (this.addToDeck(item.id)) {
                     // Feedback visual

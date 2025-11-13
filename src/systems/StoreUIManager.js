@@ -608,6 +608,12 @@ export class StoreUIManager {
         const config = getNodeConfig(itemId);
         if (!config) return;
         
+        // 🆕 NUEVO: Para el dron, obtener el costo real considerando el descuento del taller de drones
+        let displayCost = config.cost;
+        if (itemId === 'drone' && this.buildSystem) {
+            displayCost = this.buildSystem.getDroneCost();
+        }
+        
         // Icono del item (+20% más grande)
         const sprite = this.assetManager.getSprite(config.spriteKey);
         if (sprite) {
@@ -631,7 +637,13 @@ export class StoreUIManager {
         }
         
         // Verificar si se puede permitir (solo si no está bloqueado)
-        const canAfford = !isDroneLocked && !isCommandoLocked && this.buildSystem.canAffordBuilding(itemId);
+        // 🆕 NUEVO: Para el dron, usar el costo real con descuento
+        let canAfford = false;
+        if (itemId === 'drone' && this.buildSystem) {
+            canAfford = !isDroneLocked && !isCommandoLocked && this.game.currency.canAfford(displayCost);
+        } else {
+            canAfford = !isDroneLocked && !isCommandoLocked && this.buildSystem.canAffordBuilding(itemId);
+        }
         
         // Precio (más legible) - color rojo si no se puede permitir, gris si está bloqueado
         if (isDroneLocked || isCommandoLocked) {
@@ -649,9 +661,9 @@ export class StoreUIManager {
         const priceY = y + size - 6;
         const priceX = x + size / 2;
         
-        // Contorno del precio
-        ctx.strokeText(`${config.cost}`, priceX, priceY);
-        ctx.fillText(`${config.cost}`, priceX, priceY);
+        // Contorno del precio (usar displayCost que incluye descuentos)
+        ctx.strokeText(`${displayCost}`, priceX, priceY);
+        ctx.fillText(`${displayCost}`, priceX, priceY);
         
         // Si está bloqueado, mostrar mensaje
         if (isDroneLocked) {

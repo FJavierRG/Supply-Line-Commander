@@ -71,7 +71,8 @@ export class BuildingSystem {
      */
     canAffordBuilding(buildingId) {
         // Validación UI únicamente - la validación real está en el servidor
-        const cost = this.getBuildingCost(buildingId);
+        // 🆕 NUEVO: Para el dron, usar getDroneCost() que incluye el descuento del taller de drones
+        const cost = buildingId === 'drone' ? this.getDroneCost() : this.getBuildingCost(buildingId);
         return this.game.currency.canAfford(cost);
     }
     
@@ -93,9 +94,45 @@ export class BuildingSystem {
     
     /**
      * Obtiene el costo del dron (proyectil)
+     * 🆕 NUEVO: Aplica descuento del taller de drones si hay talleres activos y FOBs con suficientes suministros
      */
     getDroneCost() {
-        return this.getBuildingCost('drone');
+        const baseCost = this.getBuildingCost('drone');
+        
+        // Verificar si hay talleres de drones activos
+        const droneWorkshops = this.game.nodes.filter(n => 
+            n.type === 'droneWorkshop' && 
+            n.team === this.game.myTeam && 
+            n.active && 
+            n.constructed &&
+            !n.isAbandoning
+        );
+        
+        if (droneWorkshops.length > 0) {
+            // Leer configuración del taller de drones desde el servidor
+            const effects = this.game.serverBuildingConfig?.effects || {};
+            const workshopConfig = effects.droneWorkshop || {};
+            const requiredSupplies = workshopConfig.requiredSupplies || 10;
+            const discountMultiplier = workshopConfig.discountMultiplier || 0.5;
+            
+            // Buscar FOBs aliados con suficientes suministros
+            const fobs = this.game.nodes.filter(n => 
+                n.type === 'fob' && 
+                n.team === this.game.myTeam && 
+                n.active && 
+                n.constructed &&
+                !n.isAbandoning &&
+                n.supplies !== null &&
+                n.supplies >= requiredSupplies
+            );
+            
+            if (fobs.length > 0) {
+                // Aplicar descuento según configuración
+                return Math.floor(baseCost * discountMultiplier);
+            }
+        }
+        
+        return baseCost;
     }
     
     /**
@@ -115,8 +152,10 @@ export class BuildingSystem {
         }
         
         // Verificar si tiene suficiente currency
+        // 🆕 NUEVO: Para el dron, usar getDroneCost() que incluye el descuento del taller de drones
+        const actualCost = buildingId === 'drone' ? this.getDroneCost() : building.cost;
         if (!this.canAffordBuilding(buildingId)) {
-            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${building.cost}, Tienes: ${this.game.getMissionCurrency()})`);
+            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${actualCost}, Tienes: ${this.game.getMissionCurrency()})`);
             return;
         }
         

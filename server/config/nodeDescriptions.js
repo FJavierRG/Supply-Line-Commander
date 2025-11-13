@@ -70,6 +70,10 @@ export const NODE_DESCRIPTIONS = {
         name: 'Estación de Tren',
         description: 'Envía trenes automáticamente con suministros a los FOBs de forma periódica.'
     },
+    droneWorkshop: {
+        name: 'Taller de Drones',
+        description: 'Consume 10 suministros de un FOB aliado a cambio de un 50% de descuento el siguiente dron bomba.'
+    },
     
     // Consumibles/Proyectiles
     drone: {
@@ -86,7 +90,7 @@ export const NODE_DESCRIPTIONS = {
     },
     specopsCommando: {
         name: 'Comando Especial',
-        description: 'Despliega un comando que deshabilita los edificios enemigos dentro de su área de efecto.'
+        description: 'Despliega un comando que deshabilita los edificios enemigos dentro de su área de efecto. Requiere el Centro de Inteligencia.'
     },
     tank: {
         name: 'Tanque',

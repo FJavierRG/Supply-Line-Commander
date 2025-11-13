@@ -78,7 +78,23 @@ export class CombatHandler {
         } else {
             // Aplicar efecto "wounded" al frente (lógica original)
             const woundedConfig = SERVER_NODE_CONFIG.temporaryEffects.wounded;
-            const originalConsumeRate = targetNode.consumeRate || 1.6;
+            
+            // 🆕 FIX: Verificar si ya existe un efecto wounded activo
+            const existingWounded = targetNode.effects?.find(e => e.type === 'wounded' && 
+                e.expiresAt && this.gameState.gameTime < e.expiresAt);
+            
+            if (existingWounded) {
+                console.log(`⚠️ Frente ${targetId} ya tiene efecto wounded activo, no se aplica duplicado`);
+                return { 
+                    success: false, 
+                    reason: 'El frente ya tiene efecto wounded activo',
+                    targetId,
+                    targetType: 'front'
+                };
+            }
+            
+            // 🆕 FIX: Guardar consumo original (usar configuración si no está definido)
+            const originalConsumeRate = targetNode.consumeRate || SERVER_NODE_CONFIG.gameplay.front.consumeRate;
             targetNode.consumeRate = originalConsumeRate * woundedConfig.consumeMultiplier;
             
             // Añadir efecto con expiración
@@ -88,7 +104,8 @@ export class CombatHandler {
                 type: 'wounded',
                 icon: woundedConfig.icon,
                 tooltip: woundedConfig.tooltip,
-                expiresAt: this.gameState.gameTime + woundedConfig.duration
+                expiresAt: this.gameState.gameTime + woundedConfig.duration,
+                originalConsumeRate // 🆕 FIX: Guardar valor original para restaurar correctamente
             };
             
             targetNode.effects.push(woundedEffect);
@@ -209,7 +226,48 @@ export class CombatHandler {
         }
         
         // ✅ Costo del dron (lee de costs - fuente única de verdad)
-        const droneCost = SERVER_NODE_CONFIG.costs.drone;
+        let droneCost = SERVER_NODE_CONFIG.costs.drone;
+        
+        // 🆕 NUEVO: Aplicar descuento del 50% si hay talleres de drones y algún FOB tiene 10+ suministros
+        const droneWorkshops = this.gameState.nodes.filter(n => 
+            n.type === 'droneWorkshop' && 
+            n.team === playerTeam && 
+            n.active && 
+            n.constructed &&
+            !n.isAbandoning
+        );
+        
+        if (droneWorkshops.length > 0) {
+            // ✅ Leer configuración del taller de drones desde serverNodes
+            const workshopConfig = SERVER_NODE_CONFIG.effects.droneWorkshop || {};
+            const requiredSupplies = workshopConfig.requiredSupplies || 10;
+            const discountMultiplier = workshopConfig.discountMultiplier || 0.5;
+            const suppliesCost = workshopConfig.suppliesCost || 10;
+            
+            // Buscar FOBs aliados con suficientes suministros
+            const fobs = this.gameState.nodes.filter(n => 
+                n.type === 'fob' && 
+                n.team === playerTeam && 
+                n.active && 
+                n.constructed &&
+                !n.isAbandoning &&
+                n.supplies !== null &&
+                n.supplies >= requiredSupplies
+            );
+            
+            if (fobs.length > 0) {
+                // Aplicar descuento según configuración
+                droneCost = Math.floor(droneCost * discountMultiplier);
+                
+                // 🆕 NUEVO: Sustraer suministros del primer FOB disponible según configuración
+                const selectedFob = fobs[0];
+                const oldSupplies = selectedFob.supplies;
+                selectedFob.supplies = Math.max(0, selectedFob.supplies - suppliesCost);
+                
+                console.log(`💰 Taller de drones activo: costo de dron reducido de ${SERVER_NODE_CONFIG.costs.drone} a ${droneCost} (${(discountMultiplier * 100).toFixed(0)}% descuento)`);
+                console.log(`📦 FOB ${selectedFob.id} suministros: ${oldSupplies} → ${selectedFob.supplies} (-${suppliesCost})`);
+            }
+        }
         
         // Verificar currency
         if (this.gameState.currency[playerTeam] < droneCost) {

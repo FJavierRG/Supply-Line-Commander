@@ -18,7 +18,7 @@ const DEFAULT_DECK_CONFIG = {
 };
 
 const STORAGE_KEY = 'game_decks';
-const DEFAULT_DECK_POINT_LIMIT = 700; // 🆕 Valor por defecto (será sobrescrito por el servidor)
+const DEFAULT_DECK_POINT_LIMIT = 815; // 🆕 Valor por defecto (será sobrescrito por el servidor)
 
 export class DeckManager {
     constructor(game) {

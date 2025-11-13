@@ -203,12 +203,22 @@ export class MedicalSystemServer {
 
     /**
      * Aplicar penalización por no responder a tiempo usando configuración del servidor
+     * 🆕 FIX: Estandarizado para usar gameTime y EffectsSystem en lugar de setTimeout
      */
     applyPenalty(front) {
         // Obtener configuración del efecto wounded del servidor
         const woundedConfig = SERVER_NODE_CONFIG.temporaryEffects.wounded;
         
-        // Guardar consumo original usando configuración del servidor
+        // 🆕 FIX: Verificar si ya existe un efecto wounded activo
+        const existingWounded = front.effects?.find(e => e.type === 'wounded' && 
+            e.expiresAt && this.gameState.gameTime < e.expiresAt);
+        
+        if (existingWounded) {
+            console.log(`⚠️ Frente ${front.id} ya tiene efecto wounded activo, no se aplica duplicado`);
+            return;
+        }
+        
+        // 🆕 FIX: Guardar consumo original (usar configuración si no está definido)
         const originalConsumeRate = front.consumeRate || SERVER_NODE_CONFIG.gameplay.front.consumeRate;
         
         // Aplicar multiplicador usando configuración del servidor
@@ -217,25 +227,16 @@ export class MedicalSystemServer {
         // Añadir efecto "wounded" usando configuración del servidor
         if (!front.effects) front.effects = [];
         
+        // 🆕 FIX: Usar gameTime en lugar de Date.now() para sincronización con EffectsSystem
         front.effects.push({
             type: 'wounded',
             icon: woundedConfig.icon,
             tooltip: woundedConfig.tooltip,
-            startTime: Date.now(),
-            duration: woundedConfig.duration * 1000, // Convertir a ms
-            expiresAt: Date.now() + (woundedConfig.duration * 1000),
-            originalConsumeRate
+            expiresAt: this.gameState.gameTime + woundedConfig.duration, // 🆕 Usar gameTime (segundos)
+            originalConsumeRate // 🆕 Guardar valor original para restaurar correctamente
         });
         
-        // Programar expiración del efecto usando configuración del servidor
-        setTimeout(() => {
-            front.consumeRate = originalConsumeRate;
-            if (front.effects) {
-                front.effects = front.effects.filter(e => e.type !== 'wounded' || e.startTime !== front.effects[0].startTime);
-            }
-            console.log(`✅ Efecto wounded expirado en frente ${front.id}`);
-        }, woundedConfig.duration * 1000);
-        
+        // 🆕 FIX: Eliminado setTimeout - EffectsSystem se encargará de la expiración
         console.log(`⚠️ Penalización aplicada al frente ${front.id}: consumo x${woundedConfig.consumeMultiplier} por ${woundedConfig.duration} segundos`);
     }
 

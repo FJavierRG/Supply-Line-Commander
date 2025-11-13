@@ -19,7 +19,7 @@ export const GAME_CONFIG = {
     // MAZOS (DECKS)
     // ═══════════════════════════════════════════════════════════════
     deck: {
-        pointLimit: 700  // 🎯 Límite de puntos por mazo (ANTI-HACK: validado en servidor)
+        pointLimit: 815  // 🎯 Límite de puntos por mazo (ANTI-HACK: validado en servidor)
     },
 
     // ═══════════════════════════════════════════════════════════════

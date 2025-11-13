@@ -1,0 +1,39 @@
+# Fly.io Configuration para Supply Line Commander
+# Para usar: fly launch (primera vez) o fly deploy (actualizaciones)
+
+app = "supply-line-commander"
+primary_region = "mad"  # Madrid - cambia según tu ubicación (mad, lhr, ams, etc.)
+
+[build]
+  builder = "nixpacks"
+
+[env]
+  PORT = "8080"
+  NODE_ENV = "production"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+  
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  # Health check para mantener el servicio activo
+  [[services.http_checks]]
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "5s"
+    method = "GET"
+    path = "/api/status"
+
+  # WebSocket upgrade support (importante para Socket.IO)
+  [[services.concurrency]]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 50
+

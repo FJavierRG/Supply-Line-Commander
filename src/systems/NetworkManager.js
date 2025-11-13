@@ -2794,6 +2794,14 @@ export class NetworkManager {
      * 🆕 SERVIDOR COMO AUTORIDAD: Actualiza configuración local con valores del servidor
      */
     updateLocalBuildingConfig(serverConfig) {
+        // 🆕 NUEVO: Actualizar serverBuildingConfig del juego con la configuración completa del servidor
+        if (this.game && serverConfig) {
+            this.game.serverBuildingConfig = {
+                ...this.game.serverBuildingConfig,
+                ...serverConfig // Sobrescribir con valores del servidor
+            };
+        }
+        
         // Importar configuración local para modificarla
         import('../config/nodes.js').then(module => {
             const { NODE_CONFIG } = module;

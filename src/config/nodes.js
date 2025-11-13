@@ -180,6 +180,16 @@ export const NODE_CONFIG = {
         isTrainStation: true // Flag para identificación
     },
     
+    droneWorkshop: {
+        id: 'droneWorkshop',
+        spriteKey: 'building-drone-workshop',
+        category: 'buildable',
+        
+        radius: 35, // Tamaño visual del sprite
+        
+        isDroneWorkshop: true // Flag para identificación
+    },
+    
     // ========== PROYECTILES ==========
     drone: {
         id: 'drone',

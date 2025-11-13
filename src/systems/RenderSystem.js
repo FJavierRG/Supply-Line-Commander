@@ -2004,6 +2004,32 @@ export class RenderSystem {
             this.renderTerritoryOverlay(rules.territoryType);
         }
         
+        // 🆕 NUEVO: Para el taller de drones, mostrar áreas válidas de FOBs aliados
+        if (buildingType === 'droneWorkshop' && rules.showFobAreas) {
+            const myTeam = this.game?.myTeam || 'player1';
+            const buildRadii = this.game?.serverBuildingConfig?.buildRadii || {};
+            const fobBuildRadius = buildRadii.fob || 140; // Radio de construcción del FOB
+            
+            const allyFOBs = allNodes.filter(node => 
+                node.type === 'fob' && 
+                node.team === myTeam && 
+                node.active && 
+                node.constructed &&
+                !node.isAbandoning
+            );
+            
+            // Mostrar áreas válidas alrededor de FOBs aliados en verde
+            for (const fob of allyFOBs) {
+                this.ctx.strokeStyle = 'rgba(46, 204, 113, 0.4)'; // Verde semi-transparente
+                this.ctx.lineWidth = 3;
+                this.ctx.setLineDash([10, 5]);
+                this.ctx.beginPath();
+                this.ctx.arc(fob.x, fob.y, fobBuildRadius, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+            }
+        }
+        
         // 2. Renderizar áreas de exclusión en rojo según las reglas
         for (const rule of rules.exclusionRules) {
             const filteredNodes = allNodes.filter(node => 
@@ -2127,6 +2153,8 @@ export class RenderSystem {
         const isCommando = buildingType === 'specopsCommando';
         // 🆕 NUEVO: La torre de vigilancia puede construirse cerca de comandos enemigos
         const isVigilanceTower = buildingType === 'vigilanceTower';
+        // 🆕 NUEVO: El taller de drones puede construirse cerca de FOBs aliados
+        const isDroneWorkshop = buildingType === 'droneWorkshop';
         
         if (isCommando) {
             // Solo verificar colisión física básica (no áreas de detección)
@@ -2191,6 +2219,24 @@ export class RenderSystem {
                     continue; // Saltar la verificación de área de detección para comandos
                 }
                 
+                // 🆕 NUEVO: Si estamos construyendo un taller de drones, ignorar FOBs aliados en la validación de colisiones
+                // (solo verificar colisión física básica, no área de construcción)
+                if (isDroneWorkshop && node.type === 'fob') {
+                    const myTeam = this.game?.myTeam || 'player1';
+                    if (node.team === myTeam && node.constructed && !node.isAbandoning) {
+                        const dist = Math.hypot(x - node.x, y - node.y);
+                        const existingConfig = getNodeConfig(node.type);
+                        const existingRadius = existingConfig?.radius || 40;
+                        const newRadius = config?.radius || 35;
+                        const minPhysicalSeparation = existingRadius + newRadius;
+                        if (dist < minPhysicalSeparation) {
+                            tooClose = true;
+                            break; // Solo bloquear si hay colisión física directa
+                        }
+                        continue; // Saltar la verificación de área de construcción para FOBs aliados
+                    }
+                }
+                
                 const dist = Math.hypot(x - node.x, y - node.y);
                 
                 // Obtener radio de construcción del nodo existente (usar buildRadius si existe)
@@ -2213,13 +2259,45 @@ export class RenderSystem {
         const inAllyTerritory = this.game && this.game.territory && this.game.territory.isInAllyTerritory(x, y);
         const inEnemyTerritory = this.game && this.game.territory && !inAllyTerritory;
         
+        // 🆕 NUEVO: Para el taller de drones, verificar que esté en el área de detección de un FOB aliado
+        let isInFobArea = false;
+        if (isDroneWorkshop) {
+            const myTeam = this.game?.myTeam || 'player1';
+            const buildRadii = this.game?.serverBuildingConfig?.buildRadii || {};
+            const fobBuildRadius = buildRadii.fob || 140;
+            const allNodes = [...(bases || []), ...(this.game?.nodes || [])];
+            const allyFOBs = allNodes.filter(n => 
+                n.type === 'fob' && 
+                n.team === myTeam && 
+                n.active && 
+                n.constructed &&
+                !n.isAbandoning
+            );
+            
+            for (const fob of allyFOBs) {
+                const dist = Math.hypot(x - fob.x, y - fob.y);
+                if (dist <= fobBuildRadius) {
+                    isInFobArea = true;
+                    break;
+                }
+            }
+        }
+        
         // Usar configuración del tipo de edificio actual (ya declarada arriba)
         const radius = config ? config.radius : 30;
         
         // Color del preview (rojo si está fuera o muy cerca, verde si es válido)
         // Para comando: válido si está en territorio enemigo y no muy cerca
+        // Para taller de drones: válido si está en territorio aliado, no muy cerca Y en área de FOB
         // Para otros: válido si está en territorio aliado y no muy cerca
-        const isValid = isCommando ? (!tooClose && inEnemyTerritory) : (!tooClose && inAllyTerritory);
+        let isValid;
+        if (isCommando) {
+            isValid = !tooClose && inEnemyTerritory;
+        } else if (isDroneWorkshop) {
+            isValid = !tooClose && inAllyTerritory && isInFobArea;
+        } else {
+            isValid = !tooClose && inAllyTerritory;
+        }
         const previewColor = isValid ? 'rgba(52, 152, 219, 0.5)' : 'rgba(231, 76, 60, 0.5)';
         const borderColor = isValid ? '#3498db' : '#e74c3c';
         
@@ -2270,6 +2348,8 @@ export class RenderSystem {
             label = '⚠️ MUY CERCA';
         } else if (isCommando && !inEnemyTerritory) {
             label = '⚠️ DEBE SER EN TERRITORIO ENEMIGO';
+        } else if (isDroneWorkshop && !isInFobArea) {
+            label = '⚠️ DEBE ESTAR EN ÁREA DE FOB';
         } else if (!isCommando && !inAllyTerritory) {
             label = '⚠️ FUERA DE TERRITORIO';
         }
@@ -2624,10 +2704,10 @@ export class RenderSystem {
                 alphaMultiplier = pulseValue;
             }
             
-            // Calcular color interpolado
-            const r = Math.floor(colorStart.r + (colorEnd.r - colorStart.r) * (1 - progress));
-            const g = Math.floor(colorStart.g + (colorEnd.g - colorStart.g) * (1 - progress));
-            const b = Math.floor(colorStart.b + (colorEnd.b - colorStart.b) * (1 - progress));
+            // Usar siempre colorStart (amarillo) sin interpolación
+            const r = colorStart.r;
+            const g = colorStart.g;
+            const b = colorStart.b;
             const alpha = progress * alphaMultiplier;
             
             this.ctx.beginPath();

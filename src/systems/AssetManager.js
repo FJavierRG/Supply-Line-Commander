@@ -27,6 +27,7 @@ export class AssetManager {
             // Edificios construibles
             'building-anti-drone': 'assets/sprites/buildings/anti_drone_weapon.png',
             'building-drone-launcher': 'assets/sprites/buildings/drone_launcher.png',
+            'building-drone-workshop': 'assets/sprites/buildings/tallerDrones.png',
             'building-razor-net': 'assets/sprites/buildings/razor_net.png',
             'building-truck-factory': 'assets/sprites/buildings/truck_factory.png',
             'building-nuclear-plant': 'assets/sprites/buildings/nuclear_plant.png',

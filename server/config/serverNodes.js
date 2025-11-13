@@ -20,7 +20,8 @@ export const SERVER_NODE_CONFIG = {
         campaignHospital: 60,
         intelCenter: 150, 
         vigilanceTower: 120, 
-        trainStation: 170, 
+        trainStation: 170,
+        droneWorkshop: 85, 
         // 🆕 CONSUMIBLES/PROYECTILES
         drone: 150,
         sniperStrike: 40,
@@ -44,7 +45,8 @@ export const SERVER_NODE_CONFIG = {
         aerialBase: 3, 
         intelCenter: 3, 
         vigilanceTower: 3, 
-        trainStation: 4  
+        trainStation: 4,
+        droneWorkshop: 3  
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -70,6 +72,11 @@ export const SERVER_NODE_CONFIG = {
             trainInterval: 12,      // 🆕 Segundos entre envíos de tren
             trainSpeed: 55,        // 🆕 Velocidad del tren (píxeles por segundo)
             trainCargo: 25          // 🆕 Suministros que entrega cada tren
+        },
+        droneWorkshop: {
+            discountMultiplier: 0.5,     // 🆕 Multiplicador de descuento (50% = 0.5)
+            requiredSupplies: 15,       // 🆕 Suministros mínimos requeridos en FOB
+            suppliesCost: 15             // 🆕 Suministros que se sustraen del FOB al usar el descuento
         }
     },
 
@@ -135,7 +142,8 @@ export const SERVER_NODE_CONFIG = {
         intelCenter: 130,     
         aerialBase: 130,       
         vigilanceTower: 130,   
-        trainStation: 130       
+        trainStation: 130,
+        droneWorkshop: 130       
     },
     
     // ═══════════════════════════════════════════════════════════════
@@ -164,7 +172,8 @@ export const SERVER_NODE_CONFIG = {
         intelCenter: 35,      
         aerialBase: 40,    
         vigilanceTower: 35,   
-        trainStation: 40     
+        trainStation: 40,
+        droneWorkshop: 35     
     },
     
     // 🆕 NUEVO: Configuración de nodos especiales que se despliegan como unidades
@@ -258,7 +267,7 @@ export const SERVER_NODE_CONFIG = {
         // Propiedades de radio inteligencia
         intelRadio: {
             investmentTime: 20,      // Tiempo en segundos antes de pagar
-            investmentBonus: 25       // Beneficio adicional (se suma al costo del edificio)
+            investmentBonus: 15       // Beneficio adicional (se suma al costo del edificio)
         },
         
         // Propiedades de sniper
@@ -297,7 +306,8 @@ export const SERVER_NODE_CONFIG = {
             intelCenter: true,   
             aerialBase: false,
             vigilanceTower: false,  
-            trainStation: true,    
+            trainStation: true,
+            droneWorkshop: true,    
             // 🆕 CONSUMIBLES/PROYECTILES
             drone: true,
             sniperStrike: true,

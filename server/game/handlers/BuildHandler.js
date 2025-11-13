@@ -121,8 +121,35 @@ export class BuildHandler {
             return { success: false, reason: 'Fuera de tu territorio' };
         }
         
+        // 🆕 NUEVO: Validar que el taller de drones esté en el área de detección de un FOB aliado
+        if (buildingType === 'droneWorkshop') {
+            const fobBuildRadius = getBuildRadius('fob'); // Radio de construcción del FOB (140px)
+            const nearbyFOBs = this.gameState.nodes.filter(n => 
+                n.type === 'fob' && 
+                n.team === playerTeam && 
+                n.active && 
+                n.constructed &&
+                !n.isAbandoning
+            );
+            
+            let isInFobArea = false;
+            for (const fob of nearbyFOBs) {
+                const dist = Math.hypot(x - fob.x, y - fob.y);
+                if (dist <= fobBuildRadius) {
+                    isInFobArea = true;
+                    break;
+                }
+            }
+            
+            if (!isInFobArea) {
+                console.log(`❌ Construcción rechazada: taller de drones debe estar en el área de detección de un FOB aliado (${playerTeam} en x=${x}, y=${y})`);
+                return { success: false, reason: 'El taller de drones solo se puede construir en el área de detección de FOBs aliados' };
+            }
+        }
+        
         // Validar colisiones con otros edificios usando detectionRadius
-        if (!this.isValidLocation(x, y, buildingType)) {
+        // Pasar playerTeam para que isValidLocation pueda identificar FOBs aliados
+        if (!this.isValidLocation(x, y, buildingType, { playerTeam })) {
             console.log(`❌ Construcción rechazada: muy cerca de otro edificio (${buildingType} en x=${x}, y=${y})`);
             return { success: false, reason: 'Muy cerca de otro edificio' };
         }
@@ -400,7 +427,7 @@ export class BuildHandler {
      * @returns {boolean} True si la ubicación es válida
      */
     isValidLocation(x, y, buildingType, options = {}) {
-        const { ignoreDetectionLimits = false, allowEnemyTerritory = false } = options;
+        const { ignoreDetectionLimits = false, allowEnemyTerritory = false, playerTeam = null } = options;
         
         // Si ignoreDetectionLimits está activado, solo verificar colisiones físicas básicas (no áreas de detección)
         if (ignoreDetectionLimits) {
@@ -423,6 +450,10 @@ export class BuildHandler {
         // (su propósito es eliminarlos, así que no debe estar bloqueada por ellos)
         const isVigilanceTower = buildingType === 'vigilanceTower';
         
+        // 🆕 NUEVO: El taller de drones puede construirse cerca de FOBs aliados
+        // (debe estar dentro del área de detección del FOB, así que no debe estar bloqueado por ellos)
+        const isDroneWorkshop = buildingType === 'droneWorkshop';
+        
         // Lógica normal de detección
         // ✅ Usar función helper centralizada para obtener buildRadius con fallback
         const newBuildRadius = getBuildRadius(buildingType);
@@ -441,6 +472,20 @@ export class BuildHandler {
                     return false; // Solo bloquear si hay colisión física directa
                 }
                 continue; // Saltar la verificación de área de detección para comandos
+            }
+            
+            // 🆕 NUEVO: Si estamos construyendo un taller de drones, ignorar FOBs aliados en la validación de colisiones
+            // (la validación de estar en el área del FOB se hace antes de llamar a isValidLocation)
+            if (isDroneWorkshop && node.type === 'fob' && playerTeam && node.team === playerTeam && 
+                node.constructed && !node.isAbandoning) {
+                // Solo verificar colisión física básica con FOBs aliados (no área de construcción)
+                const dist = Math.hypot(x - node.x, y - node.y);
+                const minPhysicalSeparation = (SERVER_NODE_CONFIG.radius[buildingType] || 35) + 
+                                             (SERVER_NODE_CONFIG.radius[node.type] || 40);
+                if (dist < minPhysicalSeparation) {
+                    return false; // Solo bloquear si hay colisión física directa
+                }
+                continue; // Saltar la verificación de área de construcción para FOBs aliados
             }
             
             const dist = Math.hypot(x - node.x, y - node.y);
