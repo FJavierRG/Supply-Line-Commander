@@ -145,55 +145,12 @@ export class BuildHandler {
             }
         }
         
-        // 🆕 NUEVO: Validar que el taller de drones esté en el área de detección de un FOB aliado
-        if (buildingType === 'droneWorkshop') {
-            const fobBuildRadius = getBuildRadius('fob'); // Radio de construcción del FOB (140px)
-            const nearbyFOBs = this.gameState.nodes.filter(n => 
-                n.type === 'fob' && 
-                n.team === playerTeam && 
-                n.active && 
-                n.constructed &&
-                !n.isAbandoning
-            );
-            
-            let isInFobArea = false;
-            for (const fob of nearbyFOBs) {
-                const dist = Math.hypot(x - fob.x, y - fob.y);
-                if (dist <= fobBuildRadius) {
-                    isInFobArea = true;
-                    break;
-                }
-            }
-            
-            if (!isInFobArea) {
-                console.log(`❌ Construcción rechazada: taller de drones debe estar en el área de detección de un FOB aliado (${playerTeam} en x=${x}, y=${y})`);
-                return { success: false, reason: 'El taller de drones solo se puede construir en el área de detección de FOBs aliados' };
-            }
-        }
-        
-        // 🆕 NUEVO: Validar que el taller de vehículos esté en el área de detección de un FOB aliado
-        if (buildingType === 'vehicleWorkshop') {
-            const fobBuildRadius = getBuildRadius('fob'); // Radio de construcción del FOB (140px)
-            const nearbyFOBs = this.gameState.nodes.filter(n => 
-                n.type === 'fob' && 
-                n.team === playerTeam && 
-                n.active && 
-                n.constructed &&
-                !n.isAbandoning
-            );
-            
-            let isInFobArea = false;
-            for (const fob of nearbyFOBs) {
-                const dist = Math.hypot(x - fob.x, y - fob.y);
-                if (dist <= fobBuildRadius) {
-                    isInFobArea = true;
-                    break;
-                }
-            }
-            
-            if (!isInFobArea) {
-                console.log(`❌ Construcción rechazada: taller de vehículos debe estar en el área de detección de un FOB aliado (${playerTeam} en x=${x}, y=${y})`);
-                return { success: false, reason: 'El taller de vehículos solo se puede construir en el área de detección de FOBs aliados' };
+        // 🆕 NUEVO: Validar que el taller de drones o taller de vehículos esté en el área de construcción de un FOB aliado
+        if (buildingType === 'droneWorkshop' || buildingType === 'vehicleWorkshop') {
+            const buildingName = buildingType === 'droneWorkshop' ? 'taller de drones' : 'taller de vehículos';
+            if (!this.isInFobBuildArea(x, y, playerTeam)) {
+                console.log(`❌ Construcción rechazada: ${buildingName} debe estar en el área de construcción de un FOB aliado (${playerTeam} en x=${x}, y=${y})`);
+                return { success: false, reason: `El ${buildingName} solo se puede construir en el área de construcción de FOBs aliados` };
             }
         }
         
@@ -462,6 +419,33 @@ export class BuildHandler {
      */
     getInitialVehicles(type) {
         return SERVER_NODE_CONFIG.capacities[type]?.maxVehicles ?? 0;
+    }
+    
+    /**
+     * ✅ Helper centralizado: Verifica si una posición está en el área de construcción de un FOB aliado
+     * @param {number} x - Coordenada X
+     * @param {number} y - Coordenada Y
+     * @param {string} playerTeam - Equipo del jugador
+     * @returns {boolean} True si está en el área de construcción de un FOB aliado
+     */
+    isInFobBuildArea(x, y, playerTeam) {
+        const fobBuildRadius = getBuildRadius('fob'); // Radio de construcción del FOB (140px)
+        const nearbyFOBs = this.gameState.nodes.filter(n => 
+            n.type === 'fob' && 
+            n.team === playerTeam && 
+            n.active && 
+            n.constructed &&
+            !n.isAbandoning
+        );
+        
+        for (const fob of nearbyFOBs) {
+            const dist = Math.hypot(x - fob.x, y - fob.y);
+            if (dist <= fobBuildRadius) {
+                return true;
+            }
+        }
+        
+        return false;
     }
     
     /**

@@ -71,15 +71,20 @@ export class CameraDroneSystem {
                 // Crear ID único para este convoy en esta dirección (ida o vuelta)
                 const convoyDirectionId = `${convoy.id}_${convoy.returning ? 'return' : 'outbound'}`;
                 
-                // Calcular distancia desde el camera drone hasta la línea del convoy
-                const distToLine = this.distanceToLineSegment(
-                    cameraDrone.x, cameraDrone.y,
-                    fromNode.x, fromNode.y,
-                    toNode.x, toNode.y
+                // ✅ FIX: Calcular posición ACTUAL del convoy basada en su progress
+                // El progress va de 0.0 (origen) a 1.0 (destino)
+                const progress = Math.max(0, Math.min(1, convoy.progress || 0));
+                const currentX = fromNode.x + (toNode.x - fromNode.x) * progress;
+                const currentY = fromNode.y + (toNode.y - fromNode.y) * progress;
+                
+                // ✅ FIX: Calcular distancia desde el camera drone hasta la POSICIÓN ACTUAL del convoy
+                const distToCurrentPosition = Math.hypot(
+                    cameraDrone.x - currentX,
+                    cameraDrone.y - currentY
                 );
                 
-                // Verificar si está dentro del área ahora
-                const isInsideNow = distToLine <= detectionRadius;
+                // Verificar si la posición actual está dentro del área ahora
+                const isInsideNow = distToCurrentPosition <= detectionRadius;
                 
                 // Obtener estado anterior (undefined si no existe = primera vez que vemos este convoy en esta dirección)
                 const wasInsideBefore = previousStates.get(convoyDirectionId);
@@ -143,6 +148,17 @@ export class CameraDroneSystem {
                     // Otorgar currency al equipo del camera drone
                     if (this.gameState.currency && this.gameState.currency[cameraDrone.team] !== undefined) {
                         this.gameState.currency[cameraDrone.team] += currencyReward;
+                        
+                        // 🆕 NUEVO: Agregar evento visual para mostrar número flotante en el cliente
+                        if (this.gameState.addVisualEvent) {
+                            this.gameState.addVisualEvent('camera_drone_currency', {
+                                cameraDroneId: cameraDrone.id,
+                                x: cameraDrone.x,
+                                y: cameraDrone.y,
+                                amount: currencyReward,
+                                team: cameraDrone.team
+                            });
+                        }
                         
                         console.log(`📹 Camera Drone ${cameraDrone.id.substring(0, 8)} detectó camión ligero ${convoy.id.substring(0, 8)} (${convoy.returning ? 'vuelta' : 'ida'}) → +${currencyReward}$ para ${cameraDrone.team} [detectedSet size: ${detectedSet.size}]`);
                     }

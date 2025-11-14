@@ -44,6 +44,7 @@ export class TruckAssaultSystem {
     
     /**
      * Verifica si un convoy está dentro del área de efecto de algún truck assault enemigo
+     * ✅ FIX: Ahora verifica la POSICIÓN ACTUAL del convoy, no solo la ruta completa
      * @param {Object} convoy - Convoy a verificar
      * @returns {Object|null} Truck assault que está afectando al convoy, o null si ninguno
      */
@@ -60,6 +61,12 @@ export class TruckAssaultSystem {
             return null;
         }
         
+        // ✅ FIX: Calcular posición ACTUAL del convoy basada en su progress
+        // El progress va de 0.0 (origen) a 1.0 (destino)
+        const progress = Math.max(0, Math.min(1, convoy.progress || 0));
+        const currentX = fromNode.x + (toNode.x - fromNode.x) * progress;
+        const currentY = fromNode.y + (toNode.y - fromNode.y) * progress;
+        
         // Buscar truck assaults enemigos activos
         const enemyTruckAssaults = this.gameState.nodes.filter(n => 
             n.isTruckAssault && 
@@ -70,20 +77,18 @@ export class TruckAssaultSystem {
             (!n.expiresAt || this.gameState.gameTime < n.expiresAt)
         );
         
-        // Verificar si el convoy pasa por el área de algún truck assault enemigo
-        // Un convoy está afectado si su ruta pasa por el área de efecto
+        // ✅ FIX: Verificar si la POSICIÓN ACTUAL del convoy está dentro del área de algún truck assault
         for (const assault of enemyTruckAssaults) {
             const detectionRadius = assault.detectionRadius || 200;
             
-            // Calcular distancia desde el truck assault hasta la línea del convoy
-            const distToLine = this.distanceToLineSegment(
-                assault.x, assault.y,
-                fromNode.x, fromNode.y,
-                toNode.x, toNode.y
+            // Calcular distancia desde el truck assault hasta la posición actual del convoy
+            const distToCurrentPosition = Math.hypot(
+                assault.x - currentX,
+                assault.y - currentY
             );
             
-            // Si la distancia es menor o igual al radio de detección, el convoy está afectado
-            if (distToLine <= detectionRadius) {
+            // Si la posición actual está dentro del radio de detección, el convoy está afectado
+            if (distToCurrentPosition <= detectionRadius) {
                 return assault;
             }
         }

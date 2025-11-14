@@ -97,6 +97,8 @@ export class GameStateManager {
         
         // Sistema de eventos de sonido
         this.soundEvents = [];
+        // 🆕 NUEVO: Sistema de eventos visuales (para números flotantes, efectos, etc.)
+        this.visualEvents = [];
         this.hasPlayedEnemyContact = false;
         this.clearShootsTimer = 0;
         this.radioEffectTimer = 0;
@@ -296,6 +298,25 @@ export class GameStateManager {
     getSoundEvents() {
         const events = [...this.soundEvents];
         this.soundEvents = []; // Limpiar después de leer
+        return events;
+    }
+    
+    /**
+     * 🆕 NUEVO: Agrega un evento visual para el cliente (números flotantes, efectos, etc.)
+     * @param {string} type - Tipo de evento visual
+     * @param {Object} data - Datos del evento
+     */
+    addVisualEvent(type, data = {}) {
+        this.visualEvents.push({ type, ...data, timestamp: this.gameTime });
+    }
+    
+    /**
+     * 🆕 NUEVO: Obtiene todos los eventos visuales pendientes y los limpia
+     * @returns {Array} Array de eventos visuales
+     */
+    getVisualEvents() {
+        const events = [...this.visualEvents];
+        this.visualEvents = []; // Limpiar después de leer
         return events;
     }
     
@@ -688,7 +709,8 @@ export class GameStateManager {
                 player1: Math.floor(this.currency.player1),
                 player2: Math.floor(this.currency.player2)
             },
-            soundEvents: this.getSoundEvents() // Eventos de sonido de este tick
+            soundEvents: this.getSoundEvents(), // Eventos de sonido de este tick
+            visualEvents: this.getVisualEvents() // 🆕 NUEVO: Eventos visuales de este tick
         };
         
         // Durante sync inicial, siempre enviar. Después, aplicar optimización
