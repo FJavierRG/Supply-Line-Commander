@@ -68,6 +68,11 @@ export class StateSerializer {
             return true;
         }
         
+        // 🆕 NUEVO: Cambios en estado broken (crítico para edificios rotos)
+        if (node.broken !== lastNodeState.broken) {
+            return true;
+        }
+        
         // 🆕 NUEVO: Cambios en tiempo de comando (spawnTime y expiresAt)
         if (node.isCommando) {
             if (node.spawnTime !== lastNodeState.spawnTime ||
@@ -100,6 +105,7 @@ export class StateSerializer {
                     // Guardar estado de helicópteros
                     availableHelicopters: node.availableHelicopters || 0,
                     ambulanceAvailable: node.ambulanceAvailable,
+                    selectedResourceType: node.selectedResourceType, // 🆕 NUEVO: Tipo de recurso seleccionado
                     isAbandoning: node.isAbandoning,
                     abandonPhase: node.abandonPhase,
                     abandonStartTime: node.abandonStartTime || 0, // Timestamp para calcular tiempo transcurrido
@@ -141,6 +147,12 @@ export class StateSerializer {
                     hasMedicalSystem: node.hasMedicalSystem || false,
                     ambulanceAvailable: node.ambulanceAvailable || false,
                     maxAmbulances: node.maxAmbulances || 0,
+                    // 🆕 NUEVO: Propiedades del sistema de reparación
+                    hasRepairSystem: node.hasRepairSystem || false,
+                    availableRepairVehicles: node.availableRepairVehicles || 0,
+                    maxRepairVehicles: node.maxRepairVehicles || 0,
+                    // 🆕 NUEVO: Tipo de recurso seleccionado (para HQ y otros nodos con múltiples tipos)
+                    selectedResourceType: node.selectedResourceType || undefined,
                     // Propiedades de inversión (intelRadio)
                     investmentTime: node.investmentTime || 0,
                     investmentReturn: node.investmentReturn || 0,
@@ -150,6 +162,7 @@ export class StateSerializer {
                     abandonPhase1Duration: node.abandonPhase1Duration || 2000,
                     abandonPhase2Duration: node.abandonPhase2Duration || 3000,
                     disabled: node.disabled || false, // 🆕 NUEVO: Estado disabled (genérico)
+                    broken: node.broken || false, // 🆕 NUEVO: Estado broken (roto)
                     // 🆕 NUEVO: Propiedades de comando (spawnTime y expiresAt)
                     spawnTime: node.isCommando ? node.spawnTime : undefined,
                     expiresAt: node.isCommando ? node.expiresAt : undefined,
@@ -234,9 +247,11 @@ export class StateSerializer {
                     // Guardar estado de helicópteros
                     availableHelicopters: node.availableHelicopters || 0,
                     ambulanceAvailable: node.ambulanceAvailable,
+                    selectedResourceType: node.selectedResourceType, // 🆕 NUEVO: Tipo de recurso seleccionado
                     isAbandoning: node.isAbandoning,
                     effects: node.effects ? [...node.effects] : [],
                     disabled: node.disabled || false, // 🆕 NUEVO: Estado disabled
+                    broken: node.broken || false, // 🆕 NUEVO: Estado broken (roto)
                     // 🆕 NUEVO: Tiempo de comando
                     spawnTime: node.spawnTime,
                     expiresAt: node.expiresAt
@@ -273,6 +288,12 @@ export class StateSerializer {
                     hasMedicalSystem: node.hasMedicalSystem || false,
                     ambulanceAvailable: node.ambulanceAvailable || false,
                     maxAmbulances: node.maxAmbulances || 0,
+                    // 🆕 NUEVO: Propiedades del sistema de reparación
+                    hasRepairSystem: node.hasRepairSystem || false,
+                    availableRepairVehicles: node.availableRepairVehicles || 0,
+                    maxRepairVehicles: node.maxRepairVehicles || 0,
+                    // 🆕 NUEVO: Tipo de recurso seleccionado (para HQ y otros nodos con múltiples tipos)
+                    selectedResourceType: node.selectedResourceType || undefined,
                     // Propiedades de inversión (intelRadio)
                     investmentTime: node.investmentTime || 0,
                     investmentReturn: node.investmentReturn || 0,
@@ -282,6 +303,7 @@ export class StateSerializer {
                     abandonPhase1Duration: node.abandonPhase1Duration || 2000,
                     abandonPhase2Duration: node.abandonPhase2Duration || 3000,
                     disabled: node.disabled || false, // 🆕 NUEVO: Estado disabled (genérico)
+                    broken: node.broken || false, // 🆕 NUEVO: Estado broken (roto)
                     // 🆕 NUEVO: Propiedades de comando (spawnTime y expiresAt)
                     spawnTime: node.isCommando ? node.spawnTime : undefined,
                     expiresAt: node.isCommando ? node.expiresAt : undefined,
@@ -381,7 +403,8 @@ export class StateSerializer {
             gameTime: this.gameState.gameTime,
             tick: this.gameState.tickCounter,
             drones: this.gameState.droneSystem.getDrones(),
-            emergencies: this.gameState.medicalSystem.getEmergencies()
+            emergencies: this.gameState.medicalSystem.getEmergencies(),
+            benchCooldowns: this.gameState.benchCooldowns ? { ...this.gameState.benchCooldowns } : {} // 🆕 NUEVO: Incluir cooldowns del banquillo
         };
     }
 }

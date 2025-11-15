@@ -200,6 +200,46 @@ export const NODE_CONFIG = {
         isVehicleWorkshop: true // Flag para identificación
     },
     
+    physicStudies: {
+        id: 'physicStudies',
+        spriteKey: 'building-physic-studies',
+        category: 'buildable',
+        
+        radius: 35, // Tamaño visual del sprite
+        
+        isPhysicStudies: true // Flag para identificación
+    },
+    
+    secretLaboratory: {
+        id: 'secretLaboratory',
+        spriteKey: 'building-secret-laboratory',
+        category: 'buildable',
+        
+        radius: 35, // Tamaño visual del sprite
+        
+        isSecretLaboratory: true // Flag para identificación
+    },
+    
+    trainingCamp: {
+        id: 'trainingCamp',
+        spriteKey: 'building-training-camp',
+        category: 'buildable',
+        
+        radius: 35, // Tamaño visual del sprite
+        
+        isTrainingCamp: true // Flag para identificación
+    },
+    
+    deadlyBuild: {
+        id: 'deadlyBuild',
+        spriteKey: 'building-deadly-build',
+        category: 'buildable',
+        
+        radius: 40, // Tamaño visual del sprite
+        
+        isDeadlyBuild: true // Flag para identificación
+    },
+    
     // ========== PROYECTILES ==========
     drone: {
         id: 'drone',
@@ -242,6 +282,17 @@ export const NODE_CONFIG = {
        
     },
     
+    cameraDrone: {
+        id: 'cameraDrone',
+        spriteKey: 'camera-drone',
+        category: 'projectile',
+        
+        radius: 25,
+        
+        shadowColor: '#3498db',
+        isCameraDrone: true
+    },
+    
     truckAssault: {
         id: 'truckAssault',
         spriteKey: 'truckassault', // 🆕 NUEVO: Sprite del truck assault
@@ -261,6 +312,32 @@ export const NODE_CONFIG = {
         radius: 0,
        
         sizeMultiplier: 1.0
+    },
+    
+    lightVehicle: {
+        id: 'lightVehicle',
+        spriteKey: 'vehicle-light-1', // Sprite del artillado ligero
+        category: 'projectile',
+        
+        radius: 0,
+        sizeMultiplier: 1.0
+    },
+    
+    artillery: {
+        id: 'artillery',
+        spriteKey: 'vehicle-artillery', // Sprite de artillería
+        category: 'projectile',
+        
+        radius: 0,
+        sizeMultiplier: 1.0
+    },
+    
+    worldDestroyer: {
+        id: 'worldDestroyer',
+        spriteKey: 'world-destroyer',
+        category: 'projectile',
+        
+        radius: 0
     }
 };
 
@@ -295,6 +372,10 @@ export function getNodeConfig(nodeId) {
         if (serverConfig.descriptions && serverConfig.descriptions[nodeId]) {
             hybridConfig.name = serverConfig.descriptions[nodeId].name;
             hybridConfig.description = serverConfig.descriptions[nodeId].description;
+            // 🆕 NUEVO: Incluir details si está disponible
+            if (serverConfig.descriptions[nodeId].details) {
+                hybridConfig.details = serverConfig.descriptions[nodeId].details;
+            }
         }
         
         if (serverConfig.capacities && serverConfig.capacities[nodeId]) {

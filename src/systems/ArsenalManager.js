@@ -13,7 +13,13 @@ export class ArsenalManager {
         this.currentDeckId = null; // ID del mazo que estamos editando
         this.deck = ['hq']; // Array de IDs únicos - HQ siempre incluido por defecto
         this.deckLimit = 20; // Límite máximo de unidades en el mazo (DEPRECATED: ahora se usa sistema de puntos)
-        this.deckPointLimit = this.deckManager.getDeckPointLimit(); // 🆕 NUEVO: Límite de puntos
+        // 🆕 FIX: NO guardar copia del límite - siempre obtenerlo dinámicamente desde DeckManager (fuente única de verdad)
+        
+        // 🆕 NUEVO: Sistema de banquillo
+        this.bench = []; // Array de IDs únicos del banquillo
+        this.benchExpanded = false; // Estado del panel desplegable
+        this.swapMode = null; // Modo de permutación: null, { benchUnitId: 'xxx' } cuando se selecciona una carta del bench
+        this.destination = 'deck'; // 🆕 NUEVO: Destino por defecto: 'deck' o 'bench'
         
         this.setupEventListeners();
     }
@@ -98,6 +104,95 @@ export class ArsenalManager {
         if (selectorCloseBtn) {
             selectorCloseBtn.addEventListener('click', () => this.hideDeckSelector());
         }
+        
+        // Event listeners del modal de vista ampliada de carta
+        const cardZoomOverlay = document.getElementById('card-zoom-overlay');
+        const cardZoomCloseBtn = document.getElementById('card-zoom-close-btn');
+        
+        if (cardZoomCloseBtn) {
+            cardZoomCloseBtn.addEventListener('click', () => this.hideCardZoom());
+        }
+        
+        // Cerrar modal al hacer click fuera del contenedor
+        if (cardZoomOverlay) {
+            cardZoomOverlay.addEventListener('click', (e) => {
+                if (e.target === cardZoomOverlay) {
+                    this.hideCardZoom();
+                }
+            });
+        }
+        
+        // Cerrar modal con tecla ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && cardZoomOverlay && !cardZoomOverlay.classList.contains('hidden')) {
+                this.hideCardZoom();
+            }
+        });
+        
+        // Prevenir menú contextual del navegador en la zona de unidades disponibles
+        const arsenalContent = document.getElementById('arsenal-content');
+        if (arsenalContent) {
+            arsenalContent.addEventListener('contextmenu', (e) => {
+                // Solo prevenir si el click no fue en una carta (las cartas tienen su propio handler)
+                const clickedCard = e.target.closest('.arsenal-item');
+                if (!clickedCard) {
+                    e.preventDefault();
+                }
+            });
+        }
+        
+        // 🆕 NUEVO: Selector de destino (Mazo/Banquillo)
+        const deckDestBtn = document.getElementById('destination-deck-btn');
+        const benchDestBtn = document.getElementById('destination-bench-btn');
+        
+        if (deckDestBtn) {
+            deckDestBtn.addEventListener('click', () => {
+                this.setDestination('deck');
+            });
+        }
+        
+        if (benchDestBtn) {
+            benchDestBtn.addEventListener('click', () => {
+                this.setDestination('bench');
+            });
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Establece el destino de las cartas (mazo o banquillo)
+     */
+    setDestination(dest) {
+        this.destination = dest;
+        
+        const deckBtn = document.getElementById('destination-deck-btn');
+        const benchBtn = document.getElementById('destination-bench-btn');
+        const panelTitle = document.getElementById('deck-panel-title');
+        const deckList = document.getElementById('deck-list');
+        const deckCounter = document.getElementById('deck-count');
+        const deckLimit = document.getElementById('deck-limit');
+        
+        if (deckBtn && benchBtn) {
+            if (dest === 'deck') {
+                deckBtn.classList.add('active');
+                benchBtn.classList.remove('active');
+                if (panelTitle) panelTitle.textContent = 'Tu Mazo';
+                if (deckLimit) {
+                    const limit = this.deckManager.getDeckPointLimit();
+                    deckLimit.textContent = limit;
+                }
+            } else {
+                deckBtn.classList.remove('active');
+                benchBtn.classList.add('active');
+                if (panelTitle) panelTitle.textContent = 'Banquillo';
+                if (deckLimit) {
+                    const limit = this.deckManager.getBenchPointLimit();
+                    deckLimit.textContent = limit;
+                }
+            }
+        }
+        
+        // Actualizar la visualización según el destino
+        this.updateDeckDisplay();
     }
     
     show() {
@@ -143,6 +238,7 @@ export class ArsenalManager {
                 }
                 
                 this.populateArsenal();
+                this.initializePointLimits();
                 this.updateDeckDisplay();
             }, 100);
         } else {
@@ -157,6 +253,7 @@ export class ArsenalManager {
             }
             
             this.populateArsenal();
+            this.initializePointLimits();
             this.updateDeckDisplay();
         }
     }
@@ -164,6 +261,7 @@ export class ArsenalManager {
     /**
      * Carga el mazo seleccionado desde DeckManager
      * Si hay un mazo seleccionado del jugador, lo carga; si no, empieza con mazo vacío
+     * 🆕 NUEVO: También carga el banquillo
      */
     loadSelectedDeck() {
         const selectedDeck = this.deckManager.getSelectedDeck();
@@ -172,10 +270,30 @@ export class ArsenalManager {
         if (selectedDeck && !selectedDeck.isDefault) {
             this.currentDeckId = selectedDeck.id;
             this.deck = [...selectedDeck.units]; // Copia del array
+            this.bench = [...(selectedDeck.bench || [])]; // 🆕 NUEVO: Copia del banquillo
         } else {
             // Empezar con mazo vacío (solo HQ)
             this.currentDeckId = null;
             this.deck = ['hq'];
+            this.bench = []; // 🆕 NUEVO: Banquillo vacío
+        }
+        
+        // 🆕 NUEVO: Inicializar el selector de destino y actualizar límites
+        this.setDestination(this.destination || 'deck');
+    }
+    
+    /**
+     * 🆕 NUEVO: Inicializa los límites de puntos en el HTML
+     */
+    initializePointLimits() {
+        const deckLimitEl = document.getElementById('deck-limit');
+        if (deckLimitEl && this.deckManager) {
+            // Establecer límite inicial según el destino
+            if (this.destination === 'bench') {
+                deckLimitEl.textContent = this.deckManager.getBenchPointLimit();
+            } else {
+                deckLimitEl.textContent = this.deckManager.getDeckPointLimit();
+            }
         }
     }
     
@@ -186,6 +304,12 @@ export class ArsenalManager {
         // Limpiar el mazo actual y empezar con uno nuevo (solo HQ)
         this.currentDeckId = null;
         this.deck = ['hq'];
+        this.bench = []; // 🆕 NUEVO: Limpiar banquillo
+        
+        // Salir del modo permutación si está activo
+        if (this.swapMode) {
+            this.exitSwapMode();
+        }
         
         // Actualizar la visualización
         this.updateDeckDisplay();
@@ -293,6 +417,9 @@ export class ArsenalManager {
      * @param {string} itemId - ID de la unidad
      * @returns {Object} { canAdd: boolean, reason: string }
      */
+    /**
+     * Verifica si se puede añadir una unidad al mazo
+     */
     canAddToDeck(itemId) {
         // Verificar si ya está en el mazo
         if (this.deck.includes(itemId)) {
@@ -301,21 +428,75 @@ export class ArsenalManager {
         
         // Obtener el costo de la unidad
         const itemConfig = this.getItemConfig(itemId);
-        const unitCost = itemConfig?.cost || 0;
+        if (!itemConfig) {
+            return { canAdd: false, reason: 'Unidad no encontrada' };
+        }
+        
+        const unitCost = itemConfig.cost || 0;
         
         // Calcular el costo actual del mazo
         const currentCost = this.getDeckCost();
         const newCost = currentCost + unitCost;
         
-        // Verificar límite de puntos
-        if (newCost > this.deckPointLimit) {
+        // Verificar límite de puntos (obtener dinámicamente desde DeckManager)
+        const pointLimit = this.deckManager.getDeckPointLimit();
+        if (newCost > pointLimit) {
             return { 
                 canAdd: false, 
-                reason: `Excede el límite de puntos (${newCost}/${this.deckPointLimit})` 
+                reason: `Excede el límite de puntos (${newCost}/${pointLimit})` 
             };
         }
         
         return { canAdd: true, reason: '' };
+    }
+    
+    /**
+     * 🆕 NUEVO: Verifica si se puede añadir una unidad al banquillo
+     */
+    canAddToBench(itemId) {
+        // Verificar si ya está en el banquillo
+        if (this.bench.includes(itemId)) {
+            return { canAdd: false, reason: 'Esta unidad ya está en el banquillo' };
+        }
+        
+        // Verificar que no esté en el mazo
+        if (this.deck.includes(itemId)) {
+            return { canAdd: false, reason: 'Esta unidad ya está en el mazo' };
+        }
+        
+        // Obtener el costo de la unidad
+        const itemConfig = this.getItemConfig(itemId);
+        if (!itemConfig) {
+            return { canAdd: false, reason: 'Unidad no encontrada' };
+        }
+        
+        const unitCost = itemConfig.cost || 0;
+        
+        // Calcular el costo actual del banquillo
+        const currentCost = this.getBenchCost();
+        const newCost = currentCost + unitCost;
+        
+        // Verificar límite de puntos del banquillo (obtener dinámicamente desde DeckManager)
+        const benchPointLimit = this.deckManager.getBenchPointLimit();
+        if (newCost > benchPointLimit) {
+            return { 
+                canAdd: false, 
+                reason: `Excede el límite del banquillo (${newCost}/${benchPointLimit})` 
+            };
+        }
+        
+        return { canAdd: true, reason: '' };
+    }
+    
+    /**
+     * Verifica si se puede añadir una unidad según el destino actual
+     */
+    canAddToDestination(itemId) {
+        if (this.destination === 'bench') {
+            return this.canAddToBench(itemId);
+        } else {
+            return this.canAddToDeck(itemId);
+        }
     }
     
     /**
@@ -413,17 +594,27 @@ export class ArsenalManager {
             return;
         }
         
-        // 🆕 NUEVO: Validar límite de puntos antes de guardar
+        // 🆕 NUEVO: Validar límite de puntos antes de guardar (obtener dinámicamente desde DeckManager)
         const deckCost = this.getDeckCost();
-        if (deckCost > this.deckPointLimit) {
-            this.showNotification(`El mazo excede el límite de puntos (${deckCost}/${this.deckPointLimit}). Elimina algunas unidades antes de guardar.`, 'error');
+        const pointLimit = this.deckManager.getDeckPointLimit();
+        if (deckCost > pointLimit) {
+            this.showNotification(`El mazo excede el límite de puntos (${deckCost}/${pointLimit}). Elimina algunas unidades antes de guardar.`, 'error');
+            return;
+        }
+        
+        // 🆕 NUEVO: Validar también el banquillo
+        const benchCost = this.getBenchCost();
+        const benchPointLimit = this.deckManager.getBenchPointLimit();
+        if (benchCost > benchPointLimit) {
+            this.showNotification(`El banquillo excede el límite de puntos (${benchCost}/${benchPointLimit}). Elimina algunas unidades antes de guardar.`, 'error');
             return;
         }
         
         // Si estamos editando un mazo existente, actualizarlo
         if (this.currentDeckId) {
             const updated = this.deckManager.updateDeck(this.currentDeckId, {
-                units: [...this.deck]
+                units: [...this.deck],
+                bench: [...this.bench] // 🆕 NUEVO: Guardar banquillo
             });
             
             if (updated) {
@@ -439,7 +630,7 @@ export class ArsenalManager {
                     return;
                 }
                 
-                const newDeck = this.deckManager.createDeck(name.trim(), [...this.deck]);
+                const newDeck = this.deckManager.createDeck(name.trim(), [...this.deck], [...this.bench]); // 🆕 NUEVO: Incluir banquillo
                 if (newDeck) {
                     this.currentDeckId = newDeck.id;
                     this.deckManager.selectDeck(newDeck.id);
@@ -472,6 +663,7 @@ export class ArsenalManager {
         
         this.currentDeckId = deckToLoad.id;
         this.deck = [...deckToLoad.units]; // Copia del array
+        this.bench = [...(deckToLoad.bench || [])]; // 🆕 NUEVO: Cargar banquillo
         this.updateDeckDisplay();
         console.log('Mazo cargado:', deckToLoad.name);
         return true;
@@ -486,17 +678,27 @@ export class ArsenalManager {
             return;
         }
         
-        // 🆕 NUEVO: Validar límite de puntos antes de confirmar
+        // 🆕 NUEVO: Validar límite de puntos antes de confirmar (obtener dinámicamente desde DeckManager)
         const deckCost = this.getDeckCost();
-        if (deckCost > this.deckPointLimit) {
-            this.showNotification(`El mazo excede el límite de puntos (${deckCost}/${this.deckPointLimit}). Elimina algunas unidades antes de confirmar.`, 'error');
+        const pointLimit = this.deckManager.getDeckPointLimit();
+        if (deckCost > pointLimit) {
+            this.showNotification(`El mazo excede el límite de puntos (${deckCost}/${pointLimit}). Elimina algunas unidades antes de confirmar.`, 'error');
+            return;
+        }
+        
+        // 🆕 NUEVO: Validar también el banquillo
+        const benchCost = this.getBenchCost();
+        const benchPointLimit = this.deckManager.getBenchPointLimit();
+        if (benchCost > benchPointLimit) {
+            this.showNotification(`El banquillo excede el límite de puntos (${benchCost}/${benchPointLimit}). Elimina algunas unidades antes de confirmar.`, 'error');
             return;
         }
         
         // Guardar el mazo si hay cambios
         if (this.currentDeckId) {
             this.deckManager.updateDeck(this.currentDeckId, {
-                units: [...this.deck]
+                units: [...this.deck],
+                bench: [...this.bench] // 🆕 NUEVO: Guardar banquillo
             });
         } else {
             // Si no hay mazo actual, pedir nombre antes de crear
@@ -505,7 +707,7 @@ export class ArsenalManager {
                     return;
                 }
                 
-                const newDeck = this.deckManager.createDeck(name.trim(), [...this.deck]);
+                const newDeck = this.deckManager.createDeck(name.trim(), [...this.deck], [...this.bench]); // 🆕 NUEVO: Incluir banquillo
                 if (newDeck) {
                     this.currentDeckId = newDeck.id;
                 }
@@ -516,7 +718,7 @@ export class ArsenalManager {
                 }
                 
                 // TODO: Enviar el mazo al servidor cuando se inicie la partida
-                console.log('Mazo confirmado:', this.deck);
+                console.log('Mazo confirmado:', this.deck, 'Banquillo:', this.bench);
                 this.hide();
             });
             return; // Salir aquí, el modal manejará el resto
@@ -528,12 +730,12 @@ export class ArsenalManager {
         }
         
         // TODO: Enviar el mazo al servidor cuando se inicie la partida
-        console.log('Mazo confirmado:', this.deck);
+        console.log('Mazo confirmado:', this.deck, 'Banquillo:', this.bench);
         this.hide();
     }
     
     /**
-     * Actualiza la visualización del mazo
+     * Actualiza la visualización del mazo o banquillo según el destino seleccionado
      */
     updateDeckDisplay() {
         const deckList = document.getElementById('deck-list');
@@ -542,58 +744,306 @@ export class ArsenalManager {
         
         if (!deckList) return;
         
-        // 🆕 NUEVO: Calcular costo total del mazo
-        const deckCost = this.getDeckCost();
-        const pointLimit = this.deckPointLimit;
-        
-        // Actualizar contador de puntos (reemplaza el contador de unidades)
-        if (deckCountEl) {
-            deckCountEl.textContent = deckCost;
-            // Cambiar color si está cerca o excede el límite
-            if (deckCost >= pointLimit) {
-                deckCountEl.style.color = '#e74c3c'; // Rojo si excede
-            } else if (deckCost >= pointLimit * 0.9) {
-                deckCountEl.style.color = '#f39c12'; // Naranja si está cerca (90%+)
-            } else {
-                deckCountEl.style.color = '#ffffff'; // Blanco normal
-            }
-        }
-        
-        // Actualizar límite mostrado
-        if (deckLimitEl) {
-            deckLimitEl.textContent = pointLimit;
-        }
-        
-        // Limpiar lista
-        deckList.innerHTML = '';
-        
-        // Renderizar todas las unidades del mazo (siempre mostrar al menos el HQ)
-        if (this.deck.length === 0) {
-            // Por seguridad, asegurar que el HQ esté presente
-            this.deck = ['hq'];
-        }
-        
-        this.deck.forEach(itemId => {
-            const itemConfig = this.getItemConfig(itemId);
-            if (!itemConfig) return;
+        // 🆕 NUEVO: Mostrar mazo o banquillo según el destino seleccionado
+        if (this.destination === 'bench') {
+            // Mostrar banquillo
+            const benchCost = this.getBenchCost();
+            const benchPointLimit = this.deckManager.getBenchPointLimit();
             
-            const deckItemEl = this.createDeckItem(itemId, itemConfig);
-            deckList.appendChild(deckItemEl);
-        });
-        
-        // Si solo está el HQ, mostrar mensaje adicional
-        const nonHQItems = this.deck.filter(id => id !== 'hq');
-        if (nonHQItems.length === 0) {
-            const hintMsg = document.createElement('div');
-            hintMsg.className = 'deck-empty';
-            hintMsg.style.marginTop = '16px';
-            hintMsg.style.fontSize = '12px';
-            hintMsg.textContent = 'Añade más unidades para completar tu mazo.';
-            deckList.appendChild(hintMsg);
+            // Actualizar contador de puntos
+            if (deckCountEl) {
+                deckCountEl.textContent = benchCost;
+                // Cambiar color si está cerca o excede el límite
+                if (benchCost >= benchPointLimit) {
+                    deckCountEl.style.color = '#e74c3c'; // Rojo si excede
+                } else if (benchCost >= benchPointLimit * 0.9) {
+                    deckCountEl.style.color = '#f39c12'; // Naranja si está cerca (90%+)
+                } else {
+                    deckCountEl.style.color = '#ffffff'; // Blanco normal
+                }
+            }
+            
+            // Actualizar límite mostrado
+            if (deckLimitEl) {
+                deckLimitEl.textContent = benchPointLimit;
+            }
+            
+            // Limpiar lista
+            deckList.innerHTML = '';
+            
+            // Renderizar todas las unidades del banquillo
+            if (this.bench.length === 0) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.className = 'deck-empty';
+                emptyMsg.textContent = 'El banquillo está vacío. Selecciona "Banquillo" y haz clic en las unidades disponibles para añadirlas.';
+                deckList.appendChild(emptyMsg);
+            } else {
+                this.bench.forEach(itemId => {
+                    const itemConfig = this.getItemConfig(itemId);
+                    if (!itemConfig) return;
+                    
+                    const benchItemEl = this.createBenchItem(itemId, itemConfig);
+                    deckList.appendChild(benchItemEl);
+                });
+            }
+        } else {
+            // Mostrar mazo
+            const deckCost = this.getDeckCost();
+            const pointLimit = this.deckManager.getDeckPointLimit();
+            
+            // Actualizar contador de puntos
+            if (deckCountEl) {
+                deckCountEl.textContent = deckCost;
+                // Cambiar color si está cerca o excede el límite
+                if (deckCost >= pointLimit) {
+                    deckCountEl.style.color = '#e74c3c'; // Rojo si excede
+                } else if (deckCost >= pointLimit * 0.9) {
+                    deckCountEl.style.color = '#f39c12'; // Naranja si está cerca (90%+)
+                } else {
+                    deckCountEl.style.color = '#ffffff'; // Blanco normal
+                }
+            }
+            
+            // Actualizar límite mostrado
+            if (deckLimitEl) {
+                deckLimitEl.textContent = pointLimit;
+            }
+            
+            // Limpiar lista
+            deckList.innerHTML = '';
+            
+            // Renderizar todas las unidades del mazo (siempre mostrar al menos el HQ)
+            if (this.deck.length === 0) {
+                // Por seguridad, asegurar que el HQ esté presente
+                this.deck = ['hq'];
+            }
+            
+            this.deck.forEach(itemId => {
+                const itemConfig = this.getItemConfig(itemId);
+                if (!itemConfig) return;
+                
+                const deckItemEl = this.createDeckItem(itemId, itemConfig);
+                deckList.appendChild(deckItemEl);
+            });
+            
+            // Si solo está el HQ, mostrar mensaje adicional
+            const nonHQItems = this.deck.filter(id => id !== 'hq');
+            if (nonHQItems.length === 0) {
+                const hintMsg = document.createElement('div');
+                hintMsg.className = 'deck-empty';
+                hintMsg.style.marginTop = '16px';
+                hintMsg.style.fontSize = '12px';
+                hintMsg.textContent = 'Añade más unidades para completar tu mazo.';
+                deckList.appendChild(hintMsg);
+            }
         }
         
         // Actualizar estado visual de items disponibles
         this.updateAvailableItemsState();
+    }
+    
+    /**
+     * 🆕 NUEVO: Crea un elemento visual para una unidad en el banquillo
+     */
+    createBenchItem(itemId, itemConfig) {
+        const div = document.createElement('div');
+        div.className = 'bench-item';
+        div.dataset.itemId = itemId;
+        
+        // Click → entrar en modo permutación
+        div.addEventListener('click', () => {
+            this.enterSwapMode(itemId);
+        });
+        
+        // Click derecho → vista ampliada
+        div.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            this.showCardZoom(itemConfig);
+        });
+        
+        // Hover → panel de detalle
+        div.addEventListener('mouseenter', () => this.showDetail(itemConfig));
+        
+        // Icono
+        const icon = document.createElement('canvas');
+        icon.className = 'deck-item-icon';
+        icon.width = 48;
+        icon.height = 48;
+        
+        const sprite = this.assetManager.getSprite(itemConfig.spriteKey);
+        if (sprite) {
+            const ctx = icon.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            if (ctx.imageSmoothingQuality) {
+                ctx.imageSmoothingQuality = 'high';
+            }
+            ctx.drawImage(sprite, 0, 0, 48, 48);
+        }
+        
+        div.appendChild(icon);
+        
+        // Info
+        const info = document.createElement('div');
+        info.className = 'deck-item-info';
+        
+        const name = document.createElement('div');
+        name.className = 'deck-item-name';
+        name.textContent = itemConfig.name;
+        info.appendChild(name);
+        
+        // Precio
+        if (itemConfig.cost && itemConfig.cost > 0) {
+            const cost = document.createElement('div');
+            cost.className = 'deck-item-cost';
+            cost.textContent = itemConfig.cost;
+            info.appendChild(cost);
+        }
+        
+        div.appendChild(info);
+        
+        return div;
+    }
+    
+    /**
+     * 🆕 NUEVO: Calcula el costo total del banquillo
+     */
+    getBenchCost() {
+        return this.deckManager.calculateBenchCost(this.bench);
+    }
+    
+    /**
+     * 🆕 NUEVO: Añade una unidad al banquillo
+     */
+    addToBench(unitId) {
+        // Usar la función de validación unificada
+        const check = this.canAddToBench(unitId);
+        if (!check.canAdd) {
+            this.showNotification(check.reason, 'error');
+            return false;
+        }
+        
+        // Añadir al banquillo
+        this.bench.push(unitId);
+        this.updateDeckDisplay();
+        this.updateAvailableItemsState();
+        
+        return true;
+    }
+    
+    /**
+     * 🆕 NUEVO: Quita una unidad del banquillo
+     */
+    removeFromBench(unitId) {
+        const index = this.bench.indexOf(unitId);
+        if (index >= 0) {
+            this.bench.splice(index, 1);
+            this.updateDeckDisplay();
+            this.updateAvailableItemsState();
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * 🆕 NUEVO: Entra en modo permutación (click en carta del banquillo)
+     */
+    enterSwapMode(benchUnitId) {
+        this.swapMode = { benchUnitId };
+        
+        // Añadir clase al contenedor para estilos CSS
+        const arsenalContainer = document.querySelector('.arsenal-container');
+        if (arsenalContainer) {
+            arsenalContainer.classList.add('swap-mode-active');
+        }
+        
+        // Resaltar la carta del banquillo seleccionada
+        const benchItems = document.querySelectorAll('.bench-item');
+        benchItems.forEach(item => {
+            if (item.dataset.itemId === benchUnitId) {
+                item.classList.add('swap-selected');
+            } else {
+                item.classList.remove('swap-selected');
+            }
+        });
+        
+        // Resaltar las cartas del deck que se pueden permutar (todas excepto HQ)
+        const deckItems = document.querySelectorAll('.deck-item');
+        deckItems.forEach(item => {
+            const deckUnitId = item.dataset.itemId;
+            if (deckUnitId && deckUnitId !== 'hq') {
+                item.classList.add('swap-target');
+                // Añadir listener de click para permutar
+                item.addEventListener('click', this.handleDeckItemSwapClick.bind(this, deckUnitId, benchUnitId), { once: true });
+            }
+        });
+        
+        this.showNotification('Selecciona una carta del mazo para permutar', 'info');
+    }
+    
+    /**
+     * 🆕 NUEVO: Maneja el click en una carta del deck durante modo permutación
+     */
+    handleDeckItemSwapClick(deckUnitId, benchUnitId) {
+        this.performSwap(deckUnitId, benchUnitId);
+    }
+    
+    /**
+     * 🆕 NUEVO: Realiza la permutación entre mazo y banquillo
+     */
+    performSwap(deckUnitId, benchUnitId) {
+        // Validar permutación
+        const currentDeck = {
+            units: [...this.deck],
+            bench: [...this.bench]
+        };
+        
+        const validation = this.deckManager.validateSwap(currentDeck, deckUnitId, benchUnitId);
+        if (!validation.valid) {
+            this.showNotification(validation.errors[0] || 'No se puede realizar la permutación', 'error');
+            this.exitSwapMode();
+            return false;
+        }
+        
+        // Realizar permutación
+        const deckIndex = this.deck.indexOf(deckUnitId);
+        const benchIndex = this.bench.indexOf(benchUnitId);
+        
+        if (deckIndex >= 0 && benchIndex >= 0) {
+            this.deck[deckIndex] = benchUnitId;
+            this.bench[benchIndex] = deckUnitId;
+            
+            this.updateDeckDisplay();
+            this.updateAvailableItemsState();
+            this.exitSwapMode();
+            
+            this.showNotification('Permutación realizada', 'success');
+            return true;
+        }
+        
+        this.exitSwapMode();
+        return false;
+    }
+    
+    /**
+     * 🆕 NUEVO: Sale del modo permutación
+     */
+    exitSwapMode() {
+        this.swapMode = null;
+        
+        // Remover clase del contenedor
+        const arsenalContainer = document.querySelector('.arsenal-container');
+        if (arsenalContainer) {
+            arsenalContainer.classList.remove('swap-mode-active');
+        }
+        
+        // Remover clases de resaltado
+        document.querySelectorAll('.bench-item').forEach(item => {
+            item.classList.remove('swap-selected');
+        });
+        
+        document.querySelectorAll('.deck-item').forEach(item => {
+            item.classList.remove('swap-target');
+        });
     }
     
     /**
@@ -610,27 +1060,34 @@ export class ArsenalManager {
             if (!itemId) return;
             
             const isInDeck = this.deck.includes(itemId);
+            const isInBench = this.bench.includes(itemId); // 🆕 NUEVO: Verificar banquillo
             
             if (isInDeck) {
                 itemDiv.classList.add('in-deck');
                 itemDiv.style.opacity = '0.5';
                 itemDiv.style.cursor = 'not-allowed';
-                itemDiv.style.pointerEvents = 'none';
+                // NO poner pointerEvents: 'none' para permitir click derecho
+            } else if (isInBench) {
+                // 🆕 NUEVO: Si está en el banquillo, marcarlo visualmente pero permitir añadir al mazo
+                itemDiv.classList.add('in-bench');
+                itemDiv.style.opacity = '0.7';
+                itemDiv.style.cursor = 'pointer';
+                itemDiv.title = 'Esta unidad está en el banquillo. Click para añadir al mazo, click derecho para ver detalles.';
             } else {
                 // 🆕 NUEVO: Verificar si se puede añadir sin exceder límite
-                const check = this.canAddToDeck(itemId);
+                const check = this.canAddToDestination(itemId);
                 if (!check.canAdd) {
                     itemDiv.classList.add('disabled');
                     itemDiv.style.opacity = '0.4';
                     itemDiv.style.cursor = 'not-allowed';
                     itemDiv.title = check.reason; // Mostrar razón en tooltip
-                    itemDiv.style.pointerEvents = 'none';
+                    // NO poner pointerEvents: 'none' para permitir click derecho en todas las cartas
                 } else {
                     itemDiv.classList.remove('disabled');
                     itemDiv.style.opacity = '1';
                     itemDiv.style.cursor = 'pointer';
                     itemDiv.title = ''; // Limpiar tooltip
-                    itemDiv.style.pointerEvents = 'auto';
+                    // NO cambiar pointerEvents, mantener para permitir click derecho
                     
                     // 🆕 FIX: Re-añadir event listener si no existe (necesario cuando se crea un nuevo mazo)
                     // Usar una marca para evitar añadir listeners duplicados
@@ -661,18 +1118,36 @@ export class ArsenalManager {
                             // Marcar que ya tiene listener
                             newDiv.dataset.hasClickListener = 'true';
                             
-                            // Añadir event listener de click
+                            // Añadir event listener de click (según destino)
                             newDiv.addEventListener('click', () => {
-                                if (this.addToDeck(itemId)) {
-                                    // Feedback visual
-                                    newDiv.style.transform = 'scale(0.95)';
-                                    setTimeout(() => {
-                                        newDiv.style.transform = '';
-                                        newDiv.classList.add('in-deck');
-                                        newDiv.style.opacity = '0.5';
-                                        newDiv.style.cursor = 'not-allowed';
-                                    }, 150);
+                                if (this.destination === 'bench') {
+                                    if (this.addToBench(itemId)) {
+                                        this.showNotification(`${itemId} añadido al banquillo`, 'success');
+                                        // Feedback visual
+                                        newDiv.style.transform = 'scale(0.95)';
+                                        setTimeout(() => {
+                                            newDiv.style.transform = '';
+                                            this.updateAvailableItemsState();
+                                        }, 150);
+                                    }
+                                } else {
+                                    if (this.addToDeck(itemId)) {
+                                        // Feedback visual
+                                        newDiv.style.transform = 'scale(0.95)';
+                                        setTimeout(() => {
+                                            newDiv.style.transform = '';
+                                            newDiv.classList.add('in-deck');
+                                            newDiv.style.opacity = '0.5';
+                                            newDiv.style.cursor = 'not-allowed';
+                                        }, 150);
+                                    }
                                 }
+                            });
+                            
+                            // Re-añadir click derecho → vista ampliada (siempre disponible)
+                            newDiv.addEventListener('contextmenu', (e) => {
+                                e.preventDefault();
+                                this.showCardZoom(itemConfig);
                             });
                             
                             // Re-añadir hover listeners
@@ -701,6 +1176,12 @@ export class ArsenalManager {
             div.classList.add('deck-item-locked');
         }
         
+        // Click derecho → vista ampliada
+        div.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); // Prevenir menú contextual del navegador
+            this.showCardZoom(itemConfig);
+        });
+        
         // Hover → panel de detalle
         div.addEventListener('mouseenter', () => this.showDetail(itemConfig));
         
@@ -713,7 +1194,10 @@ export class ArsenalManager {
         const sprite = this.assetManager.getSprite(itemConfig.spriteKey);
         if (sprite) {
             const ctx = icon.getContext('2d');
-            ctx.imageSmoothingEnabled = false;
+            ctx.imageSmoothingEnabled = true;
+            if (ctx.imageSmoothingQuality) {
+                ctx.imageSmoothingQuality = 'high';
+            }
             ctx.drawImage(sprite, 0, 0, 48, 48);
         }
         
@@ -766,41 +1250,57 @@ export class ArsenalManager {
     
     populateArsenal() {
         const container = document.getElementById('arsenal-content');
-        if (!container) return;
+        if (!container) {
+            console.error('❌ No se encontró el contenedor arsenal-content');
+            return;
+        }
         
         container.innerHTML = '';
         
         // Categoría 1: HQ (solo el HQ)
-        const hqNode = getAllyNodes().find(n => n.id === 'hq');
+        const allyNodes = getAllyNodes();
+        console.log('🎴 Nodos aliados obtenidos:', allyNodes.length, allyNodes.map(n => n.id));
+        
+        const hqNode = allyNodes.find(n => n.id === 'hq');
         if (hqNode) {
             // Usar getNodeConfig para obtener descripción del servidor si está disponible
             const hqConfig = getNodeConfig('hq');
-            const hqCategory = this.createCategory('HQ', [{
-                id: hqConfig.id,
-                name: hqConfig.name || hqNode.name,
-                description: hqConfig.description || hqNode.description,
-                spriteKey: hqConfig.spriteKey || hqNode.spriteKey,
-                cost: hqConfig.cost || hqNode.cost
-            }]);
-            container.appendChild(hqCategory);
+            if (hqConfig) {
+                const hqCategory = this.createCategory('HQ', [{
+                    id: hqConfig.id || hqNode.id,
+                    name: hqConfig.name || hqNode.name,
+                    description: hqConfig.description || hqNode.description,
+                    details: hqConfig.details,
+                    spriteKey: hqConfig.spriteKey || hqNode.spriteKey,
+                    cost: hqConfig.cost || hqNode.cost
+                }]);
+                container.appendChild(hqCategory);
+            }
         }
         
         // Categoría 2: Edificios
-        const buildings = getAllyNodes().filter(n => 
+        const buildings = allyNodes.filter(n => 
             n.id !== 'hq' && n.id !== 'front' && n.category === 'buildable'
         );
-        const buildingsCategory = this.createCategory('Edificios', buildings.map(b => {
-            // Usar getNodeConfig para obtener descripción del servidor si está disponible
-            const nodeConfig = getNodeConfig(b.id);
-            return {
-            id: b.id,
-                name: nodeConfig?.name || b.name,
-                description: nodeConfig?.description || b.description,
-                spriteKey: nodeConfig?.spriteKey || b.spriteKey,
-                cost: nodeConfig?.cost || b.cost
-            };
-        }));
-        container.appendChild(buildingsCategory);
+        console.log('🎴 Edificios obtenidos:', buildings.length, buildings.map(b => b.id));
+        
+        if (buildings.length > 0) {
+            const buildingsCategory = this.createCategory('Edificios', buildings.map(b => {
+                // Usar getNodeConfig para obtener descripción del servidor si está disponible
+                const nodeConfig = getNodeConfig(b.id);
+                return {
+                    id: b.id,
+                    name: nodeConfig?.name || b.name,
+                    description: nodeConfig?.description || b.description,
+                    details: nodeConfig?.details,
+                    spriteKey: nodeConfig?.spriteKey || b.spriteKey,
+                    cost: nodeConfig?.cost || b.cost
+                };
+            }));
+            container.appendChild(buildingsCategory);
+        } else {
+            console.warn('⚠️ No se encontraron edificios para mostrar');
+        }
         
         // Categoría 3: Consumibles
         const projectiles = getProjectiles();
@@ -811,9 +1311,10 @@ export class ArsenalManager {
                 // Usar getNodeConfig para obtener descripción del servidor si está disponible
                 const nodeConfig = getNodeConfig(p.id);
                 return {
-                id: p.id,
+                    id: p.id,
                     name: nodeConfig?.name || p.name,
                     description: nodeConfig?.description || p.description,
+                    details: nodeConfig?.details,
                     spriteKey: nodeConfig?.spriteKey || p.spriteKey,
                     cost: nodeConfig?.cost || p.cost
                 };
@@ -853,8 +1354,9 @@ export class ArsenalManager {
         div.className = 'arsenal-item';
         div.dataset.itemId = item.id; // Añadir data attribute para identificar el item
         
-        // Verificar si ya está en el mazo
+        // Verificar si ya está en el mazo o banquillo
         const isInDeck = this.deck.includes(item.id);
+        const isInBench = this.bench.includes(item.id);
         
         // Verificar si el dron está bloqueado (solo si buildSystem está disponible)
         const isDroneLocked = this.buildSystem && item.id === 'drone' && !this.buildSystem.hasDroneLauncher();
@@ -865,16 +1367,22 @@ export class ArsenalManager {
         // Verificar si el truck assault está bloqueado (solo si buildSystem está disponible)
         const isTruckAssaultLocked = this.buildSystem && item.id === 'truckAssault' && !this.buildSystem.hasIntelCenter();
         
-        // 🆕 NUEVO: Verificar si se puede añadir sin exceder límite de puntos
+        // Verificar si el camera drone está bloqueado (solo si buildSystem está disponible)
+        const isCameraDroneLocked = this.buildSystem && item.id === 'cameraDrone' && !this.buildSystem.hasDroneLauncher();
+        
+        // 🆕 NUEVO: Verificar si el destructor de mundos está bloqueado
+        const isWorldDestroyerLocked = this.buildSystem && item.id === 'worldDestroyer' && !this.buildSystem.hasDeadlyBuild();
+        
+        // 🆕 NUEVO: Verificar si se puede añadir sin exceder límite de puntos (según destino)
         let canAddCheck = { canAdd: true, reason: '' };
         try {
-            canAddCheck = this.canAddToDeck(item.id);
+            canAddCheck = this.canAddToDestination(item.id);
         } catch (error) {
             console.warn('Error al verificar si se puede añadir:', error);
             // Si hay error, permitir añadir (fallback)
         }
-        const cannotAdd = !canAddCheck.canAdd && !isInDeck;
-        const isLocked = isDroneLocked || isCommandoLocked || isTruckAssaultLocked;
+        const cannotAdd = !canAddCheck.canAdd && !isInDeck && !isInBench;
+        const isLocked = isDroneLocked || isCommandoLocked || isTruckAssaultLocked || isCameraDroneLocked || isWorldDestroyerLocked;
         
         if (isInDeck) {
             div.classList.add('in-deck');
@@ -885,11 +1393,16 @@ export class ArsenalManager {
             div.classList.add('disabled');
             div.style.opacity = '0.4';
             div.style.cursor = 'not-allowed';
+            // NO poner pointerEvents: 'none' para permitir click derecho en todas las cartas
             if (isLocked) {
                 if (isDroneLocked) {
                     div.title = 'Necesitas construir una Lanzadera de Drones primero';
                 } else if (isCommandoLocked || isTruckAssaultLocked) {
                     div.title = 'Necesitas construir un Centro de Inteligencia primero';
+                } else if (isCameraDroneLocked) {
+                    div.title = 'Necesitas construir una Lanzadera de Drones primero';
+                } else if (isWorldDestroyerLocked) {
+                    div.title = 'Necesitas construir una Construcción Prohibida primero';
                 }
             } else {
                 div.title = canAddCheck.reason;
@@ -899,18 +1412,46 @@ export class ArsenalManager {
             div.dataset.hasClickListener = 'true';
             
             div.addEventListener('click', () => {
-                if (this.addToDeck(item.id)) {
-                    // Feedback visual
-                    div.style.transform = 'scale(0.95)';
-                    setTimeout(() => {
-                        div.style.transform = '';
-                        div.classList.add('in-deck');
-                        div.style.opacity = '0.5';
-                        div.style.cursor = 'not-allowed';
-                    }, 150);
+                // 🆕 NUEVO: Añadir al destino seleccionado (mazo o banquillo)
+                if (this.destination === 'bench') {
+                    if (this.addToBench(item.id)) {
+                        this.showNotification(`${item.name} añadido al banquillo`, 'success');
+                        // Feedback visual
+                        div.style.transform = 'scale(0.95)';
+                        setTimeout(() => {
+                            div.style.transform = '';
+                            this.updateAvailableItemsState();
+                        }, 150);
+                    }
+                } else {
+                    // Destino: mazo
+                    if (this.addToDeck(item.id)) {
+                        // Feedback visual
+                        div.style.transform = 'scale(0.95)';
+                        setTimeout(() => {
+                            div.style.transform = '';
+                            div.classList.add('in-deck');
+                            div.style.opacity = '0.5';
+                            div.style.cursor = 'not-allowed';
+                        }, 150);
+                    }
                 }
             });
         }
+        
+        // Click derecho → mostrar detalles (siempre)
+        div.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); // Prevenir menú contextual del navegador
+            
+            // Si está en modo permutación, salir del modo
+            if (this.swapMode) {
+                this.exitSwapMode();
+                return;
+            }
+            
+            // Siempre mostrar vista ampliada
+            this.showCardZoom(item);
+        });
         
         // Hover → panel de detalle
         div.addEventListener('mouseenter', () => this.showDetail(item));
@@ -925,7 +1466,10 @@ export class ArsenalManager {
         const sprite = this.assetManager.getSprite(item.spriteKey);
         if (sprite) {
             const ctx = icon.getContext('2d');
-            ctx.imageSmoothingEnabled = false;
+            ctx.imageSmoothingEnabled = true;
+            if (ctx.imageSmoothingQuality) {
+                ctx.imageSmoothingQuality = 'high';
+            }
             ctx.drawImage(sprite, 0, 0, 68, 68);
         }
         
@@ -969,7 +1513,10 @@ export class ArsenalManager {
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.imageSmoothingEnabled = false;
+        ctx.imageSmoothingEnabled = true;
+        if (ctx.imageSmoothingQuality) {
+            ctx.imageSmoothingQuality = 'high';
+        }
         
         const sprite = this.assetManager.getSprite(item.spriteKey);
         if (sprite) {
@@ -1208,6 +1755,210 @@ export class ArsenalManager {
             input.style.pointerEvents = '';
         }
         this.deckNameCallback = null;
+    }
+    
+    /**
+     * Reemplaza placeholders dinámicos en la descripción con valores desde serverNodes
+     * @param {string} details - Texto con placeholders {x}, {n}, etc.
+     * @param {string} itemId - ID del item
+     * @returns {string} Texto con placeholders reemplazados
+     */
+    replaceDetailsPlaceholders(details, itemId) {
+        if (!details) return '';
+        
+        const serverConfig = this.game?.serverBuildingConfig;
+        if (!serverConfig) return details;
+        
+        let result = details;
+        
+        // Obtener valores dinámicos desde serverNodes
+        const effects = serverConfig.effects?.[itemId] || {};
+        const gameplay = serverConfig.gameplay?.[itemId] || {};
+        const gameplayGlobal = serverConfig.gameplay || {}; // Para acceder a propiedades globales como worldDestroyer
+        const capacities = serverConfig.capacities?.[itemId] || {};
+        const specialNodes = serverConfig.specialNodes?.[itemId] || {};
+        const temporaryEffects = serverConfig.temporaryEffects || {}; // 🆕 NUEVO: Efectos temporales (trained, wounded)
+        const cost = serverConfig.costs?.[itemId] || 0;
+        const detectionRadius = serverConfig.detectionRadii?.[itemId];
+        
+        // Reemplazos comunes
+        result = result.replace(/{cost}/g, cost);
+        
+        // Reemplazos específicos según el item
+        switch (itemId) {
+            case 'hq':
+                result = result.replace(/{maxVehicles}/g, capacities.maxVehicles || 4);
+                result = result.replace(/{maxAmbulances}/g, capacities.maxAmbulances || 1);
+                break;
+                
+            case 'fob':
+                result = result.replace(/{maxSupplies}/g, capacities.maxSupplies || 100);
+                result = result.replace(/{maxVehicles}/g, capacities.maxVehicles || 2);
+                break;
+                
+            case 'antiDrone':
+                result = result.replace(/{detectionRange}/g, gameplay.detectionRange || 160);
+                result = result.replace(/{cooldownTime}/g, gameplay.cooldownTime || 3000);
+                break;
+                
+            case 'campaignHospital':
+                result = result.replace(/{actionRange}/g, gameplay.actionRange || 260);
+                result = result.replace(/{maxVehicles}/g, capacities.maxVehicles || 1);
+                break;
+                
+            case 'aerialBase':
+                result = result.replace(/{maxSupplies}/g, capacities.maxSupplies || 200);
+                break;
+                
+            case 'vigilanceTower':
+                result = result.replace(/{detectionRadius}/g, detectionRadius || 320);
+                break;
+                
+            case 'droneWorkshop':
+                result = result.replace(/{requiredSupplies}/g, effects.requiredSupplies || 15);
+                result = result.replace(/{discountPercent}/g, Math.round((1 - (effects.discountMultiplier || 0.5)) * 100) + '%');
+                result = result.replace(/{suppliesCost}/g, effects.suppliesCost || 15);
+                break;
+                
+            case 'truckFactory':
+                result = result.replace(/{vehicleBonus}/g, effects.vehicleBonus || 1);
+                result = result.replace(/{capacityBonus}/g, effects.capacityBonus || 15);
+                break;
+                
+            case 'engineerCenter':
+                result = result.replace(/{speedPercent}/g, Math.round(((effects.speedMultiplier || 1.5) - 1) * 100));
+                break;
+                
+            case 'nuclearPlant':
+                result = result.replace(/{incomeBonus}/g, effects.incomeBonus || 2);
+                break;
+                
+            case 'trainStation':
+                result = result.replace(/{trainInterval}/g, effects.trainInterval || 12);
+                result = result.replace(/{trainCargo}/g, effects.trainCargo || 25);
+                break;
+                
+            case 'vehicleWorkshop':
+                result = result.replace(/{vehicleBonus}/g, effects.vehicleBonus || 1);
+                break;
+                
+            case 'intelRadio':
+                result = result.replace(/{investmentTime}/g, gameplay.investmentTime || 20);
+                result = result.replace(/{investmentBonus}/g, gameplay.investmentBonus || 15);
+                break;
+                
+            case 'specopsCommando':
+                result = result.replace(/{detectionRadius}/g, specialNodes.detectionRadius || 200);
+                result = result.replace(/{health}/g, specialNodes.health || 50);
+                break;
+                
+            case 'truckAssault':
+                result = result.replace(/{detectionRadius}/g, specialNodes.detectionRadius || 200);
+                result = result.replace(/{health}/g, specialNodes.health || 50);
+                break;
+                
+            case 'cameraDrone':
+                result = result.replace(/{detectionRadius}/g, specialNodes.detectionRadius || 120);
+                result = result.replace(/{currencyReward}/g, specialNodes.currencyReward || 10);
+                result = result.replace(/{buildRadius}/g, specialNodes.buildRadius || 300);
+                result = result.replace(/{health}/g, specialNodes.health || 50);
+                break;
+                
+            case 'physicStudies':
+                result = result.replace(/{nuclearPlantBonus}/g, effects.nuclearPlantBonus || 1);
+                break;
+                
+            case 'secretLaboratory':
+                result = result.replace(/{nuclearPlantBonus}/g, effects.nuclearPlantBonus || 1);
+                break;
+                
+            case 'trainingCamp':
+                // 🆕 NUEVO: Obtener currencyBonus desde temporaryEffects.trained
+                const trainedEffect = temporaryEffects.trained || {};
+                result = result.replace(/{currencyBonus}/g, trainedEffect.currencyBonus || 1);
+                break;
+                
+            case 'worldDestroyer':
+                const worldDestroyerConfig = gameplayGlobal.worldDestroyer || {};
+                result = result.replace(/{countdownDuration}/g, worldDestroyerConfig.countdownDuration || 7);
+                break;
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Muestra el modal de vista ampliada de carta
+     * @param {Object} item - Configuración del item a mostrar
+     */
+    showCardZoom(item) {
+        const overlay = document.getElementById('card-zoom-overlay');
+        const canvas = document.getElementById('card-zoom-canvas');
+        const nameEl = document.getElementById('card-zoom-name');
+        const costEl = document.getElementById('card-zoom-cost');
+        const descEl = document.getElementById('card-zoom-desc');
+        
+        if (!overlay || !canvas || !nameEl) return;
+        
+        // Remover la clase hidden para mostrar el modal
+        overlay.classList.remove('hidden');
+        overlay.style.pointerEvents = 'auto';
+        overlay.style.zIndex = '9999';
+        
+        // Renderizar sprite en el canvas ampliado
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.imageSmoothingEnabled = true;
+        if (ctx.imageSmoothingQuality) {
+            ctx.imageSmoothingQuality = 'high';
+        }
+        
+        const sprite = this.assetManager.getSprite(item.spriteKey);
+        if (sprite) {
+            // Calcular dimensiones manteniendo proporción
+            const scale = Math.min(canvas.width / sprite.width, canvas.height / sprite.height);
+            const targetW = sprite.width * scale;
+            const targetH = sprite.height * scale;
+            const x = (canvas.width - targetW) / 2;
+            const y = (canvas.height - targetH) / 2;
+            ctx.drawImage(sprite, 0, 0, sprite.width, sprite.height, x, y, targetW, targetH);
+        }
+        
+        // Actualizar información de la carta
+        nameEl.textContent = item.name || '';
+        
+        if (costEl) {
+            costEl.textContent = item.cost ? `Coste: ${item.cost} $` : '';
+        }
+        
+        if (descEl) {
+            // 🆕 NUEVO: Usar details si está disponible, sino usar description
+            let descriptionText = item.details || item.description || '';
+            
+            // Si hay details, reemplazar placeholders dinámicos
+            if (item.details) {
+                descriptionText = this.replaceDetailsPlaceholders(item.details, item.id);
+            }
+            
+            // Aplicar tooltip para "wounded"
+            const tip = 'Wounded: el frente consume +100% suministros';
+            const safeDesc = descriptionText
+                .replace(/"wounded"|wounded/gi, (m) => `<span class="tooltip" data-tip="${tip}">${m}</span>`);
+            descEl.innerHTML = safeDesc;
+        }
+    }
+    
+    /**
+     * Oculta el modal de vista ampliada de carta
+     */
+    hideCardZoom() {
+        const overlay = document.getElementById('card-zoom-overlay');
+        
+        if (overlay) {
+            overlay.classList.add('hidden');
+            overlay.style.pointerEvents = '';
+            overlay.style.zIndex = '';
+        }
     }
 }
 

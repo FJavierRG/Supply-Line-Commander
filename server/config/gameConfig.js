@@ -19,7 +19,8 @@ export const GAME_CONFIG = {
     // MAZOS (DECKS)
     // ═══════════════════════════════════════════════════════════════
     deck: {
-        pointLimit: 815  // 🎯 Límite de puntos por mazo (ANTI-HACK: validado en servidor)
+        pointLimit: 815,        // 🎯 Límite de puntos por mazo (ANTI-HACK: validado en servidor)
+        benchPointLimit: 300    // 🆕 NUEVO: Límite de puntos para el banquillo (ANTI-HACK: validado en servidor)
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -38,21 +39,17 @@ export const GAME_CONFIG = {
     vehicles: {
         heavy_truck: {
             capacity: 15,  // ✅ USADO: Cantidad de suministros por viaje
-            speed: 600     // ⚠️ LEGACY: No usado - usar convoy.vehicleSpeeds.heavy_truck
         },
         truck: {
             capacity: 20,  // ✅ USADO: Cantidad de suministros por viaje
-            speed: 750     // ⚠️ LEGACY: No usado - usar convoy.vehicleSpeeds.truck
         },
         helicopter: {
             capacity: 100,      // Capacidad total inicial (legacy, usar baseCapacity)
             baseCapacity: 100,  // ✅ USADO: Capacidad máxima del helicóptero (0-100)
             deliveryAmount: 50, // ✅ USADO: Cantidad que entrega a frentes por viaje
-            speed: 1200         // ⚠️ LEGACY: No usado - usar convoy.vehicleSpeeds.helicopter
         },
         ambulance: {
             capacity: 0,    // ✅ USADO: No transporta suministros, solo misiones médicas
-            speed: 900     // ⚠️ LEGACY: No usado - usar convoy.vehicleSpeeds.ambulance
         }
     },
 
@@ -83,14 +80,8 @@ export const GAME_CONFIG = {
             'front': []          // Los frentes solo reciben, nunca envían
         },
         
-        // Rutas especiales por raza
-        raceSpecial: {
-            B_Nation: {
-                'hq': ['front', 'aerialBase'],           // HQ → Front o Base Aérea
-                'front': ['hq', 'front', 'aerialBase'], // Front → HQ, Front o Base Aérea
-                'aerialBase': ['hq', 'front']           // Base Aérea → HQ o Front
-            }
-        }
+        // Rutas especiales por raza (vacío - ya no hay sistema de razas)
+        raceSpecial: {}
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -129,7 +120,8 @@ export const GAME_CONFIG = {
         vehicleSpeeds: {
             heavy_truck: 40,    // Camión pesado (HQ → FOB)
             truck: 50,          // Camión normal (FOB → Front)
-            ambulance: 60,      // Ambulancia (+20% más rápida)
+            ambulance: 70,      // Ambulancia (+40% más rápida que heavy_truck)
+            repair_truck: 60,   // Camión de reparación (HQ → edificios rotos) (+50% más rápido que heavy_truck)
             helicopter: 80      // Helicóptero (más rápido)
         },
 

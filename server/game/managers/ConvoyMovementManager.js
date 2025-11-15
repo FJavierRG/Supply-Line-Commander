@@ -155,7 +155,7 @@ export class ConvoyMovementManager {
             n.type === 'engineerCenter' && 
             n.team === convoy.team && 
             n.constructed &&
-            !n.disabled // 🆕 NUEVO: No aplicar bonus si está disabled
+            this.gameState.raceManager.canNodeProvideBonus(n) // 🆕 MODULARIZADO: Usar función helper
         );
         if (hasEngineerCenter) {
             // ✅ SERVIDOR COMO AUTORIDAD: Usar configuración de serverNodes (fuente única de verdad)
@@ -179,6 +179,26 @@ export class ConvoyMovementManager {
         // console.log(`🎯 handleConvoyArrival: convoy=${convoy.id}, cargo=${convoy.cargo}, returning=${convoy.returning}`);
         
         if (!convoy.returning) {
+            // === CAMIÓN DE REPARACIÓN: Reparar edificio ===
+            if (convoy.isRepair) {
+                // 🆕 NUEVO: Reparar el edificio roto
+                if (toNode && toNode.broken) {
+                    toNode.broken = false;
+                    toNode.disabled = false; // También restaurar si estaba disabled
+                    console.log(`🔧 Edificio ${toNode.type} ${toNode.id} reparado por camión de reparación ${convoy.id}`);
+                    
+                    // Regresar el camión al HQ (similar a ambulancia del HQ)
+                    convoy.returning = true;
+                    convoy.progress = 0; // RESETEAR progress para el viaje de vuelta
+                    return;
+                } else {
+                    console.warn(`⚠️ Camión de reparación ${convoy.id} llegó a un edificio que no está roto: ${toNode?.type} ${toNode?.id}`);
+                    // Eliminar convoy si el edificio ya no está roto (por si acaso)
+                    this.gameState.convoys.splice(convoyIndex, 1);
+                    return;
+                }
+            }
+            
             // === AMBULANCIA: Resolver emergencia ===
             if (convoy.isMedical) {
                 this.gameState.medicalSystem.resolveEmergency(convoy.targetFrontId);
@@ -238,7 +258,17 @@ export class ConvoyMovementManager {
      * @param {number} convoyIndex - Índice del convoy en el array
      */
     returnVehicle(convoy, fromNode, convoyIndex) {
-        if (convoy.isMedical && fromNode) {
+        // === CAMIÓN DE REPARACIÓN: Devolver al HQ ===
+        if (convoy.isRepair && fromNode) {
+            if (fromNode.hasRepairSystem && fromNode.type === 'hq') {
+                // HQ: devolver camión de reparación
+                fromNode.availableRepairVehicles = Math.min(fromNode.maxRepairVehicles, fromNode.availableRepairVehicles + 1);
+                fromNode.repairVehicleAvailable = fromNode.availableRepairVehicles > 0;
+                console.log(`🔧 Camión de reparación ${convoy.id} regresó al HQ - Disponibles: ${fromNode.availableRepairVehicles}/${fromNode.maxRepairVehicles}`);
+            } else {
+                console.warn(`⚠️ Camión de reparación ${convoy.id} intentó regresar pero fromNode no tiene sistema de reparación válido:`, fromNode ? `${fromNode.type} hasRepairSystem=${fromNode.hasRepairSystem}` : 'null');
+            }
+        } else if (convoy.isMedical && fromNode) {
             // === AMBULANCIA: Solo HQ regresa, Hospital se consume ===
             if (fromNode.hasMedicalSystem && fromNode.type === 'hq') {
                 // HQ: devolver al sistema médico

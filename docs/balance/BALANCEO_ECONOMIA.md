@@ -25,7 +25,7 @@ El sistema económico del juego se basa en dos recursos principales:
 - Generación pasiva base: 3 currency/segundo
 - Currency adicional por avance de frentes: 1 currency cada 2 píxeles
 - Los edificios pueden generar bonificaciones económicas pasivas
-- Sistema de inversión con retorno diferido (Intel Radio)
+- Sistema de inversión con retorno diferido en algunos edificios (Intel Radio)
 
 ---
 
@@ -395,7 +395,6 @@ Los suministros NO se generan automáticamente. Deben ser transportados mediante
 
 1. **Convoyes manuales:** Camiones pesados y normales
 2. **Trenes automáticos:** Estación de Tren
-3. **Helicópteros:** Sistema aéreo (si está habilitado)
 
 ### Capacidades de Transporte
 
@@ -404,7 +403,6 @@ Los suministros NO se generan automáticamente. Deben ser transportados mediante
 | Heavy Truck | 15 | 30 (con Fábrica) | HQ |
 | Truck | 20 | 20 | FOB |
 | Tren | 25 | 25 | Estación |
-| Helicóptero | 100 | 100 | HQ/Front |
 
 ### Eficiencia de Suministros por Segundo
 

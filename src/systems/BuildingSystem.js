@@ -19,10 +19,13 @@ export class BuildingSystem {
         this.buildMode = false;
         this.droneMode = false;
         this.tankMode = false;
+        this.lightVehicleMode = false; // 🆕 NUEVO: Modo artillado ligero
         this.sniperMode = false;
         this.fobSabotageMode = false;
         this.commandoMode = false; // 🆕 NUEVO: Modo de despliegue de comando especial operativo
         this.truckAssaultMode = false; // 🆕 NUEVO: Modo de despliegue de truck assault
+        this.cameraDroneMode = false; // 🆕 NUEVO: Modo de despliegue de camera drone
+        this.artilleryMode = false; // 🆕 NUEVO: Modo de artillería
         this.currentBuildingType = null; // Tipo de edificio que se está construyendo actualmente
         this.currentRace = getDefaultRace(); // Raza actual (por defecto 'default')
         this.minDistance = 80; // Distancia mínima entre bases
@@ -190,9 +193,33 @@ export class BuildingSystem {
             return;
         }
         
+        // Si es cameraDrone, activar modo especial
+        if (buildingId === 'cameraDrone') {
+            this.activateCameraDroneMode();
+            return;
+        }
+        
         // Si es tank, activar modo especial
         if (buildingId === 'tank') {
             this.toggleTankMode();
+            return;
+        }
+        
+        // 🆕 NUEVO: Si es lightVehicle, activar modo especial
+        if (buildingId === 'lightVehicle') {
+            this.toggleLightVehicleMode();
+            return;
+        }
+        
+        // 🆕 NUEVO: Si es worldDestroyer, activar modo especial
+        if (buildingId === 'worldDestroyer') {
+            this.activateWorldDestroyerMode();
+            return;
+        }
+        
+        // 🆕 NUEVO: Si es artillery, activar modo especial
+        if (buildingId === 'artillery') {
+            this.activateArtilleryMode();
             return;
         }
         
@@ -307,8 +334,13 @@ export class BuildingSystem {
         this.deactivateBuildMode();
         this.droneMode = false;
         this.tankMode = false;
+        this.lightVehicleMode = false; // 🆕 NUEVO: Modo artillado ligero
         this.sniperMode = false;
         this.fobSabotageMode = false;
+        this.commandoMode = false;
+        this.truckAssaultMode = false;
+        this.cameraDroneMode = false;
+        this.artilleryMode = false;
         this.currentBuildingType = null;
     }
     
@@ -316,7 +348,7 @@ export class BuildingSystem {
      * Verifica si el modo construcción O drone está activo
      */
     isActive() {
-        return this.buildMode || this.droneMode || this.tankMode || this.sniperMode || this.fobSabotageMode || this.commandoMode || this.truckAssaultMode;
+        return this.buildMode || this.droneMode || this.tankMode || this.lightVehicleMode || this.sniperMode || this.fobSabotageMode || this.commandoMode || this.truckAssaultMode || this.cameraDroneMode || this.artilleryMode;
     }
     
     /**
@@ -343,6 +375,22 @@ export class BuildingSystem {
         
         return this.game.nodes.some(n => 
             n.type === 'intelCenter' && 
+            n.constructed && 
+            !n.isAbandoning &&
+            n.team === myTeam
+        );
+    }
+    
+    /**
+     * Verifica si existe al menos una construcción prohibida construida
+     * 🆕 NUEVO: Usado para desbloquear el consumible "Destructor de mundos"
+     */
+    hasDeadlyBuild() {
+        // Obtener equipo del jugador
+        const myTeam = this.game.myTeam || 'ally';
+        
+        return this.game.nodes.some(n => 
+            n.type === 'deadlyBuild' && 
             n.constructed && 
             !n.isAbandoning &&
             n.team === myTeam
@@ -427,12 +475,15 @@ export class BuildingSystem {
         if (this.droneMode) {
             this.exitDroneMode();
         }
-        if (this.commandoMode) {
-            this.exitCommandoMode();
-        }
-        if (this.truckAssaultMode) {
-            this.exitTruckAssaultMode();
-        }
+            if (this.commandoMode) {
+                this.exitCommandoMode();
+            }
+            if (this.truckAssaultMode) {
+                this.exitTruckAssaultMode();
+            }
+            if (this.artilleryMode) {
+                this.exitArtilleryMode();
+            }
         if (this.sniperMode) {
             this.exitSniperMode();
         }
@@ -500,6 +551,109 @@ export class BuildingSystem {
      */
     getTankCost() {
         return this.getBuildingCost('tank');
+    }
+    
+    /**
+     * 🆕 NUEVO: Activa/desactiva el modo artillado ligero
+     * Similar al modo tanque pero aplica broken en vez de destruir
+     */
+    toggleLightVehicleMode() {
+        if (!this.canAffordLightVehicle()) {
+            console.log(`⚠️ No tienes suficiente currency para artillado ligero (Necesitas: ${this.getLightVehicleCost()})`);
+            return;
+        }
+        
+        // Salir del modo construcción si estaba activo
+        if (this.buildMode) {
+            this.exitBuildMode();
+        }
+        
+        // Salir de otros modos
+        if (this.droneMode) {
+            this.exitDroneMode();
+        }
+            if (this.commandoMode) {
+                this.exitCommandoMode();
+            }
+            if (this.truckAssaultMode) {
+                this.exitTruckAssaultMode();
+            }
+            if (this.artilleryMode) {
+                this.exitArtilleryMode();
+            }
+        if (this.sniperMode) {
+            this.exitSniperMode();
+        }
+        if (this.tankMode) {
+            this.exitTankMode();
+        }
+        if (this.lightVehicleMode) {
+            this.exitLightVehicleMode();
+        }
+        if (this.fobSabotageMode) {
+            this.exitFobSabotageMode();
+        }
+        
+        this.lightVehicleMode = !this.lightVehicleMode;
+        
+        if (this.lightVehicleMode) {
+            this.game.selectedBase = null;
+            this.game.canvas.style.cursor = 'crosshair';
+            console.log('🚛 Modo artillado ligero activado - Click en edificio enemigo (NO FOBs ni HQs)');
+        } else {
+            this.game.canvas.style.cursor = 'default';
+            console.log('🚛 Modo artillado ligero desactivado');
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Lanza un artillado ligero hacia un objetivo
+     * Similar al tanque pero aplica broken en vez de destruir
+     */
+    launchLightVehicle(targetBase) {
+        if (!targetBase) {
+            console.log('⚠️ Objetivo no válido');
+            return;
+        }
+        
+        // Validar que NO sea FOB ni HQ
+        if (targetBase.type === 'fob' || targetBase.type === 'hq') {
+            console.log('⚠️ El artillado ligero no puede atacar FOBs ni HQs');
+            return;
+        }
+        
+        // Delegar TODO al servidor autoritativo
+        if (!this.game.network || !this.game.network.roomId) {
+            console.error('❌ No hay conexión al servidor. No se puede lanzar artillado ligero.');
+            return;
+        }
+        
+        console.log(`🚛 Enviando light_vehicle_request: target=${targetBase.id}`);
+        this.game.network.requestLightVehicle(targetBase.id);
+        
+        this.exitLightVehicleMode();
+    }
+    
+    /**
+     * 🆕 NUEVO: Sale del modo artillado ligero
+     */
+    exitLightVehicleMode() {
+        this.lightVehicleMode = false;
+        this.game.canvas.style.cursor = 'default';
+    }
+    
+    /**
+     * 🆕 NUEVO: Verifica si puede permitirse un artillado ligero
+     */
+    canAffordLightVehicle() {
+        return this.game.canAffordBuilding('lightVehicle');
+    }
+    
+    /**
+     * 🆕 NUEVO: Obtiene el costo del artillado ligero
+     */
+    getLightVehicleCost() {
+        return this.getBuildingCost('lightVehicle');
     }
     
     /**
@@ -690,6 +844,9 @@ export class BuildingSystem {
         if (this.tankMode) {
             this.exitTankMode();
         }
+        if (this.lightVehicleMode) {
+            this.exitLightVehicleMode();
+        }
         
         this.commandoMode = true;
         this.game.selectedBase = null;
@@ -762,6 +919,9 @@ export class BuildingSystem {
         if (this.tankMode) {
             this.exitTankMode();
         }
+        if (this.lightVehicleMode) {
+            this.exitLightVehicleMode();
+        }
         if (this.commandoMode) {
             this.exitCommandoMode();
         }
@@ -773,6 +933,199 @@ export class BuildingSystem {
         this.game.canvas.style.cursor = 'crosshair';
         
         console.log('🚛 Modo truck assault activado - Selecciona una posición en territorio enemigo para desplegar');
+    }
+    
+    /**
+     * Activa el modo camera drone
+     * 🆕 NUEVO
+     */
+    activateCameraDroneMode() {
+        // Verificar requisito de lanzadera de drones
+        if (!this.hasDroneLauncher()) {
+            console.log(`⚠️ Necesitas construir una Lanzadera de Drones primero`);
+            return;
+        }
+        
+        // Verificar currency
+        if (!this.canAffordBuilding('cameraDrone')) {
+            const cameraDroneCost = this.getBuildingCost('cameraDrone');
+            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${cameraDroneCost})`);
+            return;
+        }
+        
+        // Salir del modo construcción si estaba activo
+        if (this.buildMode) {
+            this.exitBuildMode();
+        }
+        
+        // Salir de otros modos de consumibles
+        if (this.fobSabotageMode) {
+            this.exitFobSabotageMode();
+        }
+        if (this.sniperMode) {
+            this.exitSniperMode();
+        }
+        if (this.droneMode) {
+            this.exitDroneMode();
+        }
+        if (this.tankMode) {
+            this.exitTankMode();
+        }
+        if (this.lightVehicleMode) {
+            this.exitLightVehicleMode();
+        }
+            if (this.commandoMode) {
+                this.exitCommandoMode();
+            }
+            if (this.truckAssaultMode) {
+                this.exitTruckAssaultMode();
+            }
+            if (this.artilleryMode) {
+                this.exitArtilleryMode();
+            }
+        
+        this.cameraDroneMode = true;
+        this.game.selectedBase = null;
+        
+        // Usar cursor normal de construcción
+        this.game.canvas.style.cursor = 'crosshair';
+        
+        console.log('📹 Modo camera drone activado - Selecciona una posición en territorio enemigo para desplegar');
+    }
+    
+    /**
+     * Ejecuta el despliegue del camera drone
+     * 🆕 NUEVO: Delega TODO al servidor
+     */
+    executeCameraDroneDeploy(x, y) {
+        // Delegar TODO al servidor autoritativo
+        if (!this.game.network || !this.game.network.roomId) {
+            console.error('❌ No hay conexión al servidor. No se puede desplegar camera drone.');
+            return;
+        }
+        
+        console.log(`📹 Enviando camera_drone_deploy_request: x=${x}, y=${y}`);
+        this.game.network.requestCameraDroneDeploy(x, y);
+        
+        this.exitCameraDroneMode();
+    }
+    
+    /**
+     * Sale del modo camera drone
+     * 🆕 NUEVO
+     */
+    exitCameraDroneMode() {
+        this.cameraDroneMode = false;
+        this.game.canvas.style.cursor = 'default';
+    }
+    
+    /**
+     * Activa el modo Destructor de mundos
+     * 🆕 NUEVO: No requiere posición, se activa inmediatamente
+     */
+    activateWorldDestroyerMode() {
+        // Verificar requisito de Construcción Prohibida
+        if (!this.hasDeadlyBuild()) {
+            console.log(`⚠️ Necesitas construir una Construcción Prohibida primero`);
+            return;
+        }
+        
+        // Verificar currency
+        if (!this.canAffordBuilding('worldDestroyer')) {
+            const worldDestroyerCost = this.getBuildingCost('worldDestroyer');
+            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${worldDestroyerCost})`);
+            return;
+        }
+        
+        // Delegar TODO al servidor autoritativo
+        if (!this.game.network || !this.game.network.roomId) {
+            console.error('❌ No hay conexión al servidor. No se puede activar el Destructor de mundos.');
+            return;
+        }
+        
+        console.log(`☠️ Activando Destructor de mundos...`);
+        this.game.network.requestWorldDestroyer();
+    }
+    
+    /**
+     * Activa el modo artillería
+     * 🆕 NUEVO
+     */
+    activateArtilleryMode() {
+        // Verificar currency
+        if (!this.canAffordBuilding('artillery')) {
+            const artilleryCost = this.getBuildingCost('artillery');
+            console.log(`⚠️ No tienes suficiente currency (Necesitas: ${artilleryCost})`);
+            return;
+        }
+        
+        // Salir del modo construcción si estaba activo
+        if (this.buildMode) {
+            this.exitBuildMode();
+        }
+        
+        // Salir de otros modos de consumibles
+        if (this.fobSabotageMode) {
+            this.exitFobSabotageMode();
+        }
+        if (this.sniperMode) {
+            this.exitSniperMode();
+        }
+        if (this.droneMode) {
+            this.exitDroneMode();
+        }
+        if (this.tankMode) {
+            this.exitTankMode();
+        }
+        if (this.lightVehicleMode) {
+            this.exitLightVehicleMode();
+        }
+            if (this.commandoMode) {
+                this.exitCommandoMode();
+            }
+            if (this.truckAssaultMode) {
+                this.exitTruckAssaultMode();
+            }
+            if (this.artilleryMode) {
+                this.exitArtilleryMode();
+            }
+        if (this.cameraDroneMode) {
+            this.exitCameraDroneMode();
+        }
+        
+        this.artilleryMode = true;
+        this.game.selectedBase = null;
+        
+        // Ocultar cursor del navegador para mostrar sprite de artillery
+        this.game.canvas.style.cursor = 'none';
+        
+        console.log('💣 Modo artillería activado - Selecciona un área en el mapa para bombardear');
+    }
+    
+    /**
+     * Ejecuta el bombardeo de artillería
+     * 🆕 NUEVO: Delega TODO al servidor
+     */
+    executeArtilleryLaunch(x, y) {
+        // Delegar TODO al servidor autoritativo
+        if (!this.game.network || !this.game.network.roomId) {
+            console.error('❌ No hay conexión al servidor. No se puede lanzar artillería.');
+            return;
+        }
+        
+        console.log(`💣 Enviando artillery_request: x=${x}, y=${y}`);
+        this.game.network.requestArtilleryLaunch(x, y);
+        
+        this.exitArtilleryMode();
+    }
+    
+    /**
+     * Sale del modo artillería
+     * 🆕 NUEVO
+     */
+    exitArtilleryMode() {
+        this.artilleryMode = false;
+        this.game.canvas.style.cursor = 'default';
     }
     
     /**

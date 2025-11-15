@@ -48,9 +48,6 @@ El sistema de logística es fundamental para mantener los frentes avanzando. Los
 - Vehículos iniciales: 2 trucks
 - Máximo de vehículos: 2
 
-**Front (Frente):**
-- Helicópteros máximos: 1
-
 **Hospital de Campaña:**
 - Vehículos máximos: 1 (ambulancia)
 
@@ -65,12 +62,10 @@ El sistema de logística es fundamental para mantener los frentes avanzando. Los
 | Heavy Truck | 40 px/s | Base (100%) |
 | Truck | 50 px/s | +25% más rápido |
 | Ambulancia | 60 px/s | +50% más rápido |
-| Helicóptero | 80 px/s | +100% más rápido |
 
 ### Comparación de Velocidades
 
 **Relación de velocidades:**
-- Helicóptero: 2x más rápido que Heavy Truck
 - Ambulancia: 1.5x más rápido que Heavy Truck
 - Truck: 1.25x más rápido que Heavy Truck
 
@@ -108,10 +103,6 @@ El sistema de logística es fundamental para mantener los frentes avanzando. Los
 
 ### Rutas Especiales
 
-**Helicópteros:**
-- Pueden volar desde HQ directamente a Fronts
-- Pueden volar desde Fronts de vuelta al HQ
-- No siguen las rutas tradicionales de camiones
 
 **Ambulancias:**
 - Pueden ir desde HQ o Hospital de Campaña a Fronts

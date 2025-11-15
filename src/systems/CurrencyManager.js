@@ -39,8 +39,37 @@ export class CurrencyManager {
             !n.isAbandoning
         );
         
-        // Cada planta nuclear añade +2 currency/segundo (visual)
-        return nuclearPlants.length * 2;
+        // Base: cada planta nuclear añade +2 currency/segundo (visual)
+        let bonus = nuclearPlants.length * 2;
+        
+        // 🆕 Bonus de Estudios de Física: +1 currency/segundo por planta nuclear si hay al menos una universidad
+        const hasPhysicStudies = this.game.nodes.some(n => 
+            n.type === 'physicStudies' && 
+            n.team === myTeam &&
+            n.constructed && 
+            !n.isConstructing &&
+            !n.isAbandoning
+        );
+        
+        if (hasPhysicStudies && nuclearPlants.length > 0) {
+            bonus += nuclearPlants.length * 1; // +1 por cada planta nuclear
+        }
+        
+        // 🆕 Bonus de Laboratorio Secreto: +1 currency/segundo por planta nuclear si hay al menos un laboratorio secreto
+        // Este bonus es INDEPENDIENTE de Estudios de Física (se acumula con él)
+        const hasSecretLaboratory = this.game.nodes.some(n => 
+            n.type === 'secretLaboratory' && 
+            n.team === myTeam &&
+            n.constructed && 
+            !n.isConstructing &&
+            !n.isAbandoning
+        );
+        
+        if (hasSecretLaboratory && nuclearPlants.length > 0) {
+            bonus += nuclearPlants.length * 1; // +1 por cada planta nuclear (acumulable con Estudios de Física)
+        }
+        
+        return bonus;
     }
     
     /**

@@ -54,13 +54,29 @@ export class CameraDroneSystem {
                 continue;
             }
             
+            // ✅ FIX: Calcular posición ACTUAL del convoy basada en su progress (una sola vez)
+            // El progress va de 0.0 (origen) a 1.0 (destino)
+            const progress = Math.max(0, Math.min(1, convoy.progress || 0));
+            const currentX = fromNode.x + (toNode.x - fromNode.x) * progress;
+            const currentY = fromNode.y + (toNode.y - fromNode.y) * progress;
+            
+            // ✅ FIX: Filtrar solo camera drones enemigos y ordenarlos por distancia al convoy
+            // Esto asegura que el camera drone más cercano detecte primero
+            const enemyCameraDrones = cameraDrones
+                .filter(cd => cd.team !== convoy.team)
+                .map(cd => {
+                    const dist = Math.hypot(cd.x - currentX, cd.y - currentY);
+                    const isInside = dist <= detectionRadius;
+                    return { cameraDrone: cd, distance: dist, isInside };
+                })
+                .sort((a, b) => a.distance - b.distance) // Ordenar por distancia (más cercano primero)
+                .map(item => item.cameraDrone);
+            
+            // ✅ FIX: Rastrear si el convoy ya fue detectado en este tick por algún camera drone
+            let detectedInThisTick = false;
+            
             // Verificar si el convoy pasa por el área de algún camera drone enemigo
-            for (const cameraDrone of cameraDrones) {
-                // Solo detectar convoyes enemigos
-                if (cameraDrone.team === convoy.team) {
-                    continue;
-                }
-                
+            for (const cameraDrone of enemyCameraDrones) {
                 // Inicializar Map de estados anteriores para este camera drone si no existe
                 if (!this.previousConvoyStates.has(cameraDrone.id)) {
                     this.previousConvoyStates.set(cameraDrone.id, new Map());
@@ -70,12 +86,6 @@ export class CameraDroneSystem {
                 
                 // Crear ID único para este convoy en esta dirección (ida o vuelta)
                 const convoyDirectionId = `${convoy.id}_${convoy.returning ? 'return' : 'outbound'}`;
-                
-                // ✅ FIX: Calcular posición ACTUAL del convoy basada en su progress
-                // El progress va de 0.0 (origen) a 1.0 (destino)
-                const progress = Math.max(0, Math.min(1, convoy.progress || 0));
-                const currentX = fromNode.x + (toNode.x - fromNode.x) * progress;
-                const currentY = fromNode.y + (toNode.y - fromNode.y) * progress;
                 
                 // ✅ FIX: Calcular distancia desde el camera drone hasta la POSICIÓN ACTUAL del convoy
                 const distToCurrentPosition = Math.hypot(
@@ -96,11 +106,19 @@ export class CameraDroneSystem {
                 
                 const detectedSet = this.detectedConvoys.get(cameraDrone.id);
                 
-                // CRÍTICO: Verificar PRIMERO si ya fue detectado para evitar pagos duplicados
+                // CRÍTICO: Verificar PRIMERO si ya fue detectado por ESTE camera drone para evitar pagos duplicados
                 // Esta verificación debe ser lo primero que hacemos ANTES de cualquier otra lógica
-                const alreadyDetected = detectedSet.has(convoyDirectionId);
-                if (alreadyDetected) {
-                    // Ya fue detectado antes, solo actualizar estado pero NO pagar
+                const alreadyDetectedByThisDrone = detectedSet.has(convoyDirectionId);
+                if (alreadyDetectedByThisDrone) {
+                    // Ya fue detectado antes por este camera drone, solo actualizar estado pero NO pagar
+                    previousStates.set(convoyDirectionId, isInsideNow);
+                    continue; // Saltar al siguiente camera drone
+                }
+                
+                // ✅ FIX: Si ya fue detectado por otro camera drone en este tick (más cercano), saltar
+                // Esto previene que aparezcan múltiples eventos visuales para el mismo convoy
+                if (detectedInThisTick) {
+                    // Ya fue detectado por otro camera drone (más cercano) en este tick, solo actualizar estado pero NO pagar
                     previousStates.set(convoyDirectionId, isInsideNow);
                     continue; // Saltar al siguiente camera drone
                 }
@@ -137,6 +155,7 @@ export class CameraDroneSystem {
                     // CRÍTICO: Marcar como detectado INMEDIATAMENTE antes de cualquier otra operación
                     // Esto previene pagos duplicados incluso si el código se ejecuta múltiples veces
                     detectedSet.add(convoyDirectionId);
+                    detectedInThisTick = true; // ✅ FIX: Marcar que fue detectado en este tick
                     
                     // Verificar nuevamente después de agregar (doble verificación de seguridad)
                     // Esto debería ser redundante pero asegura que no hay condiciones de carrera

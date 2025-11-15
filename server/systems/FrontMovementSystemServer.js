@@ -3,6 +3,7 @@
 // El cliente solo renderiza las posiciones que el servidor envía
 
 import { GAME_CONFIG } from '../config/gameConfig.js';
+import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
 
 // Configuración específica del sistema (no duplicada con gameConfig.js)
 const SYSTEM_CONFIG = {
@@ -150,7 +151,7 @@ export class FrontMovementSystemServer {
             if (front.x > front.maxXReached) {
                 const pixelsGained = front.x - front.maxXReached;
                 front.maxXReached = front.x;
-                this.awardCurrencyForAdvance('player1', pixelsGained);
+                this.awardCurrencyForAdvance('player1', pixelsGained, front);
             }
         } else {
             // Player2: avanza a la izquierda (-X)
@@ -159,7 +160,7 @@ export class FrontMovementSystemServer {
             if (front.x < front.minXReached) {
                 const pixelsGained = front.minXReached - front.x;
                 front.minXReached = front.x;
-                this.awardCurrencyForAdvance('player2', pixelsGained);
+                this.awardCurrencyForAdvance('player2', pixelsGained, front);
             }
         }
     }
@@ -213,8 +214,11 @@ export class FrontMovementSystemServer {
 
     /**
      * Otorga currency por avance de frentes
+     * @param {string} team - Equipo del jugador ('player1' o 'player2')
+     * @param {number} pixelsGained - Píxeles ganados por el avance
+     * @param {Object} front - Frente que está avanzando (para verificar efectos)
      */
-    awardCurrencyForAdvance(team, pixelsGained) {
+    awardCurrencyForAdvance(team, pixelsGained, front = null) {
         if (pixelsGained <= 0) return;
         
         // Acumular pixels
@@ -224,12 +228,29 @@ export class FrontMovementSystemServer {
         const currencyToAward = Math.floor(this.pendingCurrencyPixels[team] / GAME_CONFIG.currency.pixelsPerCurrency);
         
         if (currencyToAward > 0) {
-            this.gameState.currency[team] += currencyToAward;
+            let finalCurrencyToAward = currencyToAward;
+            
+            // 🆕 NUEVO: Verificar efecto "trained" en el frente que avanza
+            if (front) {
+                const trainedEffect = front.effects?.find(e => 
+                    e.type === 'trained' && 
+                    (!e.expiresAt || this.gameState.gameTime < e.expiresAt)
+                );
+                
+                if (trainedEffect) {
+                    const trainedConfig = SERVER_NODE_CONFIG.temporaryEffects.trained;
+                    // Añadir bonus de currency del efecto trained
+                    finalCurrencyToAward += trainedConfig.currencyBonus;
+                    console.log(`🎓 Frente ${front.id} tiene efecto "trained" - Bonus: +${trainedConfig.currencyBonus}$ por avance`);
+                }
+            }
+            
+            this.gameState.currency[team] += finalCurrencyToAward;
             this.pendingCurrencyPixels[team] -= currencyToAward * GAME_CONFIG.currency.pixelsPerCurrency;
             
-            // Log solo cada 50$ para no spamear
-            if (currencyToAward >= 50) {
-                console.log(`📈 ${team}: +${currencyToAward}$ por avance de frente (total: ${this.gameState.currency[team]}$)`);
+            // Log solo cada 50$ para no spamear (o si hay bonus de trained)
+            if (finalCurrencyToAward >= 50 || (front && front.effects?.some(e => e.type === 'trained'))) {
+                console.log(`📈 ${team}: +${finalCurrencyToAward}$ por avance de frente (total: ${this.gameState.currency[team]}$)`);
             }
         }
     }

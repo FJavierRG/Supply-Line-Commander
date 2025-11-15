@@ -12,6 +12,7 @@ import { ConvoyManager } from './systems/ConvoyManager.js';
 import { MedicalEmergencySystem } from './systems/MedicalEmergencySystem.js';
 import { DroneSystem } from './systems/DroneSystem.js';
 import { TankSystem } from './systems/TankSystem.js';
+import { LightVehicleSystem } from './systems/LightVehicleSystem.js'; // 🆕 NUEVO: Sistema de artillado ligero
 import { AntiDroneSystem } from './systems/AntiDroneSystem.js';
 import { FrontMovementSystem } from './systems/FrontMovementSystem.js';
 import { TerritorySystem } from './systems/TerritorySystem.js';
@@ -94,6 +95,7 @@ export class Game {
         this.medicalSystem = new MedicalEmergencySystem(this);
         this.droneSystem = new DroneSystem(this);
         this.tankSystem = new TankSystem(this);
+        this.lightVehicleSystem = new LightVehicleSystem(this); // 🆕 NUEVO: Sistema de artillado ligero
         this.antiDroneSystem = new AntiDroneSystem(this);
         this.frontMovement = new FrontMovementSystem(this);
         this.territory = new TerritorySystem(this);
@@ -329,6 +331,7 @@ export class Game {
         // if (debugBtn) debugBtn.style.display = 'block';
         this.droneSystem.clear();
         this.tankSystem.clear();
+        this.lightVehicleSystem.clear(); // 🆕 NUEVO: Artillado ligero
         this.paused = false;
         
         // Resetear currency
@@ -375,11 +378,6 @@ export class Game {
         
         // ELIMINADO: generateBases - Ahora el servidor genera el mapa inicial
         this.nodes = [];
-        
-        // 🆕 NUEVO: Crear helicóptero inicial si la raza es B_Nation
-        if (this.selectedRace === 'B_Nation') {
-            this.createInitialHelicopter();
-        }
         
         // Generar sistema de tiles del background
         this.backgroundTiles = new BackgroundTileSystem(this.worldWidth, this.worldHeight, 60);
@@ -445,34 +443,6 @@ export class Game {
         if (this.renderer) {
             this.renderer.clear();
         }
-    }
-    
-    /**
-     * Crea el helicóptero inicial para B_Nation
-     */
-    createInitialHelicopter() {
-        // Buscar el HQ del jugador
-        const hq = this.nodes.find(n => n.type === 'hq' && n.team === 'ally');
-        if (!hq) {
-            console.error('❌ No se encontró HQ del jugador para crear helicóptero');
-            return;
-        }
-        
-        // Crear helicóptero
-        const heli = {
-            id: `heli_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            team: 'ally',
-            state: 'landed',
-            currentNodeId: hq.id,
-            targetNodeId: null,
-            progress: null,
-            initialDistance: null,
-            cargo: 0
-        };
-        
-        this.helicopters.push(heli);
-        hq.landedHelicopters.push(heli.id);
-        
     }
     
     // ELIMINADO: generateBases() y shouldGenerateFOBs()
@@ -658,6 +628,7 @@ export class Game {
         
         // Actualizar sistemas visuales (interpolación)
         this.tankSystem.update(dt);
+        this.lightVehicleSystem.update(dt); // 🆕 NUEVO: Artillado ligero
         
         // Interpolación suave de drones (usando sistema centralizado)
         for (const drone of this.droneSystem.getDrones()) {
@@ -675,6 +646,26 @@ export class Game {
                 threshold: 1.0,
                 snapThreshold: 0.1
             });
+        }
+        
+        // 🆕 NUEVO: Interpolación suave de artillados ligeros (usando sistema centralizado)
+        for (const lightVehicle of this.lightVehicleSystem.getLightVehicles()) {
+            interpolatePosition(lightVehicle, dt, { 
+                speed: 8.0,
+                threshold: 1.0,
+                snapThreshold: 0.1
+            });
+        }
+        
+        // 🆕 NUEVO: Interpolación suave de camera drones volando (usando sistema centralizado)
+        for (const node of this.nodes) {
+            if (node.isCameraDrone && node.active && !node.deployed && node.serverX !== undefined && node.serverY !== undefined) {
+                interpolatePosition(node, dt, { 
+                    speed: 8.0,
+                    threshold: 1.0,
+                    snapThreshold: 0.1
+                });
+            }
         }
         
         // ⚠️ LEGACY REMOVED: NO ejecutar simulación aquí - el servidor maneja TODO
@@ -982,9 +973,16 @@ export class Game {
         // Renderizar tanques
         this.tankSystem.getTanks().forEach(tank => this.renderer.renderTank(tank));
         
+        // 🆕 NUEVO: Renderizar artillados ligeros
+        this.lightVehicleSystem.getLightVehicles().forEach(lightVehicle => this.renderer.renderLightVehicle(lightVehicle));
+        
         // Renderizar partículas
         this.particleSystem.getParticles().forEach(p => this.renderer.renderParticle(p));
         this.particleSystem.getExplosionSprites().forEach(e => this.renderer.renderExplosionSprite(e));
+        // 🆕 NUEVO: Renderizar explosiones de drones
+        if (this.particleSystem.getDroneExplosionSprites) {
+            this.particleSystem.getDroneExplosionSprites().forEach(e => this.renderer.renderDroneExplosionSprite(e));
+        }
         
         // Renderizar debug del sistema anti-drones
         if (this.debugMode) {
@@ -1032,6 +1030,9 @@ export class Game {
             } else if (this.buildSystem.tankMode) {
                 // Preview del tanque: similar al dron pero solo para edificios válidos (NO FOBs ni HQs)
                 this.renderer.renderTankPreview(mousePos.x, mousePos.y, this.hoveredNode);
+            } else if (this.buildSystem.lightVehicleMode) {
+                // 🆕 NUEVO: Preview del artillado ligero: similar al tanque pero aplica broken (NO FOBs ni HQs)
+                this.renderer.renderLightVehiclePreview(mousePos.x, mousePos.y, this.hoveredNode);
             } else if (this.buildSystem.sniperMode) {
                 // Preview del francotirador: mira con sprite de sniper
                 this.renderer.renderSniperCursor(mousePos.x, mousePos.y, this.hoveredNode);
@@ -1044,6 +1045,12 @@ export class Game {
             } else if (this.buildSystem.truckAssaultMode) {
                 // Preview del truck assault: usar preview normal de construcción
                 this.renderer.renderBuildPreview(mousePos.x, mousePos.y, this.nodes, 'truckAssault');
+            } else if (this.buildSystem.cameraDroneMode) {
+                // Preview del camera drone: usar preview normal de construcción
+                this.renderer.renderBuildPreview(mousePos.x, mousePos.y, this.nodes, 'cameraDrone');
+            } else if (this.buildSystem.artilleryMode) {
+                // Preview de artillería: mostrar área de efecto circular con sprite de artillery
+                this.renderer.renderArtilleryPreview(mousePos.x, mousePos.y, this.hoveredNode);
             } else {
                 // Preview del edificio actual
                 const buildingType = this.buildSystem.currentBuildingType || 'fob';
@@ -1077,6 +1084,16 @@ export class Game {
         // Restaurar Mirror View ANTES de UI del juego (para que porcentajes estén en posición correcta)
         this.renderer.restoreMirrorView();
         
+        // 🆕 NUEVO: Renderizar efectos del Destructor de mundos durante countdown (sobre todo excepto UI)
+        if (this.renderer.worldDestroyerActive) {
+            this.renderer.renderWorldDestroyerEffects();
+        }
+        
+        // 🆕 NUEVO: Renderizar efectos de artillería (countdown con sombra bomba nuclear pequeño)
+        if (this.renderer.artilleryStrikes && this.renderer.artilleryStrikes.length > 0) {
+            this.renderer.renderArtilleryEffects();
+        }
+        
         // Renderizar elementos de UI del juego (porcentajes de territorio, etc.)
         // DESPUÉS de restaurar mirror view para que estén en coordenadas correctas
         this.renderGameUI();
@@ -1088,6 +1105,11 @@ export class Game {
         
         // Restaurar cámara (siempre activa)
         this.camera.restoreContext(this.renderer.ctx);
+        
+        // 🆕 NUEVO: Renderizar pantallazo blanco del Destructor de mundos (sobre todo incluyendo UI)
+        if (this.renderer.worldDestroyerExecuted) {
+            this.renderer.renderWorldDestroyerEffects();
+        }
         
         // Renderizar tienda (fija en pantalla)
         this.storeUI.updateLayout(this.canvas.width, this.canvas.height);
@@ -1123,7 +1145,6 @@ export class Game {
                     }
                     console.log('▶️ Juego reanudado');
                 },
-                () => this.restartMission(), // Reiniciar misión
                 () => this.returnToMenuFromGame() // Volver al menú principal
             );
         } else {
@@ -1132,19 +1153,6 @@ export class Game {
         // Pausa toggled (silencioso)
     }
 
-    restartMission() {
-        // Reiniciar misión actual limpiamente
-        this.ui.hidePauseMenu();
-        this.setGameState('playing');
-        this.paused = false;
-        const pauseBtn = document.getElementById('pause-btn');
-        if (pauseBtn) {
-            pauseBtn.textContent = '⏸️';
-            pauseBtn.classList.remove('paused');
-        }
-        // Re-cargar la misión actual y arrancar
-        this.startMission();
-    }
     
     toggleBuildMode() {
         this.buildSystem.toggleBuildMode();
@@ -1319,6 +1327,7 @@ export class Game {
         // if (debugBtn) debugBtn.style.display = 'block';
         this.droneSystem.clear();
         this.tankSystem.clear();
+        this.lightVehicleSystem.clear(); // 🆕 NUEVO: Artillado ligero
         this.paused = false;
         
         // Resetear currency con valor del tutorial
@@ -1934,6 +1943,10 @@ export class Game {
                 gameplay: SERVER_NODE_CONFIG.gameplay,
                 buildRadii: SERVER_NODE_CONFIG.buildRadius || {}, // 🆕 Radio de construcción
                 detectionRadii: SERVER_NODE_CONFIG.detectionRadius,
+                specialNodes: SERVER_NODE_CONFIG.specialNodes || {}, // 🆕 NUEVO: Nodos especiales (camera drone, commando, truck assault)
+                temporaryEffects: SERVER_NODE_CONFIG.temporaryEffects || {}, // 🆕 NUEVO: Efectos temporales (trained, wounded)
+                vehicleTypes: SERVER_NODE_CONFIG.vehicleTypes || {}, // 🆕 NUEVO: Tipos de vehículos
+                vehicleSystems: SERVER_NODE_CONFIG.vehicleSystems || {}, // 🆕 NUEVO: Sistemas de vehículos por tipo de nodo
                 security: SERVER_NODE_CONFIG.security,
                 behavior: {
                     enabled: SERVER_NODE_CONFIG.gameplay.enabled,
@@ -1946,13 +1959,7 @@ export class Game {
                         'fob': ['front', 'fob'],
                         'front': []
                     },
-                    raceSpecial: {
-                        B_Nation: {
-                            'hq': ['front', 'aerialBase'],
-                            'front': ['hq', 'front', 'aerialBase'],
-                            'aerialBase': ['hq', 'front']
-                        }
-                    }
+                    raceSpecial: {}
                 },
                 currency: {
                     passiveRate: 3,
@@ -1992,13 +1999,7 @@ export class Game {
                         'fob': ['front', 'fob'],
                         'front': []
                     },
-                    raceSpecial: {
-                        B_Nation: {
-                            'hq': ['front', 'aerialBase'],
-                            'front': ['hq', 'front', 'aerialBase'],
-                            'aerialBase': ['hq', 'front']
-                        }
-                    }
+                    raceSpecial: {}
                 },
                 currency: {
                     passiveRate: 3,
@@ -2019,5 +2020,120 @@ export class Game {
                 }
             };
         });
+    }
+    
+    /**
+     * 🆕 NUEVO: Obtiene la configuración de tipos de vehículos habilitados para un nodo
+     * @param {string} nodeType - Tipo de nodo (hq, fob, front, etc.)
+     * @returns {Array<string>} Array de IDs de tipos de vehículos habilitados
+     */
+    getEnabledVehicleTypes(nodeType) {
+        const vehicleSystems = this.serverBuildingConfig?.vehicleSystems || {};
+        const vehicleTypes = this.serverBuildingConfig?.vehicleTypes || {};
+        const system = vehicleSystems[nodeType];
+        
+        if (!system) return [];
+        
+        // Filtrar solo tipos habilitados y que existan en vehicleTypes
+        return system.enabledTypes.filter(typeId => {
+            const vehicleType = vehicleTypes[typeId];
+            return vehicleType && vehicleType.enabled;
+        });
+    }
+    
+    /**
+     * 🆕 NUEVO: Obtiene la configuración de un tipo de vehículo
+     * @param {string} vehicleTypeId - ID del tipo de vehículo
+     * @returns {Object|null} Configuración del tipo de vehículo o null si no existe
+     */
+    getVehicleTypeConfig(vehicleTypeId) {
+        const vehicleTypes = this.serverBuildingConfig?.vehicleTypes || {};
+        return vehicleTypes[vehicleTypeId] || null;
+    }
+    
+    /**
+     * 🆕 NUEVO: Obtiene el número de vehículos disponibles de un tipo específico en un nodo
+     * @param {Object} node - Nodo visual
+     * @param {string} vehicleTypeId - ID del tipo de vehículo
+     * @returns {number} Número de vehículos disponibles
+     */
+    getAvailableVehicleCount(node, vehicleTypeId) {
+        const vehicleType = this.getVehicleTypeConfig(vehicleTypeId);
+        if (!vehicleType) return 0;
+        
+        if (vehicleType.usesStandardSystem) {
+            // Sistema estándar: usa availableVehicles/maxVehicles
+            return node.availableVehicles || 0;
+        } else {
+            // Sistema personalizado: usa la propiedad especificada
+            const availableProp = vehicleType.availableProperty;
+            if (availableProp === 'availableAmbulances') {
+                return node.ambulanceAvailable ? 1 : 0;
+            } else if (availableProp === 'availableHelicopters') {
+                return node.availableHelicopters || 0;
+            } else if (availableProp === 'landedHelicopters') {
+                return (node.landedHelicopters || []).length;
+            } else if (availableProp === 'availableRepairVehicles') {
+                return (node.availableRepairVehicles || 0);
+            }
+        }
+        
+        return 0;
+    }
+    
+    /**
+     * 🆕 NUEVO: Obtiene el máximo de vehículos de un tipo específico en un nodo
+     * @param {Object} node - Nodo visual
+     * @param {string} vehicleTypeId - ID del tipo de vehículo
+     * @returns {number} Número máximo de vehículos
+     */
+    getMaxVehicleCount(node, vehicleTypeId) {
+        const vehicleType = this.getVehicleTypeConfig(vehicleTypeId);
+        if (!vehicleType) return 0;
+        
+        if (vehicleType.usesStandardSystem) {
+            // Sistema estándar: usa maxVehicles
+            return node.maxVehicles || node.baseMaxVehicles || 0;
+        } else {
+            // Sistema personalizado: usa la propiedad especificada
+            const maxProp = vehicleType.maxProperty;
+            if (maxProp === 'maxAmbulances') {
+                return node.maxAmbulances || 0;
+            } else if (maxProp === 'maxHelicopters') {
+                return node.maxHelicopters || 0;
+            } else if (maxProp === 'maxRepairVehicles') {
+                return node.maxRepairVehicles || 0;
+            }
+        }
+        
+        return 0;
+    }
+    
+    /**
+     * 🆕 NUEVO: Verifica si un vehículo de un tipo específico está disponible
+     * @param {Object} node - Nodo visual
+     * @param {string} vehicleTypeId - ID del tipo de vehículo
+     * @returns {boolean} True si el vehículo está disponible
+     */
+    isVehicleAvailable(node, vehicleTypeId) {
+        const vehicleType = this.getVehicleTypeConfig(vehicleTypeId);
+        if (!vehicleType) return false;
+        
+        if (vehicleType.usesStandardSystem) {
+            return (node.availableVehicles || 0) > 0;
+        } else {
+            const availabilityProp = vehicleType.availabilityProperty;
+            if (availabilityProp === 'ambulanceAvailable') {
+                return node.ambulanceAvailable || false;
+            } else if (availabilityProp === 'landedHelicopters') {
+                return (node.landedHelicopters || []).length > 0;
+            } else if (availabilityProp === 'availableHelicopters') {
+                return (node.availableHelicopters || 0) > 0;
+            } else if (availabilityProp === 'repairVehicleAvailable') {
+                return (node.availableRepairVehicles || 0) > 0;
+            }
+        }
+        
+        return false;
     }
 }

@@ -72,6 +72,7 @@ export class ParticleSystem {
         this.game = game;
         this.particles = [];
         this.explosionSprites = [];
+        this.droneExplosionSprites = []; // 🆕 NUEVO: Explosiones de drones (2 frames)
         this.floatingTexts = [];
         this.floatingSprites = []; // Sprites flotantes (ej: sniper kill feed)
         this.fallingSprites = []; // Sprites que caen (ej: specops unit)
@@ -85,6 +86,7 @@ export class ParticleSystem {
     update(dt) {
         this.particles = this.particles.filter(p => p.update(dt));
         this.explosionSprites = this.explosionSprites.filter(e => e.update(dt));
+        this.droneExplosionSprites = this.droneExplosionSprites.filter(e => e.update(dt)); // 🆕 NUEVO
         this.floatingTexts = this.floatingTexts.filter(t => t.update(dt));
         this.floatingSprites = this.floatingSprites.filter(s => s.update(dt));
         this.fallingSprites = this.fallingSprites.filter(s => s.update(dt));
@@ -137,9 +139,27 @@ export class ParticleSystem {
         this.explosionSprites.push(new FrameExplosion(this.game, x, y));
     }
     
+    /**
+     * 🆕 NUEVO: Crea una explosión animada específica para drones (2 frames)
+     * @param {number} x - Posición X
+     * @param {number} y - Posición Y
+     */
+    createDroneExplosionSprite(x, y) {
+        this.droneExplosionSprites.push(new DroneFrameExplosion(this.game, x, y));
+    }
+    
+    /**
+     * 🆕 NUEVO: Obtiene todas las explosiones de drones activas
+     * @returns {Array} Array de explosiones de drones
+     */
+    getDroneExplosionSprites() {
+        return this.droneExplosionSprites;
+    }
+    
     clear() {
         this.particles = [];
         this.explosionSprites = [];
+        this.droneExplosionSprites = []; // 🆕 NUEVO
         this.floatingTexts = [];
         this.floatingSprites = [];
         this.fallingSprites = [];
@@ -232,6 +252,45 @@ export class ParticleSystem {
     }
 }
 
+/**
+ * 🆕 NUEVO: Explosión animada específica para drones (2 frames)
+ * Similar a FrameExplosion pero con solo 2 frames y sin crear marca de impacto
+ */
+export class DroneFrameExplosion {
+    constructor(game, x, y) {
+        this.game = game;
+        this.x = x;
+        this.y = y;
+        this.life = 0.4; // Total: 0.2 + 0.2 = 0.4 segundos (más rápida que edificios)
+        this.maxLife = 0.4;
+        this.finished = false;
+    }
+    
+    getCurrentFrame() {
+        const elapsed = this.maxLife - this.life;
+        
+        // Frame 1: 0.0 - 0.2s
+        if (elapsed < 0.2) {
+            return 'drone-explosion-1';
+        }
+        // Frame 2: 0.2 - 0.4s (0.2s de duración)
+        else {
+            return 'drone-explosion-2';
+        }
+    }
+    
+    update(dt) {
+        this.life -= dt;
+        
+        if (this.life <= 0) {
+            this.finished = true;
+            return false;
+        }
+        
+        return this.life > 0;
+    }
+}
+
 export class FrameExplosion {
     constructor(game, x, y) {
         this.game = game;
@@ -274,6 +333,7 @@ export class FrameExplosion {
         return this.life > 0;
     }
 }
+
 export class FloatingSprite {
     constructor(x, y, spriteKey, scale = 0.67) {
         this.x = x;

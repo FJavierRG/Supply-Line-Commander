@@ -19,11 +19,6 @@ export class AssetManager {
             'base-enemy-front-no-ammo': 'assets/sprites/bases/front_enemy_no_ammo.png',
             'base-enemy-fob': 'assets/sprites/bases/fob_enemy.png',
             'base-enemy-hq': 'assets/sprites/bases/hq_enemy.png',
-            // 🆕 NUEVO: Sprites específicos de B_Nation
-            'base-B_Nation-front': 'assets/sprites/bases/B_nation_front.png',
-            'base-B_Nation-front-no-ammo': 'assets/sprites/bases/B_nation_front_no_ammo.png',
-            'base-B_Nation-hq': 'assets/sprites/bases/specops_hq.png',
-            
             // Edificios construibles
             'building-anti-drone': 'assets/sprites/buildings/anti_drone_weapon.png',
             'building-drone-launcher': 'assets/sprites/buildings/drone_launcher.png',
@@ -41,6 +36,14 @@ export class AssetManager {
             'building-aerial-base': 'assets/sprites/buildings/aerial_base.png',
             'building-vigilance-tower': 'assets/sprites/buildings/vigilance_tower.png', // 🆕 Torre de Vigilancia
             'building-train-station': 'assets/sprites/buildings/train_station.png', // 🆕 Estación de Tren
+            'building-physic-studies': 'assets/sprites/buildings/physic_studies.png', // 🆕 Estudios de Física
+            'building-secret-laboratory': 'assets/sprites/buildings/secret_laboratory.png', // 🆕 Laboratorio Secreto
+            'building-training-camp': 'assets/sprites/buildings/training_camp.png', // 🆕 Campo de Entrenamiento
+            'building-deadly-build': 'assets/sprites/buildings/deadlyBuild.png', // 🆕 Construcción Prohibida
+            
+            // 🆕 NUEVO: Sprites del Destructor de mundos
+            'world-destroyer': 'assets/sprites/vehicles/worldDestroyer.png',
+            'end-of-worlds': 'assets/sprites/particles/EndOfWorlds.png',
 
             // Carreteras (4 variantes)
             'road-1': 'assets/sprites/buildings/carretera1.png',
@@ -58,10 +61,14 @@ export class AssetManager {
             'helicopter': 'assets/sprites/vehicles/chopper.png',
             'helicopter2': 'assets/sprites/vehicles/chopper2.png',  // 🆕 NUEVO: Segundo frame para animación
             'ambulance': 'assets/sprites/vehicles/ambulance.png',
+            'repair_truck': 'assets/sprites/vehicles/repair_truck.png', // 🆕 NUEVO: Camión de reparación
             'vehicle-drone': 'assets/sprites/vehicles/drone.png',
             'vehicle-tank-1': 'assets/sprites/vehicles/tank_1.png', // 🆕 NUEVO: Tanque frame 1
             'vehicle-tank-2': 'assets/sprites/vehicles/tank_2.png', // 🆕 NUEVO: Tanque frame 2
             'vehicle-tank-shot': 'assets/sprites/vehicles/tank_shot.png', // 🆕 NUEVO: Tanque disparando
+            'vehicle-light-1': 'assets/sprites/vehicles/light_vehicle_1.png', // 🆕 NUEVO: Artillado ligero
+            'vehicle-light-2': 'assets/sprites/vehicles/light_vehicle_2.png', // 🆕 NUEVO: Artillado ligero disparando
+            'vehicle-artillery': 'assets/sprites/vehicles/artillery.png', // 🆕 NUEVO: Artillería
             'vehicle-sniper_shoot_icon': 'assets/sprites/vehicles/sniper_shoot_icon.png',
             'specops_unit': 'assets/sprites/vehicles/specops_unit.png',
             'train': 'assets/sprites/vehicles/train.png', // 🆕 Tren
@@ -72,18 +79,22 @@ export class AssetManager {
             'ui-currency': 'assets/sprites/ui/currency.png',
             'ui-supplies': 'assets/sprites/ui/supplies.png',
             'ui-wounded': 'assets/sprites/ui/wounded.png',
+            'ui-vigor-up': 'assets/sprites/ui/vigor_up.png',
             'ui-no-supplies': 'assets/sprites/ui/no_supplies.png',
             'ui-sniper-kill': 'assets/sprites/ui/sniper_kill_feed.png',
             'ui-emergency-medic': 'assets/sprites/ui/emergency_medic.png',
             'ui-vehicle-icon': 'assets/sprites/ui/vehicle_resource_icon.png',
             'ui-medic-vehicle-icon': 'assets/sprites/ui/medic_vehicle_resource_icon.png',
             'ui-chopper-icon': 'assets/sprites/ui/chopper_icon.png',
+            'ui-repair-vehicle-icon': 'assets/sprites/ui/vehicle_repair_icon.png', // 🆕 NUEVO: Camión mecánico
+            'repairable': 'assets/sprites/ui/repairable.png', // 🆕 NUEVO: Overlay para edificios rotos
             
             // Sprite del cursor para Fob Sabotaje
             'specops_selector': 'assets/sprites/ui/specops_selector.png',
             'specops_observer': 'assets/sprites/buildings/specops_observer.png', // 🆕 NUEVO: Sprite del comando especial operativo
             'truckassault': 'assets/sprites/buildings/truckassault.png', // 🆕 NUEVO: Sprite del truck assault
             'vehicle_workshop': 'assets/sprites/buildings/vehicle_workshop.png', // 🆕 NUEVO: Sprite del taller de vehículos
+            'camera-drone': 'assets/sprites/vehicles/cameraDrone.png', // 🆕 NUEVO: Sprite del camera drone
             
             // Nueva UI de tienda
             'ui-store-main': 'assets/sprites/ui/UIFrames/store_main_window.png',
@@ -113,6 +124,8 @@ export class AssetManager {
             'explosion-1': 'assets/sprites/particles/explo1.png',
             'explosion-2': 'assets/sprites/particles/explo2.png',
             'explosion-3': 'assets/sprites/particles/explo3.png',
+            'drone-explosion-1': 'assets/sprites/particles/drone_explosion_1.png', // 🆕 NUEVO: Explosión de drones
+            'drone-explosion-2': 'assets/sprites/particles/drone_explosion_2.png', // 🆕 NUEVO: Explosión de drones
             'impact-1': 'assets/sprites/particles/impact_icon.png',
             'impact-2': 'assets/sprites/particles/impact_icon2.png'
         };
@@ -325,35 +338,10 @@ export class AssetManager {
      * @param {boolean} isCritical - Si está crítica (solo front)
      * @param {boolean} hasNoAmmo - Si no tiene munición (solo front)
      * @param {string} team - Equipo del nodo ('ally', 'player2', 'player1')
-     * @param {string} raceId - ID de la raza (opcional, e.g., 'B_Nation')
+     * @param {string} raceId - ID de la raza (opcional, no usado actualmente)
      * @returns {Image|null}
      */
     getBaseSprite(type, isSelected = false, isHovered = false, isCritical = false, hasNoAmmo = false, team = 'ally', raceId = null) {
-        // 🆕 NUEVO: Sprites específicos de raza para B_Nation
-        
-        // HQ de B_Nation
-        if (type === 'hq' && raceId === 'B_Nation') {
-            return this.getSprite('base-B_Nation-hq');
-        }
-        
-        // Fronts de B_Nation
-        if (type === 'front' && raceId === 'B_Nation') {
-            // Front crítico tiene prioridad (B_Nation no tiene crítico específico aún)
-            if (isCritical) {
-                const sprite = this.getSprite('base-front-critical');
-                if (sprite) return sprite;
-            }
-            
-            // Front sin munición para B_Nation
-            if (hasNoAmmo) {
-                const sprite = this.getSprite('base-B_Nation-front-no-ammo');
-                if (sprite) return sprite;
-            }
-            
-            // Front normal de B_Nation
-            return this.getSprite('base-B_Nation-front');
-        }
-        
         // Determinar prefijo según si es aliado o enemigo (team ahora es 'ally' o 'enemy')
         const prefix = team === 'enemy' ? 'base-enemy-' : 'base-';
         

@@ -168,14 +168,19 @@ export class AntiDroneSystem {
         // Crear efecto visual de disparo
         this.createShotEffect(building, drone);
         
-        // Crear partículas de explosión del drone
+        // Crear partículas de explosión del drone (gris)
         this.game.particleSystem.createExplosion(
             drone.x, 
             drone.y, 
             8, // Número de partículas
-            '#ff6b35', // Color naranja para explosión de drone
+            '#808080', // Color gris para explosión de drone
             800 // Duración en ms
         );
+        
+        // 🆕 NUEVO: Crear animación de explosión de dron (2 frames)
+        if (this.game.particleSystem.createDroneExplosionSprite) {
+            this.game.particleSystem.createDroneExplosionSprite(drone.x, drone.y);
+        }
         
         // Crear cráter del dron destruido (50% del tamaño de edificios)
         this.game.particleSystem.createImpactMark(drone.x, drone.y, 'impact_icon', 0.5);

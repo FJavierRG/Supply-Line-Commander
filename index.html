@@ -152,7 +152,6 @@
                                                         font-size: 14px;
                                                     ">
                                                         <option value="A_Nation">Fuerzas Unificadas</option>
-                                                        <!-- 🚧 TEMPORAL: B_Nation deshabilitada para migración a sistema de mazo -->
                                                     </select>
                                                 </div>
                                                 
@@ -232,19 +231,34 @@
 
                     <div class="arsenal-body">
                         <!-- Panel izquierdo: Unidades disponibles -->
-                        <div class="deck-panel available-panel">
-                            <h3 class="panel-title">Unidades Disponibles</h3>
-                            <div class="arsenal-content" id="arsenal-content">
-                                <!-- El contenido se generará dinámicamente -->
+                        <div class="arsenal-left-section">
+                            <div class="deck-panel available-panel">
+                                <h3 class="panel-title">Unidades Disponibles</h3>
+                                <div class="arsenal-content" id="arsenal-content">
+                                    <!-- El contenido se generará dinámicamente -->
+                                </div>
+                            </div>
+                            <div class="arsenal-help-text">
+                                Click izq añadir carta / Click der ver info
                             </div>
                         </div>
 
-                        <!-- Panel derecho: Mazo actual -->
+                        <!-- Panel derecho: Mazo/Banquillo (según selector) -->
                         <div class="deck-panel">
                             <div class="deck-panel-header">
-                                <h3 class="panel-title">Tu Mazo</h3>
-                                <div class="deck-counter">
-                                    <span id="deck-count">0</span> / <span id="deck-limit">815</span> puntos
+                                <h3 class="panel-title" id="deck-panel-title">Tu Mazo</h3>
+                                <div class="deck-header-right">
+                                    <div class="deck-destination-selector">
+                                        <button class="destination-btn active" id="destination-deck-btn" data-destination="deck" title="Añadir al mazo">
+                                            Mazo
+                                        </button>
+                                        <button class="destination-btn" id="destination-bench-btn" data-destination="bench" title="Añadir al banquillo">
+                                            Banquillo
+                                        </button>
+                                    </div>
+                                    <div class="deck-counter">
+                                        <span id="deck-count">0</span> / <span id="deck-limit">815</span> puntos
+                                    </div>
                                 </div>
                             </div>
                             <div class="deck-list" id="deck-list">
@@ -303,6 +317,19 @@
                 </div>
             </div>
 
+            <!-- Modal para vista ampliada de carta -->
+            <div id="card-zoom-overlay" class="overlay hidden">
+                <div class="card-zoom-container">
+                    <button id="card-zoom-close-btn" class="card-zoom-close">✕</button>
+                    <canvas id="card-zoom-canvas" class="card-zoom-canvas" width="600" height="400"></canvas>
+                    <div class="card-zoom-info">
+                        <h3 id="card-zoom-name" class="card-zoom-name"></h3>
+                        <p id="card-zoom-cost" class="card-zoom-cost"></p>
+                        <p id="card-zoom-desc" class="card-zoom-desc"></p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Pantalla de Victoria -->
             <div id="victory-overlay" class="overlay hidden">
                 <div class="main-menu-container">
@@ -338,7 +365,6 @@
                     
                     <div class="menu-actions">
                         <button id="pause-continue-btn" class="menu-btn primary">Continuar</button>
-                        <button id="pause-restart-btn" class="menu-btn primary">Reiniciar misión</button>
                         <button id="pause-options-btn" class="menu-btn secondary">Opciones</button>
                         <button id="pause-exit-btn" class="menu-btn secondary">Volver al menú</button>
                     </div>

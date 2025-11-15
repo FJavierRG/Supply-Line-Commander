@@ -98,93 +98,6 @@ const RACE_AI_CONFIG = {
             frontSupply: 70,      // Reabastecer frentes cuando <70%
             currencyStrategic: 50 // Mínimo currency para decisiones estratégicas
         }
-    },
-    
-    B_Nation: {
-        // === SCORES DE CONSTRUCCIÓN ===
-        buildingScores: {
-            intelRadio: {
-                base: 35,
-                bonuses: {
-                    earlyPhase: 15  // Muy importante temprano
-                }
-            },
-            truckFactory: null, // No disponible para B_Nation
-            fob: null,            // No disponible para B_Nation
-            nuclearPlant: {
-                base: 60,  // Más prioritario para B_Nation
-                bonuses: {
-                    perPlayerPlant: 35,
-                    perMyPlant: -30
-                }
-            },
-            droneLauncher: {
-                base: 70,  // Más prioritario para B_Nation
-                bonuses: {}
-            },
-            antiDrone: {
-                base: 40,  // Más defensivo
-                bonuses: {}
-            },
-            engineerCenter: null, // No disponible para B_Nation
-            campaignHospital: {
-                base: 45,
-                bonuses: {
-                    earlyPhase: 15,
-                    noHospital: 30  // +30 si no tiene hospital
-                }
-            },
-            aerialBase: {
-                base: 50,
-                bonuses: {
-                    earlyPhase: 20,
-                    forHelicopters: 30  // Necesario para recargar helicópteros
-                }
-            }
-        },
-        
-        // === SCORES DE ATAQUES ===
-        attackScores: {
-            drone: {
-                base: 70,  // Más agresivo con drones
-                bonuses: {
-                    hasTargets: 50
-                }
-            },
-            sniper: {
-                base: 25,  // Menos prioritario
-                bonuses: {
-                    base: 15
-                }
-            },
-            fobSabotage: {
-                base: 55,
-                bonuses: {
-                    playerHasFOBs: 20
-                }
-            }
-        },
-        
-        // === INTERVALOS ESPECÍFICOS ===
-        intervals: {
-            strategic: 7.0,   // Más rápido (B_Nation es más agresiva)
-            offensive: 35.0,  // Más frecuente
-            reaction: 0.4     // Reacciona más rápido
-        },
-        
-        // === ESTRATEGIAS ESPECÍFICAS ===
-        strategies: {
-            focusFOBs: false,     // B_Nation NO usa FOBs
-            focusEconomy: true,   // Construye plantas
-            aggressiveness: 0.8   // Muy agresiva
-        },
-        
-        // === UMBRALES ESPECÍFICOS ===
-        thresholds: {
-            fobSupply: null,       // No aplica (no usa FOBs)
-            frontSupply: 60,      // Reabastecer frentes cuando <60% (más agresivo)
-            currencyStrategic: 40  // Actúa con menos currency
-        }
     }
 };
 
@@ -235,7 +148,7 @@ const DIFFICULTY_MULTIPLIERS = {
 
 /**
  * Obtiene la configuración de IA para una raza específica
- * @param {string} raceId - ID de la raza (A_Nation, B_Nation, etc)
+ * @param {string} raceId - ID de la raza (A_Nation, etc)
  * @returns {Object} Configuración de la raza o configuración por defecto
  */
 export function getRaceAIConfig(raceId) {

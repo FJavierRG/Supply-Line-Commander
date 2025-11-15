@@ -151,7 +151,7 @@ export class UIManager {
         }
     }
     
-    showPauseMenu(onContinue, onRestart, onExit) {
+    showPauseMenu(onContinue, onExit) {
         // 🆕 NUEVO: Usar ScreenManager para mostrar pausa
         if (this.game.screenManager) {
             this.game.screenManager.show('PAUSE');
@@ -161,16 +161,11 @@ export class UIManager {
         this.overlayManager.showOverlay('pause-overlay');
         
         const continueBtn = document.getElementById('pause-continue-btn');
-        const restartBtn = document.getElementById('pause-restart-btn');
         const exitBtn = document.getElementById('pause-exit-btn');
         
         if (continueBtn) continueBtn.onclick = () => { 
             this.hidePauseMenu();
             if (onContinue) onContinue(); 
-        };
-        if (restartBtn) restartBtn.onclick = () => { 
-            this.hidePauseMenu();
-            onRestart(); 
         };
         if (exitBtn) exitBtn.onclick = () => { 
             this.hidePauseMenu();

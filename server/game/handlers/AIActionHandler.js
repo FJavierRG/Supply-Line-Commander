@@ -170,58 +170,10 @@ export class AIActionHandler {
     
     /**
      * Calcula posición para construcción (usando mismo sistema que BuildHandler)
-     * 🆕 MEJORADO: Para B_Nation construyendo Base Aérea, usa punto intermedio entre HQ y frentes
      */
     calculateBuildPosition(hq, myNodes, buildingType) {
         const territoryCalculator = this.gameState.territoryCalculator;
         const team = hq.team;
-        
-        // 🆕 NUEVO: Posición óptima para Base Aérea de B_Nation (intermedio entre HQ y frentes)
-        const raceManager = this.gameState.raceManager;
-        const playerRace = raceManager.getPlayerRace(team);
-        
-        if (playerRace === 'B_Nation' && buildingType === 'aerialBase') {
-            const myFronts = myNodes.filter(n => n.type === 'front' && n.active);
-            
-            if (myFronts.length > 0) {
-                // Calcular punto medio entre HQ y frentes
-                // Si hay múltiples frentes, usar el promedio de sus posiciones
-                let avgFrontX = 0;
-                let avgFrontY = 0;
-                
-                for (const front of myFronts) {
-                    avgFrontX += front.x;
-                    avgFrontY += front.y;
-                }
-                
-                avgFrontX /= myFronts.length;
-                avgFrontY /= myFronts.length;
-                
-                // Calcular punto intermedio (50% entre HQ y promedio de frentes)
-                const midpointX = (hq.x + avgFrontX) / 2;
-                const midpointY = (hq.y + avgFrontY) / 2;
-                
-                // Buscar posición válida cerca del punto intermedio
-                // Intentar en círculos concéntricos alrededor del punto medio
-                const searchDistances = [0, 50, 100, 150, 200, 250];
-                const searchAngles = [0, Math.PI/4, Math.PI/2, 3*Math.PI/4, Math.PI, 5*Math.PI/4, 3*Math.PI/2, 7*Math.PI/4];
-                
-                for (const distance of searchDistances) {
-                    for (const angle of searchAngles) {
-                        const x = midpointX + Math.cos(angle) * distance;
-                        const y = midpointY + Math.sin(angle) * distance;
-                        
-                        if (this.buildHandler.isValidLocation(x, y, buildingType) && 
-                            territoryCalculator.isInTeamTerritory(x, team)) {
-                            return { x, y };
-                        }
-                    }
-                }
-                
-                // Si no se encontró posición válida cerca del punto intermedio, continuar con estrategia normal
-                console.warn(`⚠️ IA B_Nation: No se encontró posición válida cerca del punto intermedio, usando estrategia normal`);
-            }
-        }
         
         // Estrategia 1: Círculo alrededor del HQ (múltiples distancias y ángulos)
         const distances = [200, 250, 300, 150, 350, 400];

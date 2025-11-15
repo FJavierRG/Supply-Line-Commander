@@ -446,6 +446,17 @@ export class InputHandler {
             return;
         }
         
+        // 🆕 NUEVO: Modo artillado ligero: lanzar artillado ligero a edificio enemigo (rompe en vez de destruir)
+        if (this.game.buildSystem.lightVehicleMode) {
+            const clickedBase = this.getBaseAt(x, y);
+            if (clickedBase && clickedBase.team !== this.game.myTeam && clickedBase.type !== 'fob' && clickedBase.type !== 'hq') {
+                this.game.buildSystem.launchLightVehicle(clickedBase);
+            } else if (clickedBase && (clickedBase.type === 'fob' || clickedBase.type === 'hq')) {
+                console.log('⚠️ El artillado ligero no puede atacar FOBs ni HQs');
+            }
+            return;
+        }
+        
         // Modo francotirador: disparar a frente enemigo
         if (this.game.buildSystem.sniperMode) {
             const clickedBase = this.getBaseAt(x, y);
@@ -478,6 +489,20 @@ export class InputHandler {
             return;
         }
         
+        // Modo camera drone: desplegar camera drone en territorio enemigo
+        if (this.game.buildSystem.cameraDroneMode) {
+            // El camera drone se despliega en una posición (no requiere click en un nodo específico)
+            this.game.buildSystem.executeCameraDroneDeploy(x, y);
+            return;
+        }
+        
+        // Modo artillería: bombardear área en el mapa
+        if (this.game.buildSystem.artilleryMode) {
+            // La artillería se lanza en una posición (área de efecto)
+            this.game.buildSystem.executeArtilleryLaunch(x, y);
+            return;
+        }
+        
         // Detectar clic en selector de recursos del HQ - VERIFICAR ANTES DE getBaseAt
         // Porque los botones están FUERA del círculo del HQ
         // Tutorial simple: no hay interacción
@@ -490,9 +515,28 @@ export class InputHandler {
         if (hq) {
             const resourceButtonClick = this.checkResourceSelectorClick(x, y, hq);
             if (resourceButtonClick) {
+                // 🆕 NUEVO: Cambio local inmediato para feedback visual
                 hq.setResourceType(resourceButtonClick);
                 this.game.selectedBase = hq;
-                console.log(`🎯 HQ seleccionado: ${resourceButtonClick === 'medical' ? 'Modo MÉDICO 🚑' : 'Modo MUNICIÓN 📦'}`);
+                
+                // 🆕 NUEVO: Enviar cambio al servidor (autoritativo)
+                if (this.game.network && this.game.network.socket && this.game.network.roomId) {
+                    this.game.network.socket.emit('change_node_resource_type', {
+                        roomId: this.game.network.roomId,
+                        nodeId: hq.id,
+                        resourceType: resourceButtonClick
+                    });
+                }
+                
+                // 🆕 NUEVO: Mensaje específico según el tipo de vehículo seleccionado
+                const modeMessages = {
+                    'medical': 'Modo MÉDICO 🚑',
+                    'repair': 'Modo MECÁNICO 🔧',
+                    'ammo': 'Modo MUNICIÓN 📦',
+                    'helicopter': 'Modo AÉREO 🚁'
+                };
+                const modeMessage = modeMessages[resourceButtonClick] || `Modo ${resourceButtonClick.toUpperCase()}`;
+                console.log(`🎯 HQ seleccionado: ${modeMessage}`);
                 return;
             }
         }
@@ -502,9 +546,9 @@ export class InputHandler {
         
         // Prioridad: primero verificar edificios (hospitales), luego bases
         if (clickedBuilding && clickedBuilding.canDispatchMedical) {
-            // 🆕 NUEVO: No permitir seleccionar hospitales disabled
-            if (clickedBuilding.disabled) {
-                console.log('⚠️ Hospital deshabilitado - no se puede usar');
+            // 🆕 NUEVO: No permitir seleccionar hospitales disabled o rotos
+            if (clickedBuilding.disabled || clickedBuilding.broken) {
+                console.log('⚠️ Hospital deshabilitado o roto - no se puede usar');
                 return;
             }
             
@@ -526,9 +570,9 @@ export class InputHandler {
         
         if (clickedBase) {
             if (!this.game.selectedBase) {
-                // 🆕 NUEVO: No permitir seleccionar nodos disabled
-                if (clickedBase.disabled) {
-                    console.log('⚠️ Nodo deshabilitado - no se puede usar');
+                // 🆕 NUEVO: No permitir seleccionar nodos disabled o rotos
+                if (clickedBase.disabled || clickedBase.broken) {
+                    console.log('⚠️ Nodo deshabilitado o roto - no se puede usar');
                     return;
                 }
                 
@@ -538,12 +582,9 @@ export class InputHandler {
                     return;
                 }
                 
-                // No permitir seleccionar frentes (excepto si son de B_Nation) ni nodos enemigos
+                // No permitir seleccionar frentes ni nodos enemigos
                 if (clickedBase.type === 'front') {
-                    // Solo permitir seleccionar frentes si son de B_Nation y tienen helicópteros disponibles
-                    if (this.game.selectedRace !== 'B_Nation' || !clickedBase.hasAvailableHelicopter()) {
-                        return;
-                    }
+                    return;
                 } else if (clickedBase.team !== this.game.myTeam) {
                     return;
                 }
@@ -553,47 +594,47 @@ export class InputHandler {
                     return;
                 }
                 
-                // Intentar seleccionar una base
-                // Para HQ en modo médico, verificar ambulancia; sino verificar vehículos normales
-                // Para frentes con helicópteros, verificar helicópteros disponibles
-                let hasVehicle = false;
-                if (clickedBase.type === 'hq' && clickedBase.selectedResourceType === 'medical') {
-                    hasVehicle = clickedBase.hasAmbulanceAvailable();
-                } else if (clickedBase.type === 'hq' && this.game.selectedRace === 'B_Nation' && clickedBase.hasHelicopters) {
-                    // HQ de B_Nation: verificar helicópteros disponibles
-                    hasVehicle = clickedBase.hasAvailableHelicopter();
-                    console.log(`🚁 DEBUG HQ: hasHelicopters=${clickedBase.hasHelicopters}, availableHelicopters=${clickedBase.availableHelicopters}, hasVehicle=${hasVehicle}`);
-                } else if (clickedBase.type === 'front' && this.game.selectedRace === 'B_Nation') {
-                    hasVehicle = clickedBase.hasAvailableHelicopter();
-                } else {
-                    hasVehicle = clickedBase.hasAvailableVehicle();
+                // 🆕 NUEVO: Permitir seleccionar HQ y FOB siempre, independientemente de vehículos disponibles
+                // Los vehículos se verifican al intentar enviar convoy, no al seleccionar
+                this.game.selectedBase = clickedBase;
+                
+                // Reproducir sonido específico del HQ
+                if (clickedBase.type === 'hq') {
+                    this.game.audio.playHQSound();
                 }
                 
-                if ((clickedBase.maxVehicles > 0 || (clickedBase.type === 'front' && this.game.selectedRace === 'B_Nation')) && !hasVehicle) {
-                    // No tiene vehículos: mostrar feedback visual
-                    this.showNoVehiclesFeedback(clickedBase);
-                } else {
-                    // Tiene vehículos: seleccionar
-                    this.game.selectedBase = clickedBase;
-                    
-                    // Reproducir sonido específico del HQ
-                    if (clickedBase.type === 'hq') {
-                        this.game.audio.playHQSound();
+                // Mostrar feedback visual si no hay vehículos del tipo seleccionado (pero no deseleccionar)
+                if (clickedBase.type === 'hq' || clickedBase.type === 'fob') {
+                    // Verificar vehículos del tipo seleccionado
+                    let hasVehicle = false;
+                    if (clickedBase.type === 'hq' && clickedBase.selectedResourceType) {
+                        // Usar el sistema modular de vehículos
+                        hasVehicle = this.game.isVehicleAvailable(clickedBase, clickedBase.selectedResourceType);
                     } else {
+                        hasVehicle = clickedBase.hasAvailableVehicle();
+                    }
+                    
+                    if (!hasVehicle) {
+                        // Mostrar feedback visual pero mantener seleccionado
+                        this.showNoVehiclesFeedback(clickedBase);
                     }
                 }
             } else if (this.game.selectedBase === clickedBase) {
                 this.game.selectedBase = null;
             } else {
-                // 🆕 NUEVO: No permitir enviar a nodos disabled
-                if (clickedBase.disabled) {
-                    console.log('⚠️ No se puede enviar convoy: nodo destino deshabilitado');
+                // 🆕 NUEVO: Detectar si es un camión de reparación
+                const isRepairVehicle = this.game.selectedBase.type === 'hq' && 
+                                       this.game.selectedBase.selectedResourceType === 'repair';
+                
+                // 🆕 NUEVO: No permitir enviar a nodos disabled o rotos (EXCEPTO si es camión de reparación y el destino está roto)
+                if (clickedBase.disabled || (clickedBase.broken && !isRepairVehicle)) {
+                    console.log('⚠️ No se puede enviar convoy: nodo destino deshabilitado o roto');
                     return;
                 }
                 
-                // 🆕 NUEVO: No permitir enviar desde nodos disabled
-                if (this.game.selectedBase.disabled) {
-                    console.log('⚠️ No se puede enviar convoy: nodo origen deshabilitado');
+                // 🆕 NUEVO: No permitir enviar desde nodos disabled o rotos
+                if (this.game.selectedBase.disabled || this.game.selectedBase.broken) {
+                    console.log('⚠️ No se puede enviar convoy: nodo origen deshabilitado o roto');
                     return;
                 }
                 
@@ -652,6 +693,39 @@ export class InputHandler {
                         }
                     } else {
                     }
+                }
+                // HQ EN MODO MECÁNICO: Enviar camión de reparación
+                else if (this.game.selectedBase.type === 'hq' && 
+                    this.game.selectedBase.selectedResourceType === 'repair') {
+                    // MODO MECÁNICO: Solo enviar a edificios rotos (no FOBs ni HQs)
+                    if (clickedBase.broken && clickedBase.team === this.game.myTeam) {
+                        // Validar que no sea FOB ni HQ
+                        if (clickedBase.type === 'fob' || clickedBase.type === 'hq' || clickedBase.type === 'front') {
+                            console.log('⚠️ No se puede reparar FOBs, HQs ni Frentes');
+                            return;
+                        }
+                        
+                        // Verificar que haya camión de reparación disponible
+                        const hasRepairVehicle = this.game.isVehicleAvailable(this.game.selectedBase, 'repair');
+                        if (hasRepairVehicle) {
+                            // Usar createRoute normal - el servidor detectará que es repair y lo manejará correctamente
+                            this.game.convoyManager.createRoute(this.game.selectedBase, clickedBase);
+                            this.game.audio.playSound('dispatch');
+                            
+                            // Deseleccionar solo si NO se mantiene Shift
+                            if (!shiftPressed) {
+                                this.game.selectedBase = null;
+                            }
+                        } else {
+                            console.log('⚠️ No hay camiones de reparación disponibles');
+                        }
+                    } else {
+                        if (!clickedBase.broken) {
+                            console.log('⚠️ Solo se puede enviar camión de reparación a edificios rotos');
+                        } else {
+                            console.log('⚠️ No puedes reparar edificios enemigos');
+                        }
+                    }
                 } else {
                     // Tutorial simple: no hay interacción
                     if (this.game.state === 'tutorial') {
@@ -676,30 +750,50 @@ export class InputHandler {
      * Detecta click en botones del selector de recursos del HQ
      */
     checkResourceSelectorClick(x, y, base) {
-        if (base.type !== 'hq') return null;
+        if (!this.game) return null;
         
-        const buttonSize = 35; // +15% más grande (30 * 1.15 = 35)
+        // 🆕 NUEVO: Obtener tipos de vehículos habilitados desde la configuración del servidor
+        const enabledTypes = this.game.getEnabledVehicleTypes(base.type);
+        if (enabledTypes.length === 0) return null;
+        
+        const buttonSize = 40; // +15% más grande (35 * 1.15 = 40.25 ≈ 40)
         const buttonRadius = buttonSize / 2;
-        const spacing = 10;
-        const baseY = base.y - base.radius - 75; // Subido 15% más (de -65 a -75)
         const hitboxPadding = 5; // Padding extra para hitbox circular
         
-        // Botón munición (CIRCULAR)
-        const ammoCenterX = base.x - buttonRadius - spacing/2;
-        const ammoCenterY = baseY + buttonRadius;
-        const ammoDistance = Math.hypot(x - ammoCenterX, y - ammoCenterY);
+        // 🆕 NUEVO: Calcular posición de los botones en un arco alrededor del HQ (igual que en renderResourceSelector)
+        const ringRadius = base.radius * 1.6; // Radio del anillo de selección
+        const buttonDistance = ringRadius + 35; // Distancia del centro del HQ al centro de los botones
         
-        if (ammoDistance < buttonRadius + hitboxPadding) {
-            return 'ammo';
-        }
+        // Ángulo inicial: comenzar desde arriba-izquierda (aproximadamente -135 grados desde arriba)
+        const startAngle = -Math.PI * 0.75; // -135 grados (arriba-izquierda)
+        const endAngle = -Math.PI * 0.25; // -45 grados (arriba-derecha)
+        const angleSpan = endAngle - startAngle; // Rango total del arco
         
-        // Botón médico (CIRCULAR)
-        const medCenterX = base.x + buttonRadius + spacing/2;
-        const medCenterY = baseY + buttonRadius;
-        const medDistance = Math.hypot(x - medCenterX, y - medCenterY);
+        // 🆕 NUEVO: Calcular espaciado dinámicamente (igual que en renderResourceSelector)
+        // Si hay 1 botón, se centra en el medio del arco
+        // Si hay más, se distribuyen uniformemente
+        const angleStep = enabledTypes.length > 1 ? angleSpan / (enabledTypes.length - 1) : 0;
+        const centerAngle = enabledTypes.length === 1 ? (startAngle + endAngle) / 2 : null;
         
-        if (medDistance < buttonRadius + hitboxPadding) {
-            return 'medical';
+        // 🆕 NUEVO: Verificar clicks en cada botón dinámicamente
+        for (let index = 0; index < enabledTypes.length; index++) {
+            const vehicleTypeId = enabledTypes[index];
+            
+            // Calcular ángulo para este botón (igual que en renderResourceSelector)
+            // Si solo hay 1 botón, centrarlo en el medio del arco
+            // Si hay más, distribuirlos uniformemente
+            const angle = centerAngle !== null ? centerAngle : (startAngle + (angleStep * index));
+            
+            // Calcular posición en el círculo (igual que en renderResourceSelector)
+            const centerX = base.x + Math.cos(angle) * buttonDistance;
+            const centerY = base.y + Math.sin(angle) * buttonDistance;
+            
+            // Verificar si el click está dentro del botón
+            const distance = Math.hypot(x - centerX, y - centerY);
+            
+            if (distance < buttonRadius + hitboxPadding) {
+                return vehicleTypeId;
+            }
         }
         
         return null;
@@ -1158,6 +1252,21 @@ export class InputHandler {
                 return 10;
             }
             
+            // 🆕 NUEVO: Modo artillado ligero: puede atacar edificios pero NO FOBs ni HQs (igual que tanque)
+            if (buildSystem.lightVehicleMode) {
+                // Obtener validTargets desde la configuración del servidor
+                const validTargets = this.game?.serverBuildingConfig?.actions?.lightVehicleLaunch?.validTargets || 
+                                     ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
+                if (validTargets.includes(node.type)) {
+                    // Puede atacar este tipo, pero no FOBs ni Fronts
+                    return 100;
+                }
+                if (node.type === 'fob' || node.type === 'front') {
+                    return 0; // No puede atacar estos
+                }
+                return 10;
+            }
+            
             // Modo sniper: puede atacar Fronts Y Comandos enemigos
             if (buildSystem.sniperMode) {
                 if (node.type === 'front') return 100;
@@ -1316,6 +1425,11 @@ export class InputHandler {
                 console.log('🚫 Modo tanque cancelado (click derecho)');
                 return;
             }
+            if (this.game.buildSystem.lightVehicleMode) {
+                this.game.buildSystem.exitLightVehicleMode();
+                console.log('🚫 Modo artillado ligero cancelado (click derecho)');
+                return;
+            }
             if (this.game.buildSystem.sniperMode) {
                 this.game.buildSystem.exitSniperMode();
                 console.log('🚫 Modo francotirador cancelado (click derecho)');
@@ -1324,6 +1438,26 @@ export class InputHandler {
             if (this.game.buildSystem.fobSabotageMode) {
                 this.game.buildSystem.exitFobSabotageMode();
                 console.log('🚫 Modo sabotaje FOB cancelado (click derecho)');
+                return;
+            }
+            if (this.game.buildSystem.commandoMode) {
+                this.game.buildSystem.exitCommandoMode();
+                console.log('🚫 Modo comando cancelado (click derecho)');
+                return;
+            }
+            if (this.game.buildSystem.truckAssaultMode) {
+                this.game.buildSystem.exitTruckAssaultMode();
+                console.log('🚫 Modo truck assault cancelado (click derecho)');
+                return;
+            }
+            if (this.game.buildSystem.cameraDroneMode) {
+                this.game.buildSystem.exitCameraDroneMode();
+                console.log('🚫 Modo camera drone cancelado (click derecho)');
+                return;
+            }
+            if (this.game.buildSystem.artilleryMode) {
+                this.game.buildSystem.exitArtilleryMode();
+                console.log('🚫 Modo artillería cancelado (click derecho)');
                 return;
             }
         }

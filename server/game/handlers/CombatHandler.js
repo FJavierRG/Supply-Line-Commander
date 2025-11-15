@@ -368,6 +368,84 @@ export class CombatHandler {
     }
     
     /**
+     * 🆕 NUEVO: Maneja solicitud de artillado ligero
+     */
+    handleLightVehicleLaunch(playerTeam, targetId) {
+        const targetNode = this.gameState.nodes.find(n => n.id === targetId);
+        
+        if (!targetNode) {
+            return { success: false, reason: 'Objetivo no encontrado' };
+        }
+        
+        // Validar que sea un edificio enemigo válido (NO FOBs ni HQs)
+        const validTargetTypes = SERVER_NODE_CONFIG.actions.lightVehicleLaunch.validTargets;
+        
+        console.log(`🚛 Validando objetivo artillado ligero: ${targetNode.type}, team: ${targetNode.team}, playerTeam: ${playerTeam}`);
+        console.log(`🚛 ValidTargets disponibles:`, validTargetTypes);
+        console.log(`🚛 Es válido: ${validTargetTypes.includes(targetNode.type)}, Es enemigo: ${targetNode.team !== playerTeam}`);
+        
+        // Validar que sea un edificio enemigo válido (NO aliados)
+        if (!validTargetTypes.includes(targetNode.type) || targetNode.team === playerTeam) {
+            return { success: false, reason: 'Objetivo no válido para artillado ligero' };
+        }
+        
+        // Validar que el objetivo esté construido (no atacar edificios en construcción)
+        if (targetNode.isConstructing || !targetNode.constructed) {
+            return { success: false, reason: 'No puedes atacar edificios en construcción' };
+        }
+        
+        // 🆕 NUEVO: No atacar edificios ya rotos (no tiene sentido romperlos dos veces)
+        if (targetNode.broken) {
+            return { success: false, reason: 'El edificio ya está roto' };
+        }
+        
+        // ✅ Costo del artillado ligero (lee de costs - fuente única de verdad)
+        const lightVehicleCost = SERVER_NODE_CONFIG.costs.lightVehicle;
+        
+        // Verificar currency
+        if (this.gameState.currency[playerTeam] < lightVehicleCost) {
+            return { success: false, reason: 'Currency insuficiente' };
+        }
+        
+        // Descontar currency
+        this.gameState.currency[playerTeam] -= lightVehicleCost;
+        
+        // Lanzar artillado ligero desde el extremo del mapa
+        const lightVehicle = this.gameState.lightVehicleSystem.launchLightVehicle(playerTeam, targetNode);
+        
+        console.log(`🚛 Artillado ligero ${lightVehicle.id} lanzado por ${playerTeam} → ${targetNode.type} ${targetId}`);
+
+        return { success: true, lightVehicle, targetId };
+    }
+    
+    /**
+     * 🆕 NUEVO: Maneja lanzamiento de artillería en un área
+     * @param {string} playerTeam - Equipo del jugador
+     * @param {number} x - Coordenada X del centro del área de efecto
+     * @param {number} y - Coordenada Y del centro del área de efecto
+     * @returns {Object} Resultado de la operación
+     */
+    handleArtilleryLaunch(playerTeam, x, y) {
+        // ✅ Costo de la artillería (lee de costs - fuente única de verdad)
+        const artilleryCost = SERVER_NODE_CONFIG.costs.artillery;
+        
+        // Verificar currency
+        if (this.gameState.currency[playerTeam] < artilleryCost) {
+            return { success: false, reason: 'Currency insuficiente' };
+        }
+        
+        // Descontar currency
+        this.gameState.currency[playerTeam] -= artilleryCost;
+        
+        // Lanzar bombardeo de artillería
+        const artillery = this.gameState.artillerySystem.launchArtillery(playerTeam, x, y);
+        
+        console.log(`💣 Artillería ${artillery.id} lanzada por ${playerTeam} en (${x}, ${y})`);
+        
+        return { success: true, artillery, x, y };
+    }
+    
+    /**
      * Maneja despliegue de comando especial operativo
      * 🆕 NUEVO: Crea un nodo especial que deshabilita edificios enemigos dentro de su área
      */
@@ -642,6 +720,181 @@ export class CombatHandler {
             
             console.log(`   ✅ Efecto aplicado a ${building.type}(${building.id.substring(0, 8)}): disabled=${building.disabled}, efectos=${building.effects.length}, commandoResidual=${building.effects.some(e => e.type === 'commandoResidual')}`);
         }
+    }
+    
+    /**
+     * 🆕 NUEVO: Maneja la activación del Destructor de mundos
+     * @param {string} playerTeam - Equipo del jugador que activa el destructor
+     * @returns {Object} Resultado de la operación
+     */
+    handleWorldDestroyer(playerTeam) {
+        // ✅ Costo del destructor (lee de costs - fuente única de verdad)
+        const worldDestroyerCost = SERVER_NODE_CONFIG.costs.worldDestroyer;
+        
+        // Verificar currency
+        if (this.gameState.currency[playerTeam] < worldDestroyerCost) {
+            return { success: false, reason: 'Currency insuficiente' };
+        }
+        
+        // Verificar que el jugador tenga Construcción Prohibida construida
+        const hasDeadlyBuild = this.gameState.nodes.some(n => 
+            n.type === 'deadlyBuild' && 
+            n.team === playerTeam && 
+            n.constructed && 
+            !n.isAbandoning &&
+            n.active
+        );
+        
+        if (!hasDeadlyBuild) {
+            return { success: false, reason: 'Requiere tener una Construcción Prohibida construida' };
+        }
+        
+        // Verificar si ya hay un destructor activo
+        if (this.gameState.worldDestroyerActive) {
+            return { success: false, reason: 'El Destructor de mundos ya está activo' };
+        }
+        
+        // Descontar currency
+        this.gameState.currency[playerTeam] -= worldDestroyerCost;
+        
+        // Iniciar el destructor
+        const worldDestroyerConfig = SERVER_NODE_CONFIG.gameplay.worldDestroyer;
+        this.gameState.worldDestroyerActive = true;
+        this.gameState.worldDestroyerStartTime = this.gameState.gameTime;
+        this.gameState.worldDestroyerPlayerTeam = playerTeam;
+        this.gameState.worldDestroyerCountdownDuration = worldDestroyerConfig.countdownDuration;
+        
+        console.log(`☠️ Destructor de mundos activado por ${playerTeam} - se activará en ${worldDestroyerConfig.countdownDuration} segundos`);
+        
+        return { 
+            success: true, 
+            playerTeam,
+            startTime: this.gameState.worldDestroyerStartTime,
+            countdownDuration: worldDestroyerConfig.countdownDuration
+        };
+    }
+    
+    /**
+     * 🆕 NUEVO: Actualiza el estado del Destructor de mundos y ejecuta efectos
+     * Debe llamarse cada tick desde GameStateManager
+     * @param {number} dt - Delta time en segundos
+     * @returns {Object|null} Evento de activación si se ejecutó, null si no
+     */
+    updateWorldDestroyer(dt) {
+        if (!this.gameState.worldDestroyerActive) {
+            return null;
+        }
+        
+        const worldDestroyerConfig = SERVER_NODE_CONFIG.gameplay.worldDestroyer;
+        const elapsed = this.gameState.gameTime - this.gameState.worldDestroyerStartTime;
+        
+        // Si aún no ha pasado el tiempo de countdown, no hacer nada
+        if (elapsed < worldDestroyerConfig.countdownDuration) {
+            return null;
+        }
+        
+        // Si ya se ejecutó el efecto, no hacer nada más
+        if (this.gameState.worldDestroyerExecuted) {
+            return null;
+        }
+        
+        // EJECUTAR EFECTO
+        console.log(`☠️ EJECUTANDO Destructor de mundos - destruyendo edificios y vaciando suministros...`);
+        
+        const playerTeam = this.gameState.worldDestroyerPlayerTeam;
+        const enemyTeam = playerTeam === 'player1' ? 'player2' : 'player1';
+        
+        const destroyedBuildings = [];
+        const emptiedFOBs = [];
+        const emptiedFronts = [];
+        
+        // 1. Contar FOBs enemigos para decidir si destruirlos
+        const enemyFOBs = this.gameState.nodes.filter(n => 
+            n.team === enemyTeam && 
+            n.type === 'fob' && 
+            n.constructed && 
+            n.active && 
+            !n.isAbandoning
+        );
+        const shouldDestroyEnemyFOBs = enemyFOBs.length > 2;
+        
+        // 2. Destruir todos los edificios enemigos (excepto HQ y FOBs, a menos que haya >2 FOBs)
+        for (const node of this.gameState.nodes) {
+            if (node.team === enemyTeam && 
+                node.constructed && 
+                node.active && 
+                !node.isAbandoning &&
+                node.type !== 'hq' && 
+                node.type !== 'front') {
+                
+                // Si es un FOB enemigo, solo destruirlo si hay más de 2
+                if (node.type === 'fob' && !shouldDestroyEnemyFOBs) {
+                    continue; // Saltar este FOB
+                }
+                
+                node.active = false;
+                node.destroyed = true;
+                destroyedBuildings.push({
+                    id: node.id,
+                    type: node.type,
+                    x: node.x,
+                    y: node.y
+                });
+            }
+        }
+        
+        // 3. Vaciar TODOS los FOBs (aliados y enemigos) que no fueron destruidos
+        for (const node of this.gameState.nodes) {
+            if (node.type === 'fob' && 
+                node.constructed && 
+                node.active && 
+                !node.isAbandoning) {
+                
+                const oldSupplies = node.supplies || 0;
+                node.supplies = 0;
+                emptiedFOBs.push({
+                    id: node.id,
+                    team: node.team,
+                    x: node.x,
+                    y: node.y,
+                    oldSupplies
+                });
+            }
+        }
+        
+        // 4. Vaciar todos los nodos de Frente (enemigos y aliados)
+        for (const node of this.gameState.nodes) {
+            if (node.type === 'front' && 
+                node.constructed && 
+                node.active && 
+                !node.isAbandoning) {
+                
+                const oldSupplies = node.supplies || 0;
+                node.supplies = 0;
+                emptiedFronts.push({
+                    id: node.id,
+                    team: node.team,
+                    x: node.x,
+                    y: node.y,
+                    oldSupplies
+                });
+            }
+        }
+        
+        // Marcar como ejecutado
+        this.gameState.worldDestroyerExecuted = true;
+        
+        console.log(`☠️ Destructor de mundos ejecutado: ${destroyedBuildings.length} edificios destruidos (incluye ${shouldDestroyEnemyFOBs ? enemyFOBs.length : 0} FOBs enemigos), ${emptiedFOBs.length} FOBs vaciados, ${emptiedFronts.length} Frentes vaciados`);
+        
+        return {
+            type: 'worldDestroyer',
+            playerTeam,
+            destroyedBuildings,
+            emptiedFOBs,
+            emptiedFronts,
+            worldWidth: this.gameState.worldWidth,
+            worldHeight: this.gameState.worldHeight
+        };
     }
 }
 

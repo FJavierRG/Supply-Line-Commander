@@ -176,11 +176,21 @@ export class NetworkManager {
             }
         });
         
-        // 🎯 NUEVO: Recibir configuración del juego del servidor (incluyendo límite de mazo)
+        // 🎯 NUEVO: Recibir configuración del juego del servidor (incluyendo límite de mazo y mazo por defecto)
         this.socket.on('game_config', (config) => {
             console.log('⚙️ Configuración del juego recibida:', config);
-            if (config.deckPointLimit && this.game && this.game.deckManager) {
-                this.game.deckManager.setPointLimit(config.deckPointLimit);
+            if (this.game && this.game.deckManager) {
+                if (config.deckPointLimit) {
+                    this.game.deckManager.setPointLimit(config.deckPointLimit);
+                }
+                // 🆕 NUEVO: Establecer límite del banquillo
+                if (config.benchPointLimit) {
+                    this.game.deckManager.setBenchPointLimit(config.benchPointLimit);
+                }
+                // 🆕 NUEVO: Establecer mazo por defecto desde el servidor
+                if (config.defaultDeck) {
+                    this.game.deckManager.setDefaultDeckFromServer(config.defaultDeck);
+                }
             }
         });
         
@@ -281,6 +291,49 @@ export class NetworkManager {
         this.socket.on('race_selection_updated', (data) => {
             // Actualizar la UI del lobby con los nuevos datos
             this.updateLobbyUI(data);
+        });
+        
+        // 🆕 NUEVO: Eventos de permutación de cartas
+        this.socket.on('swap_card_success', (data) => {
+            // Actualizar el mazo local con el resultado de la permutación
+            if (this.game && this.game.deckManager) {
+                // Obtener el mazo actual del jugador
+                let currentDeck = this.game.deckManager.getSelectedDeck();
+                if (!currentDeck) {
+                    currentDeck = this.game.deckManager.getDefaultDeck();
+                }
+                
+                if (currentDeck) {
+                    // Actualizar unidades y banquillo
+                    currentDeck.units = data.newDeck;
+                    currentDeck.bench = data.newBench;
+                    
+                    // Guardar cambios en localStorage
+                    if (currentDeck.id !== 'default') {
+                        this.game.deckManager.updateDeck(currentDeck.id, {
+                            units: data.newDeck,
+                            bench: data.newBench
+                        });
+                    }
+                    
+                    // Actualizar la tienda para reflejar los cambios
+                    if (this.game.storeUI) {
+                        this.game.storeUI.setDeck(currentDeck.id);
+                        // Salir del modo permutación si está activo
+                        if (this.game.storeUI.swapMode) {
+                            this.game.storeUI.exitSwapMode();
+                        }
+                    }
+                }
+            }
+        });
+        
+        this.socket.on('swap_card_error', (data) => {
+            console.error('Error al permutar carta:', data.message);
+            // Mostrar notificación de error al usuario
+            if (this.game && this.game.arsenalManager) {
+                this.game.arsenalManager.showNotification(data.message || 'Error al permutar carta', 'error');
+            }
         });
         
         // === EVENTOS DE JUEGO ===
@@ -619,6 +672,25 @@ export class NetworkManager {
                 }
             }
             
+            // 🆕 NUEVO: Si se eliminó un camera drone, crear animación de explosión
+            if (data.eliminated && data.targetType === 'cameraDrone') {
+                // Crear partículas de explosión (gris)
+                this.game.particleSystem.createExplosion(
+                    feedX, 
+                    feedY, 
+                    '#808080', // Gris
+                    8 // Menos partículas que explosión de edificio
+                );
+                
+                // Crear animación de explosión de dron (2 frames)
+                if (this.game.particleSystem.createDroneExplosionSprite) {
+                    this.game.particleSystem.createDroneExplosionSprite(feedX, feedY);
+                }
+                
+                // Crear cráter pequeño del dron destruido (50% del tamaño)
+                this.game.particleSystem.createImpactMark(feedX, feedY, 'impact_icon', 0.5);
+            }
+            
             // Mostrar sprite flotante de kill feed sobre el objetivo
             this.game.particleSystem.createFloatingSprite(
                 feedX, 
@@ -661,6 +733,89 @@ export class NetworkManager {
             // Opcional: mostrar mensaje visual al usuario
             if (this.game && this.game.showNotification) {
                 this.game.showNotification(data.reason || 'No se pudo realizar el sabotaje', 'error');
+            }
+        });
+        
+        /**
+         * 🆕 NUEVO: Manejo de activación del Destructor de mundos
+         */
+        this.socket.on('world_destroyer_activated', (data) => {
+            console.log(`☠️ Destructor de mundos activado por ${data.playerTeam}`);
+            
+            // Reproducir sonido de alarma para ambos jugadores
+            if (this.game && this.game.audio && this.game.audio.playAlarmSound) {
+                this.game.audio.playAlarmSound();
+            }
+            
+            // Iniciar efectos visuales del countdown
+            if (this.game && this.game.renderer) {
+                this.game.renderer.startWorldDestroyerEffect(data.startTime, data.countdownDuration);
+            }
+        });
+        
+        this.socket.on('world_destroyer_failed', (data) => {
+            console.warn(`⚠️ Destructor de mundos fallido: ${data.reason || 'Razón desconocida'}`);
+            // Opcional: mostrar mensaje visual al usuario
+            if (this.game && this.game.showNotification) {
+                this.game.showNotification(data.reason || 'No se pudo activar el Destructor de mundos', 'error');
+            }
+        });
+        
+        /**
+         * 🆕 NUEVO: Manejo de ejecución del Destructor de mundos
+         */
+        this.socket.on('world_destroyer_executed', (data) => {
+            console.log(`☠️ Destructor de mundos ejecutado - ${data.destroyedBuildings.length} edificios destruidos`);
+            
+            // Reproducir sonido de explosión nuclear para ambos jugadores (cuando se muestra el flash blanco)
+            if (this.game && this.game.audio && this.game.audio.playNuclearExplosionSound) {
+                this.game.audio.playNuclearExplosionSound();
+            }
+            
+            // Iniciar pantallazo blanco
+            if (this.game && this.game.renderer) {
+                this.game.renderer.executeWorldDestroyerEffect(data);
+            }
+            
+            // Aplicar efectos del servidor: destruir edificios, vaciar FOBs y Frentes
+            // Los nodos ya deberían estar actualizados por el estado del servidor, pero aplicamos efectos visuales
+            // ✅ FIX: Usar el mismo sistema de efectos visuales que drones/tanques para consistencia
+            if (data.destroyedBuildings) {
+                data.destroyedBuildings.forEach((building, index) => {
+                    // ✅ FIX: Usar coordenadas del servidor directamente (más confiable que buscar el nodo)
+                    // Los nodos pueden haber sido eliminados del estado, pero las coordenadas del servidor son válidas
+                    const x = building.x;
+                    const y = building.y;
+                    
+                    // Reproducir sonido de explosión (solo una vez por edificio, no todos a la vez)
+                    // Nota: Esto podría ser abrumador si hay muchos edificios, considerar un sonido especial
+                    if (this.game.audio && this.game.audio.playExplosionSound) {
+                        // Usar setTimeout para espaciar los sonidos y evitar sobrecarga
+                        setTimeout(() => {
+                            this.game.audio.playExplosionSound();
+                        }, index * 50 + Math.random() * 100); // Espaciar entre 0-150ms por edificio
+                    }
+                    
+                    // ✅ Usar el mismo sistema de explosiones que drones/tanques
+                    // 1. Partículas de explosión (mismo color que drones/tanques para consistencia)
+                    this.game.particleSystem.createExplosion(
+                        x, 
+                        y, 
+                        '#808080', // Mismo color gris que drones/tanques
+                        40 // Mismo número de partículas que impactos normales
+                    );
+                    
+                    // 2. Sprite de explosión del edificio (mismo que drones/tanques)
+                    if (this.game.particleSystem.createExplosionSprite) {
+                        this.game.particleSystem.createExplosionSprite(x, y);
+                    }
+                    
+                    // 3. ✅ FIX: Marca de impacto permanente (mismo que drones/tanques)
+                    // Asegurarse de que se cree incluso si el nodo ya no existe
+                    this.game.particleSystem.createImpactMark(x, y, 'impact_icon', 1.2);
+                    
+                    console.log(`💥 Destructor: Cráter creado en (${x}, ${y}) para ${building.type} ${building.id}`);
+                });
             }
         });
         
@@ -727,6 +882,57 @@ export class NetworkManager {
          */
         this.socket.on('commando_deploy_failed', (data) => {
             // TODO: Mostrar mensaje visual al usuario cuando se implemente showMessage en UIManager
+        });
+        
+        /**
+         * 🆕 NUEVO: Manejo de despliegue de camera drone
+         */
+        this.socket.on('camera_drone_deployed', (data) => {
+            // Verificar que no exista ya (evitar duplicados)
+            const exists = this.game.nodes.find(n => n.id === data.cameraDroneId);
+            if (exists) {
+                console.warn(`⚠️ Nodo ${data.cameraDroneId} ya existe, ignorando camera_drone_deployed`);
+                return;
+            }
+            
+            // Crear el nodo del camera drone en el cliente
+            const config = getNodeConfig('cameraDrone');
+            const newNode = new VisualNode(
+                data.x,
+                data.y,
+                'cameraDrone',
+                {
+                    ...config,
+                    team: data.team,
+                    isConstructed: data.deployed || false
+                },
+                this.game
+            );
+            
+            if (newNode) {
+                // Sobrescribir ID y estado desde el servidor
+                newNode.id = data.cameraDroneId;
+                newNode.constructed = data.deployed || false;
+                newNode.isConstructing = false;
+                newNode.active = true;
+                newNode.detectionRadius = data.detectionRadius || 200;
+                newNode.isCameraDrone = true;
+                newNode.deployed = data.deployed || false;
+                newNode.targetX = data.targetX;
+                newNode.targetY = data.targetY;
+                
+                // 🆕 NUEVO: Inicializar propiedades de interpolación para multijugador (solo si está volando)
+                if (newNode.updateServerPosition && !data.deployed) {
+                    newNode.updateServerPosition(data.x, data.y);
+                } else {
+                    // Si ya está desplegado, usar posición directa
+                    newNode.x = data.x;
+                    newNode.y = data.y;
+                }
+                
+                this.game.nodes.push(newNode);
+                console.log(`📹 Camera drone desplegado: ${data.cameraDroneId} en (${data.x}, ${data.y})`);
+            }
         });
         
         /**
@@ -811,7 +1017,11 @@ export class NetworkManager {
             // Crear explosión grande con partículas grises
             this.game.particleSystem.createExplosion(impact.x, impact.y, '#808080', 40);
             
-            // Añadir sprite de explosión animado
+            // 🆕 NUEVO: Crear animación de explosión de dron (2 frames) cuando impacta
+            // La explosión del edificio se muestra después (explosionSprite)
+            this.game.particleSystem.createDroneExplosionSprite(impact.x, impact.y);
+            
+            // Añadir sprite de explosión animado del edificio (después de la explosión del dron)
             this.game.particleSystem.createExplosionSprite(impact.x, impact.y);
             
             // Crear marca de impacto permanente (cráter grande)
@@ -839,13 +1049,16 @@ export class NetworkManager {
             // Sonido de disparo anti-drone
             this.game.audio.playBomShootSound();
             
-            // Crear partículas de explosión del dron en el aire (naranja, más pequeña)
+            // Crear partículas de explosión del dron en el aire (gris, más pequeña)
             this.game.particleSystem.createExplosion(
                 interception.x, 
                 interception.y, 
-                '#ff6b35', // Naranja
+                '#808080', // Gris (igual que explosiones de edificios)
                 8 // Menos partículas que explosión de edificio
             );
+            
+            // 🆕 NUEVO: Crear animación de explosión de dron (2 frames)
+            this.game.particleSystem.createDroneExplosionSprite(interception.x, interception.y);
             
             // Crear cráter pequeño del dron destruido (50% del tamaño)
             this.game.particleSystem.createImpactMark(interception.x, interception.y, 'impact_icon', 0.5);
@@ -921,6 +1134,89 @@ export class NetworkManager {
             this.game.particleSystem.createImpactMark(impact.x, impact.y, 'impact_icon', 1.2);
             
             console.log(`💥 Tanque ${impact.tankId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`);
+        });
+        
+        /**
+         * 🆕 NUEVO: Manejo de lanzamiento de artillado ligero
+         */
+        this.socket.on('light_vehicle_launched', (data) => {
+            // El servidor ya lo tiene en el estado, solo reproducir sonido si es necesario
+            console.log(`🚛 Artillado ligero ${data.lightVehicleId} lanzado por ${data.team} → ${data.targetId}`);
+        });
+        
+        /**
+         * 🆕 NUEVO: Manejo de fallo en lanzamiento de artillado ligero
+         */
+        this.socket.on('light_vehicle_failed', (data) => {
+            console.log(`⚠️ Artillado ligero rechazado: ${data.reason}`);
+            // TODO: Mostrar mensaje visual al usuario cuando se implemente showMessage en UIManager
+        });
+        
+        /**
+         * 🆕 NUEVO: Manejo de impacto de artillado ligero (aplica broken en vez de destruir)
+         */
+        this.socket.on('light_vehicle_impact', (impact) => {
+            // Reproducir sonido de explosión
+            this.game.audio.playExplosionSound();
+            
+            // Crear explosión grande con partículas grises (igual que tanque)
+            this.game.particleSystem.createExplosion(impact.x, impact.y, '#808080', 40);
+            
+            // Añadir sprite de explosión animado
+            this.game.particleSystem.createExplosionSprite(impact.x, impact.y);
+            
+            // NO crear marca de impacto permanente (el edificio no se destruye, solo se rompe)
+            
+            console.log(`💥 Artillado ligero ${impact.lightVehicleId} aplicó broken a ${impact.targetType} en (${impact.x}, ${impact.y})`);
+        });
+        
+        /**
+         * 🆕 NUEVO: Manejo de lanzamiento de artillería
+         */
+        this.socket.on('artillery_launched', (data) => {
+            console.log(`💣 Artillería ${data.artilleryId} lanzada por ${data.team} en (${data.x}, ${data.y})`);
+            
+            // Iniciar efecto visual en RenderSystem
+            if (this.game && this.game.renderer) {
+                this.game.renderer.executeArtilleryEffect(data);
+            }
+        });
+        
+        /**
+         * 🆕 NUEVO: Manejo de ejecución de artillería
+         */
+        this.socket.on('artillery_executed', (data) => {
+            console.log(`💣 Artillería ejecutada - ${data.affectedBuildings.length} edificios afectados`);
+            
+            // Reproducir sonido de explosión
+            if (this.game && this.game.audio && this.game.audio.playExplosionSound) {
+                this.game.audio.playExplosionSound();
+            }
+            
+            // Aplicar efectos visuales a edificios afectados
+            if (data.affectedBuildings) {
+                data.affectedBuildings.forEach((building, index) => {
+                    const x = building.x;
+                    const y = building.y;
+                    
+                    // Reproducir sonido de explosión (espaciado)
+                    if (this.game.audio && this.game.audio.playExplosionSound) {
+                        setTimeout(() => {
+                            this.game.audio.playExplosionSound();
+                        }, index * 50 + Math.random() * 100);
+                    }
+                    
+                    // Partículas de explosión
+                    this.game.particleSystem.createExplosion(x, y, '#808080', 30);
+                    
+                    // Sprite de explosión
+                    if (this.game.particleSystem.createExplosionSprite) {
+                        this.game.particleSystem.createExplosionSprite(x, y);
+                    }
+                    
+                    console.log(`💥 Artillería: Edificio ${building.type} ${building.id} afectado en (${x}, ${y})`);
+                });
+            }
         });
         
         this.socket.on('cheat_success', (data) => {
@@ -1179,11 +1475,29 @@ export class NetworkManager {
             return;
         }
         
-
+        // 🆕 NUEVO: Obtener unidades del mazo y banquillo
+        let deckUnits = null;
+        let benchUnits = null;
+        
+        if (this.game && this.game.deckManager) {
+            const deck = this.game.deckManager.getDeck(raceId);
+            if (deck) {
+                deckUnits = deck.units;
+                benchUnits = deck.bench || [];
+            } else if (raceId === 'default') {
+                const defaultDeck = this.game.deckManager.getDefaultDeck();
+                if (defaultDeck) {
+                    deckUnits = defaultDeck.units;
+                    benchUnits = defaultDeck.bench || [];
+                }
+            }
+        }
         
         this.socket.emit('select_race', {
             roomId: this.roomId,
-            raceId: raceId
+            raceId: raceId,
+            deckUnits: deckUnits, // 🆕 NUEVO: Enviar unidades del mazo
+            benchUnits: benchUnits // 🆕 NUEVO: Enviar banquillo
         });
     }
     
@@ -1253,6 +1567,20 @@ export class NetworkManager {
     }
     
     /**
+     * Solicita lanzamiento de artillado ligero al servidor
+     * 🆕 NUEVO
+     */
+    requestLightVehicle(targetId) {
+        if (!this.isMultiplayer || !this.roomId) return;
+        
+        
+        this.socket.emit('light_vehicle_request', {
+            roomId: this.roomId,
+            targetId
+        });
+    }
+    
+    /**
      * Solicita despliegue de comando especial operativo al servidor
      * 🆕 NUEVO
      */
@@ -1272,6 +1600,35 @@ export class NetworkManager {
      * @param {number} x - Posición X
      * @param {number} y - Posición Y
      */
+    requestCameraDroneDeploy(x, y) {
+        if (!this.socket || !this.connected || !this.roomId) {
+            console.error('❌ No hay conexión al servidor');
+            return;
+        }
+        
+        this.socket.emit('camera_drone_deploy_request', {
+            roomId: this.roomId,
+            x: x,
+            y: y
+        });
+        
+        console.log(`📹 Camera drone deploy request enviado: x=${x}, y=${y}`);
+    }
+    
+    requestArtilleryLaunch(x, y) {
+        if (!this.socket || !this.roomId) {
+            console.error('❌ No hay conexión al servidor');
+            return;
+        }
+        
+        console.log(`💣 Enviando artillery_request: x=${x}, y=${y}`);
+        this.socket.emit('artillery_request', {
+            roomId: this.roomId,
+            x: x,
+            y: y
+        });
+    }
+    
     requestTruckAssaultDeploy(x, y) {
         if (!this.isMultiplayer || !this.roomId) return;
         
@@ -1279,6 +1636,17 @@ export class NetworkManager {
             roomId: this.roomId,
             x,
             y
+        });
+    }
+    
+    /**
+     * 🆕 NUEVO: Solicita activación del Destructor de mundos
+     */
+    requestWorldDestroyer() {
+        if (!this.isMultiplayer || !this.roomId) return;
+        
+        this.socket.emit('world_destroyer_request', {
+            roomId: this.roomId
         });
     }
     
@@ -1376,6 +1744,11 @@ export class NetworkManager {
             // 🆕 NUEVO: Sincronizar estado disabled (genérico)
             if (nodeData.disabled !== undefined) {
                 node.disabled = nodeData.disabled;
+            }
+            
+            // 🆕 NUEVO: Sincronizar estado broken (roto)
+            if (nodeData.broken !== undefined) {
+                node.broken = nodeData.broken;
             }
             
             // Inicializar propiedades de interpolación para multijugador
@@ -1515,9 +1888,12 @@ export class NetworkManager {
                 if (node) {
                     // Actualizar nodo existente
                     
-                    // Actualizar posición - usar interpolación suave para fronts en multijugador
+                    // Actualizar posición - usar interpolación suave para fronts y camera drones volando en multijugador
                     if (this.game.isMultiplayer && node.type === 'front') {
                         // Para fronts, usar interpolación suave
+                        node.updateServerPosition(nodeData.x, nodeData.y);
+                    } else if (this.game.isMultiplayer && node.isCameraDrone && !nodeData.deployed) {
+                        // 🆕 NUEVO: Para camera drones volando, usar interpolación suave
                         node.updateServerPosition(nodeData.x, nodeData.y);
                     } else {
                         // Para otros nodos (construcciones), actualización directa
@@ -1549,8 +1925,48 @@ export class NetworkManager {
                         node.landedHelicopters = nodeData.landedHelicopters;
                     }
                     
+                    // 🆕 NUEVO: Sincronizar propiedades del sistema de reparación
+                    if (nodeData.hasRepairSystem !== undefined) {
+                        node.hasRepairSystem = nodeData.hasRepairSystem;
+                    }
+                    if (nodeData.availableRepairVehicles !== undefined) {
+                        node.availableRepairVehicles = nodeData.availableRepairVehicles;
+                    }
+                    if (nodeData.maxRepairVehicles !== undefined) {
+                        node.maxRepairVehicles = nodeData.maxRepairVehicles;
+                    }
+                    
+                    // 🆕 NUEVO: Actualizar tipo de recurso seleccionado desde el servidor (autoritativo)
+                    // El servidor es la fuente de verdad, siempre sincronizar
+                    if (nodeData.selectedResourceType !== undefined) {
+                        // Verificar que el tipo enviado por el servidor sea válido para este nodo
+                        const enabledTypes = this.game.getEnabledVehicleTypes(node.type);
+                        if (enabledTypes.includes(nodeData.selectedResourceType)) {
+                            // El servidor es autoritativo, siempre actualizar
+                            node.selectedResourceType = nodeData.selectedResourceType;
+                        }
+                    }
+                    
                     // Actualizar estado activo
                     node.active = nodeData.active;
+                    
+                    // 🆕 NUEVO: Actualizar propiedades específicas del camera drone
+                    if (node.isCameraDrone) {
+                        node.deployed = nodeData.deployed || false;
+                        node.targetX = nodeData.targetX;
+                        node.targetY = nodeData.targetY;
+                        node.detectionRadius = nodeData.detectionRadius || 200;
+                        
+                        // Si cambió de volando a desplegado, actualizar posición directamente
+                        if (nodeData.deployed && !node.deployed) {
+                            node.x = nodeData.x;
+                            node.y = nodeData.y;
+                            // Limpiar interpolación cuando se despliega
+                            if (node.updateServerPosition) {
+                                node.updateServerPosition(nodeData.x, nodeData.y);
+                            }
+                        }
+                    }
                     
                     // Actualizar estado de construcción
                     const wasConstructing = node.isConstructing;
@@ -1638,6 +2054,35 @@ export class NetworkManager {
                                 node.y - 30, // Un poco arriba del nodo
                                 'Disabled',
                                 '#ff0000' // Rojo
+                            );
+                        }
+                    }
+                    
+                    // 🆕 NUEVO: Actualizar estado broken (roto)
+                    if (nodeData.broken !== undefined) {
+                        const wasBroken = node.broken || false;
+                        const isNowBroken = nodeData.broken;
+                        node.broken = isNowBroken;
+                        
+                        // 🆕 NUEVO: Crear floating text cuando un nodo se rompe
+                        if (!wasBroken && isNowBroken) {
+                            // Nodo se acaba de romper
+                            this.game.particleSystem.createFloatingText(
+                                node.x,
+                                node.y - 30, // Un poco arriba del nodo
+                                'Roto',
+                                '#ff8800' // Naranja
+                            );
+                        }
+                        
+                        // 🆕 NUEVO: Crear floating text cuando un nodo se repara
+                        if (wasBroken && !isNowBroken) {
+                            // Nodo se acaba de reparar
+                            this.game.particleSystem.createFloatingText(
+                                node.x,
+                                node.y - 30, // Un poco arriba del nodo
+                                'Reparado',
+                                '#4ecca3' // Verde
                             );
                         }
                     }
@@ -1819,6 +2264,37 @@ export class NetworkManager {
             }
         }
         
+        // === ACTUALIZAR ARTILLADOS LIGEROS ===
+        if (gameState.lightVehicles) {
+            // Actualizar artillados ligeros existentes y crear nuevos
+            gameState.lightVehicles.forEach(lightVehicleData => {
+                let lightVehicle = this.game.lightVehicleSystem.lightVehicles.find(lv => lv.id === lightVehicleData.id);
+                
+                if (lightVehicle) {
+                    // Interpolación suave: guardar posición objetivo del servidor
+                    lightVehicle.serverX = lightVehicleData.x;
+                    lightVehicle.serverY = lightVehicleData.y;
+                    lightVehicle.targetId = lightVehicleData.targetId;
+                    lightVehicle.state = lightVehicleData.state || lightVehicle.state;
+                    lightVehicle.spriteFrame = lightVehicleData.spriteFrame || lightVehicleData.spriteFrame;
+                    lightVehicle.waitTimer = lightVehicleData.waitTimer || 0;
+                    lightVehicle.shootTimer = lightVehicleData.shootTimer || 0;
+                    lightVehicle.lastServerUpdate = Date.now();
+                } else {
+                    // Artillado ligero nuevo del servidor - crear localmente usando LightVehicleSystem
+                    this.game.lightVehicleSystem.createLightVehicle(lightVehicleData);
+                }
+            });
+            
+            // Eliminar artillados ligeros que ya no existen en el servidor (completaron su misión)
+            const serverLightVehicleIds = gameState.lightVehicles.map(lv => lv.id);
+            for (let i = this.game.lightVehicleSystem.lightVehicles.length - 1; i >= 0; i--) {
+                if (!serverLightVehicleIds.includes(this.game.lightVehicleSystem.lightVehicles[i].id)) {
+                    this.game.lightVehicleSystem.lightVehicles.splice(i, 1);
+                }
+            }
+        }
+        
         // === ACTUALIZAR EMERGENCIAS MÉDICAS ===
         if (gameState.emergencies) {
             // Limpiar emergencias antiguas
@@ -1843,6 +2319,39 @@ export class NetworkManager {
             gameState.soundEvents.forEach(event => {
                 this.handleSoundEvent(event);
             });
+        }
+        
+        // 🆕 NUEVO: PROCESAR EVENTOS VISUALES ===
+        if (gameState.visualEvents && gameState.visualEvents.length > 0) {
+            gameState.visualEvents.forEach(event => {
+                this.handleVisualEvent(event);
+            });
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Maneja eventos visuales del servidor (números flotantes, efectos, etc.)
+     * @param {Object} event - Evento visual del servidor
+     */
+    handleVisualEvent(event) {
+        switch(event.type) {
+            case 'camera_drone_currency':
+                // Solo mostrar si es del equipo del jugador
+                if (event.team === this.myTeam && this.game.particleSystem) {
+                    // Crear número flotante en la posición del camera drone
+                    this.game.particleSystem.createFloatingText(
+                        event.x,
+                        event.y - 30, // Un poco arriba del camera drone
+                        `+${event.amount}`,
+                        '#4ecca3', // Color verde acento del juego
+                        null // Sin acumulación - mostrar cada pago individualmente
+                    );
+                    console.log(`💰 Camera Drone ${event.cameraDroneId?.substring(0, 8)} otorgó +${event.amount}$`);
+                }
+                break;
+                
+            default:
+                console.warn(`⚠️ Evento visual desconocido: ${event.type}`);
         }
     }
     
@@ -2203,14 +2712,17 @@ export class NetworkManager {
                     let deckUnits = null;
                     const deckId = select.value;
                     
+                    let benchUnits = null; // 🆕 NUEVO: Banquillo
                     if (this.game && this.game.deckManager) {
                         const deck = this.game.deckManager.getDeck(deckId);
                         if (deck) {
                             deckUnits = deck.units;
+                            benchUnits = deck.bench || []; // 🆕 NUEVO: Obtener banquillo
                         } else if (deckId === 'default') {
                             const defaultDeck = this.game.deckManager.getDefaultDeck();
                             if (defaultDeck) {
                                 deckUnits = defaultDeck.units;
+                                benchUnits = defaultDeck.bench || []; // 🆕 NUEVO: Obtener banquillo
                             }
                         }
                     }
@@ -2218,7 +2730,8 @@ export class NetworkManager {
                     this.socket.emit('select_race', {
                         roomId: this.roomId,
                         raceId: deckId, // Mantener compatibilidad
-                        deckUnits: deckUnits // 🆕 NUEVO: Enviar unidades del mazo
+                        deckUnits: deckUnits, // 🆕 NUEVO: Enviar unidades del mazo
+                        benchUnits: benchUnits // 🆕 NUEVO: Enviar banquillo
                     });
                 }
             }
@@ -2229,16 +2742,19 @@ export class NetworkManager {
                 if (deckId) {
                     // 🎯 NUEVO: Obtener las unidades del mazo seleccionado
                     let deckUnits = null;
+                    let benchUnits = null; // 🆕 NUEVO: Banquillo
                     
                     if (this.game && this.game.deckManager) {
                         const deck = this.game.deckManager.getDeck(deckId);
                         if (deck) {
                             deckUnits = deck.units;
+                            benchUnits = deck.bench || []; // 🆕 NUEVO: Obtener banquillo
                         } else if (deckId === 'default') {
                             // Si es el mazo predeterminado, obtenerlo
                             const defaultDeck = this.game.deckManager.getDefaultDeck();
                             if (defaultDeck) {
                                 deckUnits = defaultDeck.units;
+                                benchUnits = defaultDeck.bench || []; // 🆕 NUEVO: Obtener banquillo
                             }
                         }
                     }
@@ -2247,7 +2763,8 @@ export class NetworkManager {
                     this.socket.emit('select_race', {
                         roomId: this.roomId,
                         raceId: deckId, // Mantener compatibilidad con nombre anterior
-                        deckUnits: deckUnits // 🆕 NUEVO: Enviar unidades del mazo
+                        deckUnits: deckUnits, // 🆕 NUEVO: Enviar unidades del mazo
+                        benchUnits: benchUnits // 🆕 NUEVO: Enviar banquillo
                     });
                 }
             });
@@ -2907,6 +3424,10 @@ export class NetworkManager {
                     if (NODE_CONFIG[buildingType]) {
                         NODE_CONFIG[buildingType].name = serverConfig.descriptions[buildingType].name;
                         NODE_CONFIG[buildingType].description = serverConfig.descriptions[buildingType].description;
+                        // 🆕 NUEVO: Incluir details si está disponible
+                        if (serverConfig.descriptions[buildingType].details) {
+                            NODE_CONFIG[buildingType].details = serverConfig.descriptions[buildingType].details;
+                        }
                     }
                 });
             }

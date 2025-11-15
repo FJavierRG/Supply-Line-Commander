@@ -26,7 +26,9 @@ export class RoadSystem {
                 n.type === 'engineerCenter' && 
                 n.team === team && 
                 n.constructed && 
-                !n.isAbandoning
+                !n.isAbandoning &&
+                !n.disabled && 
+                !n.broken // 🆕 MODULARIZADO: No mantener carreteras si está disabled o roto
             );
             
             const fobIds = this.game.nodes
@@ -57,12 +59,14 @@ export class RoadSystem {
         
         // Construir carreteras para TODOS los equipos
         for (const team of teams) {
-            // Verificar si este equipo tiene engineerCenter
+            // Verificar si este equipo tiene engineerCenter (funcional)
             const hasEngineer = this.game.nodes.some(n => 
                 n.type === 'engineerCenter' && 
                 n.team === team && 
                 n.constructed && 
-                !n.isAbandoning
+                !n.isAbandoning &&
+                !n.disabled && 
+                !n.broken // 🆕 MODULARIZADO: No mantener carreteras si está disabled o roto
             );
             
             if (!hasEngineer) continue; // Este equipo no tiene engineer, no construir carreteras

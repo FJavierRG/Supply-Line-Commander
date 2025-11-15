@@ -39,6 +39,7 @@ function getEnabledUnits() {
 /**
  * Mazo predeterminado del juego
  * Incluye unidades básicas y equilibradas para empezar a jugar
+ * 🆕 NUEVO: Incluye banquillo vacío (se rellenará después)
  */
 export const DEFAULT_DECK = {
     id: 'default',
@@ -54,6 +55,7 @@ export const DEFAULT_DECK = {
         'drone',           // Dron consumible
         'sniperStrike'     // Ataque de francotirador
     ],
+    bench: [], // 🆕 NUEVO: Banquillo vacío (se rellenará después)
     createdAt: Date.now(),
     updatedAt: Date.now(),
     isDefault: true
@@ -62,6 +64,7 @@ export const DEFAULT_DECK = {
 /**
  * Crea un nuevo mazo predeterminado con todas las unidades habilitadas
  * Útil para crear un mazo completo automáticamente
+ * 🆕 NUEVO: Incluye banquillo vacío
  */
 export function createFullDefaultDeck() {
     const enabledUnits = getEnabledUnits();
@@ -69,6 +72,7 @@ export function createFullDefaultDeck() {
         id: 'default',
         name: 'Mazo Predeterminado',
         units: ['hq', ...enabledUnits], // HQ siempre primero
+        bench: [], // 🆕 NUEVO: Banquillo vacío
         createdAt: Date.now(),
         updatedAt: Date.now(),
         isDefault: true

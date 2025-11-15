@@ -54,7 +54,9 @@ export class AudioManager {
             chopper: 0.2, // Sonido de chopper (muy reducido, era demasiado alto)
             whisper: 0.9, // Sonido de whisper para specops (+30%: 0.3 * 1.3 = 0.39)
             commando: 0.6, // Sonido de despliegue de comando (+20% respecto a 0.5)
-            menuHover: 0.4 // Sonido de hover en botones del menú
+            menuHover: 0.4, // Sonido de hover en botones del menú
+            alarm: 0.5, // Sonido de alarma del destructor de mundos
+            nuclearExplosion: 0.6 // Sonido de explosión nuclear del destructor de mundos
         };
         
         this.loadSounds();
@@ -142,6 +144,10 @@ export class AudioManager {
         // Sonido de hover en menú - TEST: probar con sonido más pequeño
         const menuHoverUrl = SOUNDS_BASE_URL + 'menu_choice.wav';
         this.sounds.menuHover = this.createAudio(menuHoverUrl, this.volumes.menuHover, false);
+        
+        // Sonidos del destructor de mundos
+        this.sounds.alarm = this.createAudio(SOUNDS_BASE_URL + 'alarm_sound_normalized.wav', this.volumes.alarm, false);
+        this.sounds.nuclearExplosion = this.createAudio(SOUNDS_BASE_URL + 'nucelar_explosion_normalized.wav', this.volumes.nuclearExplosion, false);
     }
     
     createAudio(src, volume, loop) {
@@ -379,6 +385,40 @@ export class AudioManager {
             droneSound.currentTime = 0;
             this.activeDroneSounds.delete(droneId);
         }
+    }
+    
+    /**
+     * Reproduce sonido de alarma del destructor de mundos (cuando se activa)
+     * Se reproduce para ambos jugadores cuando se activa el destructor
+     */
+    playAlarmSound() {
+        // Obtener volumen actualizado con volumen maestro aplicado
+        let finalVolume = this.volumes.alarm;
+        if (this.optionsManager) {
+            const masterVolume = this.optionsManager.settings.masterVolume || 1.0;
+            const sfxVolume = this.optionsManager.settings.sfxVolume || 1.0;
+            finalVolume = this.volumes.alarm * masterVolume * sfxVolume;
+        }
+        
+        // Reproducir sonido (usar instancia para permitir múltiples reproducciones)
+        this.playSoundInstance('assets/sounds/normalized/alarm_sound_normalized.wav', finalVolume);
+    }
+    
+    /**
+     * Reproduce sonido de explosión nuclear del destructor de mundos (cuando se muestra el flash blanco)
+     * Se reproduce para ambos jugadores cuando se ejecuta el destructor
+     */
+    playNuclearExplosionSound() {
+        // Obtener volumen actualizado con volumen maestro aplicado
+        let finalVolume = this.volumes.nuclearExplosion;
+        if (this.optionsManager) {
+            const masterVolume = this.optionsManager.settings.masterVolume || 1.0;
+            const sfxVolume = this.optionsManager.settings.sfxVolume || 1.0;
+            finalVolume = this.volumes.nuclearExplosion * masterVolume * sfxVolume;
+        }
+        
+        // Reproducir sonido (usar instancia para permitir múltiples reproducciones)
+        this.playSoundInstance('assets/sounds/normalized/nucelar_explosion_normalized.wav', finalVolume);
     }
     
     /**

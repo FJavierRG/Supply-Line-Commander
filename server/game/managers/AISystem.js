@@ -29,7 +29,7 @@ export class AISystem {
             supply: 0,
             fobCheck: 0,        // Timer para revisar FOBs
             frontCheck: 0,      // Timer para revisar frentes
-            helicopterCheck: 0, // 🆕 Timer para revisar helicópteros (B_Nation)
+            helicopterCheck: 0,
             strategic: 0,
             offensive: 0,
             harass: 0,
@@ -45,7 +45,7 @@ export class AISystem {
             supply: AIConfig.intervals.supply,  // Temporal, se ajustará en activate()
             fobCheck: 2.0,        // Revisar FOBs cada 2s (desde HQ)
             frontCheck: 3.0,     // Revisar frentes cada 3s (desde FOBs)
-            helicopterCheck: 1.5, // 🆕 Revisar helicópteros cada 1.5s (B_Nation)
+            helicopterCheck: 1.5,
             strategic: AIConfig.intervals.strategic, // Temporal, se ajustará en activate()
             offensive: AIConfig.intervals.offensive,  // Temporal, se ajustará en activate()
             harass: AIConfig.intervals.harass,  // Temporal, se ajustará en activate()
@@ -105,7 +105,7 @@ export class AISystem {
             supply: getAdjustedInterval('supply', this.raceId, this.difficulty),
             fobCheck: 2.0,
             frontCheck: 3.0,
-            helicopterCheck: 1.5, // 🆕 Revisar helicópteros cada 1.5s (B_Nation)
+            helicopterCheck: 1.5,
             strategic: Math.min(4.0 * this.difficultyMultipliers.buildingMultiplier, getAdjustedInterval('strategic', this.raceId, this.difficulty)), // Primera decisión más rápida (ajustada por dificultad)
             offensive: randomOffensive,
             harass: getAdjustedInterval('harass', this.raceId, this.difficulty),
@@ -251,14 +251,6 @@ export class AISystem {
             this.ruleResupplyFronts(enemyTeam);
         }
         
-        // 🆕 2.5. Reabastecimiento con helicópteros (B_Nation) - cada 1.5 segundos
-        if (this.raceId === 'B_Nation') {
-            this.timers.helicopterCheck += dt;
-            if (this.timers.helicopterCheck >= this.intervals.helicopterCheck) {
-                this.timers.helicopterCheck = 0;
-                this.ruleResupplyHelicopters(enemyTeam);
-            }
-        }
         
         // 2. Construcciones estratégicas (cada X segundos)
         this.timers.strategic += dt;
@@ -399,7 +391,7 @@ export class AISystem {
     }
     
     /**
-     * 🆕 REGLA 2.5: Reabastecimiento con helicópteros (B_Nation)
+     * 🆕 REGLA 2.5: Reabastecimiento con helicópteros
      * - Envía helicópteros desde HQ a frentes (sin importar umbral de suministros)
      * - Regresa helicópteros vacíos a Base Aérea (si existe) o HQ para recargar
      */
@@ -660,15 +652,10 @@ export class AISystem {
     
     /**
      * Envía convoy de suministros (simulando evento de jugador real)
-     * 🆕 MEJORADO: Soporta helicópteros para B_Nation
      */
     sendSupplyConvoy(from, to, team) {
-        // 🆕 NUEVO: Para B_Nation, verificar helicópteros en lugar de vehículos
-        const raceManager = this.gameState.raceManager;
-        const playerRace = raceManager.getPlayerRace(team);
-        const isHelicopterRace = playerRace === 'B_Nation';
-        
-        if (isHelicopterRace) {
+        // Verificar helicópteros si es un nodo que los usa
+        if (from.type === 'front' && from.hasHelicopters) {
             // Verificar helicópteros disponibles
             if (!from.landedHelicopters || from.landedHelicopters.length === 0) {
                 if (AIConfig.debug.logSupply) {
@@ -801,7 +788,7 @@ export class AISystem {
         const hasLauncher = myNodes.some(n => n.type === 'droneLauncher');
         const playerPlants = playerNodes.filter(n => n.type === 'nuclearPlant');
         
-        // 🆕 NUEVO: Contar Bases Aéreas, antenas y hospitales para B_Nation
+        // Contar Bases Aéreas, antenas y hospitales
         const myAerialBases = myNodes.filter(n => (n.type === 'aerialBase' || n.isAerialBase) && n.active);
         const myIntelRadios = myNodes.filter(n => n.type === 'intelRadio' && n.active);
         const myHospitals = myNodes.filter(n => n.type === 'campaignHospital' && n.active);
@@ -880,50 +867,7 @@ export class AISystem {
             };
         };
         
-        // 🆕 NUEVO: PRIORIDADES ESPECIALES PARA B_Nation
-        if (this.raceId === 'B_Nation') {
-            // PRIORIDAD 1: Asegurar al menos 1 Base Aérea
-            if (state.myAerialBases < 1) {
-                const aerialBaseAction = evaluateBuilding('aerialBase');
-                if (aerialBaseAction) {
-                    // Score muy alto para forzar construcción
-                    aerialBaseAction.score = 999;
-                    actions.push(aerialBaseAction);
-                    if (AIConfig.debug.logActions) {
-                    }
-                    // Solo permitir Base Aérea hasta tenerla
-                    return actions.sort((a, b) => b.score - a.score);
-                } else {
-                    // No puede construir Base Aérea aún (falta currency o no está disponible)
-                    // Bloquear otras construcciones hasta tener Base Aérea
-                    if (AIConfig.debug.logActions) {
-                    }
-                    return []; // No permitir otras construcciones
-                }
-            }
-            
-            // PRIORIDAD 2: Asegurar al menos 2 antenas (intelRadio)
-            if (state.myAerialBases >= 1 && state.myIntelRadios < 2) {
-                const intelRadioAction = evaluateBuilding('intelRadio');
-                if (intelRadioAction) {
-                    // Score muy alto para forzar construcción
-                    intelRadioAction.score = 998;
-                    actions.push(intelRadioAction);
-                    if (AIConfig.debug.logActions) {
-                    }
-                    // Solo permitir antenas hasta tener 2
-                    return actions.sort((a, b) => b.score - a.score);
-                } else {
-                    // No puede construir antena aún (falta currency o no está disponible)
-                    // Bloquear otras construcciones hasta tener 2 antenas
-                    if (AIConfig.debug.logActions) {
-                    }
-                    return []; // No permitir otras construcciones
-                }
-            }
-        }
-        
-        // Evaluar todos los edificios disponibles (solo si se cumplen las prioridades para B_Nation)
+        // Evaluar todos los edificios disponibles
         const buildingsToEvaluate = [
             'intelRadio',
             'truckFactory',
@@ -942,34 +886,32 @@ export class AISystem {
                 continue; // Ya tiene lanzadera
             }
             
-            // 🆕 NUEVO: Para B_Nation, saltar edificios que ya cumplen las prioridades
-            if (this.raceId === 'B_Nation') {
-                // Si ya tiene Base Aérea, no evaluarla de nuevo (ya se evaluó en prioridad 1)
-                // Pero permitir múltiples si quiere (por ahora solo 1)
-                if (buildingType === 'aerialBase' && state.myAerialBases >= 1) {
-                    continue;
-                }
-                // Si ya tiene 2 antenas básicas, permitir más antenas pero con score normal
-                // (no bloqueamos más antenas después de tener las 2 básicas)
-                // 🆕 NUEVO: Aumentar score de antenas adicionales para priorizarlas
-                if (buildingType === 'intelRadio' && state.myIntelRadios >= 2) {
-                    // Permitir más antenas, pero aumentar su score para priorizarlas
-                    const intelRadioAction = evaluateBuilding('intelRadio');
-                    if (intelRadioAction) {
-                        // Aumentar score significativamente para priorizar antenas adicionales
-                        intelRadioAction.score *= 1.5; // +50% de score
-                        if (AIConfig.debug.logActions) {
-                        }
-                        actions.push(intelRadioAction);
-                        continue; // Ya agregamos la acción, continuar con siguiente edificio
-                    }
-                }
-                // 🆕 NUEVO: Limitar hospitales a solo 1 máximo
-                if (buildingType === 'campaignHospital' && state.myHospitals >= 1) {
+            // Saltar edificios que ya cumplen las prioridades
+            if (buildingType === 'aerialBase' && state.myAerialBases >= 1) {
+                continue;
+            }
+            
+            // Si ya tiene 2 antenas básicas, permitir más antenas pero con score normal
+            // (no bloqueamos más antenas después de tener las 2 básicas)
+            // 🆕 NUEVO: Aumentar score de antenas adicionales para priorizarlas
+            if (buildingType === 'intelRadio' && state.myIntelRadios >= 2) {
+                // Permitir más antenas, pero aumentar su score para priorizarlas
+                const intelRadioAction = evaluateBuilding('intelRadio');
+                if (intelRadioAction) {
+                    // Aumentar score significativamente para priorizar antenas adicionales
+                    intelRadioAction.score *= 1.5; // +50% de score
                     if (AIConfig.debug.logActions) {
                     }
-                    continue; // No construir más hospitales
+                    actions.push(intelRadioAction);
+                    continue; // Ya agregamos la acción, continuar con siguiente edificio
                 }
+            }
+            
+            // 🆕 NUEVO: Limitar hospitales a solo 1 máximo
+            if (buildingType === 'campaignHospital' && state.myHospitals >= 1) {
+                if (AIConfig.debug.logActions) {
+                }
+                continue; // No construir más hospitales
             }
             
             if (buildingType === 'nuclearPlant') {
@@ -1036,7 +978,7 @@ export class AISystem {
             }
         }
         
-        // FOB Sabotage (solo para B_Nation)
+        // FOB Sabotage
         if (this.canUse('fobSabotage')) {
             const fobSabotageCost = costs['fobSabotage'] || 80;
             const playerFOBs = playerNodes.filter(n => n.type === 'fob').length;
@@ -1066,7 +1008,7 @@ export class AISystem {
                     if (AIConfig.debug.logActions) {
                     }
                 }
-            } else if (AIConfig.debug.logActions && this.raceId === 'B_Nation') {
+            } else if (AIConfig.debug.logActions) {
                 if (!hasPriority1) {
                 } else if (!hasPriority2) {
                 }

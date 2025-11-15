@@ -39,11 +39,6 @@ export class ConvoyManager {
             if (!from.hasAvailableHelicopter()) {
                 return;
             }
-        } else if (from.type === 'hq' && this.game.selectedRace === 'B_Nation' && from.hasHelicopters) {
-            // Para HQ de B_Nation con helicópteros, verificar helicópteros disponibles
-            if (!from.hasAvailableHelicopter()) {
-                return;
-            }
         } else if ((from.type === 'aerialBase' || from.isAerialBase) && from.landedHelicopters && from.landedHelicopters.length > 0) {
             // 🆕 NUEVO: Base Aérea puede enviar helicópteros si tiene alguno aterrizado
             console.log(`✅ Base Aérea tiene ${from.landedHelicopters.length} helicópteros - permitiendo envío`);
@@ -65,11 +60,9 @@ export class ConvoyManager {
         // 🆕 NUEVO: Seleccionar tipo de vehículo según la raza y origen
         let vehicleType = this.selectVehicleType(from, this.game.selectedRace);
         
-        // Verificar suministros (solo para sistema tradicional)
-        if (this.game.selectedRace !== 'B_Nation') {
-            if (!from.hasEnoughSupplies(10)) {
-                return;
-            }
+        // Verificar suministros
+        if (!from.hasEnoughSupplies(10)) {
+            return;
         }
         
         // === SERVIDOR AUTORITATIVO: Siempre enviar solicitud al servidor ===
@@ -221,13 +214,6 @@ export class ConvoyManager {
     
     // 🆕 NUEVO: Método para seleccionar tipo de vehículo por raza
     selectVehicleType(from, raceId) {
-        const raceConfig = getRaceConfig(raceId);
-        
-        // Si es HQ y la raza tiene transporte aéreo
-        if (from.type === 'hq' && raceConfig?.specialMechanics?.transportSystem === 'aerial') {
-            return 'helicopter';
-        }
-        
         // Si es Front y tiene helicópteros, usar helicóptero
         if (from.type === 'front' && from.hasHelicopters) {
             return 'helicopter';

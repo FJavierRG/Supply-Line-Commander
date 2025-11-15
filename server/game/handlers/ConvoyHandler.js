@@ -14,10 +14,9 @@ export class ConvoyHandler {
      * Obtiene rutas válidas para un tipo de nodo
      * ✅ SIMPLIFICADO: Ya no hay rutas especiales por raza
      * @param {string} fromType - Tipo de nodo origen
-     * @param {Object} raceConfig - Configuración de la raza (no usado, mantenido para compatibilidad)
      * @returns {Array} Array de tipos de nodos válidos
      */
-    getValidRoutesForRace(fromType, raceConfig) {
+    getValidRoutesForRace(fromType) {
         return GAME_CONFIG.routes.valid[fromType] || [];
     }
     
@@ -25,23 +24,13 @@ export class ConvoyHandler {
      * Selecciona el tipo de vehículo según el nodo origen
      * ✅ SIMPLIFICADO: Ya no hay sistema aéreo por raza
      * @param {Object} fromNode - Nodo origen
-     * @param {Object} raceConfig - Configuración de la raza (no usado, mantenido para compatibilidad)
      * @returns {string} Tipo de vehículo
      */
-    selectVehicleTypeForRace(fromNode, raceConfig) {
+    selectVehicleTypeForRace(fromNode) {
         // ✅ SIMPLIFICADO: Sistema tradicional siempre
         return fromNode.type === 'hq' ? 'heavy_truck' : 'truck';
     }
     
-    /**
-     * Obtiene el sistema de cargo
-     * ✅ SIMPLIFICADO: Siempre tradicional
-     * @param {Object} raceConfig - Configuración de la raza (no usado, mantenido para compatibilidad)
-     * @returns {Object} Configuración del sistema de cargo
-     */
-    getCargoSystemForRace(raceConfig) {
-        return { type: 'traditional', requiresSupplies: true };
-    }
     
     /**
      * Maneja solicitud de convoy
@@ -54,20 +43,17 @@ export class ConvoyHandler {
             return { success: false, reason: 'Nodos no encontrados' };
         }
         
-        // 🆕 NUEVO: Validar que el nodo origen no esté disabled
-        if (fromNode.disabled) {
-            return { success: false, reason: 'Nodo origen deshabilitado' };
+        // 🆕 NUEVO: Detectar si es un camión de reparación
+        const isRepairVehicle = fromNode.type === 'hq' && fromNode.selectedResourceType === 'repair';
+        
+        // 🆕 MODULARIZADO: Validar que el nodo origen sea usable
+        if (!this.gameState.raceManager.isNodeUsable(fromNode)) {
+            return { success: false, reason: 'Nodo origen deshabilitado o roto' };
         }
         
         // Validar que ambos sean del mismo equipo
         if (fromNode.team !== playerTeam || toNode.team !== playerTeam) {
             return { success: false, reason: 'No puedes enviar a nodos enemigos' };
-        }
-        
-        // ✅ ELIMINADO: Ya no hay configuración de raza, usar rutas estándar
-        const validRoutes = this.getValidRoutesForRace(fromNode.type, null);
-        if (!validRoutes.includes(toNode.type)) {
-            return { success: false, reason: 'Ruta no válida para tu raza' };
         }
         
         // 🆕 NUEVO: Detectar si es un helicóptero (sistema aéreo)
@@ -76,68 +62,119 @@ export class ConvoyHandler {
             return this.handleHelicopterDispatch(playerTeam, fromNode, toNode);
         }
         
+        // 🆕 NUEVO: Detectar si es un camión de reparación
+        if (isRepairVehicle) {
+            // 🆕 NUEVO: Validar destino - debe ser un edificio roto (no FOB/HQ)
+            if (!toNode.broken) {
+                return { success: false, reason: 'El camión de reparación solo puede ir a edificios rotos' };
+            }
+            
+            // Validar que no sea FOB ni HQ (solo edificios construibles)
+            if (toNode.type === 'fob' || toNode.type === 'hq' || toNode.type === 'front') {
+                return { success: false, reason: 'No se puede reparar FOBs, HQs ni Frentes' };
+            }
+            // Validar que el HQ tenga vehículo de reparación disponible
+            if (!fromNode.hasRepairSystem || !fromNode.repairVehicleAvailable || fromNode.availableRepairVehicles <= 0) {
+                return { success: false, reason: 'No hay camiones de reparación disponibles' };
+            }
+            
+            // Tomar vehículo de reparación
+            fromNode.availableRepairVehicles--;
+            fromNode.repairVehicleAvailable = fromNode.availableRepairVehicles > 0;
+            
+            // Calcular distancia inicial (fija) para velocidad consistente
+            const dx = toNode.x - fromNode.x;
+            const dy = toNode.y - fromNode.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Crear convoy de reparación
+            const convoy = {
+                id: `convoy_${uuidv4().substring(0, 8)}`,
+                fromId,
+                toId,
+                team: playerTeam,
+                vehicleType: 'repair_truck',
+                cargo: 0, // Camiones de reparación no llevan suministros
+                progress: 0,
+                returning: false,
+                isRepair: true, // 🆕 Flag para identificar convoy de reparación
+                initialDistance: distance
+            };
+            
+            this.gameState.convoys.push(convoy);
+            
+            // SONIDOS: Truck sound
+            if (fromNode.type === 'hq') {
+                this.gameState.addSoundEvent('hq_dispatch', { team: playerTeam });
+            }
+            this.gameState.addSoundEvent('truck_dispatch', { team: playerTeam });
+            
+            console.log(`🔧 Camión de reparación creado: ${fromId} → ${toId}`);
+            
+            return { success: true, convoy };
+        }
+        
+        // 🆕 MODULARIZADO: Validar destino - permitir edificios rotos solo si es camión de reparación
+        // (Ya pasamos la validación de reparación, así que aquí rechazamos rotos)
+        if (!this.gameState.raceManager.isNodeUsable(toNode)) {
+            return { success: false, reason: 'Nodo destino deshabilitado o roto' };
+        }
+        
+        // ✅ Validar rutas estándar (solo para convoyes normales, no reparación)
+        const validRoutes = this.getValidRoutesForRace(fromNode.type, null);
+        if (!validRoutes.includes(toNode.type)) {
+            return { success: false, reason: 'Ruta no válida para tu raza' };
+        }
+        
         // Sistema tradicional de camiones
-        const vehicleType = this.selectVehicleTypeForRace(fromNode, null);
+        const vehicleType = this.selectVehicleTypeForRace(fromNode);
         
         // ✅ ELIMINADO: Ya no hay sistema de cargo por raza, siempre tradicional
-        const cargoSystem = this.getCargoSystemForRace(null);
+        // Sistema tradicional: siempre requiere suministros si el nodo los tiene
         
         // Validar vehículos disponibles
         if (!fromNode.hasVehicles || fromNode.availableVehicles <= 0) {
             return { success: false, reason: 'No hay vehículos disponibles' };
         }
         
-        // 🆕 CENTRALIZADO: Validar suministros según el sistema de cargo
-        if (cargoSystem.requiresSupplies && fromNode.hasSupplies && fromNode.supplies < 10) {
+        // Validar suministros (sistema tradicional: requiere suministros si el nodo los tiene)
+        if (fromNode.hasSupplies && fromNode.supplies < 10) {
             return { success: false, reason: 'Suministros insuficientes' };
         }
         
         // Tomar vehículo
         fromNode.availableVehicles--;
         
-        // 🆕 CENTRALIZADO: Calcular suministros según el sistema de cargo
-        let suppliesToTransport = 0;
+        // Sistema tradicional: Carga normal
+        let capacity = GAME_CONFIG.vehicles[vehicleType].capacity;
         
-        if (cargoSystem.type === 'aerial') {
-            // Sistema aéreo: Solo carga cuando sale del HQ
-            if (fromNode.type === 'hq') {
-                const capacity = GAME_CONFIG.vehicles[vehicleType].capacity;
-                suppliesToTransport = Math.min(capacity, fromNode.supplies);
-                fromNode.supplies -= suppliesToTransport;
+        // Bonus de TruckFactory (solo para heavy_truck, solo si no están disabled)
+        if (vehicleType === 'heavy_truck') {
+            const truckFactories = this.gameState.nodes.filter(n => 
+                n.type === 'truckFactory' && 
+                n.team === playerTeam && 
+                this.gameState.raceManager.canNodeProvideBonus(n) // 🆕 MODULARIZADO: Usar función helper
+            ).length;
+            
+            if (truckFactories > 0) {
+                // ✅ Usar configuración de serverNodes (fuente única de verdad)
+                const bonusPerFactory = SERVER_NODE_CONFIG.effects.truckFactory.capacityBonus;
+                capacity += truckFactories * bonusPerFactory;
             }
-            // Si sale de un Front, no transporta suministros
+        }
+        
+        // 🆕 CRÍTICO: HQ no tiene suministros variables - los heavy_trucks salen "llenos por defecto"
+        let suppliesToTransport = 0;
+        if (fromNode.type === 'hq') {
+            // HQ: cargo = capacity (sin quitar suministros del HQ)
+            suppliesToTransport = capacity;
         } else {
-            // Sistema tradicional: Carga normal
-            let capacity = GAME_CONFIG.vehicles[vehicleType].capacity;
+            // Otros nodos (FOB): cargar normalmente desde supplies
+            suppliesToTransport = Math.min(capacity, fromNode.supplies);
             
-            // Bonus de TruckFactory (solo para heavy_truck, solo si no están disabled)
-            if (vehicleType === 'heavy_truck') {
-                const truckFactories = this.gameState.nodes.filter(n => 
-                    n.type === 'truckFactory' && 
-                    n.team === playerTeam && 
-                    n.constructed &&
-                    !n.disabled // 🆕 NUEVO: No aplicar bonus si está disabled
-                ).length;
-                
-                if (truckFactories > 0) {
-                    // ✅ Usar configuración de serverNodes (fuente única de verdad)
-                    const bonusPerFactory = SERVER_NODE_CONFIG.effects.truckFactory.capacityBonus;
-                    capacity += truckFactories * bonusPerFactory;
-                }
-            }
-            
-            // 🆕 CRÍTICO: HQ no tiene suministros variables - los heavy_trucks salen "llenos por defecto"
-            if (fromNode.type === 'hq') {
-                // HQ: cargo = capacity (sin quitar suministros del HQ)
-                suppliesToTransport = capacity;
-            } else {
-                // Otros nodos (FOB): cargar normalmente desde supplies
-                suppliesToTransport = Math.min(capacity, fromNode.supplies);
-                
-                // Quitar suministros del nodo origen
-                if (fromNode.hasSupplies) {
-                    fromNode.supplies -= suppliesToTransport;
-                }
+            // Quitar suministros del nodo origen
+            if (fromNode.hasSupplies) {
+                fromNode.supplies -= suppliesToTransport;
             }
         }
         
@@ -156,9 +193,7 @@ export class ConvoyHandler {
             cargo: suppliesToTransport,
             progress: 0, // 0 a 1
             returning: false,
-            initialDistance: distance, // Guardar distancia fija
-            // 🆕 CENTRALIZADO: Agregar información del sistema de cargo
-            cargoSystem: cargoSystem
+            initialDistance: distance // Guardar distancia fija
         };
         
         this.gameState.convoys.push(convoy);
@@ -246,8 +281,8 @@ export class ConvoyHandler {
             return { success: false, reason: 'Nodos no encontrados' };
         }
         
-        // 🆕 NUEVO: Validar que el nodo origen no esté disabled
-        if (fromNode.disabled) {
+        // 🆕 MODULARIZADO: Validar que el nodo origen sea usable
+        if (!this.gameState.raceManager.isNodeUsable(fromNode)) {
             return { success: false, reason: 'Origen deshabilitado' };
         }
         

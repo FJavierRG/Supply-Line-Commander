@@ -198,11 +198,19 @@ app.get('*', (req, res, next) => {
 io.on('connection', (socket) => {
     console.log(`✅ Cliente conectado: ${socket.id}`);
     
-    // 🎯 NUEVO: Enviar configuración del juego al cliente (incluyendo límite de mazo)
+    // 🎯 NUEVO: Enviar configuración del juego al cliente (incluyendo límite de mazo y mazo por defecto)
     (async () => {
         const { GAME_CONFIG } = await import('./config/gameConfig.js');
+        const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
         socket.emit('game_config', {
-            deckPointLimit: GAME_CONFIG.deck.pointLimit
+            deckPointLimit: GAME_CONFIG.deck.pointLimit,
+            benchPointLimit: GAME_CONFIG.deck.benchPointLimit, // 🆕 NUEVO: Límite del banquillo
+            defaultDeck: { // 🆕 NUEVO: Mazo por defecto del servidor
+                id: DEFAULT_DECK.id,
+                name: DEFAULT_DECK.name,
+                units: DEFAULT_DECK.units,
+                bench: DEFAULT_DECK.bench || []
+            }
         });
     })();
     
@@ -330,7 +338,7 @@ io.on('connection', (socket) => {
      */
     socket.on('select_race', async (data) => {
         console.log('🎴 SERVIDOR: Recibido select_race (ahora maneja mazos):', data);
-        const { roomId, raceId, deckUnits } = data; // raceId ahora es deckId, deckUnits es opcional
+        const { roomId, raceId, deckUnits, benchUnits } = data; // raceId ahora es deckId, deckUnits y benchUnits son opcionales
         
         try {
             const room = roomManager.getRoom(roomId);
@@ -349,7 +357,8 @@ io.on('connection', (socket) => {
                 validatedDeck = {
                     id: 'default',
                     name: 'Mazo Predeterminado',
-                    units: DEFAULT_DECK.units
+                    units: DEFAULT_DECK.units,
+                    bench: DEFAULT_DECK.bench || [] // 🆕 NUEVO: Incluir banquillo
                 };
             } else if (deckUnits && Array.isArray(deckUnits)) {
                 // 🎯 VALIDACIÓN ANTI-HACK: Validar que todas las unidades sean válidas
@@ -358,6 +367,7 @@ io.on('connection', (socket) => {
                 const enabled = SERVER_NODE_CONFIG.gameplay.enabled || {};
                 const costs = SERVER_NODE_CONFIG.costs || {};
                 const deckPointLimit = GAME_CONFIG.deck.pointLimit;
+                const benchPointLimit = GAME_CONFIG.deck.benchPointLimit; // 🆕 NUEVO: Límite del banquillo
                 
                 // Verificar que todas las unidades estén habilitadas en el servidor
                 const validUnits = deckUnits.filter(unitId => {
@@ -394,12 +404,70 @@ io.on('connection', (socket) => {
                     return; // Rechazar el mazo
                 }
                 
-                console.log(`✅ Mazo validado: ${validUnits.length} unidades, costo total: ${deckCost}/${deckPointLimit}`);
+                // 🆕 NUEVO: Validar banquillo si se proporciona
+                let validBenchUnits = [];
+                let benchCost = 0;
+                
+                if (benchUnits && Array.isArray(benchUnits)) {
+                    // Verificar que todas las unidades del banquillo estén habilitadas
+                    validBenchUnits = benchUnits.filter(unitId => {
+                        const isEnabled = enabled[unitId] === true;
+                        if (!isEnabled) {
+                            console.warn(`⚠️ Unidad deshabilitada en banquillo: ${unitId}`);
+                        }
+                        return isEnabled;
+                    });
+                    
+                    // Calcular costo del banquillo
+                    benchCost = validBenchUnits.reduce((total, unitId) => {
+                        const unitCost = costs[unitId] || 0;
+                        return total + unitCost;
+                    }, 0);
+                    
+                    // Validar que el costo del banquillo no exceda el límite
+                    if (benchCost > benchPointLimit) {
+                        console.warn(`🚫 Banquillo rechazado: costo ${benchCost} excede límite ${benchPointLimit}`);
+                        socket.emit('deck_validation_error', {
+                            error: 'INVALID_BENCH_COST',
+                            message: `El costo del banquillo (${benchCost}) excede el límite permitido (${benchPointLimit})`,
+                            benchCost: benchCost,
+                            benchLimit: benchPointLimit
+                        });
+                        return; // Rechazar el mazo
+                    }
+                    
+                    // 🆕 NUEVO: Verificar que no haya duplicados entre mazo y banquillo
+                    const deckSet = new Set(validUnits);
+                    const benchSet = new Set(validBenchUnits);
+                    const intersection = [...deckSet].filter(x => benchSet.has(x));
+                    if (intersection.length > 0) {
+                        console.warn(`🚫 Mazo rechazado: duplicados entre mazo y banquillo: ${intersection.join(', ')}`);
+                        socket.emit('deck_validation_error', {
+                            error: 'DUPLICATE_UNITS',
+                            message: `No puede haber unidades duplicadas entre el mazo y el banquillo: ${intersection.join(', ')}`,
+                            duplicates: intersection
+                        });
+                        return; // Rechazar el mazo
+                    }
+                    
+                    // 🆕 NUEVO: Verificar que el HQ no esté en el banquillo
+                    if (validBenchUnits.includes('hq')) {
+                        console.warn(`🚫 Mazo rechazado: el HQ no puede estar en el banquillo`);
+                        socket.emit('deck_validation_error', {
+                            error: 'HQ_IN_BENCH',
+                            message: 'El HQ no puede estar en el banquillo'
+                        });
+                        return; // Rechazar el mazo
+                    }
+                }
+                
+                console.log(`✅ Mazo validado: ${validUnits.length} unidades (${deckCost}/${deckPointLimit} puntos), banquillo: ${validBenchUnits.length} unidades (${benchCost}/${benchPointLimit} puntos)`);
                 
                 validatedDeck = {
                     id: raceId, // El deckId del cliente
                     name: `Mazo del jugador ${player.name}`,
-                    units: validUnits
+                    units: validUnits,
+                    bench: validBenchUnits // 🆕 NUEVO: Incluir banquillo
                 };
             } else {
                 // Si no hay deckUnits, asumir que es el mazo predeterminado
@@ -407,7 +475,8 @@ io.on('connection', (socket) => {
                 validatedDeck = {
                     id: 'default',
                     name: 'Mazo Predeterminado',
-                    units: DEFAULT_DECK.units
+                    units: DEFAULT_DECK.units,
+                    bench: DEFAULT_DECK.bench || [] // 🆕 NUEVO: Incluir banquillo
                 };
             }
             
@@ -438,6 +507,126 @@ io.on('connection', (socket) => {
         } catch (error) {
             console.error('❌ Error al seleccionar mazo:', error);
             socket.emit('error', { message: error.message });
+        }
+    });
+    
+    /**
+     * 🆕 NUEVO: Permutar carta entre mazo y banquillo durante la partida
+     */
+    socket.on('swap_card', async (data) => {
+        const { roomId, deckUnitId, benchUnitId } = data;
+        console.log(`🔄 Swap recibido: ${deckUnitId} ↔ ${benchUnitId} en sala ${roomId}`);
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room) throw new Error('Sala no encontrada');
+            
+            // Verificar que la partida esté en curso
+            if (room.status !== 'playing' || !room.gameState) {
+                socket.emit('swap_card_error', {
+                    error: 'GAME_NOT_STARTED',
+                    message: 'La partida no ha comenzado'
+                });
+                return;
+            }
+            
+            // Encontrar el jugador
+            const player = room.players.find(p => p.id === socket.id);
+            if (!player) throw new Error('Jugador no encontrado');
+            
+            // Obtener el mazo actual del jugador
+            const playerDeck = room.gameState.raceManager.getPlayerDeck(player.team);
+            if (!playerDeck || !playerDeck.units || !playerDeck.bench) {
+                socket.emit('swap_card_error', {
+                    error: 'DECK_NOT_FOUND',
+                    message: 'Mazo no encontrado'
+                });
+                return;
+            }
+            
+            // Validar que las unidades existan en sus respectivos lugares
+            if (!playerDeck.units.includes(deckUnitId)) {
+                socket.emit('swap_card_error', {
+                    error: 'UNIT_NOT_IN_DECK',
+                    message: `La unidad "${deckUnitId}" no está en el mazo`
+                });
+                return;
+            }
+            
+            if (!playerDeck.bench.includes(benchUnitId)) {
+                socket.emit('swap_card_error', {
+                    error: 'UNIT_NOT_IN_BENCH',
+                    message: `La unidad "${benchUnitId}" no está en el banquillo`
+                });
+                return;
+            }
+            
+            // Verificar que no se intente intercambiar el HQ
+            if (deckUnitId === 'hq') {
+                socket.emit('swap_card_error', {
+                    error: 'CANNOT_SWAP_HQ',
+                    message: 'No se puede intercambiar el HQ'
+                });
+                return;
+            }
+            
+            // 🆕 NUEVO: NO validar límites de puntos durante la permutación ingame
+            // Los límites solo se aplican en el editor. Durante la partida, se puede permutar libremente.
+            
+            // 🆕 NUEVO: Verificar cooldown de la carta que entra al banquillo
+            const gameTime = room.gameState.gameTime || 0;
+            if (room.gameState.raceManager.isBenchCardOnCooldown(player.team, benchUnitId, gameTime)) {
+                socket.emit('swap_card_error', {
+                    error: 'BENCH_CARD_ON_COOLDOWN',
+                    message: 'Esta carta está en cooldown y no puede ser intercambiada'
+                });
+                return;
+            }
+            
+            // Realizar el intercambio
+            const deckIndex = playerDeck.units.indexOf(deckUnitId);
+            const benchIndex = playerDeck.bench.indexOf(benchUnitId);
+            playerDeck.units[deckIndex] = benchUnitId;
+            playerDeck.bench[benchIndex] = deckUnitId;
+            
+            // 🆕 CRÍTICO: Actualizar también en gameState.playerDecks para que getPlayerDeck() devuelva el mazo actualizado
+            if (room.gameState.playerDecks && room.gameState.playerDecks[player.team]) {
+                room.gameState.playerDecks[player.team].units = [...playerDeck.units];
+                room.gameState.playerDecks[player.team].bench = [...playerDeck.bench];
+                console.log(`🔄 Mazo actualizado en gameState para ${player.team}: ${playerDeck.units.length} unidades`);
+            }
+            
+            // 🆕 NUEVO: Establecer cooldown para la carta que entra al banquillo (la que viene del deck)
+            room.gameState.raceManager.setBenchCooldown(player.team, deckUnitId, gameTime);
+            console.log(`⏱️ Cooldown establecido para ${deckUnitId} (team: ${player.team}, gameTime: ${gameTime}, cooldown hasta: ${room.gameState.benchCooldowns[player.team][deckUnitId]})`);
+            
+            // 🆕 NUEVO: Limpiar cooldown de la carta que sale del banquillo (si tenía uno)
+            if (room.gameState.benchCooldowns?.[player.team]?.[benchUnitId]) {
+                delete room.gameState.benchCooldowns[player.team][benchUnitId];
+                console.log(`✅ Cooldown limpiado para ${benchUnitId} (salió del banquillo)`);
+            }
+            
+            // Actualizar el mazo en el jugador también (para consistencia)
+            if (player.selectedDeck) {
+                player.selectedDeck.units = [...playerDeck.units];
+                player.selectedDeck.bench = [...playerDeck.bench];
+            }
+            
+            // Confirmar el intercambio al jugador
+            socket.emit('swap_card_success', {
+                deckUnitId: benchUnitId, // La que ahora está en el deck
+                benchUnitId: deckUnitId, // La que ahora está en el bench
+                newDeck: [...playerDeck.units],
+                newBench: [...playerDeck.bench]
+            });
+            
+            console.log(`🔄 Jugador ${player.name} permutó ${deckUnitId} ↔ ${benchUnitId}`);
+        } catch (error) {
+            console.error('❌ Error al permutar carta:', error);
+            socket.emit('swap_card_error', {
+                error: 'UNKNOWN_ERROR',
+                message: error.message
+            });
         }
     });
     
@@ -522,9 +711,7 @@ io.on('connection', (socket) => {
             // 🐛 FIX: Mapear IDs de raza del cliente al servidor
             const raceMapping = {
                 'nationA': 'A_Nation',
-                'nationB': 'B_Nation',
-                'A': 'A_Nation',
-                'B': 'B_Nation'
+                'A': 'A_Nation'
             };
             const mappedRace = raceMapping[race] || race;
             
@@ -840,6 +1027,38 @@ io.on('connection', (socket) => {
     });
     
     /**
+     * 🆕 NUEVO: Activación del Destructor de mundos
+     */
+    socket.on('world_destroyer_request', (data) => {
+        const { roomId } = data;
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room || !room.gameState) throw new Error('Partida no iniciada');
+            
+            const playerTeam = roomManager.getPlayerTeam(roomId, socket.id);
+            const result = room.gameState.handleWorldDestroyer(playerTeam);
+            
+            if (result.success) {
+                // Broadcast a todos que se activó el destructor
+                io.to(roomId).emit('world_destroyer_activated', {
+                    playerTeam: result.playerTeam,
+                    startTime: result.startTime,
+                    countdownDuration: result.countdownDuration
+                });
+                
+                console.log(`☠️ Destructor de mundos activado por ${playerTeam}`);
+            } else {
+                socket.emit('world_destroyer_failed', { reason: result.reason });
+                console.log(`⚠️ Destructor de mundos rechazado: ${result.reason}`);
+            }
+        } catch (error) {
+            console.error('❌ Error en world_destroyer_request:', error);
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
+    /**
      * Sabotaje de FOB
      */
     socket.on('fob_sabotage_request', (data) => {
@@ -1035,6 +1254,33 @@ io.on('connection', (socket) => {
      * Lanzamiento de tanque
      * 🆕 NUEVO
      */
+    /**
+     * 🆕 NUEVO: Cambiar tipo de recurso seleccionado de un nodo
+     */
+    socket.on('change_node_resource_type', (data) => {
+        const { roomId, nodeId, resourceType } = data;
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room || !room.gameState) throw new Error('Partida no iniciada');
+            
+            const playerTeam = roomManager.getPlayerTeam(roomId, socket.id);
+            const result = room.gameState.changeNodeResourceType(playerTeam, nodeId, resourceType);
+            
+            if (result.success) {
+                // El cambio se sincronizará automáticamente en el próximo game_update
+                // No necesitamos emitir un evento específico, el estado del juego se actualizará
+                console.log(`🎯 ${playerTeam} cambió tipo de recurso de nodo ${nodeId} a ${resourceType}`);
+            } else {
+                socket.emit('change_node_resource_type_failed', { reason: result.reason });
+                console.log(`⚠️ Cambio de tipo de recurso rechazado: ${result.reason}`);
+            }
+        } catch (error) {
+            console.error('❌ Error en change_node_resource_type:', error);
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
     socket.on('tank_request', (data) => {
         const { roomId, targetId } = data;
         
@@ -1059,6 +1305,68 @@ io.on('connection', (socket) => {
             } else {
                 socket.emit('tank_failed', { reason: result.reason });
                 console.log(`⚠️ Tanque rechazado: ${result.reason}`);
+            }
+        } catch (error) {
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
+    // 🆕 NUEVO: Solicitud de artillado ligero
+    socket.on('light_vehicle_request', (data) => {
+        const { roomId, targetId } = data;
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room || !room.gameState) throw new Error('Partida no iniciada');
+            
+            const playerTeam = roomManager.getPlayerTeam(roomId, socket.id);
+            const result = room.gameState.handleLightVehicleLaunch(playerTeam, targetId);
+            
+            if (result.success) {
+                // Broadcast a todos
+                io.to(roomId).emit('light_vehicle_launched', {
+                    lightVehicleId: result.lightVehicle.id,
+                    targetId: result.targetId,
+                    team: playerTeam,
+                    x: result.lightVehicle.x,
+                    y: result.lightVehicle.y
+                });
+                
+                console.log(`🚛 Artillado ligero lanzado por ${playerTeam} → ${targetId}`);
+            } else {
+                socket.emit('light_vehicle_failed', { reason: result.reason });
+                console.log(`⚠️ Artillado ligero rechazado: ${result.reason}`);
+            }
+        } catch (error) {
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
+    // 🆕 NUEVO: Solicitud de artillería
+    socket.on('artillery_request', (data) => {
+        const { roomId, x, y } = data;
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room || !room.gameState) throw new Error('Partida no iniciada');
+            
+            const playerTeam = roomManager.getPlayerTeam(roomId, socket.id);
+            const result = room.gameState.handleArtilleryLaunch(playerTeam, x, y);
+            
+            if (result.success) {
+                // Broadcast a todos
+                io.to(roomId).emit('artillery_launched', {
+                    artilleryId: result.artillery.id,
+                    team: playerTeam,
+                    x: result.x,
+                    y: result.y,
+                    startTime: result.artillery.startTime
+                });
+                
+                console.log(`💣 Artillería lanzada por ${playerTeam} en (${x}, ${y})`);
+            } else {
+                socket.emit('artillery_failed', { reason: result.reason });
+                console.log(`⚠️ Artillería rechazada: ${result.reason}`);
             }
         } catch (error) {
             socket.emit('error', { message: error.message });
@@ -1288,6 +1596,29 @@ async function startGame(roomId) {
                         console.log(`💥 Tanque ${impact.tankId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`);
                     });
                     gameState.tankImpacts = []; // Limpiar después de enviar
+                }
+                
+                // 🆕 NUEVO: Enviar impactos de artillados ligeros si hay
+                if (gameState.lightVehicleImpacts && gameState.lightVehicleImpacts.length > 0) {
+                    gameState.lightVehicleImpacts.forEach(impact => {
+                        io.to(roomId).emit('light_vehicle_impact', impact);
+                        console.log(`💥 Artillado ligero ${impact.lightVehicleId} impactó ${impact.targetType} (aplicó broken) en (${impact.x}, ${impact.y})`);
+                    });
+                    gameState.lightVehicleImpacts = []; // Limpiar después de enviar
+                }
+                
+                // 🆕 NUEVO: Enviar evento del Destructor de mundos si se ejecutó
+                if (gameState.worldDestroyerEvent) {
+                    io.to(roomId).emit('world_destroyer_executed', gameState.worldDestroyerEvent);
+                    console.log(`☠️ Destructor de mundos ejecutado - ${gameState.worldDestroyerEvent.destroyedBuildings.length} edificios destruidos`);
+                    gameState.worldDestroyerEvent = null; // Limpiar después de enviar
+                }
+                
+                // 🆕 NUEVO: Enviar evento de artillería si se ejecutó
+                if (gameState.artilleryEvent) {
+                    io.to(roomId).emit('artillery_executed', gameState.artilleryEvent);
+                    console.log(`💣 Artillería ejecutada - ${gameState.artilleryEvent.affectedBuildings.length} edificios afectados`);
+                    gameState.artilleryEvent = null; // Limpiar después de enviar
                 }
                 
                 // Enviar intercepciones de anti-drones si hay

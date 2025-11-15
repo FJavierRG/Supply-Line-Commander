@@ -2,6 +2,7 @@
 export class InvestmentManager {
     constructor(gameState) {
         this.gameState = gameState;
+        this.raceManager = gameState.raceManager; // 🆕 MODULARIZADO: Acceso al RaceManager
     }
     
     /**
@@ -12,9 +13,8 @@ export class InvestmentManager {
         for (const node of this.gameState.nodes) {
             if (node.type === 'intelRadio' && 
                 node.investmentStarted && 
-                node.constructed && 
                 !node.investmentCompleted &&
-                !node.disabled) { // 🆕 NUEVO: No procesar inversión si está disabled
+                this.raceManager.isNodeFunctional(node)) { // 🆕 MODULARIZADO: Usar función helper (ya verifica constructed)
                 node.investmentTimer = (node.investmentTimer || 0) + dt;
                 
                 if (node.investmentTimer >= node.investmentTime) {

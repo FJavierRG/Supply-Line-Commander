@@ -64,6 +64,27 @@ export class BuildHandler {
     }
     
     /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene efectos temporales (trained, wounded, etc.)
+     */
+    getTemporaryEffects() {
+        return { ...SERVER_NODE_CONFIG.temporaryEffects };
+    }
+    
+    /**
+     * 🆕 NUEVO: SERVIDOR COMO AUTORIDAD: Obtiene tipos de vehículos
+     */
+    getVehicleTypes() {
+        return { ...SERVER_NODE_CONFIG.vehicleTypes };
+    }
+    
+    /**
+     * 🆕 NUEVO: SERVIDOR COMO AUTORIDAD: Obtiene sistemas de vehículos por tipo de nodo
+     */
+    getVehicleSystems() {
+        return { ...SERVER_NODE_CONFIG.vehicleSystems };
+    }
+    
+    /**
      * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene radios de detección (CRÍTICO PARA SEGURIDAD)
      */
     getDetectionRadii() {
@@ -119,6 +140,36 @@ export class BuildHandler {
         // 🎯 NUEVO: Validar construcción según mazo del jugador
         if (!this.canBuildBuilding(playerTeam, buildingType)) {
             return { success: false, reason: 'Tu mazo no incluye este edificio' };
+        }
+        
+        // 🆕 NUEVO: Validar requisitos de construcción (edificios requeridos)
+        const requirements = SERVER_NODE_CONFIG.buildRequirements?.[buildingType];
+        if (requirements && requirements.required) {
+            const missingRequirements = [];
+            
+            for (const requiredType of requirements.required) {
+                const hasRequired = this.gameState.nodes.some(n => 
+                    n.type === requiredType && 
+                    n.team === playerTeam && 
+                    n.constructed && 
+                    !n.isAbandoning &&
+                    n.active
+                );
+                
+                if (!hasRequired) {
+                    missingRequirements.push(requiredType);
+                }
+            }
+            
+            if (missingRequirements.length > 0) {
+                const buildingName = SERVER_NODE_CONFIG.descriptions[buildingType]?.name || buildingType;
+                const missingNames = missingRequirements.map(t => 
+                    SERVER_NODE_CONFIG.descriptions[t]?.name || t
+                ).join(', ');
+                
+                console.log(`❌ Construcción rechazada: ${buildingName} requiere ${missingNames} (${playerTeam})`);
+                return { success: false, reason: `Requiere: ${missingNames}` };
+            }
         }
         
         // Validar que esté dentro del territorio del jugador
@@ -205,6 +256,31 @@ export class BuildHandler {
                 console.log(`⚡ NuclearPlant completada - ${node.team} recibirá +${incomeBonus}$/s`);
                 break;
                 
+            case 'physicStudies':
+                // El bonus a plantas nucleares se aplica automáticamente en el loop de currency
+                const physicStudiesConfig = SERVER_NODE_CONFIG.effects.physicStudies;
+                console.log(`🔬 Estudios de Física completados - ${node.team} recibirá +${physicStudiesConfig.nuclearPlantBonus}$/s adicional por cada planta nuclear`);
+                break;
+                
+            case 'secretLaboratory':
+                // El bonus a plantas nucleares se aplica automáticamente en el loop de currency
+                // Este bonus es independiente de Estudios de Física (se acumula con él)
+                const secretLaboratoryConfig = SERVER_NODE_CONFIG.effects.secretLaboratory;
+                console.log(`🔬 Laboratorio Secreto completado - ${node.team} recibirá +${secretLaboratoryConfig.nuclearPlantBonus}$/s adicional por cada planta nuclear (acumulable con Estudios de Física)`);
+                break;
+                
+            case 'trainingCamp':
+                // 🆕 NUEVO: Aplicar efecto "trained" a todos los frentes del jugador
+                this.applyTrainedEffectToFronts(node.team);
+                const trainedConfig = SERVER_NODE_CONFIG.temporaryEffects.trained;
+                console.log(`🎓 Campo de Entrenamiento completado - ${node.team} ahora tiene efecto "trained" en todos sus frentes (+${trainedConfig.currencyBonus}$ por avance)`);
+                break;
+                
+            case 'deadlyBuild':
+                // Desbloquea el consumible "Destructor de mundos" en la tienda
+                console.log(`☠️ Construcción Prohibida completada - ${node.team} ahora puede comprar "Destructor de mundos" en la tienda`);
+                break;
+                
             case 'campaignHospital':
                 // El hospital puede enviar ambulancias (implementado en handleMedicalRequest)
                 console.log(`🏥 CampaignHospital completado - ${node.team} puede enviar ambulancias desde este hospital`);
@@ -232,6 +308,40 @@ export class BuildHandler {
                 this.eliminateEnemyCommandosInRange(node);
                 console.log(`🗼 Torre de Vigilancia ${node.id} completada - protegiendo área de ${node.detectionRadius || 140}px`);
                 break;
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Aplica el efecto "trained" a todos los frentes del jugador
+     * @param {string} team - Equipo del jugador ('player1' o 'player2')
+     */
+    applyTrainedEffectToFronts(team) {
+        const trainedConfig = SERVER_NODE_CONFIG.temporaryEffects.trained;
+        const playerFronts = this.gameState.nodes.filter(n => 
+            n.type === 'front' && 
+            n.team === team
+        );
+        
+        for (const front of playerFronts) {
+            // Verificar si ya tiene el efecto "trained" activo
+            const existingTrained = front.effects?.find(e => 
+                e.type === 'trained' && 
+                (!e.expiresAt || this.gameState.gameTime < e.expiresAt)
+            );
+            
+            if (!existingTrained) {
+                // Añadir efecto "trained" (permanente, no expira)
+                if (!front.effects) front.effects = [];
+                
+                front.effects.push({
+                    type: 'trained',
+                    icon: trainedConfig.icon,
+                    tooltip: trainedConfig.tooltip,
+                    expiresAt: null // Permanente
+                });
+                
+                console.log(`🎓 Efecto "trained" aplicado a frente ${front.id} de ${team}`);
+            }
         }
     }
     
@@ -552,9 +662,25 @@ export class BuildHandler {
         const deck = this.gameState.getPlayerDeck(team);
         
         if (deck && deck.units) {
-            // Validar usando el mazo
-            const canBuild = deck.units.includes(buildingType);
-            console.log(`🎴 ${team} (mazo "${deck.name}") intenta construir ${buildingType}: ${canBuild ? 'PERMITIDO' : 'DENEGADO'} (disponibles: ${deck.units.join(', ')})`);
+            // 🆕 NUEVO: Verificar tanto en el mazo principal como en el banquillo
+            const isInDeck = deck.units.includes(buildingType);
+            const isInBench = deck.bench && deck.bench.includes(buildingType);
+            const canBuild = isInDeck || isInBench;
+            
+            if (!canBuild) {
+                // 🆕 NUEVO: Log detallado cuando se deniega la construcción
+                console.log(`🚫 ${team} (mazo "${deck.name}") NO puede construir ${buildingType}`);
+                console.log(`   📋 Unidades en el mazo: [${deck.units.join(', ')}]`);
+                if (deck.bench && deck.bench.length > 0) {
+                    console.log(`   📋 Unidades en el banquillo: [${deck.bench.join(', ')}]`);
+                } else {
+                    console.log(`   📋 Banquillo vacío`);
+                }
+                console.log(`   🔍 Buscando: ${buildingType}`);
+            } else {
+                const location = isInDeck ? 'mazo' : 'banquillo';
+                console.log(`✅ ${team} (mazo "${deck.name}") puede construir ${buildingType} (en ${location})`);
+            }
             return canBuild;
         }
         

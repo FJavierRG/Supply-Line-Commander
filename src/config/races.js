@@ -11,14 +11,6 @@ export const RACE_CONFIG = {
         // ⚠️ DEPRECATED: buildings, consumables, specialMechanics movidos al servidor (autoridad - ANTI-HACK)
     },
     
-    B_Nation: {
-        id: 'B_Nation',
-        name: 'Fuerza de Asalto Directa',
-        description: 'Ejército de asalto rápido sin puntos intermedios',
-        color: '#e74c3c',
-        icon: 'race-military'
-        // ⚠️ DEPRECATED: buildings, consumables, specialMechanics movidos al servidor (autoridad - ANTI-HACK)
-    }
 };
 
 /**
@@ -32,11 +24,9 @@ export function getRaceConfig(raceId) {
 
 /**
  * Obtiene todas las razas disponibles (SOLO VISUAL)
- * 🚧 TEMPORAL: Solo devuelve A_Nation mientras se migra a sistema de mazo
  * @returns {Array} Array con todas las configuraciones visuales de razas
  */
 export function getAllRaces() {
-    // 🚧 TEMPORAL: Solo devolver A_Nation - B_Nation deshabilitada para migración a sistema de mazo
     return [RACE_CONFIG.A_Nation];
 }
 

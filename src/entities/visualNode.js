@@ -75,6 +75,17 @@ export class VisualNode {
             this.maxAmbulances = config.maxAmbulances || 1;
         }
         
+        // 🆕 NUEVO: Propiedades del sistema de reparación (solo para display)
+        this.hasRepairSystem = config.hasRepairSystem || false;
+        if (this.hasRepairSystem) {
+            this.availableRepairVehicles = config.availableRepairVehicles || config.maxRepairVehicles || 0;
+            this.maxRepairVehicles = config.maxRepairVehicles || 0;
+        }
+        
+        // ✅ SEGURO: Propiedades de estado (solo para display)
+        this.disabled = config.disabled || false; // Estado disabled (para comandos)
+        this.broken = config.broken || false; // 🆕 NUEVO: Estado broken (roto - requiere reparación)
+        
         if (config.canDispatchMedical) {
             this.canDispatchMedical = true;
             this.actionRange = config.actionRange || 200;
@@ -132,18 +143,14 @@ export class VisualNode {
     }
     
     /**
-     * ✅ SEGURO: Getter dinámico para maxVehicles (solo para display)
+     * ✅ SEGURO: Getter para maxVehicles (solo para display)
+     * 🆕 FIX: El servidor ya calcula el bonus del truck factory, no sumar dos veces
      */
     get maxVehicles() {
         if (!this.hasVehicles) return 0;
-        
-        let total = this.baseMaxVehicles;
-        
-        if (this.type === 'hq' && this.game) {
-            total += this.game.getTruckFactoryBonus(this.team);
-        }
-        
-        return total;
+        // El servidor ya calcula maxVehicles incluyendo el bonus del truck factory
+        // No necesitamos sumar nada adicional aquí
+        return this.baseMaxVehicles || 0;
     }
     
     /**
@@ -228,11 +235,13 @@ export class VisualNode {
         return false;
     }
     
-    // Sistema médico (solo para display)
+    // 🆕 NUEVO: Sistema de selección de tipo de vehículo (modular)
     setResourceType(type) {
-        if (this.hasMedicalSystem) {
-            this.selectedResourceType = type;
-        }
+        // Permitir cambio si el nodo tiene sistema médico O si tiene tipos de vehículos habilitados
+        // La verificación de tipos habilitados se hace en el renderizado, aquí solo guardamos el valor
+        this.selectedResourceType = type;
+        // 🆕 NUEVO: Marcar timestamp para evitar que el servidor sobrescriba cambios locales recientes
+        this._lastResourceTypeChange = Date.now();
     }
     
     hasAmbulanceAvailable() {
@@ -324,7 +333,12 @@ export class VisualNode {
     }
     
     isUsable() {
-        return !this.isAbandoning && this.active && this.constructed;
+        // 🆕 MODULARIZADO: Incluir verificaciones de disabled y broken
+        return !this.isAbandoning && 
+               this.active && 
+               this.constructed && 
+               !this.disabled && 
+               !this.broken;
     }
     
     // Sistema de construcción (solo para display)

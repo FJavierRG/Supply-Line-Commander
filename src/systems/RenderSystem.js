@@ -18,6 +18,35 @@ export class RenderSystem {
         this.ctx.font = 'bold 32px Arial'; // +35% (24 * 1.35 = 32.4 ≈ 32)
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
+        
+        // 🎨 MEJORA DE CALIDAD: Habilitar suavizado de imágenes para mejor calidad al escalar
+        this.ctx.imageSmoothingEnabled = true;
+        if (this.ctx.imageSmoothingQuality) {
+            this.ctx.imageSmoothingQuality = 'high';
+        }
+        
+        // 🆕 NUEVO: Estado del Destructor de mundos (efectos visuales)
+        this.worldDestroyerActive = false;
+        this.worldDestroyerStartTime = null;
+        this.worldDestroyerCountdownDuration = 7;
+        this.worldDestroyerExecuted = false;
+        this.worldDestroyerExecutionTime = null;
+        
+        // 🆕 NUEVO: Estado de artillería (efectos visuales)
+        this.artilleryStrikes = []; // Array de bombardeos de artillería activos
+    }
+    
+    /**
+     * 🆕 GENERALIZADO: Determina si un nodo siempre debe mirar hacia el oponente
+     * @param {Object} node - Nodo a verificar
+     * @returns {boolean} True si el nodo siempre debe orientarse hacia el enemigo
+     */
+    shouldAlwaysFaceOpponent(node) {
+        // Lista de tipos/identificadores que deben orientarse hacia el enemigo
+        return node.isCommando || 
+               node.isTruckAssault ||
+               node.isCameraDrone || 
+               node.type === 'droneLauncher';
     }
     
     resize(width, height) {
@@ -152,7 +181,7 @@ export class RenderSystem {
         
         // Determinar si el sprite necesita volteo adicional por ser enemigo
         // Los sprites de A_Nation enemigos ya vienen volteados (base-enemy-*)
-        // Los sprites de otras naciones (como B_Nation) necesitan volteo manual porque
+        // Los sprites enemigos necesitan volteo manual porque
         // no tienen versión enemiga volteada en los archivos
         // NOTA: Los frentes también necesitan volteo cuando son de naciones específicas y son enemigos
         const isEnemy = !isMyBuilding;
@@ -178,8 +207,8 @@ export class RenderSystem {
                 shouldFlipBuilding = isEnemy; // Enemigos se voltean, propios no
             }
         } else {
-            // 🆕 NUEVO: Comando y truck assault siempre miran hacia el oponente
-            if (node.isCommando || node.isTruckAssault) {
+            // 🆕 GENERALIZADO: Edificios que siempre miran hacia el oponente
+            if (this.shouldAlwaysFaceOpponent(node)) {
                 // Determinar dirección hacia el oponente:
                 // - Player1 → debe mirar hacia la derecha (hacia player2) → no flip
                 // - Player2 → debe mirar hacia la izquierda (hacia player1) → flip
@@ -205,7 +234,7 @@ export class RenderSystem {
                     // Si el sprite necesita volteo adicional por ser enemigo (naciones específicas),
                     // aplicar volteo adicional para compensar que estos sprites no tienen versión enemiga volteada
                     if (needsEnemyFlip) {
-                        // Los sprites de naciones específicas (como B_Nation) no tienen versión enemiga volteada,
+                        // Los sprites no tienen versión enemiga volteada,
                         // por lo que necesitan volteo adicional para que miren hacia el jugador
                         // Invertir la lógica de posición para estos sprites
                         shouldFlipBuilding = node.x > centerX;
@@ -304,8 +333,12 @@ export class RenderSystem {
             }
         }
         
+        // 🆕 NUEVO: Saltar renderizado del sprite base si es camera drone volando
+        // (se renderiza específicamente más abajo en renderCameraDroneFlying)
+        const shouldSkipBaseSprite = node.isCameraDrone && node.active && !node.deployed;
+        
         // Renderizar sprite
-        if (sprite) {
+        if (sprite && !shouldSkipBaseSprite) {
             // Aplicar filtro de grises si el FOB está abandonando
             if (node.isAbandoning) {
                 this.ctx.save();
@@ -341,7 +374,62 @@ export class RenderSystem {
                 this.ctx.filter = 'none'; // Resetear filtro
                 this.ctx.restore();
             } 
-            // 🆕 NUEVO: Aplicar filtro de grises si el edificio está deshabilitado
+            // 🆕 NUEVO: Aplicar filtro de grises si el edificio está roto (prioridad sobre disabled)
+            else if (node.broken) {
+                this.ctx.save();
+                // Gris completo para edificios rotos (igual que disabled)
+                this.ctx.filter = 'grayscale(100%) brightness(0.6)';
+                
+                // Compensar Mirror View si está activo
+                if (needsMirrorCompensation) {
+                    this.ctx.translate(node.x, node.y);
+                    this.ctx.scale(-1, 1); // Compensar el flip global
+                    
+                    // Aplicar orientación dinámica del edificio o del frente
+                    if (shouldFlipBuilding) {
+                        this.ctx.scale(-1, 1);
+                    }
+                    
+                    this.ctx.drawImage(sprite, -spriteWidth/2, -spriteHeight/2, spriteWidth, spriteHeight);
+                } else if (shouldFlipBuilding) {
+                    this.ctx.translate(node.x, node.y);
+                    this.ctx.scale(-1, 1);
+                    this.ctx.drawImage(sprite, -spriteWidth/2, -spriteHeight/2, spriteWidth, spriteHeight);
+                } else {
+                    this.ctx.drawImage(sprite, node.x - spriteWidth/2, node.y - spriteHeight/2, spriteWidth, spriteHeight);
+                }
+                
+                this.ctx.filter = 'none'; // Resetear filtro
+                this.ctx.restore();
+                
+                // 🆕 NUEVO: Renderizar overlay "repairable.png" sobre el edificio roto
+                const repairableOverlay = this.assetManager.getSprite('repairable');
+                if (repairableOverlay) {
+                    // Usar el mismo tamaño que el sprite del edificio
+                    const overlayWidth = spriteWidth;
+                    const overlayHeight = spriteHeight;
+                    
+                    if (needsMirrorCompensation) {
+                        this.ctx.save();
+                        this.ctx.translate(node.x, node.y);
+                        this.ctx.scale(-1, 1);
+                        if (shouldFlipBuilding) {
+                            this.ctx.scale(-1, 1);
+                        }
+                        this.ctx.drawImage(repairableOverlay, -overlayWidth/2, -overlayHeight/2, overlayWidth, overlayHeight);
+                        this.ctx.restore();
+                    } else if (shouldFlipBuilding) {
+                        this.ctx.save();
+                        this.ctx.translate(node.x, node.y);
+                        this.ctx.scale(-1, 1);
+                        this.ctx.drawImage(repairableOverlay, -overlayWidth/2, -overlayHeight/2, overlayWidth, overlayHeight);
+                        this.ctx.restore();
+                    } else {
+                        this.ctx.drawImage(repairableOverlay, node.x - overlayWidth/2, node.y - overlayHeight/2, overlayWidth, overlayHeight);
+                    }
+                }
+            }
+            // 🆕 NUEVO: Aplicar filtro de grises si el edificio está deshabilitado (pero no roto)
             else if (node.disabled) {
                 this.ctx.save();
                 // Gris completo para edificios deshabilitados
@@ -397,16 +485,16 @@ export class RenderSystem {
             
             this.ctx.shadowBlur = 0;
             
-            // Aro de selección/hover
-            if (isSelected || isHovered) {
+            // Aro de selección/hover (saltar si es camera drone volando)
+            if (!shouldSkipBaseSprite && (isSelected || isHovered)) {
                 this.ctx.strokeStyle = isSelected ? '#f39c12' : '#fff';
                 this.ctx.lineWidth = isSelected ? 4 : 3;
                 this.ctx.beginPath();
                 this.ctx.arc(node.x, node.y, node.radius * 1.6, 0, Math.PI * 2);
                 this.ctx.stroke();
             }
-        } else {
-            // Fallback si no hay sprite
+        } else if (!shouldSkipBaseSprite) {
+            // Fallback si no hay sprite (solo si no es camera drone volando)
             console.warn(`⚠️ Sprite no encontrado:`, spriteKey, 'para nodo', node.type);
             this.ctx.shadowBlur = 0;
             this.ctx.fillStyle = '#555';
@@ -521,11 +609,6 @@ export class RenderSystem {
             }
         }
         
-        // 🆕 NUEVO: Icono de helicóptero para frentes de B_Nation con helicópteros
-        if (node.type === 'front' && this.game.selectedRace === 'B_Nation' && node.availableHelicopters > 0) {
-            this.renderHelicopterIcon(node);
-        }
-        
         // Selector de recursos del HQ
         if ((isSelected || node === game?.hoveredNode) && node.type === 'hq') {
             this.renderResourceSelector(node);
@@ -539,6 +622,19 @@ export class RenderSystem {
         // 🆕 NUEVO: Anillo de duración del truck assault
         if (node.isTruckAssault && node.active) {
             this.renderTruckAssaultDurationRing(node, game);
+        }
+        
+        // 🆕 NUEVO: Renderizar camera drone volando o desplegado
+        if (node.isCameraDrone && node.active) {
+            if (!node.deployed) {
+                // Camera drone volando - renderizar como dron
+                this.renderCameraDroneFlying(node);
+            } else {
+                // Camera drone desplegado - renderizar área de detección si está seleccionado
+                if (isSelected || node === game?.hoveredNode) {
+                    this.renderCameraDroneDetectionArea(node);
+                }
+            }
         }
         
         // 🆕 NUEVO: Anillo de progreso de inversión de intelRadio
@@ -572,6 +668,8 @@ export class RenderSystem {
     
     // ========== CONTADOR DE VEHÍCULOS DEL HQ ==========
     renderHQVehicles(node) {
+        if (!this.game) return;
+        
         // Compensar Mirror View si está activo
         if (this.mirrorViewApplied) {
             this.ctx.save();
@@ -595,52 +693,25 @@ export class RenderSystem {
             shakeY = Math.cos(node.noVehiclesShakeTime * shakeSpeed * 1.5) * shakeIntensity;
         }
         
-        let vehicleText;
-        let availableCount;
+        // 🆕 NUEVO: Obtener tipo de vehículo seleccionado dinámicamente
+        const selectedTypeId = node.selectedResourceType || 'ammo'; // Fallback a 'ammo' si no hay selección
+        const vehicleType = this.game.getVehicleTypeConfig(selectedTypeId);
         
-        // Determinar qué mostrar según el modo
-        if (node.selectedResourceType === 'medical') {
-            // Modo médico: mostrar ambulancias
-            const ambulanceAvailable = node.ambulanceAvailable ? 1 : 0;
-            const medicIconSprite = this.assetManager.getSprite('ui-medic-vehicle-icon');
-            const iconSize = 45;
-            const iconX = node.x + shakeX - 45;
-            const iconY = barY + 26 + shakeY - iconSize / 2 - 3;
-            
-            if (medicIconSprite) {
-                this.ctx.drawImage(medicIconSprite, iconX, iconY, iconSize, iconSize);
-            }
-            
-            vehicleText = `${ambulanceAvailable}/${node.maxAmbulances || 1}`;
-            availableCount = ambulanceAvailable;
-        } else if (this.game.selectedRace === 'B_Nation' && node.hasHelicopters) {
-            // Modo B_Nation: mostrar helicópteros
-            const helicopterIconSprite = this.assetManager.getSprite('ui-vehicle-icon'); // Usar el mismo icono por ahora
-            const iconSize = 45;
-            const iconX = node.x + shakeX - 45;
-            const iconY = barY + 26 + shakeY - iconSize / 2 - 3;
-            
-            if (helicopterIconSprite) {
-                this.ctx.drawImage(helicopterIconSprite, iconX, iconY, iconSize, iconSize);
-            }
-            
-            // 🆕 NUEVO: Contar helicópteros aterrizados en lugar de availableHelicopters
-            const landedCount = node.landedHelicopters?.length || 0;
-            vehicleText = `${landedCount}/${node.maxHelicopters}`;
-            availableCount = landedCount;
-        } else {
-            // Modo normal: mostrar camiones
-            const vehicleIconSprite = this.assetManager.getSprite('ui-vehicle-icon');
-            const iconSize = 45;
-            const iconX = node.x + shakeX - 45;
-            const iconY = barY + 26 + shakeY - iconSize / 2 - 3;
-            
-            if (vehicleIconSprite) {
-                this.ctx.drawImage(vehicleIconSprite, iconX, iconY, iconSize, iconSize);
-            }
-            
-            vehicleText = `${node.availableVehicles}/${node.maxVehicles}`;
-            availableCount = node.availableVehicles;
+        if (!vehicleType) return; // No hay tipo configurado, no renderizar
+        
+        // 🆕 NUEVO: Obtener contadores dinámicamente usando métodos helper
+        const availableCount = this.game.getAvailableVehicleCount(node, selectedTypeId);
+        const maxCount = this.game.getMaxVehicleCount(node, selectedTypeId);
+        const vehicleText = `${availableCount}/${maxCount}`;
+        
+        // 🆕 NUEVO: Renderizar icono dinámicamente
+        const iconSprite = this.assetManager.getSprite(vehicleType.icon);
+        const iconSize = 45;
+        const iconX = node.x + shakeX - 45;
+        const iconY = barY + 26 + shakeY - iconSize / 2 - 3;
+        
+        if (iconSprite) {
+            this.ctx.drawImage(iconSprite, iconX, iconY, iconSize, iconSize);
         }
         
         // Renderizar texto del contador
@@ -863,96 +934,116 @@ export class RenderSystem {
     }
     
     renderResourceSelector(base) {
+        if (!this.game) return;
+        
+        // 🆕 NUEVO: Obtener tipos de vehículos habilitados desde la configuración del servidor
+        const enabledTypes = this.game.getEnabledVehicleTypes(base.type);
+        if (enabledTypes.length === 0) return; // No hay tipos habilitados, no renderizar
+        
         const buttonSize = 40; // +15% más grande (35 * 1.15 = 40.25 ≈ 40)
         const buttonRadius = buttonSize / 2;
-        const spacing = 10;
-        const baseY = base.y - base.radius - 75; // Subido 15% más (de -65 a -75)
-        
-        // Botón munición (REDONDO)
-        const ammoCenterX = base.x - buttonRadius - spacing/2;
-        const ammoCenterY = baseY + buttonRadius;
-        const ammoSelected = base.selectedResourceType === 'ammo';
         
         // Color verde militar
         const militaryGreen = '#4a5d23';
         const militaryGreenSolid = '#4a5d23'; // 100% opaco
         
-        this.ctx.fillStyle = ammoSelected ? militaryGreenSolid : 'rgba(0, 0, 0, 0.7)';
-        this.ctx.beginPath();
-        this.ctx.arc(ammoCenterX, ammoCenterY, buttonRadius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.strokeStyle = ammoSelected ? militaryGreen : 'rgba(74, 93, 35, 0.5)';
-        this.ctx.lineWidth = ammoSelected ? 3 : 2;
-        this.ctx.stroke();
-        // Renderizar icono de vehículo (ui-vehicle-icon)
-        const vehicleIcon = this.assetManager.getSprite('ui-vehicle-icon');
-        if (vehicleIcon) {
-            const iconSize = 34; // Tamaño del icono +20% (28 * 1.2 = 33.6 ≈ 34)
-            this.ctx.drawImage(vehicleIcon, 
-                ammoCenterX - iconSize/2, ammoCenterY - iconSize/2, 
-                iconSize, iconSize);
-        } else {
-            // Fallback a emoji si no hay sprite
-            this.ctx.font = '25px Arial';
-        this.ctx.fillStyle = '#fff';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-            this.ctx.fillText('🚛', ammoCenterX, ammoCenterY);
-        }
+        // 🆕 NUEVO: Calcular posición de los botones en un arco alrededor del HQ
+        // El arco comienza desde arriba-izquierda y se distribuye uniformemente
+        const ringRadius = base.radius * 1.6; // Radio del anillo de selección
+        const buttonDistance = ringRadius + 35; // Distancia del centro del HQ al centro de los botones
         
-        // Botón médico (REDONDO)
-        const medCenterX = base.x + buttonRadius + spacing/2;
-        const medCenterY = baseY + buttonRadius;
-        const medSelected = base.selectedResourceType === 'medical';
-        const ambulanceAvailable = base.ambulanceAvailable;
+        // Ángulo inicial: comenzar desde arriba-izquierda (aproximadamente -135 grados desde arriba)
+        // Distribuir los botones en un arco que va de arriba-izquierda a arriba-derecha
+        const startAngle = -Math.PI * 0.75; // -135 grados (arriba-izquierda)
+        const endAngle = -Math.PI * 0.25; // -45 grados (arriba-derecha)
+        const angleSpan = endAngle - startAngle; // Rango total del arco
         
-        // Color más apagado si no está disponible (sin tachar)
-        const medBgColor = !ambulanceAvailable ? 'rgba(100, 100, 100, 0.5)' : 
-                           medSelected ? militaryGreenSolid : 'rgba(0, 0, 0, 0.7)';
-        const medBorderColor = !ambulanceAvailable ? 'rgba(150, 150, 150, 0.5)' :
-                               medSelected ? militaryGreen : 'rgba(74, 93, 35, 0.5)';
+        // 🆕 NUEVO: Calcular espaciado dinámicamente según el número de botones
+        // Si hay 1 botón, se centra en el medio del arco
+        // Si hay más, se distribuyen uniformemente
+        const angleStep = enabledTypes.length > 1 ? angleSpan / (enabledTypes.length - 1) : 0;
+        const centerAngle = enabledTypes.length === 1 ? (startAngle + endAngle) / 2 : null;
         
-        this.ctx.fillStyle = medBgColor;
+        enabledTypes.forEach((vehicleTypeId, index) => {
+            const vehicleType = this.game.getVehicleTypeConfig(vehicleTypeId);
+            if (!vehicleType) return;
+            
+            // Calcular ángulo para este botón
+            // Si solo hay 1 botón, centrarlo en el medio del arco
+            // Si hay más, distribuirlos uniformemente
+            const angle = centerAngle !== null ? centerAngle : (startAngle + (angleStep * index));
+            
+            // Calcular posición en el círculo
+            const centerX = base.x + Math.cos(angle) * buttonDistance;
+            const centerY = base.y + Math.sin(angle) * buttonDistance;
+            
+            const isSelected = base.selectedResourceType === vehicleTypeId;
+            const isAvailable = this.game.isVehicleAvailable(base, vehicleTypeId);
+            
+            // Color más apagado si no está disponible
+            const bgColor = !isAvailable ? 'rgba(100, 100, 100, 0.5)' : 
+                           isSelected ? militaryGreenSolid : 'rgba(0, 0, 0, 0.7)';
+            const borderColor = !isAvailable ? 'rgba(150, 150, 150, 0.5)' :
+                               isSelected ? militaryGreen : 'rgba(74, 93, 35, 0.5)';
+            
+            // Renderizar botón (REDONDO)
+            this.ctx.fillStyle = bgColor;
             this.ctx.beginPath();
-        this.ctx.arc(medCenterX, medCenterY, buttonRadius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.strokeStyle = medBorderColor;
-        this.ctx.lineWidth = medSelected ? 3 : 2;
+            this.ctx.arc(centerX, centerY, buttonRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.strokeStyle = borderColor;
+            this.ctx.lineWidth = isSelected ? 3 : 2;
             this.ctx.stroke();
-        // Renderizar icono de vehículo médico (ui-medic-vehicle-icon)
-        const medicIcon = this.assetManager.getSprite('ui-medic-vehicle-icon');
-        if (medicIcon) {
-            const iconSize = 34; // Tamaño del icono +20% (28 * 1.2 = 33.6 ≈ 34)
-            // Aplicar opacidad si no está disponible
-            if (!ambulanceAvailable) {
-                this.ctx.globalAlpha = 0.4;
+            
+            // Renderizar icono del tipo de vehículo
+            const icon = this.assetManager.getSprite(vehicleType.icon);
+            if (icon) {
+                const iconSize = 34; // Tamaño del icono +20% (28 * 1.2 = 33.6 ≈ 34)
+                // Aplicar opacidad si no está disponible
+                if (!isAvailable) {
+                    this.ctx.globalAlpha = 0.4;
+                }
+                this.ctx.drawImage(icon, 
+                    centerX - iconSize/2, centerY - iconSize/2, 
+                    iconSize, iconSize);
+                if (!isAvailable) {
+                    this.ctx.globalAlpha = 1.0; // Restaurar opacidad
+                }
+            } else {
+                // Fallback a emoji si no hay sprite
+                this.ctx.font = '25px Arial';
+                this.ctx.fillStyle = isAvailable ? '#fff' : '#999';
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                // 🆕 NUEVO: Emoji por defecto según el tipo (genérico para cualquier tipo)
+                // Mapeo de tipos conocidos a emojis
+                const emojiMap = {
+                    'medical': '🚑',
+                    'helicopter': '🚁',
+                    'repair': '🔧',
+                    'ammo': '🚛'
+                };
+                const emoji = emojiMap[vehicleTypeId] || '🚚'; // Fallback genérico si no hay mapeo
+                this.ctx.fillText(emoji, centerX, centerY);
             }
-            this.ctx.drawImage(medicIcon, 
-                medCenterX - iconSize/2, medCenterY - iconSize/2, 
-                iconSize, iconSize);
-            if (!ambulanceAvailable) {
-                this.ctx.globalAlpha = 1.0; // Restaurar opacidad
-            }
-        } else {
-            // Fallback a emoji si no hay sprite
-            this.ctx.font = '25px Arial';
-            this.ctx.fillStyle = ambulanceAvailable ? '#fff' : '#999';
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText('🚑', medCenterX, medCenterY);
-        }
+        });
         
-        // Texto indicador del modo seleccionado (más visible)
-        this.ctx.font = 'bold 17px Arial'; // +20% (14 * 1.2 = 16.8 ≈ 17)
-        const modeText = medSelected ? 'MÉDICO' : 'SUMINISTROS';
-        const modeColor = '#4a5d23'; // Verde militar para ambos
+        // 🆕 NUEVO: Texto indicador del modo seleccionado (arriba del HQ, encima de los botones)
+        const selectedType = this.game.getVehicleTypeConfig(base.selectedResourceType);
+        const modeText = selectedType ? selectedType.name.toUpperCase() : 'SELECCIONAR';
+        const modeColor = '#4a5d23'; // Verde militar
+        
+        // Posición del texto arriba del HQ (encima de los botones en el arco)
+        // Calcular la posición más alta de los botones para colocar el texto arriba
+        const topButtonY = base.y + Math.sin(startAngle) * buttonDistance; // Y del primer botón (más arriba)
+        const textY = topButtonY - 70; // 50px arriba del botón más alto para no tapar los botones
         
         // Fondo para el texto
+        this.ctx.font = 'bold 17px Arial'; // +20% (14 * 1.2 = 16.8 ≈ 17)
         const textMetrics = this.ctx.measureText(modeText);
         const textWidth = textMetrics.width;
         const textHeight = 19; // +20% (16 * 1.2 = 19.2 ≈ 19)
         const textX = base.x - textWidth / 2;
-        const textY = baseY - 22;
         
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         this.ctx.fillRect(textX - 4, textY - textHeight / 2, textWidth + 8, textHeight);
@@ -1349,8 +1440,15 @@ export class RenderSystem {
         
         this.ctx.globalAlpha = opacity;
         
-        // Usar sprites para todos los vehículos (incluida ambulancia)
-        const vehicleSpriteKey = convoy.isMedical ? 'ambulance' : convoy.vehicleType;
+        // Usar sprites para todos los vehículos (incluida ambulancia y camión de reparación)
+        let vehicleSpriteKey;
+        if (convoy.isMedical) {
+            vehicleSpriteKey = 'ambulance';
+        } else if (convoy.vehicleType === 'repair' || convoy.vehicleType === 'repair_truck' || convoy.isRepair) {
+            vehicleSpriteKey = 'repair_truck';
+        } else {
+            vehicleSpriteKey = convoy.vehicleType;
+        }
         // No usar sprites "returning"; aplicamos estilos dinámicamente
         const sprite = this.assetManager?.getVehicleSprite(vehicleSpriteKey, false);
         const angle = convoy.getAngle();
@@ -1710,6 +1808,32 @@ export class RenderSystem {
         );
     }
     
+    /**
+     * 🆕 NUEVO: Renderiza una explosión de dron (2 frames)
+     * @param {DroneFrameExplosion} explosion - Explosión de dron
+     */
+    renderDroneExplosionSprite(explosion) {
+        // Animación de 2 frames: drone-explosion-1, drone-explosion-2
+        // Cada frame: 0.2s (total 0.4s)
+        if (!explosion || typeof explosion.life === 'undefined') return;
+        
+        // Obtener el frame actual según el progreso
+        const currentFrame = explosion.getCurrentFrame ? explosion.getCurrentFrame() : 'drone-explosion-1';
+        const sprite = this.assetManager.getSprite(currentFrame);
+        if (!sprite) return;
+        
+        // Tamaño más pequeño que explosiones de edificios (drones son más pequeños)
+        const size = 100; // Tamaño apropiado para explosión de dron
+        
+        this.ctx.drawImage(
+            sprite,
+            explosion.x - size/2,
+            explosion.y - size/2,
+            size,
+            size
+        );
+    }
+    
     renderImpactMark(impactMark) {
         const sprite = this.assetManager.getSprite(impactMark.spriteKey);
         if (!sprite) return;
@@ -1911,37 +2035,127 @@ export class RenderSystem {
     }
     
     /**
-     * Renderiza un tanque
-     * 🆕 NUEVO: Renderiza el tanque con sprites alternantes y animación de disparo
+     * 🆕 NUEVO: Renderiza un camera drone volando hacia su objetivo
      */
-    renderTank(tank) {
-        // Determinar qué sprite usar según el estado
-        let spriteKey;
-        if (tank.state === 'shooting' || tank.showShotOnImpact) {
-            // Mostrar sprite de shot durante el estado shooting o cuando ocurre el impacto
-            spriteKey = 'vehicle-tank-shot';
-        } else {
-            // Alternar entre tank_1 y tank_2 mientras se mueve
-            spriteKey = tank.spriteFrame === 1 ? 'vehicle-tank-1' : 'vehicle-tank-2';
-        }
+    renderCameraDroneFlying(cameraDrone) {
+        const cameraDroneSprite = this.assetManager.getSprite('camera-drone');
+        // Usar el mismo cálculo de tamaño que otros nodos (basado en radius)
+        const size = (cameraDrone.radius || 25) * 2 * 1.875; // Mismo cálculo que renderNode
         
-        const tankSprite = this.assetManager.getSprite(spriteKey);
-        const size = 100; // Tamaño del sprite del tanque (60 * 1.25 = 75)
-        
-        if (tankSprite) {
-            // Dibujar sprite del tanque con sombra
-            this.ctx.shadowColor = tank.team === 'player1' ? '#4ecca3' : '#e74c3c';
+        if (cameraDroneSprite) {
+            // Dibujar sprite del camera drone con sombra azul
+            this.ctx.shadowColor = '#3498db';
             this.ctx.shadowBlur = 15;
             
             this.ctx.save();
-            this.ctx.translate(tank.x, tank.y);
+            this.ctx.translate(cameraDrone.x, cameraDrone.y);
             
             // Determinar dirección basada en movimiento hacia el objetivo
             let shouldFlip = false;
-            if (tank.targetId) {
-                const targetNode = this.game?.nodes?.find(n => n.id === tank.targetId);
+            if (cameraDrone.targetX !== undefined && cameraDrone.targetY !== undefined) {
+                const dx = cameraDrone.targetX - cameraDrone.x;
+                shouldFlip = dx < 0; // Si va hacia la izquierda, flip
+            }
+            
+            if (shouldFlip) {
+                this.ctx.scale(-1, 1);
+            }
+            
+            this.ctx.drawImage(
+                cameraDroneSprite,
+                -size/2,
+                -size/2,
+                size,
+                size
+            );
+            
+            this.ctx.restore();
+            this.ctx.shadowBlur = 0;
+        } else {
+            // Fallback: círculo azul
+            this.ctx.shadowColor = '#3498db';
+            this.ctx.shadowBlur = 25;
+            this.ctx.fillStyle = '#3498db';
+            this.ctx.beginPath();
+            this.ctx.arc(cameraDrone.x, cameraDrone.y, 12, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.shadowBlur = 0;
+            
+            // Icono de cámara
+            this.ctx.font = '20px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillStyle = '#fff';
+            this.ctx.fillText('📹', cameraDrone.x, cameraDrone.y);
+        }
+        
+        // Línea hacia el objetivo (azul)
+        if (cameraDrone.targetX !== undefined && cameraDrone.targetY !== undefined) {
+            this.ctx.strokeStyle = 'rgba(52, 152, 219, 0.4)';
+            this.ctx.lineWidth = 2;
+            this.ctx.setLineDash([6, 6]);
+            this.ctx.beginPath();
+            this.ctx.moveTo(cameraDrone.x, cameraDrone.y);
+            this.ctx.lineTo(cameraDrone.targetX, cameraDrone.targetY);
+            this.ctx.stroke();
+            this.ctx.setLineDash([]);
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Renderiza el área de detección del camera drone
+     */
+    renderCameraDroneDetectionArea(cameraDrone) {
+        if (!cameraDrone.deployed || !cameraDrone.detectionRadius) return;
+        
+        // Círculo de área de detección
+        this.ctx.strokeStyle = 'rgba(52, 152, 219, 0.5)';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([10, 5]);
+        this.ctx.beginPath();
+        this.ctx.arc(cameraDrone.x, cameraDrone.y, cameraDrone.detectionRadius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+    }
+    
+    /**
+     * ✅ REFACTORIZADO: Método genérico para renderizar vehículos de combate
+     * @param {Object} vehicle - El vehículo a renderizar (tank, lightVehicle, etc.)
+     * @param {Object} config - Configuración del vehículo:
+     *   - getSpriteKey: función(vehicle) -> string - Devuelve la clave del sprite a usar
+     *   - fallbackEmoji: string - Emoji a mostrar si no hay sprite
+     *   - size: number - Tamaño del sprite (default: 100)
+     *   - shadowEnabled: boolean - Si debe tener sombra/glow (default: true)
+     */
+    renderCombatVehicle(vehicle, config) {
+        const { getSpriteKey, fallbackEmoji, size = 100, shadowEnabled = true } = config;
+        
+        // Obtener sprite key (puede ser función o string)
+        const spriteKey = typeof getSpriteKey === 'function' 
+            ? getSpriteKey(vehicle) 
+            : getSpriteKey;
+        
+        const vehicleSprite = this.assetManager.getSprite(spriteKey);
+        
+        if (vehicleSprite) {
+            // Dibujar sprite del vehículo con sombra (opcional)
+            if (shadowEnabled) {
+                this.ctx.shadowColor = vehicle.team === 'player1' ? '#4ecca3' : '#e74c3c';
+                this.ctx.shadowBlur = 15;
+            } else {
+                this.ctx.shadowColor = 'transparent';
+                this.ctx.shadowBlur = 0;
+            }
+            
+            this.ctx.save();
+            this.ctx.translate(vehicle.x, vehicle.y);
+            
+            // Determinar dirección basada en movimiento hacia el objetivo
+            let shouldFlip = false;
+            if (vehicle.targetId) {
+                const targetNode = this.game?.nodes?.find(n => n.id === vehicle.targetId);
                 if (targetNode) {
-                    const dx = targetNode.x - tank.x;
+                    const dx = targetNode.x - vehicle.x;
                     shouldFlip = dx < 0; // Si va hacia la izquierda, flip
                 }
             }
@@ -1951,7 +2165,7 @@ export class RenderSystem {
             }
             
             this.ctx.drawImage(
-                tankSprite,
+                vehicleSprite,
                 -size/2,
                 -size/2,
                 size,
@@ -1962,38 +2176,72 @@ export class RenderSystem {
             this.ctx.shadowBlur = 0;
         } else {
             // Fallback: círculo con color del equipo
-            const color = tank.team === 'player1' ? '#4ecca3' : '#e74c3c';
-            this.ctx.shadowColor = color;
-            this.ctx.shadowBlur = 25;
+            const color = vehicle.team === 'player1' ? '#4ecca3' : '#e74c3c';
+            if (shadowEnabled) {
+                this.ctx.shadowColor = color;
+                this.ctx.shadowBlur = 25;
+            } else {
+                this.ctx.shadowColor = 'transparent';
+                this.ctx.shadowBlur = 0;
+            }
             this.ctx.fillStyle = color;
             this.ctx.beginPath();
-            this.ctx.arc(tank.x, tank.y, 15, 0, Math.PI * 2);
+            this.ctx.arc(vehicle.x, vehicle.y, 15, 0, Math.PI * 2);
             this.ctx.fill();
             this.ctx.shadowBlur = 0;
             
-            // Icono de tanque
+            // Icono de fallback
             this.ctx.font = '20px Arial';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillStyle = '#fff';
-            this.ctx.fillText('🛡️', tank.x, tank.y);
+            this.ctx.fillText(fallbackEmoji || '🚗', vehicle.x, vehicle.y);
         }
         
-        // Línea hacia el objetivo (si está moviéndose)
-        if (tank.state === 'moving' && tank.targetId) {
-            const targetNode = this.game?.nodes?.find(n => n.id === tank.targetId);
-            if (targetNode) {
-                const color = tank.team === 'player1' ? '#4ecca3' : '#e74c3c';
-                this.ctx.strokeStyle = color + '80'; // 50% opacidad
-                this.ctx.lineWidth = 2;
-                this.ctx.setLineDash([6, 6]);
-                this.ctx.beginPath();
-                this.ctx.moveTo(tank.x, tank.y);
-                this.ctx.lineTo(targetNode.x, targetNode.y);
-                this.ctx.stroke();
-                this.ctx.setLineDash([]);
-            }
-        }
+        // Línea hacia el objetivo eliminada - ya no se muestra
+    }
+    
+    /**
+     * Renderiza un tanque
+     * Usa renderCombatVehicle con configuración específica del tanque
+     */
+    renderTank(tank) {
+        this.renderCombatVehicle(tank, {
+            getSpriteKey: (tank) => {
+                // Determinar qué sprite usar según el estado
+                if (tank.state === 'shooting' || tank.showShotOnImpact) {
+                    // Mostrar sprite de shot durante el estado shooting o cuando ocurre el impacto
+                    return 'vehicle-tank-shot';
+                } else {
+                    // Alternar entre tank_1 y tank_2 mientras se mueve
+                    return tank.spriteFrame === 1 ? 'vehicle-tank-1' : 'vehicle-tank-2';
+                }
+            },
+            fallbackEmoji: '🛡️',
+            size: 100
+        });
+    }
+    
+    /**
+     * Renderiza un artillado ligero
+     * Usa renderCombatVehicle con configuración específica del artillado ligero
+     */
+    renderLightVehicle(lightVehicle) {
+        this.renderCombatVehicle(lightVehicle, {
+            getSpriteKey: (lightVehicle) => {
+                // Determinar qué sprite usar según el estado
+                if (lightVehicle.state === 'shooting' || lightVehicle.showShotOnImpact) {
+                    // Mostrar sprite de disparo durante el estado shooting o cuando ocurre el impacto
+                    return 'vehicle-light-2';
+                } else {
+                    // Sprite normal mientras se mueve
+                    return 'vehicle-light-1';
+                }
+            },
+            fallbackEmoji: '🚛',
+            size: 100,
+            shadowEnabled: false // 🆕 Sin glow/sombra verde para el artillado ligero
+        });
     }
     
     renderRoutePreview(from, to) {
@@ -2005,6 +2253,70 @@ export class RenderSystem {
         this.ctx.lineTo(to.x, to.y);
         this.ctx.stroke();
         this.ctx.setLineDash([]);
+    }
+    
+    /**
+     * ✅ Helper centralizado: Verifica si una posición está en el área de construcción de un FOB aliado
+     * @param {number} x - Coordenada X
+     * @param {number} y - Coordenada Y
+     * @returns {boolean} True si está en el área de construcción de un FOB aliado
+     */
+    isInFobBuildArea(x, y) {
+        if (!this.game) return false;
+        
+        const myTeam = this.game.myTeam || 'player1';
+        const buildRadii = this.game.serverBuildingConfig?.buildRadii || {};
+        const fobBuildRadius = buildRadii.fob || 140;
+        const allNodes = [...(this.game.bases || []), ...(this.game.nodes || [])];
+        const allyFOBs = allNodes.filter(n => 
+            n.type === 'fob' && 
+            n.team === myTeam && 
+            n.active && 
+            n.constructed &&
+            !n.isAbandoning
+        );
+        
+        for (const fob of allyFOBs) {
+            const dist = Math.hypot(x - fob.x, y - fob.y);
+            if (dist <= fobBuildRadius) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * ✅ Helper centralizado: Verifica si una posición está en el área de construcción permitida por un camera drone
+     * @param {number} x - Coordenada X
+     * @param {number} y - Coordenada Y
+     * @returns {boolean} True si hay un camera drone aliado que permite construir aquí
+     */
+    isInCameraDroneBuildArea(x, y) {
+        if (!this.game) return false;
+        
+        const myTeam = this.game.myTeam || 'player1';
+        const specialNodes = this.game.serverBuildingConfig?.specialNodes || {};
+        const cameraDroneConfig = specialNodes.cameraDrone || {};
+        const buildRadius = cameraDroneConfig.buildRadius || 300;
+        const allNodes = [...(this.game.bases || []), ...(this.game.nodes || [])];
+        const allyCameraDrones = allNodes.filter(n => 
+            n.isCameraDrone && 
+            n.team === myTeam && 
+            n.active && 
+            n.constructed &&
+            !n.isAbandoning &&
+            n.deployed
+        );
+        
+        for (const cameraDrone of allyCameraDrones) {
+            const dist = Math.hypot(x - cameraDrone.x, y - cameraDrone.y);
+            if (dist <= buildRadius) {
+                return true;
+            }
+        }
+        
+        return false;
     }
     
     /**
@@ -2171,6 +2483,8 @@ export class RenderSystem {
         const isCommando = buildingType === 'specopsCommando';
         // 🆕 NUEVO: El truck assault ignora límites de detección (solo verifica colisión física básica)
         const isTruckAssault = buildingType === 'truckAssault';
+        // 🆕 NUEVO: El camera drone ignora límites de detección (solo verifica colisión física básica)
+        const isCameraDrone = buildingType === 'cameraDrone';
         // 🆕 NUEVO: La torre de vigilancia puede construirse cerca de comandos enemigos
         const isVigilanceTower = buildingType === 'vigilanceTower';
         // 🆕 NUEVO: El taller de drones puede construirse cerca de FOBs aliados
@@ -2178,7 +2492,7 @@ export class RenderSystem {
         // 🆕 NUEVO: El taller de vehículos puede construirse cerca de FOBs aliados
         const isVehicleWorkshop = buildingType === 'vehicleWorkshop';
         
-        if (isCommando || isTruckAssault) {
+        if (isCommando || isTruckAssault || isCameraDrone) {
             // Solo verificar colisión física básica (no áreas de detección)
             for (const node of allNodes) {
                 if (!node.active) continue;
@@ -2281,40 +2595,32 @@ export class RenderSystem {
         const inAllyTerritory = this.game && this.game.territory && this.game.territory.isInAllyTerritory(x, y);
         const inEnemyTerritory = this.game && this.game.territory && !inAllyTerritory;
         
-        // 🆕 NUEVO: Para el taller de drones y taller de vehículos, verificar que esté en el área de detección de un FOB aliado
+        // 🆕 NUEVO: Para el taller de drones y taller de vehículos, verificar que esté en el área de construcción de un FOB aliado
         let isInFobArea = false;
         if (isDroneWorkshop || isVehicleWorkshop) {
-            const myTeam = this.game?.myTeam || 'player1';
-            const buildRadii = this.game?.serverBuildingConfig?.buildRadii || {};
-            const fobBuildRadius = buildRadii.fob || 140;
-            const allNodes = [...(bases || []), ...(this.game?.nodes || [])];
-            const allyFOBs = allNodes.filter(n => 
-                n.type === 'fob' && 
-                n.team === myTeam && 
-                n.active && 
-                n.constructed &&
-                !n.isAbandoning
-            );
-            
-            for (const fob of allyFOBs) {
-                const dist = Math.hypot(x - fob.x, y - fob.y);
-                if (dist <= fobBuildRadius) {
-                    isInFobArea = true;
-                    break;
-                }
-            }
+            isInFobArea = this.isInFobBuildArea(x, y);
+        }
+        
+        // 🆕 NUEVO: Para edificios que pueden construirse en territorio enemigo con camera drone, verificar si hay uno cerca
+        let isInCameraDroneArea = false;
+        const canBuildInEnemyTerritoryWithDrone = ['vigilanceTower', 'specopsCommando', 'truckAssault'].includes(buildingType);
+        if (canBuildInEnemyTerritoryWithDrone && inEnemyTerritory) {
+            isInCameraDroneArea = this.isInCameraDroneBuildArea(x, y);
         }
         
         // Usar configuración del tipo de edificio actual (ya declarada arriba)
         const radius = config ? config.radius : 30;
         
         // Color del preview (rojo si está fuera o muy cerca, verde si es válido)
-        // Para comando y truck assault: válido si está en territorio enemigo y no muy cerca
+        // Para comando, truck assault y camera drone: válido si está en territorio enemigo y no muy cerca
+        // Para torre de vigilancia: válido si está en territorio aliado O (territorio enemigo con camera drone cerca) y no muy cerca
         // Para taller de drones y taller de vehículos: válido si está en territorio aliado, no muy cerca Y en área de FOB
         // Para otros: válido si está en territorio aliado y no muy cerca
         let isValid;
-        if (isCommando || isTruckAssault) {
+        if (isCommando || isTruckAssault || isCameraDrone) {
             isValid = !tooClose && inEnemyTerritory;
+        } else if (isVigilanceTower) {
+            isValid = !tooClose && (inAllyTerritory || (inEnemyTerritory && isInCameraDroneArea));
         } else if (isDroneWorkshop || isVehicleWorkshop) {
             isValid = !tooClose && inAllyTerritory && isInFobArea;
         } else {
@@ -2368,19 +2674,19 @@ export class RenderSystem {
         let label = config.name || buildingType.toUpperCase();
         if (tooClose) {
             label = '⚠️ MUY CERCA';
-        } else if ((isCommando || isTruckAssault) && !inEnemyTerritory) {
+        } else if ((isCommando || isTruckAssault || isCameraDrone) && !inEnemyTerritory) {
             label = '⚠️ DEBE SER EN TERRITORIO ENEMIGO';
         } else if ((isDroneWorkshop || isVehicleWorkshop) && !isInFobArea) {
             label = '⚠️ DEBE ESTAR EN ÁREA DE FOB';
-        } else if (!isCommando && !isTruckAssault && !inAllyTerritory) {
+        } else if (!isCommando && !isTruckAssault && !isCameraDrone && !inAllyTerritory) {
             label = '⚠️ FUERA DE TERRITORIO';
         }
         this.ctx.fillText(label, x, y - radius - 10);
         
         // Círculo de área de detección (naranja) - siempre visible para dev
-        // ✅ Para comando y truck assault, usar specialNodes del servidor (fuente única de verdad)
+        // ✅ Para comando, truck assault y camera drone, usar specialNodes del servidor (fuente única de verdad)
         let detectionRadius;
-        if (buildingType === 'specopsCommando' || buildingType === 'truckAssault') {
+        if (buildingType === 'specopsCommando' || buildingType === 'truckAssault' || buildingType === 'cameraDrone') {
             const specialNodes = this.game?.serverBuildingConfig?.specialNodes || {};
             const specialNodeConfig = specialNodes[buildingType];
             detectionRadius = specialNodeConfig?.detectionRadius || 200;
@@ -2461,26 +2767,50 @@ export class RenderSystem {
     }
     
     /**
-     * Renderiza preview del tanque (similar al dron pero solo para edificios válidos, NO FOBs ni HQs)
-     * 🆕 NUEVO
+     * ✅ REFACTORIZADO: Método genérico para renderizar preview de vehículos de combate
+     * @param {number} x - Coordenada X
+     * @param {number} y - Coordenada Y
+     * @param {Object} hoveredBase - El nodo sobre el que se hace hover
+     * @param {Object} config - Configuración del preview:
+     *   - actionName: string - Nombre de la acción en serverBuildingConfig (ej: "tankLaunch", "lightVehicleLaunch")
+     *   - validColor: string - Color cuando el objetivo es válido (ej: "rgba(78, 204, 163, 0.8)")
+     *   - textColor: string - Color del texto cuando es válido (ej: "#4ecca3")
+     *   - label: string - Etiqueta a mostrar (ej: "TANQUE", "ARTILLADO")
+     *   - additionalValidation: función(hoveredBase) -> boolean - Validación adicional opcional
+     *   - getInvalidLabel: función(hoveredBase) -> string - Función para obtener label cuando es inválido
      */
-    renderTankPreview(x, y, hoveredBase) {
+    renderCombatVehiclePreview(x, y, hoveredBase, config) {
+        const { 
+            actionName, 
+            validColor, 
+            textColor, 
+            label, 
+            additionalValidation = null,
+            getInvalidLabel = null
+        } = config;
+        
         const radius = 30;
         
-        // 🎯 Validar objetivos permitidos para tanque (NO FOBs ni HQs)
+        // 🎯 Validar objetivos permitidos
         let validTarget = false;
         if (hoveredBase && hoveredBase.team !== this.game?.myTeam) {
             // Obtener validTargets desde la configuración del servidor
-            const validTargets = this.game?.serverBuildingConfig?.actions?.tankLaunch?.validTargets || 
+            const validTargets = this.game?.serverBuildingConfig?.actions?.[actionName]?.validTargets || 
                                  ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
+            
             validTarget = validTargets.includes(hoveredBase.type) && 
                          hoveredBase.constructed && 
                          !hoveredBase.isConstructing && 
                          !hoveredBase.isAbandoning;
+            
+            // Validación adicional si se proporciona
+            if (validTarget && additionalValidation) {
+                validTarget = additionalValidation(hoveredBase);
+            }
         }
         
-        // Círculo vacío con borde verde punteado (para diferenciarlo del dron)
-        this.ctx.strokeStyle = validTarget ? 'rgba(78, 204, 163, 0.8)' : 'rgba(255, 0, 0, 0.8)';
+        // Círculo vacío con borde punteado
+        this.ctx.strokeStyle = validTarget ? validColor : 'rgba(255, 0, 0, 0.8)';
         this.ctx.lineWidth = 3;
         this.ctx.setLineDash([8, 8]);
         this.ctx.beginPath();
@@ -2503,20 +2833,125 @@ export class RenderSystem {
             this.ctx.stroke();
         }
         
-        // Etiqueta específica para tanque
-        this.ctx.fillStyle = validTarget ? '#4ecca3' : '#ff0000';
+        // Etiqueta
+        this.ctx.fillStyle = validTarget ? textColor : '#ff0000';
         this.ctx.font = 'bold 11px Arial';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        let label = 'TANQUE';
+        let displayLabel = label;
+        
         if (!validTarget) {
-            if (hoveredBase && (hoveredBase.type === 'fob' || hoveredBase.type === 'hq')) {
-                label = 'NO FOBs/HQs';
+            if (getInvalidLabel) {
+                displayLabel = getInvalidLabel(hoveredBase);
             } else {
-                label = 'NO VÁLIDO';
+                // Fallback genérico
+                if (hoveredBase && (hoveredBase.type === 'fob' || hoveredBase.type === 'hq')) {
+                    displayLabel = 'NO FOBs/HQs';
+                } else {
+                    displayLabel = 'NO VÁLIDO';
+                }
             }
         }
-        this.ctx.fillText(label, x, y - radius - 12);
+        
+        this.ctx.fillText(displayLabel, x, y - radius - 12);
+    }
+    
+    /**
+     * Renderiza preview del tanque
+     * Usa renderCombatVehiclePreview con configuración específica del tanque
+     */
+    renderTankPreview(x, y, hoveredBase) {
+        this.renderCombatVehiclePreview(x, y, hoveredBase, {
+            actionName: 'tankLaunch',
+            validColor: 'rgba(78, 204, 163, 0.8)',
+            textColor: '#4ecca3',
+            label: 'TANQUE',
+            getInvalidLabel: (hoveredBase) => {
+                if (hoveredBase && (hoveredBase.type === 'fob' || hoveredBase.type === 'hq')) {
+                    return 'NO FOBs/HQs';
+                }
+                return 'NO VÁLIDO';
+            }
+        });
+    }
+    
+    /**
+     * Renderiza preview del artillado ligero
+     * Usa renderCombatVehiclePreview con configuración específica del artillado ligero
+     */
+    renderLightVehiclePreview(x, y, hoveredBase) {
+        this.renderCombatVehiclePreview(x, y, hoveredBase, {
+            actionName: 'lightVehicleLaunch',
+            validColor: 'rgba(255, 140, 0, 0.8)',
+            textColor: '#ff8c00',
+            label: 'ARTILLADO',
+            additionalValidation: (hoveredBase) => !hoveredBase.broken,
+            getInvalidLabel: (hoveredBase) => {
+                if (hoveredBase && (hoveredBase.type === 'fob' || hoveredBase.type === 'hq')) {
+                    return 'NO FOBs/HQs';
+                } else if (hoveredBase && hoveredBase.broken) {
+                    return 'YA ROTO';
+                }
+                return 'NO VÁLIDO';
+            }
+        });
+    }
+    
+    /**
+     * Renderiza preview de artillería
+     * 🆕 NUEVO: Muestra área de efecto circular con sprite de artillery
+     */
+    renderArtilleryPreview(x, y, hoveredBase) {
+        // Renderizar sprite de artillery como cursor
+        const sprite = this.assetManager?.getSprite('vehicle-artillery');
+        
+        if (sprite) {
+            // Usar sprite de artillery
+            const size = 60; // Tamaño del sprite (más pequeño que comando/truck assault)
+            this.ctx.globalAlpha = 0.9;
+            this.ctx.drawImage(
+                sprite,
+                x - size/2,
+                y - size/2,
+                size,
+                size
+            );
+            this.ctx.globalAlpha = 1.0;
+        } else {
+            // Fallback: círculo con símbolo de artillería
+            this.ctx.strokeStyle = '#ff8c00';
+            this.ctx.fillStyle = 'rgba(255, 140, 0, 0.2)';
+            this.ctx.lineWidth = 3;
+            
+            const radius = 30;
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+        }
+        
+        // Renderizar área de efecto - leer del servidor (gameplay.artillery.areaRadius - fuente única de verdad)
+        const areaRadius = this.game?.serverBuildingConfig?.gameplay?.artillery?.areaRadius || 150;
+        
+        // Área de efecto con color distintivo (naranja para artillería)
+        this.ctx.strokeStyle = '#ff8c00';
+        this.ctx.fillStyle = 'rgba(255, 140, 0, 0.1)';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([5, 5]);
+        
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, areaRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        this.ctx.setLineDash([]);
+        
+        // Etiqueta indicando que afecta un área
+        this.ctx.fillStyle = '#ff8c00';
+        this.ctx.font = 'bold 12px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('ARTILLERÍA', x, y - areaRadius - 15);
     }
     
     renderSniperCursor(x, y, hoveredBase) {
@@ -3479,6 +3914,267 @@ export class RenderSystem {
             iconX,
             barY - 8
         );
+    }
+    
+    /**
+     * 🆕 NUEVO: Inicia el efecto visual del Destructor de mundos
+     * @param {number} startTime - Tiempo de inicio del countdown (gameTime del servidor)
+     * @param {number} countdownDuration - Duración del countdown en segundos
+     */
+    startWorldDestroyerEffect(startTime, countdownDuration) {
+        this.worldDestroyerActive = true;
+        this.worldDestroyerStartTime = startTime;
+        this.worldDestroyerCountdownDuration = countdownDuration || 7;
+        this.worldDestroyerExecuted = false;
+        this.worldDestroyerExecutionTime = null;
+        
+        // Guardar tiempo local para fallback
+        this._localStartTime = Date.now();
+        
+        console.log(`☠️ Iniciando efectos visuales del Destructor de mundos - countdown: ${this.worldDestroyerCountdownDuration}s, startTime: ${startTime}`);
+    }
+    
+    /**
+     * 🆕 NUEVO: Ejecuta el efecto visual del Destructor de mundos (pantallazo blanco)
+     * @param {Object} eventData - Datos del evento de ejecución
+     */
+    executeWorldDestroyerEffect(eventData) {
+        this.worldDestroyerExecuted = true;
+        
+        // Usar tiempo del servidor si está disponible, o tiempo local como fallback
+        if (this.game?.network?.lastGameState?.gameTime !== undefined) {
+            this.worldDestroyerExecutionTime = this.game.network.lastGameState.gameTime;
+        } else if (this.game?.gameTime !== undefined) {
+            this.worldDestroyerExecutionTime = this.game.gameTime;
+        } else {
+            // Fallback: calcular desde el countdown
+            this.worldDestroyerExecutionTime = (this.worldDestroyerStartTime || 0) + (this.worldDestroyerCountdownDuration || 7);
+        }
+        
+        this.worldDestroyerActive = false; // Detener el countdown visual
+        this._localExecutionStartTime = Date.now();
+        this._localElapsedSinceExecution = 0;
+        
+        console.log(`☠️ Ejecutando pantallazo blanco del Destructor de mundos - executionTime: ${this.worldDestroyerExecutionTime}`);
+    }
+    
+    /**
+     * 🆕 NUEVO: Inicia el efecto visual de artillería
+     * @param {Object} data - Datos del bombardeo de artillería
+     */
+    executeArtilleryEffect(data) {
+        // Agregar bombardeo de artillería a la lista activa
+        this.artilleryStrikes.push({
+            id: data.artilleryId,
+            x: data.x,
+            y: data.y,
+            startTime: data.startTime || (this.game?.network?.lastGameState?.gameTime || 0),
+            active: true
+        });
+        
+        console.log(`💣 Iniciando efecto visual de artillería ${data.artilleryId} en (${data.x}, ${data.y})`);
+    }
+    
+    /**
+     * 🆕 NUEVO: Renderiza los efectos visuales de artillería
+     * Usa el sprite EndOfWorlds pero pequeño y en el área de efecto
+     */
+    renderArtilleryEffects() {
+        if (!this.game) return;
+        
+        // Obtener tiempo del servidor si está disponible
+        let currentTime = 0;
+        if (this.game.network && this.game.network.lastGameState && this.game.network.lastGameState.gameTime !== undefined) {
+            currentTime = this.game.network.lastGameState.gameTime;
+        } else if (this.game.gameTime !== undefined) {
+            currentTime = this.game.gameTime;
+        }
+        
+        const sprite = this.assetManager?.getSprite('end-of-worlds');
+        if (!sprite) return;
+        
+        const countdownDuration = 3; // 3 segundos según configuración
+        
+        // Renderizar cada bombardeo de artillería activo
+        for (let i = this.artilleryStrikes.length - 1; i >= 0; i--) {
+            const artillery = this.artilleryStrikes[i];
+            
+            if (!artillery.active) {
+                this.artilleryStrikes.splice(i, 1);
+                continue;
+            }
+            
+            const elapsed = currentTime - artillery.startTime;
+            
+            if (elapsed >= 0 && elapsed < countdownDuration) {
+                // Renderizar countdown con sprite EndOfWorlds pequeño
+                const progress = Math.min(elapsed / countdownDuration, 1);
+                
+                // Tamaño: desde 50% hasta 300% (más pequeño que world destroyer)
+                const baseSize = 80; // Tamaño base más pequeño
+                const sizeMultiplier = 1 + (progress * 2); // De 1x a 3x (en vez de 6x)
+                const currentSize = baseSize * sizeMultiplier;
+                
+                // Alpha: desde 10% hasta 100%
+                const alpha = 0.1 + (progress * 0.9); // De 0.1 a 1.0
+                
+                // Renderizar sprite centrado en la posición del bombardeo
+                this.ctx.save();
+                this.ctx.globalAlpha = alpha;
+                this.ctx.translate(artillery.x, artillery.y);
+                
+                // Renderizar el sprite centrado
+                this.ctx.drawImage(
+                    sprite,
+                    -currentSize / 2,
+                    -currentSize / 2,
+                    currentSize,
+                    currentSize
+                );
+                
+                this.ctx.restore();
+            } else if (elapsed >= countdownDuration) {
+                // Countdown terminado, eliminar de la lista
+                artillery.active = false;
+            }
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Renderiza los efectos visuales del Destructor de mundos
+     * Incluye el sprite EndOfWorlds durante el countdown y el pantallazo blanco
+     */
+    renderWorldDestroyerEffects() {
+        if (!this.game) return;
+        
+        // Obtener tiempo del servidor si está disponible, o usar tiempo local
+        let currentTime = 0;
+        if (this.game.network && this.game.network.lastGameState && this.game.network.lastGameState.gameTime !== undefined) {
+            currentTime = this.game.network.lastGameState.gameTime;
+        } else if (this.game.gameTime !== undefined) {
+            currentTime = this.game.gameTime;
+        } else {
+            // Fallback: usar tiempo relativo local desde activación
+            if (this.worldDestroyerActive && this._localStartTime) {
+                currentTime = (Date.now() - this._localStartTime) / 1000;
+            } else if (this.worldDestroyerExecuted && this._localExecutionTime) {
+                currentTime = (Date.now() - this._localExecutionTime) / 1000 + this.worldDestroyerCountdownDuration;
+            }
+        }
+        
+        // === FASE 1: Countdown con sprite EndOfWorlds (7 segundos) ===
+        if (this.worldDestroyerActive && this.worldDestroyerStartTime !== null) {
+            const elapsed = currentTime - this.worldDestroyerStartTime;
+            const countdownDuration = this.worldDestroyerCountdownDuration || 7;
+            
+            if (elapsed >= 0 && elapsed < countdownDuration) {
+                this.renderWorldDestroyerCountdown(elapsed, countdownDuration);
+            } else if (elapsed >= countdownDuration) {
+                // Countdown terminado, debería ejecutarse (el servidor maneja esto)
+                // Pero si el cliente aún está activo, esperar la ejecución del servidor
+            }
+        }
+        
+        // === FASE 2: Pantallazo blanco (2 segundos + 2 segundos de fade out = 4 segundos total) ===
+        if (this.worldDestroyerExecuted && this.worldDestroyerExecutionTime !== null) {
+            // Usar tiempo relativo desde la ejecución
+            let elapsedSinceExecution;
+            if (this.game.network && this.game.network.lastGameState && this.game.network.lastGameState.gameTime !== undefined) {
+                elapsedSinceExecution = this.game.network.lastGameState.gameTime - this.worldDestroyerExecutionTime;
+            } else {
+                elapsedSinceExecution = this._localElapsedSinceExecution || 0;
+            }
+            
+            const whiteScreenDuration = 2;
+            const fadeOutDuration = 2;
+            const totalDuration = whiteScreenDuration + fadeOutDuration; // 4 segundos total
+            
+            if (elapsedSinceExecution >= 0 && elapsedSinceExecution < totalDuration) {
+                // Actualizar tiempo local si no tenemos tiempo del servidor
+                if (!this._localExecutionStartTime) {
+                    this._localExecutionStartTime = Date.now();
+                }
+                if (!this.game.network || !this.game.network.lastGameState) {
+                    elapsedSinceExecution = (Date.now() - this._localExecutionStartTime) / 1000;
+                    this._localElapsedSinceExecution = elapsedSinceExecution;
+                }
+                
+                this.renderWhiteScreen(elapsedSinceExecution, whiteScreenDuration, fadeOutDuration);
+            } else if (elapsedSinceExecution >= totalDuration) {
+                // Terminó el efecto, limpiar
+                this.worldDestroyerExecuted = false;
+                this.worldDestroyerExecutionTime = null;
+                this._localExecutionStartTime = null;
+                this._localElapsedSinceExecution = null;
+            }
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Renderiza el sprite EndOfWorlds durante el countdown
+     * @param {number} elapsed - Tiempo transcurrido desde el inicio
+     * @param {number} countdownDuration - Duración total del countdown
+     */
+    renderWorldDestroyerCountdown(elapsed, countdownDuration) {
+        const sprite = this.assetManager?.getSprite('end-of-worlds');
+        if (!sprite) return;
+        
+        // Calcular progreso (0 a 1)
+        const progress = Math.min(elapsed / countdownDuration, 1);
+        
+        // Tamaño: desde 100% hasta 600% (6x el tamaño original)
+        const baseSize = 200; // Tamaño base del sprite
+        const sizeMultiplier = 1 + (progress * 5); // De 1x a 6x
+        const currentSize = baseSize * sizeMultiplier;
+        
+        // Alpha: desde 10% hasta 100%
+        const alpha = 0.1 + (progress * 0.9); // De 0.1 a 1.0
+        
+        // Calcular centro del mapa
+        const centerX = (this.game?.worldWidth || this.width) / 2;
+        const centerY = (this.game?.worldHeight || this.height) / 2;
+        
+        // Renderizar sprite con transformaciones
+        this.ctx.save();
+        this.ctx.globalAlpha = alpha;
+        this.ctx.translate(centerX, centerY);
+        
+        // Renderizar el sprite centrado
+        this.ctx.drawImage(
+            sprite,
+            -currentSize / 2,
+            -currentSize / 2,
+            currentSize,
+            currentSize
+        );
+        
+        this.ctx.restore();
+    }
+    
+    /**
+     * 🆕 NUEVO: Renderiza el pantallazo blanco
+     * @param {number} elapsed - Tiempo transcurrido desde la ejecución
+     * @param {number} whiteScreenDuration - Duración del pantallazo blanco completo (2s)
+     * @param {number} fadeOutDuration - Duración del desvanecimiento (2s)
+     */
+    renderWhiteScreen(elapsed, whiteScreenDuration, fadeOutDuration) {
+        let alpha = 1.0;
+        
+        // Durante los primeros 2 segundos: pantallazo blanco completo (alpha = 100%)
+        if (elapsed <= whiteScreenDuration) {
+            alpha = 1.0;
+        } else {
+            // Durante los siguientes 2 segundos: desvanecer de 100% a 0%
+            const fadeProgress = (elapsed - whiteScreenDuration) / fadeOutDuration;
+            alpha = Math.max(0, 1.0 - fadeProgress);
+        }
+        
+        // Renderizar pantallazo blanco sobre todo
+        this.ctx.save();
+        this.ctx.globalAlpha = alpha;
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.fillRect(0, 0, this.width, this.height);
+        this.ctx.restore();
     }
     
 }

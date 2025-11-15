@@ -23,14 +23,21 @@ export const SERVER_NODE_CONFIG = {
         trainStation: 170,
         droneWorkshop: 85,
         vehicleWorkshop: 100,
+        physicStudies: 60,
+        secretLaboratory: 70,
+        trainingCamp: 120,
+        deadlyBuild: 120,
         // 🆕 CONSUMIBLES/PROYECTILES
         drone: 150,
         sniperStrike: 40,
         fobSabotage: 40,
         specopsCommando: 70,  
         tank: 100,
+        lightVehicle: 60, // 🆕 NUEVO: Artillado ligero
         truckAssault: 45,
-        cameraDrone: 40
+        cameraDrone: 40,
+        artillery: 150, // 🆕 NUEVO: Artillería (efecto de área)
+        worldDestroyer: 200
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -50,7 +57,11 @@ export const SERVER_NODE_CONFIG = {
         vigilanceTower: 3, 
         trainStation: 4,
         droneWorkshop: 3,
-        vehicleWorkshop: 3
+        vehicleWorkshop: 3,
+        physicStudies: 3,
+        secretLaboratory: 3,
+        trainingCamp: 3,
+        deadlyBuild: 4
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -84,6 +95,18 @@ export const SERVER_NODE_CONFIG = {
         },
         vehicleWorkshop: {
             vehicleBonus: 1              // 🆕 +1 vehículo máximo y disponible a FOBs en su área
+        },
+        physicStudies: {
+            nuclearPlantBonus: 1         // 🆕 +1 currency/segundo a todas las plantas nucleares si hay al menos una universidad
+        },
+        secretLaboratory: {
+            nuclearPlantBonus: 1         // 🆕 +1 currency/segundo a todas las plantas nucleares si hay al menos un laboratorio secreto (acumulable con Estudios de Física)
+        },
+        trainingCamp: {
+            appliesTrainedEffect: true   // 🆕 Aplica efecto "trained" a los frentes del jugador
+        },
+        deadlyBuild: {
+            // Sin efectos directos - desbloquea consumible "Destructor de mundos"
         }
     },
 
@@ -108,10 +131,17 @@ export const SERVER_NODE_CONFIG = {
             ignoreDetectionLimits: true // No afectado por límites de detección de otros edificios
         },
         droneLaunch: {
-            validTargets: ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'trainStation','vigilanceTower','vehicleWorkshop', 'droneWorkshop']
+            validTargets: ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'trainStation','vigilanceTower','vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild']
         },
         tankLaunch: {
-            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation', 'vehicleWorkshop', 'droneWorkshop']
+            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation', 'vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild']
+        },
+        lightVehicleLaunch: { // 🆕 NUEVO: Artillado ligero (aplica broken en vez de destruir)
+            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation', 'vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild']
+        },
+        artilleryLaunch: { // 🆕 NUEVO: Artillería (efecto de área que rompe edificios)
+            targetType: 'area' // Se selecciona un área en vez de un edificio específico
+            // ✅ areaRadius está en gameplay.artillery.areaRadius (fuente única de verdad)
         }
     },
 
@@ -124,6 +154,12 @@ export const SERVER_NODE_CONFIG = {
             consumeMultiplier: 2,   // Duplica consumo
             icon: 'ui-wounded',
             tooltip: 'Herido: Consume el doble'
+        },
+        trained: {
+            duration: null,         // null = permanente (no expira)
+            currencyBonus: 1,       // +1 currency adicional por avance
+            icon: 'ui-vigor-up',
+            tooltip: 'Entrenado: +1 currency por avance'
         }
     },
 
@@ -155,7 +191,11 @@ export const SERVER_NODE_CONFIG = {
         vigilanceTower: 130,   
         trainStation: 130,
         droneWorkshop: 130,
-        vehicleWorkshop: 130
+        vehicleWorkshop: 130,
+        physicStudies: 130,
+        secretLaboratory: 130,
+        trainingCamp: 130,
+        deadlyBuild: 140
     },
     
     // ═══════════════════════════════════════════════════════════════
@@ -186,7 +226,11 @@ export const SERVER_NODE_CONFIG = {
         vigilanceTower: 35,   
         trainStation: 40,
         droneWorkshop: 35,
-        vehicleWorkshop: 35
+        vehicleWorkshop: 35,
+        physicStudies: 35,
+        secretLaboratory: 35,
+        trainingCamp: 35,
+        deadlyBuild: 40
     },
     
     // 🆕 NUEVO: Configuración de nodos especiales que se despliegan como unidades
@@ -214,6 +258,81 @@ export const SERVER_NODE_CONFIG = {
     },
 
     // ═══════════════════════════════════════════════════════════════
+    // TIPOS DE VEHÍCULOS (SERVIDOR COMO AUTORIDAD)
+    // ═══════════════════════════════════════════════════════════════
+    // Definición centralizada de tipos de vehículos disponibles
+    vehicleTypes: {
+        ammo: {
+            id: 'ammo',
+            name: 'Suministros',
+            icon: 'ui-vehicle-icon',
+            enabled: true,
+            // Se usa el sistema tradicional de availableVehicles/maxVehicles
+            usesStandardSystem: true
+        },
+        medical: {
+            id: 'medical',
+            name: 'Médico',
+            icon: 'ui-medic-vehicle-icon',
+            enabled: true,
+            // Usa availableAmbulances/maxAmbulances
+            usesStandardSystem: false,
+            availabilityProperty: 'ambulanceAvailable',
+            maxProperty: 'maxAmbulances',
+            availableProperty: 'availableAmbulances'
+        },
+        helicopter: {
+            id: 'helicopter',
+            name: 'Aéreo',
+            icon: 'ui-chopper-icon',
+            enabled: true,
+            // Usa landedHelicopters/maxHelicopters
+            usesStandardSystem: false,
+            availabilityProperty: 'landedHelicopters',
+            maxProperty: 'maxHelicopters',
+            availableProperty: 'availableHelicopters'
+        },
+        repair: {
+            id: 'repair',
+            name: 'Mecánico',
+            icon: 'ui-repair-vehicle-icon',
+            enabled: true,
+            // Usa availableRepairVehicles/maxRepairVehicles
+            usesStandardSystem: false,
+            availabilityProperty: 'repairVehicleAvailable',
+            maxProperty: 'maxRepairVehicles',
+            availableProperty: 'availableRepairVehicles'
+        }
+    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // SISTEMAS DE VEHÍCULOS POR TIPO DE NODO (SERVIDOR COMO AUTORIDAD)
+    // ═══════════════════════════════════════════════════════════════
+    // Define qué tipos de vehículos están disponibles para cada nodo
+    vehicleSystems: {
+        hq: {
+            enabledTypes: ['ammo', 'medical', 'repair'], // Tipos de vehículos disponibles en el HQ
+            defaultType: 'ammo' // Tipo seleccionado por defecto
+        },
+        fob: {
+            enabledTypes: ['ammo'], // Solo camiones en FOBs
+            defaultType: 'ammo'
+        },
+        front: {
+            enabledTypes: ['helicopter'], // Solo helicópteros en frentes (si tienen)
+            defaultType: 'helicopter'
+        },
+        aerialBase: {
+            enabledTypes: ['helicopter'],
+            defaultType: 'helicopter'
+        },
+        campaignHospital: {
+            enabledTypes: ['medical'], // Solo ambulancias
+            defaultType: 'medical'
+        }
+    },
+
+    // ═══════════════════════════════════════════════════════════════
     // CAPACIDADES DE EDIFICIOS (SERVIDOR COMO AUTORIDAD)
     // ═══════════════════════════════════════════════════════════════
     // Los valores por defecto son: hasSupplies=false, hasVehicles=false, hasHelicopters=false
@@ -222,8 +341,10 @@ export const SERVER_NODE_CONFIG = {
         hq: {
             maxVehicles: 4,
             maxAmbulances: 1,
+            maxRepairVehicles: 1, // 🆕 NUEVO: Camión mecánico
             hasVehicles: true,
-            hasMedicalSystem: true
+            hasMedicalSystem: true,
+            hasRepairSystem: true // 🆕 NUEVO: Sistema de reparación
         },
         fob: {
             maxSupplies: 100,
@@ -323,6 +444,19 @@ export const SERVER_NODE_CONFIG = {
             speedPenalty: 0.1     // Multiplicador de velocidad (0.75 = 25% de ralentización)
         },
         
+        // Propiedades del Destructor de mundos
+        worldDestroyer: {
+            countdownDuration: 7,  // Segundos antes de activarse (7s)
+            whiteScreenDuration: 2, // Duración del pantallazo blanco (2s)
+            fadeOutDuration: 2      // Duración del desvanecimiento (2s)
+        },
+        
+        // Propiedades de artillería
+        artillery: {
+            countdownDuration: 3,  // Segundos antes de aplicar efecto (3s)
+            areaRadius: 150         // Radio del área de efecto en píxeles (fuente única de verdad)
+        },
+        
         // Activar / Desactivar nodos por completo, usar para dev y testing
         enabled: {
             hq: true,
@@ -343,14 +477,21 @@ export const SERVER_NODE_CONFIG = {
             trainStation: true,
             droneWorkshop: true,
             vehicleWorkshop: true,
+            physicStudies: true,
+            secretLaboratory: true,
+            trainingCamp: true,
+            deadlyBuild: true,
             // 🆕 CONSUMIBLES/PROYECTILES
             drone: true,
             sniperStrike: true,
             fobSabotage: true,
             specopsCommando: true,
             tank: true,
+            lightVehicle: true, // 🆕 NUEVO: Artillado ligero
             truckAssault: true,
-            cameraDrone: true
+            cameraDrone: true,
+            artillery: true, // 🆕 NUEVO: Artillería
+            worldDestroyer: true
         },
         
         // Propiedades de comportamiento
@@ -392,7 +533,23 @@ export const SERVER_NODE_CONFIG = {
                 canPlaceInEnemyTerritory: true,
                 ignoreDetectionLimits: true,
                 showRangePreview: true
+            },
+            artillery: {
+                targetType: 'area',
+                cursorSprite: 'vehicle-artillery',
+                showRangePreview: true
+                // ✅ areaRadius está en gameplay.artillery.areaRadius (fuente única de verdad)
             }
+        }
+    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // REQUISITOS DE CONSTRUCCIÓN
+    // ═══════════════════════════════════════════════════════════════
+    // Edificios que requieren otros edificios para construirse
+    buildRequirements: {
+        deadlyBuild: {
+            required: ['nuclearPlant', 'secretLaboratory', 'physicStudies'] // Requiere tener al menos uno de cada tipo en mesa
         }
     },
 

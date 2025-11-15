@@ -371,6 +371,12 @@ export class BackgroundTileSystem {
                 this.worldmapCache.height = this.worldHeight;
                 const cacheCtx = this.worldmapCache.getContext('2d');
                 
+                // 🎨 MEJORA DE CALIDAD: Habilitar suavizado para mejor calidad al escalar
+                cacheCtx.imageSmoothingEnabled = true;
+                if (cacheCtx.imageSmoothingQuality) {
+                    cacheCtx.imageSmoothingQuality = 'high';
+                }
+                
                 // Dibujar el worldmap UNA SOLA VEZ en el cache
                 cacheCtx.drawImage(worldmapSprite, 0, 0, this.worldWidth, this.worldHeight);
                 this.worldmapCacheReady = true;

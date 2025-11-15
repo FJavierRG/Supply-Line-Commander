@@ -19,9 +19,8 @@ El sistema de mazos reemplaza al antiguo sistema de razas, dando libertad total 
 
 **Características Clave:**
 - Límite de puntos: 700 por mazo
-- HQ siempre incluido (gratis, no cuenta para el límite)
-- Sin duplicados permitidos
-- Validación en servidor (anti-hack)
+- HQ siempre incluido y 2 FOBs iniciales (gratis, no cuenta para el límite)
+- Sin duplicados necesarios
 - Mazo predeterminado disponible para nuevos jugadores
 
 ---
@@ -39,7 +38,7 @@ El sistema de mazos reemplaza al antiguo sistema de razas, dando libertad total 
 ### Cálculo de Costos
 
 **Reglas:**
-- El HQ siempre está incluido y **NO cuenta** para el límite
+- El HQ y 2 FOBs iniciales siempre está incluido y **NO cuenta** para el límite
 - Todas las demás unidades suman su costo al total
 - El costo de cada unidad es el mismo que su costo de construcción en el juego
 

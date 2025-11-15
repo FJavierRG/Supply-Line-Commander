@@ -5,6 +5,8 @@ import { FrontMovementSystemServer } from '../systems/FrontMovementSystemServer.
 import { TerritorySystemServer } from '../systems/TerritorySystemServer.js';
 import { DroneSystemServer } from '../systems/DroneSystemServer.js';
 import { TankSystemServer } from '../systems/TankSystemServer.js';
+import { LightVehicleSystemServer } from '../systems/LightVehicleSystemServer.js'; // 🆕 NUEVO: Sistema de artillado ligero
+import { ArtillerySystemServer } from '../systems/ArtillerySystemServer.js'; // 🆕 NUEVO: Sistema de artillería
 import { TrainSystemServer } from '../systems/TrainSystemServer.js';
 import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
@@ -51,6 +53,7 @@ export class GameStateManager {
             player2: null
         };
         this.gameTime = 0;
+        this.benchCooldowns = {}; // 🆕 NUEVO: Cooldowns del banquillo por team
         this.tickCounter = 0;
         this.duration = GAME_CONFIG.match.duration;
         this.tickRate = GAME_CONFIG.match.tickRate;
@@ -66,6 +69,8 @@ export class GameStateManager {
         this.territory = new TerritorySystemServer(this);
         this.droneSystem = new DroneSystemServer(this);
         this.tankSystem = new TankSystemServer(this);
+        this.lightVehicleSystem = new LightVehicleSystemServer(this); // 🆕 NUEVO: Sistema de artillado ligero
+        this.artillerySystem = new ArtillerySystemServer(this); // 🆕 NUEVO: Sistema de artillería
         this.trainSystem = new TrainSystemServer(this); // 🆕 NUEVO: Sistema de trenes
         
         // Handlers de acciones
@@ -94,6 +99,19 @@ export class GameStateManager {
         this.truckAssaultSystem = new TruckAssaultSystem(this); // 🆕 NUEVO: Sistema de truck assault
         this.vehicleWorkshopSystem = new VehicleWorkshopSystem(this); // 🆕 NUEVO: Sistema de taller de vehículos
         this.cameraDroneSystem = new CameraDroneSystem(this); // 🆕 NUEVO: Sistema de camera drone
+        
+        // 🆕 NUEVO: Estado del Destructor de mundos
+        this.worldDestroyerActive = false;
+        this.worldDestroyerExecuted = false;
+        this.worldDestroyerStartTime = null;
+        this.worldDestroyerPlayerTeam = null;
+        this.worldDestroyerCountdownDuration = null;
+        
+        // 🆕 NUEVO: Eventos de impacto de artillado ligero
+        this.lightVehicleImpacts = [];
+        
+        // 🆕 NUEVO: Eventos de artillería
+        this.artilleryEvent = null;
         
         // Sistema de eventos de sonido
         this.soundEvents = [];
@@ -211,9 +229,12 @@ export class GameStateManager {
                 gameplay: this.buildHandler.getGameplayProperties(),
                 buildRadii: this.buildHandler.getBuildRadii(), // 🆕 Radio de construcción (proximidad)
                 detectionRadii: this.buildHandler.getDetectionRadii(),
+                temporaryEffects: this.buildHandler.getTemporaryEffects(), // 🆕 NUEVO: Efectos temporales (trained, wounded)
                 security: this.buildHandler.getSecurityProperties(),
                 behavior: this.buildHandler.getBehaviorProperties(),
-                specialNodes: this.buildHandler.getSpecialNodes() // 🆕 Configuración de nodos especiales (comando, truck assault)
+                specialNodes: this.buildHandler.getSpecialNodes(), // 🆕 Configuración de nodos especiales (comando, truck assault)
+                vehicleTypes: this.buildHandler.getVehicleTypes(), // 🆕 NUEVO: Tipos de vehículos
+                vehicleSystems: this.buildHandler.getVehicleSystems() // 🆕 NUEVO: Sistemas de vehículos por tipo de nodo
             }
         };
     }
@@ -233,11 +254,16 @@ export class GameStateManager {
             active: true,
             constructed: true,
             isConstructing: false,
-            landedHelicopters: [] // 🆕 Array para helicópteros aterrizados
+            landedHelicopters: [], // 🆕 Array para helicópteros aterrizados
+            disabled: false, // 🆕 Estado disabled (para comandos)
+            broken: false // 🆕 Estado broken (roto - requiere reparación con camión mecánico)
         };
         
         // 🆕 CENTRALIZADO: Obtener configuración de vehículos según la raza
         const vehicleConfig = this.raceManager.getInitialVehiclesForRace(team, type);
+        
+        // 🆕 Obtener configuración de capacidades del nodo
+        const capacityConfig = SERVER_NODE_CONFIG.capacities[type] || {};
         
         // Propiedades según tipo
         if (type === 'hq') {
@@ -254,6 +280,14 @@ export class GameStateManager {
             node.hasMedicalSystem = true;
             node.ambulanceAvailable = true;
             node.maxAmbulances = 1;
+            // 🆕 NUEVO: Sistema de reparación para camión mecánico
+            node.hasRepairSystem = capacityConfig.hasRepairSystem || false;
+            node.repairVehicleAvailable = true;
+            node.maxRepairVehicles = capacityConfig.maxRepairVehicles || 1;
+            node.availableRepairVehicles = capacityConfig.maxRepairVehicles || 1;
+            // 🆕 NUEVO: Inicializar tipo de recurso seleccionado por defecto
+            const defaultType = this.raceManager.getDefaultVehicleType('hq');
+            node.selectedResourceType = defaultType || 'ammo';
         } else if (type === 'fob') {
             node.hasSupplies = true;
             node.maxSupplies = 100;
@@ -339,6 +373,13 @@ export class GameStateManager {
     }
     
     /**
+     * 🆕 NUEVO: Maneja activación del Destructor de mundos
+     */
+    handleWorldDestroyer(playerTeam) {
+        return this.combatHandler.handleWorldDestroyer(playerTeam);
+    }
+    
+    /**
      * Maneja solicitud de convoy
      */
     handleConvoy(playerTeam, fromId, toId) {
@@ -379,6 +420,22 @@ export class GameStateManager {
      */
     handleTankLaunch(playerTeam, targetId) {
         return this.combatHandler.handleTankLaunch(playerTeam, targetId);
+    }
+    
+    /**
+     * Maneja lanzamiento de artillado ligero
+     * 🆕 NUEVO
+     */
+    handleLightVehicleLaunch(playerTeam, targetId) {
+        return this.combatHandler.handleLightVehicleLaunch(playerTeam, targetId);
+    }
+    
+    /**
+     * Maneja lanzamiento de artillería
+     * 🆕 NUEVO
+     */
+    handleArtilleryLaunch(playerTeam, x, y) {
+        return this.combatHandler.handleArtilleryLaunch(playerTeam, x, y);
     }
     
     /**
@@ -495,6 +552,12 @@ export class GameStateManager {
         
         // Actualizar tiempo (solo después del countdown)
         this.gameTime += dt;
+        
+        // 🆕 NUEVO: Limpiar cooldowns de cartas que ya no están en el banquillo
+        if (this.raceManager) {
+            this.raceManager.cleanupBenchCooldowns('player1');
+            this.raceManager.cleanupBenchCooldowns('player2');
+        }
         
         // Incrementar contador de ticks desde inicio del juego
         if (this.gameStartTicks < this.INITIAL_SYNC_TICKS) {
@@ -614,6 +677,31 @@ export class GameStateManager {
             this.tankImpacts = tankResult.impacts;
         }
         
+        // === ACTUALIZAR ARTILLADO LIGERO (MOVIMIENTO + IMPACTOS) ===
+        const lightVehicleResult = this.lightVehicleSystem.update(dt);
+        
+        // Guardar eventos para enviar a clientes
+        if (lightVehicleResult.impacts.length > 0) {
+            this.lightVehicleImpacts = lightVehicleResult.impacts;
+        }
+        
+        // === ACTUALIZAR ARTILLERÍA (EFECTOS DE ÁREA) ===
+        const artilleryEvent = this.artillerySystem.update(dt);
+        
+        // Guardar eventos para enviar a clientes
+        if (artilleryEvent) {
+            this.artilleryEvent = artilleryEvent;
+        }
+        
+        // 🆕 NUEVO: Actualizar Destructor de mundos
+        const worldDestroyerEvent = this.combatHandler.updateWorldDestroyer(dt);
+        if (worldDestroyerEvent) {
+            // Guardar evento para enviar a clientes
+            this.worldDestroyerEvent = worldDestroyerEvent;
+            // Limpiar nodos destruidos
+            this.nodes = this.nodes.filter(n => n.active !== false);
+        }
+        
         // 🆕 NUEVO: Verificar talleres cuando se destruyen FOBs
         const destroyedFOBs = [];
         if (droneResult.impacts.length > 0 || tankResult.impacts.length > 0) {
@@ -704,13 +792,16 @@ export class GameStateManager {
             helicopters: this.stateSerializer.serializeAllHelicopters(), // Helicópteros
             drones: this.droneSystem.getDrones(), // Drones activos con posiciones
             tanks: this.tankSystem.getTanks(), // Tanques activos con posiciones
+            lightVehicles: this.lightVehicleSystem.getLightVehicles(), // 🆕 NUEVO: Artillados ligeros activos con posiciones
+            artilleryStrikes: this.artillerySystem.getArtilleryStrikes(), // 🆕 NUEVO: Bombardeos de artillería activos
             emergencies: this.medicalSystem.getEmergencies(),
             currency: {
                 player1: Math.floor(this.currency.player1),
                 player2: Math.floor(this.currency.player2)
             },
             soundEvents: this.getSoundEvents(), // Eventos de sonido de este tick
-            visualEvents: this.getVisualEvents() // 🆕 NUEVO: Eventos visuales de este tick
+            visualEvents: this.getVisualEvents(), // 🆕 NUEVO: Eventos visuales de este tick
+            benchCooldowns: this.benchCooldowns ? { ...this.benchCooldowns } : {} // 🆕 NUEVO: Cooldowns del banquillo
         };
         
         // Durante sync inicial, siempre enviar. Después, aplicar optimización
@@ -722,6 +813,37 @@ export class GameStateManager {
         this.optimizationTracker.updateLastSentState(JSON.parse(JSON.stringify(state)));
         
         return state;
+    }
+    
+    /**
+     * 🆕 NUEVO: Cambia el tipo de recurso seleccionado de un nodo
+     * @param {string} playerTeam - Equipo del jugador
+     * @param {string} nodeId - ID del nodo
+     * @param {string} resourceType - Tipo de recurso seleccionado (ammo, medical, helicopter, etc.)
+     * @returns {Object} Resultado con success y reason
+     */
+    changeNodeResourceType(playerTeam, nodeId, resourceType) {
+        const node = this.nodes.find(n => n.id === nodeId);
+        
+        if (!node) {
+            return { success: false, reason: 'Nodo no encontrado' };
+        }
+        
+        // Verificar que el nodo pertenezca al jugador
+        if (node.team !== playerTeam) {
+            return { success: false, reason: 'No puedes cambiar el tipo de recurso de nodos enemigos' };
+        }
+        
+        // Verificar que el tipo de recurso sea válido para este nodo
+        const enabledTypes = this.raceManager.getEnabledVehicleTypes(node.type);
+        if (!enabledTypes.includes(resourceType)) {
+            return { success: false, reason: `Tipo de recurso ${resourceType} no válido para este nodo` };
+        }
+        
+        // Cambiar el tipo de recurso seleccionado
+        node.selectedResourceType = resourceType;
+        
+        return { success: true };
     }
     
     /**

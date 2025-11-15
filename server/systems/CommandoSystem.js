@@ -148,10 +148,8 @@ export class CommandoSystem {
             const truckFactories = this.gameState.nodes.filter(n => 
                 n.type === 'truckFactory' && 
                 n.team === team && 
-                n.constructed &&
-                !n.disabled &&
                 !n.isAbandoning &&
-                n.active
+                this.gameState.raceManager.isNodeFunctional(n) // 🆕 MODULARIZADO: Usar función helper (ya verifica constructed, active, disabled, broken)
             ).length;
             
             // ✅ Usar configuración de serverNodes (fuente única de verdad)

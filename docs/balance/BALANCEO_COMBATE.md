@@ -19,6 +19,7 @@
 Este documento detalla todas las mecánicas de combate del juego, incluyendo velocidades, rangos, tiempos de espera, efectos temporales y las interacciones entre diferentes sistemas de combate.
 
 **Características Clave:**
+- El juego se centra en logística y contralogística, no en APM de unidades de combate
 - El combate se basa principalmente en destrucción de edificios y efectos temporales
 - No hay sistema de vida/armadura tradicional - los edificios se destruyen instantáneamente
 - Los frentes se mueven basándose en suministros, no en combate directo
@@ -419,7 +420,7 @@ Si un sniper elimina el comando:
 |---------|----------|-------------|
 | Dron | Anti-Dron | ⭐⭐⭐⭐⭐ (100% si está en rango) |
 | Comando | Torre de Vigilancia | ⭐⭐⭐⭐⭐ (Previene despliegue en rango 320px) |
-| Comando | Sniper | ⭐⭐⭐⭐ (Elimina comando, pero deja efecto residual) |
+| Comando | Sniper | ⭐⭐⭐⭐ (Elimina comando, pero deja efecto residual 3 segundos) |
 | FOB Sabotaje | Torre de Vigilancia | ⭐⭐⭐⭐⭐ (Previene sabotaje en rango 320px) |
 | Front | Sniper | ⭐⭐⭐⭐ (Duplica consumo por 15s) |
 
