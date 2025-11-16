@@ -27,9 +27,9 @@ export const GAME_CONFIG = {
     // CURRENCY (ECONOMÍA)
     // ═══════════════════════════════════════════════════════════════
     currency: {
-        initial: 30,          // Currency inicial de cada jugador
-        passiveRate: 3,       // Generación pasiva base ($/s)
-        pixelsPerCurrency: 2,  // Cada X pixels de avance del frente = 1 currency
+        initial: 0,          // Currency inicial de cada jugador
+        passiveRate: 2,       // Generación pasiva base ($/s)
+        pixelsPerCurrency: 2,  // Cada 2 pixels de avance del frente = 1 currency
         currencyName: 'Terreno Ganado' // Nombre de la currency
     },
 
@@ -95,7 +95,13 @@ export const GAME_CONFIG = {
             supplies: 100,
             maxSupplies: 100,
             availableVehicles: 4,
-            maxVehicles: 4
+            maxVehicles: 4, //heavy trucks de suministro
+            // Sistema médico (ambulancias)
+            ambulanceAvailable: true,
+            maxAmbulances: 1,
+            // Sistema de reparación (camiones mecánicos)
+            availableRepairVehicles: 1,
+            maxRepairVehicles: 2
         },
         
         // Frentes iniciales

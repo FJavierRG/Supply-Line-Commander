@@ -9,35 +9,35 @@ export const SERVER_NODE_CONFIG = {
     // COSTES DE EDIFICIOS
     // ═══════════════════════════════════════════════════════════════
     costs: {
-        fob: 120,
-        antiDrone: 115,
-        droneLauncher: 100,
-        nuclearPlant: 180,
-        truckFactory: 80,
-        engineerCenter: 60,
-        intelRadio: 70, 
-        aerialBase: 150, 
+        fob: 140,
+        antiDrone: 135,
+        droneLauncher: 120,
+        nuclearPlant: 200,
+        truckFactory: 90,
+        engineerCenter: 80,
+        intelRadio: 90, 
+        aerialBase: 170, 
         campaignHospital: 50,
-        intelCenter: 80, 
-        vigilanceTower: 120, 
-        trainStation: 150,
-        droneWorkshop: 85,
-        vehicleWorkshop: 70,
-        physicStudies: 60,
-        secretLaboratory: 70,
-        trainingCamp: 80,
-        deadlyBuild: 120,
+        intelCenter: 110, 
+        vigilanceTower: 140, 
+        trainStation: 170,
+        droneWorkshop: 115,
+        vehicleWorkshop: 90,
+        physicStudies: 80,
+        secretLaboratory: 90,
+        trainingCamp: 90,
+        deadlyBuild: 140,
         // 🆕 CONSUMIBLES/PROYECTILES
-        drone: 150,
+        drone: 170,
         sniperStrike: 40,
         fobSabotage: 40,
-        specopsCommando: 120,  
-        tank: 150,
-        lightVehicle: 45, // 🆕 NUEVO: Artillado ligero
-        truckAssault: 45,
+        specopsCommando: 140,  
+        tank: 170,
+        lightVehicle: 40, // 🆕 NUEVO: Artillado ligero
+        truckAssault: 50,
         cameraDrone: 50,
-        artillery: 120, // 🆕 NUEVO: Artillería (efecto de área)
-        worldDestroyer: 200
+        artillery: 140, // 🆕 NUEVO: Artillería (efecto de área)
+        worldDestroyer: 220
     },
 
     // ═══════════════════════════════════════════════════════════════

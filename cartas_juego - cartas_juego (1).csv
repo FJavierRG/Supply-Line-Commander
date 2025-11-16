@@ -1,0 +1,30 @@
+Nombre,Coste,Tipo de efecto
+HQ (Cuartel General),0,Ninguno
+Ataque de Francotirador,40,Debuff
+Sabotaje FOB,40,Debuff
+Truck Assault,50,Debuff
+Artillado Ligero,40,Rotura
+Dron Cámara,50,Buff
+Hospital de Campaña,50,Buff
+Estudios de Física,80,Buff
+Centro de Ingenieros,80,Buff
+Radio de Inteligencia,90,Buff
+Laboratorio Secreto,90,Buff
+Taller de Vehículos,90,Buff
+Campo de Entrenamiento,90,Buff
+Fábrica de Camiones,90,Buff
+Centro de Inteligencia,110,Desbloqueo
+Taller de Drones,115,Buff
+Lanzadera de Drones,120,Desbloqueo
+Anti-Dron,135,Defensa
+Comando Especial,140,Disable
+FOB (Base de Operaciones Avanzada),140,Ninguno
+Torre de Vigilancia,140,Defensa
+Construcción Prohibida,140,Desbloqueo
+Artillería,140,Rotura
+Tanque,170,Destrucción
+Base Aérea,170,Ninguno
+Dron Bomba,170,Destrucción
+Estación de Tren,170,Buff
+Planta Nuclear,200,Buff
+Destructor de Mundos,220,Destrucción

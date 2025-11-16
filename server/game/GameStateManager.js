@@ -269,22 +269,30 @@ export class GameStateManager {
         if (type === 'hq') {
             node.hasSupplies = false;
             node.supplies = null; // Infinitos
+            
+            // ✅ CONFIGURACIÓN INICIAL: Leer valores iniciales desde GAME_CONFIG.initialNodes.hq
+            const initialConfig = GAME_CONFIG.initialNodes.hq || {};
+            
             // ✅ CONSOLIDADO: Usar configuración de vehículos desde vehicleConfig (lee de SERVER_NODE_CONFIG.capacities)
             node.hasVehicles = vehicleConfig.hasVehicles;
-            node.maxVehicles = vehicleConfig.hasVehicles ? vehicleConfig.availableVehicles : 0;
-            node.availableVehicles = vehicleConfig.availableVehicles;
+            // Valores iniciales disponibles desde gameConfig, máximos desde serverNodes
+            node.maxVehicles = vehicleConfig.hasVehicles ? (initialConfig.maxVehicles ?? vehicleConfig.availableVehicles) : 0;
+            node.availableVehicles = vehicleConfig.hasVehicles ? (initialConfig.availableVehicles ?? vehicleConfig.availableVehicles) : 0;
             node.hasHelicopters = vehicleConfig.hasHelicopters;
             node.maxHelicopters = vehicleConfig.hasHelicopters ? vehicleConfig.availableHelicopters : 0;
             node.availableHelicopters = vehicleConfig.availableHelicopters;
-            // Sistema médico para ambulancias
+            
+            // Sistema médico para ambulancias - valores iniciales desde gameConfig
             node.hasMedicalSystem = true;
-            node.ambulanceAvailable = true;
-            node.maxAmbulances = 1;
-            // 🆕 NUEVO: Sistema de reparación para camión mecánico
+            node.ambulanceAvailable = initialConfig.ambulanceAvailable ?? true;
+            node.maxAmbulances = initialConfig.maxAmbulances ?? (capacityConfig.maxAmbulances || 1);
+            
+            // 🆕 NUEVO: Sistema de reparación para camión mecánico - valores iniciales desde gameConfig
             node.hasRepairSystem = capacityConfig.hasRepairSystem || false;
-            node.repairVehicleAvailable = true;
-            node.maxRepairVehicles = capacityConfig.maxRepairVehicles || 1;
-            node.availableRepairVehicles = capacityConfig.maxRepairVehicles || 1;
+            node.maxRepairVehicles = initialConfig.maxRepairVehicles ?? (capacityConfig.maxRepairVehicles || 1);
+            node.availableRepairVehicles = initialConfig.availableRepairVehicles ?? (capacityConfig.maxRepairVehicles || 1);
+            node.repairVehicleAvailable = node.availableRepairVehicles > 0;
+            
             // 🆕 NUEVO: Inicializar tipo de recurso seleccionado por defecto
             const defaultType = this.raceManager.getDefaultVehicleType('hq');
             node.selectedResourceType = defaultType || 'ammo';
