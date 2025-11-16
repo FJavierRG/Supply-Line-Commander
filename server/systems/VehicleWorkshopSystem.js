@@ -92,19 +92,14 @@ export class VehicleWorkshopSystem {
                     // Actualizar máximo
                     fob.maxVehicles = newMaxVehicles;
                     
-                    // Actualizar disponibles: mantener la diferencia si ya tenía vehículos disponibles
+                    // Actualizar disponibles: mantener la diferencia si ya tenía vehículos en camino
                     // Si tenía menos disponibles que el máximo anterior, mantener la misma diferencia
+                    // Esto asegura que los vehículos en camino no se dupliquen
                     const oldDifference = oldMax - oldAvailable;
                     const newAvailable = Math.max(0, newMaxVehicles - oldDifference);
                     
                     // Asegurar que availableVehicles no exceda maxVehicles
                     fob.availableVehicles = Math.min(newAvailable, newMaxVehicles);
-                    
-                    // Si el nuevo máximo es mayor, dar el bonus adicional inmediatamente
-                    if (newMaxVehicles > oldMax) {
-                        const bonus = newMaxVehicles - oldMax;
-                        fob.availableVehicles = Math.min(fob.availableVehicles + bonus, newMaxVehicles);
-                    }
                     
                     console.log(`🔧 Vehicle Workshop afectando FOB ${fob.id} (${team}): ${oldMax}→${newMaxVehicles} máx, ${oldAvailable}→${fob.availableVehicles} disp (${workshopsInArea} talleres en área)`);
                 }

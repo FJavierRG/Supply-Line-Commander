@@ -99,6 +99,9 @@ export class AISystem {
             decisionsExecuted: 0
         };
         
+        // Cooldowns internos de consumibles (por tipo de carta)
+        this.lastConsumableUse = {};
+        
     }
     
     /**
@@ -789,6 +792,17 @@ export class AISystem {
         // 🎯 NUEVO: Usar sistema de perfiles para evaluar consumibles
         const state = AIGameStateAnalyzer.analyzeState(team, this.gameState);
         const scoringRules = this.profile.getScoringRules();
+        
+        // 🎯 PRESUPUESTO DE CONSUMIBLES POR FASE
+        let maxConsumableBudget = currency;
+        if (typeof this.profile.getConsumableBudgetConfig === 'function') {
+            const budgetConfig = this.profile.getConsumableBudgetConfig();
+            const phaseBudgetFraction = budgetConfig?.[state.phase];
+            if (typeof phaseBudgetFraction === 'number' && phaseBudgetFraction > 0) {
+                maxConsumableBudget = currency * phaseBudgetFraction;
+            }
+        }
+        
         const recommendations = AICardEvaluator.evaluateDeck(
             this.profile.getDeck(),
             this.gameState,
@@ -799,7 +813,30 @@ export class AISystem {
         );
         
         // Filtrar solo consumibles (no edificios)
-        const consumableActions = recommendations.filter(action => action.type === 'attack');
+        let consumableActions = recommendations.filter(action => action.type === 'attack');
+        
+        // Aplicar presupuesto de consumibles por fase
+        consumableActions = consumableActions.filter(action => action.cost <= maxConsumableBudget);
+        
+        // 🎯 RATE-LIMIT DE HARASS (sniper, sabotajes) POR FASE
+        const now = this.gameState.gameTime || 0;
+        if (typeof this.profile.getConsumableCooldownConfig === 'function') {
+            const cooldownConfig = this.profile.getConsumableCooldownConfig() || {};
+            const phaseCooldowns = cooldownConfig[state.phase] || {};
+            
+            consumableActions = consumableActions.filter(action => {
+                const cardId = action.cardId;
+                const cooldownSeconds = phaseCooldowns[cardId];
+                
+                // Si no hay cooldown configurado para este consumible en esta fase, dejarlo pasar
+                if (!cooldownSeconds || cooldownSeconds <= 0) {
+                    return true;
+                }
+                
+                const lastUse = this.lastConsumableUse[cardId] ?? -Infinity;
+                return (now - lastUse) >= cooldownSeconds;
+            });
+        }
         
         if (consumableActions.length === 0) {
             return;
@@ -815,6 +852,9 @@ export class AISystem {
         // Ejecutar acción
         if (bestAction.type === 'attack') {
             this.aiActionHandler.executeAttack(team, bestAction.cardId);
+            // Registrar uso para cooldowns
+            const now = this.gameState.gameTime || 0;
+            this.lastConsumableUse[bestAction.cardId] = now;
         }
     }
     
@@ -1132,23 +1172,29 @@ export class AISystem {
             return;
         }
         
-        // Detectar si jugador lanzó dron recientemente
-        const recentDrone = this.gameState.droneSystem?.drones?.some(d => 
-            d.team === 'player1' && 
-            Date.now() - d.createdAt < 10000 // Últimos 10s
-        ) || false;
+        // Detectar presión aérea usando el analizador de estado
+        const state = AIGameStateAnalyzer.analyzeState(team, this.gameState);
         
-        // Si jugador tiene lanzadera y lanzó dron: construir anti-drone
-        // Nota: currencyThreshold ahora es 1.0, así que el umbral es el mismo para todas las dificultades
+        // Si jugador tiene lanzadera o hay presión aérea reciente: considerar construir anti-drone
         const antiDroneCost = this.gameState.buildHandler.getBuildingCosts()['antiDrone'] || 115;
-        if (playerHasLauncher && recentDrone && currency >= antiDroneCost) {
+        if ((playerHasLauncher || state.hasAirThreat) && currency >= antiDroneCost) {
             const hasAntiDrone = myNodes.some(n => n.type === 'antiDrone');
-            if (!hasAntiDrone && Math.random() < 0.6) {
-                this.stats.decisionsExecuted++;
-                if (AIConfig.debug.logActions) {
-                    console.log(`🤖 IA REACCIÓN: Construir anti-drone (jugador lanzó dron)`);
+            if (!hasAntiDrone) {
+                // Probabilidad de "acierto" dependiente de dificultad
+                let reactProbability = 0.7; // medium por defecto
+                if (this.difficulty === 'easy') {
+                    reactProbability = 0.45;
+                } else if (this.difficulty === 'hard') {
+                    reactProbability = 0.9;
                 }
-                this.aiActionHandler.executeBuild(team, 'antiDrone');
+                
+                if (Math.random() < reactProbability) {
+                    this.stats.decisionsExecuted++;
+                    if (AIConfig.debug.logActions) {
+                        console.log(`🤖 IA REACCIÓN: Construir anti-drone (presión aérea detectada, dificultad=${this.difficulty})`);
+                    }
+                    this.aiActionHandler.executeBuild(team, 'antiDrone');
+                }
             }
         }
     }

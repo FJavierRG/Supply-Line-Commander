@@ -1130,16 +1130,21 @@ io.on('connection', (socket) => {
     socket.on('camera_drone_deploy_request', (data) => {
         const { roomId, x, y } = data;
         
+        console.log(`📹 [SERVER] camera_drone_deploy_request recibido: roomId=${roomId}, x=${x}, y=${y}`);
+        
         try {
             const room = roomManager.getRoom(roomId);
             if (!room || !room.gameState) throw new Error('Partida no iniciada');
             
             const playerTeam = roomManager.getPlayerTeam(roomId, socket.id);
+            console.log(`📹 [SERVER] Procesando despliegue para team: ${playerTeam}`);
+            
             const result = room.gameState.handleCameraDroneDeploy(playerTeam, x, y);
             
+            console.log(`📹 [SERVER] Resultado del despliegue: success=${result.success}`, result);
+            
             if (result.success) {
-                // Broadcast a todos
-                io.to(roomId).emit('camera_drone_deployed', {
+                const eventData = {
                     cameraDroneId: result.cameraDrone.id,
                     team: playerTeam,
                     x: result.cameraDrone.x,
@@ -1148,14 +1153,27 @@ io.on('connection', (socket) => {
                     targetY: result.cameraDrone.targetY,
                     detectionRadius: result.cameraDrone.detectionRadius,
                     deployed: result.cameraDrone.deployed
+                };
+                
+                console.log(`📹 [SERVER] Emitiendo camera_drone_deployed a room ${roomId}:`, eventData);
+                
+                // Broadcast a todos
+                io.to(roomId).emit('camera_drone_deployed', eventData);
+                
+                // También enviar actualización de currency inmediatamente
+                io.to(roomId).emit('currency_update', {
+                    player1: Math.floor(room.gameState.currency.player1),
+                    player2: Math.floor(room.gameState.currency.player2)
                 });
                 
-                console.log(`📹 Camera Drone desplegado por ${playerTeam} hacia (${x.toFixed(0)}, ${y.toFixed(0)})`);
+                console.log(`📹 Camera Drone desplegado por ${playerTeam} hacia (${x.toFixed(0)}, ${y.toFixed(0)}) - Currency actualizado: ${room.gameState.currency[playerTeam]}$`);
             } else {
+                console.log(`⚠️ [SERVER] Despliegue fallido, enviando camera_drone_deploy_failed: ${result.reason}`);
                 socket.emit('camera_drone_deploy_failed', { reason: result.reason });
                 console.log(`⚠️ Despliegue de camera drone rechazado: ${result.reason}`);
             }
         } catch (error) {
+            console.error(`❌ [SERVER] Error en camera_drone_deploy_request:`, error);
             socket.emit('error', { message: error.message });
         }
     });

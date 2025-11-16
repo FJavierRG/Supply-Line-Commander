@@ -73,14 +73,15 @@ export class AIRepairManager {
      */
     getBuildingPriority(buildingType) {
         const priorities = {
-            'nuclearPlant': 100,      // Máxima prioridad
-            'droneLauncher': 80,      // Alta prioridad
-            'antiDrone': 60,          // Prioridad media-alta
-            'truckFactory': 50,       // Prioridad media
-            'engineerCenter': 40,     // Prioridad media
-            'intelCenter': 70,        // Alta prioridad
-            'campaignHospital': 55,   // Prioridad media-alta
-            'aerialBase': 65,         // Alta prioridad
+            // Economía y defensa crítica primero
+            'nuclearPlant': 100,      // Máxima prioridad: economía principal
+            'droneLauncher': 90,      // Muy alta: habilita drones ofensivos
+            'aerialBase': 85,         // Muy alta: logística aérea
+            'antiDrone': 80,          // Alta: defensa frente a presión aérea
+            'intelRadio': 75,         // Alta: economía/visión
+            'campaignHospital': 70,   // Alta: soporte médico
+            'truckFactory': 65,       // Media-alta: logística terrestre
+            'engineerCenter': 60,     // Media-alta: mejora logística
             // Otros edificios: prioridad baja por defecto
         };
         

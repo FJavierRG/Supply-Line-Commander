@@ -18,7 +18,7 @@
   Asegurarse de que todas las reglas de scoring que usan condiciones como `earlyPhase`, `notLate`, etc. se apoyan en `state.phase` calculado a partir del tiempo, no solo de la currency.
 
 - [ ] **Definir reglas de comportamiento por fase**
-  - Early (0–3:30): priorizar `truckFactory`, `engineerCenter` y el primer `fob` como núcleo de economía/logística; penalizar fuertemente `drone` para que prácticamente no se use en esta fase.  
+  - Early (0–3:30): priorizar 'intel radio', `truckFactory`, `engineerCenter` y el primer `fob` como núcleo de economía/logística; penalizar fuertemente `drone` para que prácticamente no se use en esta fase.  
   - Mid (3:30–6:00): seguir mejorando economía (`nuclearPlant` cuando sea viable), consolidar FOBs faltantes, dar peso significativo a `sniperStrike` y `fobSabotage` como herramientas de harass, permitir construir `droneLauncher` pero seguir penalizando el uso de `drone`.  
   - Late (>6:00): mantener economía y reconstruir edificios clave si se pierden, dar prioridad alta al uso de `drone` contra objetivos importantes (lanzaderas, plantas nucleares, economía), mantener uso activo de `sniperStrike` y `fobSabotage` como harass constante.
 

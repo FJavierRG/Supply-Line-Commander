@@ -433,7 +433,7 @@ export const SERVER_NODE_CONFIG = {
         // Propiedades de comando especial operativo
         specopsCommando: {
             // ✅ detectionRadius está en specialNodes.specopsCommando.detectionRadius (fuente única de verdad)
-            duration: 10,           // Duración en segundos antes de que el comando expire (10s)
+            duration: 15,           // Duración en segundos antes de que el comando expire (10s)
             residualDisabledDuration: 3  // 🆕 NUEVO: Duración en segundos que los edificios permanecen disabled después de eliminar el comando (3s)
         },
         
@@ -441,7 +441,7 @@ export const SERVER_NODE_CONFIG = {
         truckAssault: {
             // ✅ detectionRadius está en specialNodes.truckAssault.detectionRadius (fuente única de verdad)
             duration: 25,          // Duración en segundos antes de que el truck assault expire (25s)
-            speedPenalty: 0.1     // Multiplicador de velocidad (0.75 = 25% de ralentización)
+            speedPenalty: 0.5     // Multiplicador de velocidad (0.75 = 25% de ralentización)
         },
         
         // Propiedades del Destructor de mundos

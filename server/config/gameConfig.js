@@ -101,7 +101,7 @@ export const GAME_CONFIG = {
             maxAmbulances: 1,
             // Sistema de reparación (camiones mecánicos)
             availableRepairVehicles: 1,
-            maxRepairVehicles: 2
+            maxRepairVehicles: 1
         },
         
         // Frentes iniciales

@@ -3,7 +3,7 @@
 
 import AIConfig from '../config/AIConfig.js';
 import { GAME_CONFIG } from '../../../config/gameConfig.js';
-import { getAdjustedThreshold } from '../config/RaceAIConfig.js';
+import { getAdjustedThreshold, getDifficultyMultipliers } from '../config/RaceAIConfig.js';
 
 export class AISupplyManager {
     constructor(gameState, io, roomId, raceId, difficulty) {
@@ -15,8 +15,8 @@ export class AISupplyManager {
     }
     
     /**
-     * REGLA 1: Reabastecer FOBs desde HQ (cada 2 segundos)
-     * Envía convoyes a TODOS los FOBs que necesiten suministros (<50%)
+     * REGLA 1: Reabastecer FOBs desde HQ
+     * Envía convoyes a FOBs que necesiten suministros, con "error humano" en fácil
      */
     ruleResupplyFOBs(team) {
         const myNodes = this.gameState.nodes.filter(n => n.team === team && n.active);
@@ -30,9 +30,20 @@ export class AISupplyManager {
         
         if (!hq || !myFOBs || myFOBs.length === 0) return;
         
-        // Enviar a TODOS los FOBs que cumplan la condición (no solo al primero)
+        // 🎯 PROBABILIDAD DE "ERROR HUMANO" EN FÁCIL: No siempre revisa todos los FOBs
+        let checkProbability = 1.0; // 100% en medium/hard
+        if (this.difficulty === 'easy') {
+            checkProbability = 0.7; // 70% de probabilidad de revisar en fácil
+        }
+        
+        // Enviar a FOBs que cumplan la condición
         for (const fob of myFOBs) {
             if (!fob.active) continue;
+            
+            // 🎯 EN FÁCIL: A veces "olvida" revisar algunos FOBs
+            if (this.difficulty === 'easy' && Math.random() > checkProbability) {
+                continue; // "Olvida" este FOB
+            }
             
             // Verificar si el FOB necesita suministros
             const supplyPercentage = (fob.supplies / fob.maxSupplies) * 100;
@@ -41,21 +52,29 @@ export class AISupplyManager {
             const threshold = getAdjustedThreshold('fobSupply', this.raceId, this.difficulty) || 50;
             
             if (supplyPercentage <= threshold) {
-                // Intentar enviar convoy desde el HQ
-                const success = this.sendSupplyConvoy(hq, fob, team);
+                // 🎯 EN FÁCIL: A veces "duda" y no envía el convoy incluso si lo necesita
+                let sendProbability = 1.0;
+                if (this.difficulty === 'easy') {
+                    sendProbability = 0.75; // 75% de probabilidad de enviar en fácil
+                }
                 
-                if (success) {
-                    if (AIConfig.debug.logSupply || AIConfig.debug.logActions) {
+                if (Math.random() < sendProbability) {
+                    // Intentar enviar convoy desde el HQ
+                    const success = this.sendSupplyConvoy(hq, fob, team);
+                    
+                    if (success) {
+                        if (AIConfig.debug.logSupply || AIConfig.debug.logActions) {
+                        }
+                        // NO hacer return - continuar revisando otros FOBs
                     }
-                    // NO hacer return - continuar revisando otros FOBs
                 }
             }
         }
     }
     
     /**
-     * REGLA 2: Reabastecer Frentes desde FOBs (cada 3 segundos)
-     * Envía convoyes a TODOS los frentes que necesiten suministros (<70%)
+     * REGLA 2: Reabastecer Frentes desde FOBs
+     * Envía convoyes a frentes que necesiten suministros, con "error humano" en fácil
      */
     ruleResupplyFronts(team) {
         const myNodes = this.gameState.nodes.filter(n => n.team === team && n.active);
@@ -64,9 +83,20 @@ export class AISupplyManager {
         
         if (!myFronts || myFronts.length === 0) return;
         
-        // Revisar TODOS los frentes (no solo el primero)
+        // 🎯 PROBABILIDAD DE "ERROR HUMANO" EN FÁCIL: No siempre revisa todos los frentes
+        let checkProbability = 1.0; // 100% en medium/hard
+        if (this.difficulty === 'easy') {
+            checkProbability = 0.65; // 65% de probabilidad de revisar en fácil
+        }
+        
+        // Revisar frentes
         for (const front of myFronts) {
             if (!front.active) continue;
+            
+            // 🎯 EN FÁCIL: A veces "olvida" revisar algunos frentes
+            if (this.difficulty === 'easy' && Math.random() > checkProbability) {
+                continue; // "Olvida" este frente
+            }
             
             // Verificar si el frente necesita suministros
             const supplyPercentage = (front.supplies / front.maxSupplies) * 100;
@@ -79,13 +109,21 @@ export class AISupplyManager {
                 const closestFOB = this.findClosestFOBWithResources(front, myFOBs);
                 
                 if (closestFOB) {
-                    const success = this.sendSupplyConvoy(closestFOB, front, team);
+                    // 🎯 EN FÁCIL: A veces "duda" y no envía el convoy incluso si lo necesita
+                    let sendProbability = 1.0;
+                    if (this.difficulty === 'easy') {
+                        sendProbability = 0.7; // 70% de probabilidad de enviar en fácil
+                    }
                     
-                    if (success) {
-                        if (AIConfig.debug.logSupply || AIConfig.debug.logActions) {
+                    if (Math.random() < sendProbability) {
+                        const success = this.sendSupplyConvoy(closestFOB, front, team);
+                        
+                        if (success) {
+                            if (AIConfig.debug.logSupply || AIConfig.debug.logActions) {
+                            }
+                            // NO hacer return - continuar revisando otros Frentes
+                            continue; // Pasar al siguiente frente
                         }
-                        // NO hacer return - continuar revisando otros Frentes
-                        continue; // Pasar al siguiente frente
                     }
                 }
             }

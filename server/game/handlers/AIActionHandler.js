@@ -2,6 +2,7 @@
 // Ejecuta decisiones tomadas por la IA
 
 import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
+import AIConfig from '../ai/config/AIConfig.js';
 
 export class AIActionHandler {
     constructor(gameState, io, roomId) {
@@ -44,6 +45,14 @@ export class AIActionHandler {
     async executeBuild(team, cardId) {
         if (!cardId) {
             console.warn('⚠️ Building type no especificado');
+            return false;
+        }
+        
+        // 🎯 PROTECCIÓN: Verificar que no se intente construir un consumible como edificio
+        // Los consumibles tienen targetType en SERVER_NODE_CONFIG, los edificios no
+        const hasTargetType = SERVER_NODE_CONFIG.gameplay?.behavior?.[cardId]?.targetType !== undefined;
+        if (hasTargetType) {
+            console.error(`❌ IA ERROR: Intento de construir consumible "${cardId}" como edificio. Esto no debería pasar.`);
             return false;
         }
         
@@ -121,12 +130,16 @@ export class AIActionHandler {
     
     /**
      * Ejecuta ataque con dron
+     * 🎯 CORREGIDO: Usa CombatHandler.handleDroneLaunch para validar currency y descuentos
      */
     async executeDroneAttack(myNodes, team) {
         // Encontrar lanzadera
-        const launcher = myNodes.find(n => n.type === 'droneLauncher' && n.active);
+        const launcher = myNodes.find(n => n.type === 'droneLauncher' && n.active && n.constructed);
         
         if (!launcher) {
+            if (AIConfig.debug.logActions) {
+                console.warn('⚠️ IA: No se encontró lanzadera para lanzar dron');
+            }
             return false;
         }
         
@@ -134,11 +147,37 @@ export class AIActionHandler {
         const target = this.findBestDroneTarget();
         
         if (!target) {
+            if (AIConfig.debug.logActions) {
+                console.warn('⚠️ IA: No se encontró objetivo válido para dron');
+            }
             return false;
         }
         
-        // Lanzar dron
-        return await this.gameState.droneSystem.launchDrone(team, launcher, target);
+        // 🎯 USAR CombatHandler.handleDroneLaunch (valida currency, descuenta dinero, maneja descuentos, etc.)
+        const result = this.combatHandler.handleDroneLaunch(team, target.id);
+        
+        if (result.success) {
+            // Broadcast como si fuera un jugador real
+            this.io.to(this.roomId).emit('drone_launched', {
+                droneId: result.drone.id,
+                launcherId: result.launcherId,
+                targetId: result.targetId,
+                team: team,
+                x: result.drone.x,
+                y: result.drone.y
+            });
+            
+            if (AIConfig.debug.logActions) {
+                console.log(`💣 IA: Dron lanzado exitosamente → ${target.type} ${target.id} en (${result.drone.x}, ${result.drone.y})`);
+            }
+            
+            return true;
+        } else {
+            if (AIConfig.debug.logActions) {
+                console.warn(`⚠️ IA: Fallo al lanzar dron: ${result.reason}`);
+            }
+            return false;
+        }
     }
     
     /**
@@ -444,6 +483,11 @@ export class AIActionHandler {
      * Calcula posición para construcción (usando mismo sistema que BuildHandler)
      */
     calculateBuildPosition(hq, myNodes, buildingType) {
+        // 🎯 CASO ESPECIAL: antiDrone debe colocarse cerca del diámetro del nodo objetivo prioritario
+        if (buildingType === 'antiDrone') {
+            return this.calculateAntiDronePosition(hq, myNodes);
+        }
+        
         const territoryCalculator = this.gameState.territoryCalculator;
         const team = hq.team;
         
@@ -507,6 +551,111 @@ export class AIActionHandler {
         
         // Si TODO falla
         console.warn(`⚠️ IA: No se pudo encontrar posición válida para ${buildingType} después de 100+ intentos`);
+        return { 
+            x: hq.x + 200, 
+            y: hq.y 
+        };
+    }
+    
+    /**
+     * Calcula posición óptima para antiDrone: lo más cerca posible del diámetro del nodo objetivo prioritario
+     * El antiDrone debe estar dentro de su rango de intercepción (160px) del objetivo
+     */
+    calculateAntiDronePosition(hq, myNodes) {
+        const ANTI_DRONE_RANGE = 160; // Rango de intercepción del antiDrone
+        const territoryCalculator = this.gameState.territoryCalculator;
+        const team = hq.team;
+        
+        // 1. Identificar objetivos prioritarios de drones enemigos (edificios propios que necesitan protección)
+        // Prioridad: Plantas nucleares > Lanzaderas > Hospitales > FOBs > Otros edificios importantes
+        const priorityTargets = myNodes.filter(n => 
+            n.active && 
+            n.constructed && 
+            !n.isAbandoning &&
+            (n.type === 'nuclearPlant' || 
+             n.type === 'droneLauncher' || 
+             n.type === 'campaignHospital' || 
+             n.type === 'fob' ||
+             n.type === 'truckFactory' ||
+             n.type === 'engineerCenter')
+        );
+        
+        // Ordenar por prioridad
+        const targetPriority = {
+            'nuclearPlant': 100,
+            'droneLauncher': 90,
+            'campaignHospital': 80,
+            'fob': 70,
+            'truckFactory': 60,
+            'engineerCenter': 50
+        };
+        
+        priorityTargets.sort((a, b) => {
+            const priorityA = targetPriority[a.type] || 0;
+            const priorityB = targetPriority[b.type] || 0;
+            return priorityB - priorityA;
+        });
+        
+        // 2. Para cada objetivo prioritario, intentar colocar antiDrone cerca de su diámetro
+        for (const target of priorityTargets) {
+            const targetRadius = SERVER_NODE_CONFIG.radius[target.type] || 30;
+            
+            // Calcular distancia óptima: justo en el borde del radio del nodo + pequeño margen
+            // Pero asegurando que esté dentro del rango de intercepción (160px)
+            const optimalDistance = targetRadius + 10; // 10px de margen para evitar solapamiento
+            
+            // Si el objetivo es muy grande y el rango no alcanza, usar distancia máxima posible
+            const maxDistance = Math.min(optimalDistance, ANTI_DRONE_RANGE - 5); // 5px de margen de seguridad
+            
+            // Probar múltiples ángulos alrededor del objetivo
+            const angles = [0, Math.PI/4, Math.PI/2, 3*Math.PI/4, Math.PI, 5*Math.PI/4, 3*Math.PI/2, 7*Math.PI/4];
+            
+            for (const angle of angles) {
+                const x = target.x + Math.cos(angle) * maxDistance;
+                const y = target.y + Math.sin(angle) * maxDistance;
+                
+                // Verificar que esté en territorio propio y sea una ubicación válida
+                if (this.buildHandler.isValidLocation(x, y, 'antiDrone') && 
+                    territoryCalculator.isInTeamTerritory(x, team)) {
+                    
+                    // Verificar que esté dentro del rango de intercepción del objetivo
+                    const distanceToTarget = Math.hypot(x - target.x, y - target.y);
+                    if (distanceToTarget <= ANTI_DRONE_RANGE) {
+                        return { x, y };
+                    }
+                }
+            }
+            
+            // Si no se encontró posición exacta, probar con distancias variables
+            for (let distance = targetRadius + 5; distance <= ANTI_DRONE_RANGE - 5; distance += 10) {
+                for (const angle of angles) {
+                    const x = target.x + Math.cos(angle) * distance;
+                    const y = target.y + Math.sin(angle) * distance;
+                    
+                    if (this.buildHandler.isValidLocation(x, y, 'antiDrone') && 
+                        territoryCalculator.isInTeamTerritory(x, team)) {
+                        return { x, y };
+                    }
+                }
+            }
+        }
+        
+        // 3. Fallback: si no hay objetivos prioritarios o no se encontró posición, usar lógica estándar cerca del HQ
+        // Intentar posiciones cerca del HQ en círculo
+        const distances = [150, 200, 250, 100, 300];
+        const angles = [0, Math.PI/4, Math.PI/2, 3*Math.PI/4, Math.PI, 5*Math.PI/4, 3*Math.PI/2, 7*Math.PI/4];
+        for (const distance of distances) {
+            for (const angle of angles) {
+                const x = hq.x + Math.cos(angle) * distance;
+                const y = hq.y + Math.sin(angle) * distance;
+                if (this.buildHandler.isValidLocation(x, y, 'antiDrone') && 
+                    territoryCalculator.isInTeamTerritory(x, team)) {
+                    return { x, y };
+                }
+            }
+        }
+        
+        // Último fallback: posición cerca del HQ
         return { 
             x: hq.x + 200, 
             y: hq.y 

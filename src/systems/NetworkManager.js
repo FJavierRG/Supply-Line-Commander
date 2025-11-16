@@ -888,6 +888,8 @@ export class NetworkManager {
          * 🆕 NUEVO: Manejo de despliegue de camera drone
          */
         this.socket.on('camera_drone_deployed', (data) => {
+            console.log(`📹 [CLIENT] camera_drone_deployed recibido:`, data);
+            
             // Verificar que no exista ya (evitar duplicados)
             const exists = this.game.nodes.find(n => n.id === data.cameraDroneId);
             if (exists) {
@@ -895,43 +897,70 @@ export class NetworkManager {
                 return;
             }
             
-            // Crear el nodo del camera drone en el cliente
-            const config = getNodeConfig('cameraDrone');
-            const newNode = new VisualNode(
-                data.x,
-                data.y,
-                'cameraDrone',
-                {
-                    ...config,
-                    team: data.team,
-                    isConstructed: data.deployed || false
-                },
-                this.game
-            );
-            
-            if (newNode) {
-                // Sobrescribir ID y estado desde el servidor
-                newNode.id = data.cameraDroneId;
-                newNode.constructed = data.deployed || false;
-                newNode.isConstructing = false;
-                newNode.active = true;
-                newNode.detectionRadius = data.detectionRadius || 200;
-                newNode.isCameraDrone = true;
-                newNode.deployed = data.deployed || false;
-                newNode.targetX = data.targetX;
-                newNode.targetY = data.targetY;
+            try {
+                // Crear el nodo del camera drone en el cliente
+                const config = getNodeConfig('cameraDrone');
+                console.log(`📹 [CLIENT] Config obtenida:`, config);
                 
-                // 🆕 NUEVO: Inicializar propiedades de interpolación para multijugador (solo si está volando)
-                if (newNode.updateServerPosition && !data.deployed) {
-                    newNode.updateServerPosition(data.x, data.y);
+                const newNode = new VisualNode(
+                    data.x,
+                    data.y,
+                    'cameraDrone',
+                    {
+                        ...config,
+                        team: data.team,
+                        isConstructed: data.deployed || false
+                    },
+                    this.game
+                );
+                
+                if (newNode) {
+                    // Sobrescribir ID y estado desde el servidor
+                    newNode.id = data.cameraDroneId;
+                    newNode.constructed = data.deployed || false;
+                    newNode.isConstructing = false;
+                    newNode.active = true;
+                    newNode.detectionRadius = data.detectionRadius || 200;
+                    newNode.isCameraDrone = true;
+                    newNode.deployed = data.deployed || false;
+                    newNode.targetX = data.targetX;
+                    newNode.targetY = data.targetY;
+                    
+                    // 🆕 NUEVO: Inicializar propiedades de interpolación para multijugador (solo si está volando)
+                    if (newNode.updateServerPosition && !data.deployed) {
+                        newNode.updateServerPosition(data.x, data.y);
+                    } else {
+                        // Si ya está desplegado, usar posición directa
+                        newNode.x = data.x;
+                        newNode.y = data.y;
+                    }
+                    
+                    this.game.nodes.push(newNode);
+                    console.log(`📹 [CLIENT] Camera drone creado y agregado: ${data.cameraDroneId} en (${data.x}, ${data.y}), deployed=${data.deployed}`);
                 } else {
-                    // Si ya está desplegado, usar posición directa
-                    newNode.x = data.x;
-                    newNode.y = data.y;
+                    console.error(`❌ [CLIENT] Error: newNode es null o undefined`);
                 }
-                
-                this.game.nodes.push(newNode);
-                console.log(`📹 Camera drone desplegado: ${data.cameraDroneId} en (${data.x}, ${data.y})`);
+            } catch (error) {
+                console.error(`❌ [CLIENT] Error al crear camera drone:`, error);
+            }
+        });
+        
+        /**
+         * 🆕 NUEVO: Manejo de fallo en despliegue de camera drone
+         */
+        this.socket.on('camera_drone_deploy_failed', (data) => {
+            console.error(`❌ [CLIENT] Despliegue de camera drone fallido: ${data.reason}`);
+            // TODO: Mostrar mensaje de error al usuario en la UI
+        });
+        
+        /**
+         * 🆕 NUEVO: Actualización inmediata de currency (para despliegues de consumibles)
+         */
+        this.socket.on('currency_update', (data) => {
+            if (data && this.myTeam && data[this.myTeam] !== undefined) {
+                const oldCurrency = this.game.currency.missionCurrency;
+                this.game.currency.missionCurrency = data[this.myTeam];
+                console.log(`💰 [CLIENT] Currency actualizado inmediatamente: ${oldCurrency} → ${this.game.currency.missionCurrency}$`);
             }
         });
         

@@ -22,21 +22,56 @@ export class AIGameStateAnalyzer {
         // Contar edificios del jugador
         const playerPlants = playerNodes.filter(n => n.type === 'nuclearPlant' && n.constructed).length;
         
-        // Verificar si tiene lanzadera
+        // Verificar si tiene lanzadera propia y enemiga
         const hasLauncher = myNodes.some(n => n.type === 'droneLauncher' && n.constructed && n.active);
+        const enemyHasLauncher = playerNodes.some(n => n.type === 'droneLauncher' && n.constructed && n.active);
         
         // Obtener currency actual
         const currency = gameState.currency[team] || 0;
+
+        // Tiempo transcurrido de partida (segundos)
+        // Preferimos gameTime (servidor) y caemos a elapsedTime si existe por compatibilidad
+        const elapsedTime = typeof gameState.gameTime === 'number'
+            ? gameState.gameTime
+            : (gameState.elapsedTime || 0);
+        const elapsedMinutes = elapsedTime / 60;
         
-        // Calcular fase del juego
-        const phase = this.getGamePhase(currency);
+        // Calcular fase del juego (basada principalmente en tiempo)
+        const phase = this.getGamePhase(elapsedTime, gameState);
+
+        // Detectar presión aérea enemiga básica
+        let enemyActiveDrones = 0;
+        let hasRecentEnemyDrone = false;
+        const DRONE_RECENT_WINDOW = 15; // segundos
+
+        if (gameState.droneSystem && Array.isArray(gameState.droneSystem.drones)) {
+            const now = elapsedTime;
+            const drones = gameState.droneSystem.drones;
+            enemyActiveDrones = drones.filter(d => d.team === 'player1').length;
+            hasRecentEnemyDrone = drones.some(d => 
+                d.team === 'player1' &&
+                typeof d.createdAt === 'number' &&
+                (now - d.createdAt) <= DRONE_RECENT_WINDOW
+            );
+        }
+
+        const hasAirThreat = enemyHasLauncher || hasRecentEnemyDrone || enemyActiveDrones > 0;
+        const airThreatLevel = !hasAirThreat
+            ? 'none'
+            : (enemyActiveDrones >= 2 || hasRecentEnemyDrone ? 'high' : 'low');
         
         return {
             phase: phase,
+            elapsedTime,
+            elapsedMinutes,
             myFOBs: myFOBs,
             myPlants: myPlants,
             playerPlants: playerPlants,
             hasLauncher: hasLauncher,
+            enemyHasLauncher,
+            hasAirThreat,
+            airThreatLevel,
+            enemyActiveDrones,
             currency: currency,
             myAerialBases: myAerialBases,
             myIntelRadios: myIntelRadios,
@@ -45,14 +80,19 @@ export class AIGameStateAnalyzer {
     }
     
     /**
-     * Calcula la fase del juego basándose en el currency
-     * @param {number} currency - Currency actual del equipo
+     * Calcula la fase del juego basándose en el tiempo transcurrido
+     * @param {number} elapsedTime - Tiempo transcurrido de partida en segundos
+     * @param {Object} gameState - Estado completo del juego (opcional, por si se quiere usar contexto extra)
      * @returns {string} 'early' | 'mid' | 'late'
      */
-    static getGamePhase(currency) {
-        if (currency < 200) {
+    static getGamePhase(elapsedTime, gameState = null) {
+        // Fases definidas principalmente por tiempo de partida:
+        // Early: 0 – 210s (0 – 3:30)
+        // Mid:   210 – 360s (3:30 – 6:00)
+        // Late:  > 360s
+        if (elapsedTime < 210) {
             return 'early';
-        } else if (currency < 400) {
+        } else if (elapsedTime < 360) {
             return 'mid';
         } else {
             return 'late';

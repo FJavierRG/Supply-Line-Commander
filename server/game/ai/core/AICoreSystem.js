@@ -22,20 +22,21 @@ export class AICoreSystem {
         
         // Timers para cada tipo de acción
         this.timers = {
-            fobCheck: 0,        // Revisar FOBs cada 2s
-            frontCheck: 0,      // Revisar frentes cada 3s
-            helicopterCheck: 0, // Revisar helicópteros cada 1.5s
-            medical: 0,         // Revisar emergencias médicas cada 3s
-            repair: 0           // Revisar reparaciones cada 3-5s
+            fobCheck: 0,        // Revisar FOBs
+            frontCheck: 0,      // Revisar frentes
+            helicopterCheck: 0, // Revisar helicópteros
+            medical: 0,         // Revisar emergencias médicas
+            repair: 0           // Revisar reparaciones
         };
         
-        // Intervalos ajustados por dificultad
+        // 🎯 INTERVALOS AJUSTADOS POR DIFICULTAD usando getAdjustedInterval
+        // Base: 2.0s para FOBs, 3.0s para frentes, 1.5s para helicópteros
         this.intervals = {
-            fobCheck: 2.0,
-            frontCheck: 3.0,
-            helicopterCheck: 1.5,
-            medical: 3.0,
-            repair: 4.0 // Intervalo base para reparaciones (3-5s)
+            fobCheck: getAdjustedInterval('supply', raceId, difficulty) * 2.0, // Base 2.0s ajustado
+            frontCheck: getAdjustedInterval('supply', raceId, difficulty) * 3.0, // Base 3.0s ajustado
+            helicopterCheck: getAdjustedInterval('supply', raceId, difficulty) * 1.5, // Base 1.5s ajustado
+            medical: 3.0, // No ajustado por dificultad (emergencias médicas)
+            repair: 4.0 // No ajustado por dificultad (reparaciones)
         };
         
         // Currency tracking

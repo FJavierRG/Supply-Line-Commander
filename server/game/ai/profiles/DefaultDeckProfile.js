@@ -59,15 +59,27 @@ export class DefaultDeckProfile extends BaseProfile {
             'fob': {
                 base: 40,
                 bonuses: {
-                    hasLessThan2: 30,  // +30 si tiene <2 FOBs
-                    earlyPhase: 20     // +20 si fase early
+                    // Early: puede construir FOBs normalmente (hasta cierto punto)
+                    earlyPhase: 20,     // +20 si fase early
+                    hasLessThan2: 30,   // +30 si tiene <2 FOBs (primeros FOBs)
+                    // Mid: solo construir si tiene <3 FOBs (objetivo: 3 FOBs en mid)
+                    // NOTA: hasLessThan3 solo aplica en mid/late, no en early
+                    midPhaseAndLessThan3: 30,  // +30 si está en mid Y tiene <3 FOBs
+                    // Late: solo construir si tiene <4 FOBs (objetivo: 4 FOBs en late)
+                    latePhaseAndLessThan4: 25, // +25 si está en late Y tiene <4 FOBs
+                    // Penalización si tiene demasiados FOBs
+                    has4OrMore: -999,   // Penalización enorme si tiene >=4 FOBs
+                    // Penalización adicional: en mid, si ya tiene 2 FOBs, no construir más
+                    midPhaseAndHas2OrMore: -50  // Penalización en mid si tiene >=2 FOBs
                 }
             },
             'nuclearPlant': {
                 base: 50,
                 bonuses: {
                     perPlayerPlant: 30,  // +30 por cada planta del jugador
-                    perMyPlant: -25      // -25 por cada planta propia (evitar spam)
+                    perMyPlant: -25,     // -25 por cada planta propia (evitar spam)
+                    midPhase: 15,        // En mid, empujar a construir si es viable
+                    latePhase: 25        // En late, aún más peso si vamos por detrás
                 }
             },
             'droneLauncher': {
@@ -75,8 +87,13 @@ export class DefaultDeckProfile extends BaseProfile {
                 bonuses: {}
             },
             'antiDrone': {
-                base: 30,
-                bonuses: {}
+                // Base defensiva baja, pero con grandes boosts cuando hay amenaza aérea
+                base: 20,
+                bonuses: {
+                    airThreat: 25,      // Bonus cuando hay cualquier amenaza aérea
+                    airThreatHigh: 25,  // Extra si la presión aérea es alta
+                    latePhase: 15       // Más relevante en late
+                }
             },
             'truckFactory': {
                 base: 45,
@@ -92,18 +109,39 @@ export class DefaultDeckProfile extends BaseProfile {
             },
             'intelRadio': {
                 base: 35,
-                bonuses: {}
+                bonuses: {
+                    earlyPhase: 15, // Priorizar antena en early como parte del núcleo eco/logístico
+                    midPhase: 10    // Mantenerla relevante en mid
+                }
             },
             'drone': {
-                base: 65,
+                // 🎯 Ajustado a comportamiento por fases:
+                // - Early: fuertemente penalizado (prácticamente no se usa)
+                // - Mid: empieza a ser interesante pero aún contenido
+                // - Late: prioridad alta contra objetivos importantes
+                base: 20,
                 bonuses: {
-                    hasTargets: 40  // +40 si hay objetivos disponibles
+                    hasTargets: 40,   // +40 si hay objetivos disponibles
+                    earlyPhase: -999, // Penalización enorme en early → se filtra al fondo de la lista
+                    midPhase: 15,     // Pequeño empuje en mid
+                    latePhase: 40     // Gran empuje en late
                 }
             },
             'sniperStrike': {
-                base: 30,
+                // 🎯 Harass eficiente sobre todo en mid/late
+                base: 10,
                 bonuses: {
-                    base: 20  // Bonus base siempre aplica
+                    base: 20,   // Bonus base siempre aplica
+                    notEarly: 20 // +20 extra en mid/late → más uso fuera de early
+                }
+            },
+            // 🎯 Preparado para futuros mazos que incluyan fobSabotage
+            'fobSabotage': {
+                base: 20,
+                bonuses: {
+                    playerHasFOBs: 20, // Solo tiene sentido si el jugador tiene FOBs
+                    midPhase: 20,      // Relevante en mid
+                    latePhase: 20      // Y en late
                 }
             }
         };
@@ -117,6 +155,40 @@ export class DefaultDeckProfile extends BaseProfile {
             earlyGame: ['fob', 'truckFactory', 'engineerCenter'],
             midGame: ['nuclearPlant', 'droneLauncher', 'intelRadio'],
             lateGame: ['antiDrone', 'drone', 'sniperStrike']
+        };
+    }
+    
+    /**
+     * Configuración de presupuesto de consumibles por fase
+     * Los valores son fracción de la currency actual que se permite gastar
+     * en un único consumible ofensivo (drone, sniper, sabotajes, etc).
+     */
+    getConsumableBudgetConfig() {
+        return {
+            early: 0.25, // Early: ~20–25% de la currency actual
+            mid: 0.4,    // Mid: ~35–40%
+            late: 0.6    // Late: hasta ~50–60% si la economía está sana
+        };
+    }
+    
+    /**
+     * Configuración de cooldown de consumibles por fase (en segundos)
+     * Pensado para limitar el harass en early sin bloquear mid/late.
+     */
+    getConsumableCooldownConfig() {
+        return {
+            early: {
+                sniperStrike: 25, // Máx. 1 sniper cada ~25s en early
+                fobSabotage: 35   // Máx. 1 sabotaje cada ~35s en early (si está en el mazo)
+            },
+            mid: {
+                sniperStrike: 15,
+                fobSabotage: 25
+            },
+            late: {
+                sniperStrike: 10,
+                fobSabotage: 20
+            }
         };
     }
     

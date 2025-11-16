@@ -193,10 +193,31 @@ export class AICardEvaluator {
         switch (bonusName) {
             case 'earlyPhase':
                 return state.phase === 'early';
+            case 'midPhase':
+                return state.phase === 'mid';
+            case 'latePhase':
+                return state.phase === 'late';
             case 'notLate':
                 return state.phase !== 'late';
+            case 'notEarly':
+                return state.phase !== 'early';
             case 'hasLessThan2':
                 return state.myFOBs !== undefined && state.myFOBs < 2;
+            case 'hasLessThan3':
+                return state.myFOBs !== undefined && state.myFOBs < 3;
+            case 'hasLessThan4':
+                return state.myFOBs !== undefined && state.myFOBs < 4;
+            case 'has4OrMore':
+                return state.myFOBs !== undefined && state.myFOBs >= 4;
+            case 'midPhaseAndLessThan3':
+                // Solo en mid Y si tiene <3 FOBs
+                return state.phase === 'mid' && state.myFOBs !== undefined && state.myFOBs < 3;
+            case 'latePhaseAndLessThan4':
+                // Solo en late Y si tiene <4 FOBs
+                return state.phase === 'late' && state.myFOBs !== undefined && state.myFOBs < 4;
+            case 'midPhaseAndHas2OrMore':
+                // Penalización: en mid, si ya tiene >=2 FOBs
+                return state.phase === 'mid' && state.myFOBs !== undefined && state.myFOBs >= 2;
             case 'perPlayerPlant':
                 // Bonus por cada planta del jugador
                 return state.playerPlants !== undefined && state.playerPlants > 0;
@@ -220,6 +241,10 @@ export class AICardEvaluator {
                     n.active
                 ).length;
                 return playerFOBs > 0;
+            case 'airThreat':
+                return !!state.hasAirThreat;
+            case 'airThreatHigh':
+                return state.airThreatLevel === 'high';
             case 'base':
                 return true; // Bonus base siempre aplica
             default:
