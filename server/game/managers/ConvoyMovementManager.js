@@ -232,9 +232,12 @@ export class ConvoyMovementManager {
             // NO cambiar fromId/toId - el cliente los interpreta según returning=true
         } else {
             // Llegó de vuelta, devolver vehículo/ambulancia
-            // Cuando returning=true, fromNode es el destino original (edificio reparado) 
-            // y toNode es el origen original (HQ), así que debemos devolver a toNode
-            this.returnVehicle(convoy, toNode, convoyIndex);
+            // Cuando returning=true, el convoy está viajando de vuelta al nodo origen original
+            // fromNode = nodo con ID convoy.fromId (origen original: HQ/FOB)
+            // toNode = nodo con ID convoy.toId (destino original: front/edificio)
+            // El convoy regresa al nodo origen original (fromNode), así que fromNode es correcto
+            console.log(`🔄 Convoy ${convoy.id} regresando: fromNode=${fromNode?.type} ${fromNode?.id}, toNode=${toNode?.type} ${toNode?.id}, returning=${convoy.returning}`);
+            this.returnVehicle(convoy, fromNode, convoyIndex);
         }
     }
     

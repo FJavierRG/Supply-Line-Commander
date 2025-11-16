@@ -82,39 +82,39 @@ Crear un sistema modular por capas que separe responsabilidades y permita crear 
 ## ✅ Fase 1: Crear Capa 1 - Lógica Común (Core)
 
 ### 1.1 Extraer Lógica de Abastecimiento
-- [ ] Crear archivo `server/game/ai/core/AISupplyManager.js`
+- [x] Crear archivo `server/game/ai/core/AISupplyManager.js`
   
   Crear un nuevo archivo que contendrá toda la lógica relacionada con el abastecimiento de la IA. Este archivo será una clase que se instanciará desde el sistema core.
 
-- [ ] Implementar método `ruleResupplyFOBs(team)`
+- [x] Implementar método `ruleResupplyFOBs(team)`
   
   Este método debe revisar todos los FOBs del equipo y verificar si tienen suministros por debajo del umbral (50% por defecto). Para cada FOB que necesite suministros, debe enviar un convoy desde el HQ. Debe ejecutarse periódicamente (cada 2 segundos).
 
-- [ ] Implementar método `ruleResupplyFronts(team)`
+- [x] Implementar método `ruleResupplyFronts(team)`
   
   Este método debe revisar todos los frentes del equipo y verificar si tienen suministros por debajo del umbral (70% por defecto). Para cada frente que necesite suministros, debe encontrar el FOB más cercano con recursos disponibles y enviar un convoy desde ese FOB al frente. Debe ejecutarse periódicamente (cada 3 segundos).
 
-- [ ] Implementar método `ruleResupplyHelicopters(team)`
+- [x] Implementar método `ruleResupplyHelicopters(team)`
   
   Este método debe gestionar el reabastecimiento usando helicópteros. Debe enviar helicópteros llenos desde HQ o Bases Aéreas hacia los frentes, y regresar helicópteros vacíos a las bases para recargar. Debe ejecutarse periódicamente (cada 1.5 segundos).
 
-- [ ] Implementar método `sendSupplyConvoy(from, to, team)`
+- [x] Implementar método `sendSupplyConvoy(from, to, team)`
   
   Este método debe crear y enviar un convoy de suministros desde un nodo origen hacia un nodo destino. Debe verificar que haya vehículos disponibles en el origen, crear el convoy usando el sistema de convoyes del juego, y emitir los eventos correspondientes para que el cliente se entere.
 
-- [ ] Implementar método `findClosestFOBWithResources(targetNode, fobs)`
+- [x] Implementar método `findClosestFOBWithResources(targetNode, fobs)`
   
   Este método debe encontrar el FOB más cercano a un nodo objetivo que tenga vehículos disponibles y suministros suficientes. Debe calcular distancias y retornar el FOB más cercano que cumpla las condiciones, o null si no hay ninguno disponible.
 
-- [ ] Migrar lógica desde `AISystem.ruleResupplyFOBs()`
+- [x] Migrar lógica desde `AISystem.ruleResupplyFOBs()`
   
   Copiar la lógica existente del método `ruleResupplyFOBs()` en `AISystem.js` al nuevo `AISupplyManager`, adaptándola para que funcione como método de instancia de la clase.
 
-- [ ] Migrar lógica desde `AISystem.ruleResupplyFronts()`
+- [x] Migrar lógica desde `AISystem.ruleResupplyFronts()`
   
   Copiar la lógica existente del método `ruleResupplyFronts()` en `AISystem.js` al nuevo `AISupplyManager`, adaptándola para que funcione como método de instancia de la clase.
 
-- [ ] Migrar lógica desde `AISystem.ruleResupplyHelicopters()`
+- [x] Migrar lógica desde `AISystem.ruleResupplyHelicopters()`
   
   Copiar la lógica existente del método `ruleResupplyHelicopters()` en `AISystem.js` al nuevo `AISupplyManager`, adaptándola para que funcione como método de instancia de la clase.
 
@@ -123,19 +123,19 @@ Crear un sistema modular por capas que separe responsabilidades y permita crear 
   Verificar que los convoyes se envían correctamente desde HQ a FOBs, desde FOBs a frentes, y que los helicópteros se gestionan adecuadamente. Debe funcionar igual que antes de la migración.
 
 ### 1.2 Extraer Lógica de Emergencias Médicas
-- [ ] Crear archivo `server/game/ai/core/AIMedicalManager.js`
+- [x] Crear archivo `server/game/ai/core/AIMedicalManager.js`
   
   Crear un nuevo archivo que contendrá toda la lógica relacionada con las emergencias médicas de la IA. Este archivo será una clase que se instanciará desde el sistema core.
 
-- [ ] Implementar método `handleMedicalEmergencies(team, currency)`
+- [x] Implementar método `handleMedicalEmergencies(team, currency)`
   
   Este método debe revisar si hay emergencias médicas activas para el equipo (frentes con bajas que requieren ambulancias). Si hay emergencias y hay ambulancias disponibles en el HQ o en un hospital, debe enviar una ambulancia a la primera emergencia encontrada. Debe ejecutarse periódicamente (cada 3 segundos) y tener una probabilidad de respuesta (70% por defecto).
 
-- [ ] Implementar método `findEmergencyFronts(team)`
+- [x] Implementar método `findEmergencyFronts(team)`
   
   Este método debe buscar en el sistema de emergencias médicas del juego todos los frentes del equipo que tengan emergencias activas y no resueltas. Debe retornar una lista de objetos con el frente y la información de la emergencia.
 
-- [ ] Migrar lógica desde `AISystem.handleMedicalEmergencies()`
+- [x] Migrar lógica desde `AISystem.handleMedicalEmergencies()`
   
   Copiar la lógica existente del método `handleMedicalEmergencies()` en `AISystem.js` al nuevo `AIMedicalManager`, adaptándola para que funcione como método de instancia de la clase.
 
@@ -144,23 +144,23 @@ Crear un sistema modular por capas que separe responsabilidades y permita crear 
   Verificar que cuando hay frentes con bajas, la IA envía ambulancias desde el HQ o hospital para resolver las emergencias. Debe funcionar igual que antes de la migración.
 
 ### 1.3 Crear Lógica de Reparaciones
-- [ ] Crear archivo `server/game/ai/core/AIRepairManager.js`
+- [x] Crear archivo `server/game/ai/core/AIRepairManager.js`
   
   Crear un nuevo archivo que contendrá toda la lógica relacionada con las reparaciones de edificios rotos de la IA. Este archivo será una clase que se instanciará desde el sistema core.
 
-- [ ] Implementar método `handleRepairs(team, currency)`
+- [x] Implementar método `handleRepairs(team, currency)`
   
   Este método debe revisar si hay edificios del equipo que estén en estado "roto" (broken). Si hay edificios rotos y hay vehículos mecánicos disponibles en el HQ, debe enviar un vehículo de reparación al edificio roto más prioritario. Debe ejecutarse periódicamente (cada 3-5 segundos).
 
-- [ ] Implementar método `findBrokenBuildings(team)`
+- [x] Implementar método `findBrokenBuildings(team)`
   
   Este método debe buscar en el gameState todos los edificios del equipo que tengan la propiedad `broken` en `true`. Debe filtrar solo edificios que sean reparables (no FOBs ni HQs) y retornar una lista ordenada por prioridad (edificios más importantes primero).
 
-- [ ] Implementar método `sendRepairVehicle(hq, target, team)`
+- [x] Implementar método `sendRepairVehicle(hq, target, team)`
   
   Este método debe crear y enviar un vehículo mecánico desde el HQ hacia un edificio roto. Debe verificar que haya vehículos de reparación disponibles en el HQ, crear el convoy de reparación usando el sistema de convoyes del juego, y emitir los eventos correspondientes.
 
-- [ ] Integrar con sistema de vehículos mecánicos existente
+- [x] Integrar con sistema de vehículos mecánicos existente
   
   Asegurarse de que el sistema de reparaciones use correctamente el sistema de vehículos mecánicos que ya existe en el juego. Debe verificar `availableRepairVehicles` y `maxRepairVehicles` en el HQ, y usar el handler de convoyes con el tipo de vehículo correcto.
 
@@ -169,27 +169,27 @@ Crear un sistema modular por capas que separe responsabilidades y permita crear 
   Verificar que cuando hay edificios rotos, la IA envía vehículos mecánicos desde el HQ para repararlos. Los edificios deben quedar funcionales después de la reparación. Debe funcionar de forma similar al sistema de ambulancias.
 
 ### 1.4 Crear Sistema Core
-- [ ] Crear archivo `server/game/ai/core/AICoreSystem.js`
+- [x] Crear archivo `server/game/ai/core/AICoreSystem.js`
   
   Crear un nuevo archivo que será el sistema central que orquesta toda la lógica común de la IA. Este sistema coordinará los diferentes managers (abastecimiento, emergencias, reparaciones).
 
-- [ ] Implementar constructor que recibe `gameState`, `io`, `roomId`
+- [x] Implementar constructor que recibe `gameState`, `io`, `roomId`
   
   El constructor debe recibir las dependencias necesarias: el estado del juego, el objeto de Socket.IO para emitir eventos, y el ID de la sala. Debe inicializar los managers y los timers necesarios.
 
-- [ ] Crear instancias de `AISupplyManager`, `AIMedicalManager`, `AIRepairManager`
+- [x] Crear instancias de `AISupplyManager`, `AIMedicalManager`, `AIRepairManager`
   
   En el constructor, crear instancias de cada uno de los managers pasándoles las dependencias necesarias (gameState, io, roomId). Estos managers se usarán desde el método update.
 
-- [ ] Implementar método `update(dt)` que orquesta los managers
+- [x] Implementar método `update(dt)` que orquesta los managers
   
   Este método debe ser llamado cada frame/tick del juego. Debe actualizar los timers internos y llamar a los métodos correspondientes de cada manager según sus intervalos. Debe gestionar los timers para abastecimiento (cada 2s, 3s, 1.5s), emergencias (cada 3s), y reparaciones (cada 3-5s).
 
-- [ ] Implementar método `updateCurrency(dt)`
+- [x] Implementar método `updateCurrency(dt)`
   
   Este método debe actualizar el tracking interno de currency de la IA. Debe leer el currency actual del gameState y almacenarlo para uso en las decisiones. Puede incluir logging si está habilitado el debug.
 
-- [ ] Gestionar timers e intervalos comunes
+- [x] Gestionar timers e intervalos comunes
   
   El sistema core debe mantener timers internos para cada tipo de acción (abastecimiento FOBs, frentes, helicópteros, emergencias, reparaciones). Debe usar los intervalos configurados y ajustados por dificultad.
 
@@ -202,47 +202,47 @@ Crear un sistema modular por capas que separe responsabilidades y permita crear 
 ## ✅ Fase 2: Crear Adaptador de Configuración
 
 ### 2.1 Crear AICardAdapter
-- [ ] Crear archivo `server/game/ai/core/AICardAdapter.js`
+- [x] Crear archivo `server/game/ai/core/AICardAdapter.js`
   
   Crear un nuevo archivo que será un adaptador estático para leer información de cartas desde la configuración del servidor. Este adaptador NO duplica datos, solo lee desde `SERVER_NODE_CONFIG`.
 
-- [ ] Implementar método `getCost(cardId)` → Lee `SERVER_NODE_CONFIG.costs[cardId]`
+- [x] Implementar método `getCost(cardId)` → Lee `SERVER_NODE_CONFIG.costs[cardId]`
   
   Este método debe leer el coste de una carta desde la configuración del servidor. Debe retornar el coste numérico o null si la carta no existe o no tiene coste definido. No debe duplicar esta información.
 
-- [ ] Implementar método `getRequirements(cardId)`
+- [x] Implementar método `getRequirements(cardId)`
   
   Este método debe retornar un array con todos los requisitos (directos e indirectos) que necesita una carta para poder usarse. Debe retornar un array vacío si no hay requisitos, o null si la carta no existe.
   
-  - [ ] Leer requisitos directos desde `SERVER_NODE_CONFIG.buildRequirements`
+  - [x] Leer requisitos directos desde `SERVER_NODE_CONFIG.buildRequirements`
     
     Leer los requisitos de construcción que están definidos en la configuración. Por ejemplo, `deadlyBuild` requiere `['nuclearPlant', 'secretLaboratory', 'physicStudies']`.
   
-  - [ ] Añadir requisitos indirectos:
+  - [x] Añadir requisitos indirectos:
     
     Añadir requisitos que no están en buildRequirements pero que son necesarios para usar ciertos consumibles. Estos requisitos deben estar hardcodeados en el método ya que son reglas de juego.
     
-    - [ ] `drone` → `['droneLauncher']`
+    - [x] `drone` → `['droneLauncher']`
       
       Un dron requiere tener una lanzadera de drones construida para poder usarse.
     
-    - [ ] `specopsCommando` → `['intelCenter']`
+    - [x] `specopsCommando` → `['intelCenter']`
       
       Un comando especial requiere tener un centro de inteligencia construido.
     
-    - [ ] `fobSabotage` → `['intelCenter']` (verificar en código)
+    - [x] `fobSabotage` → `['intelCenter']` (verificar en código)
       
       El sabotaje de FOB requiere tener un centro de inteligencia. Verificar en el código del CombatHandler si este requisito es correcto.
     
-    - [ ] Añadir más según sea necesario
+    - [x] Añadir más según sea necesario
       
-      Revisar otros consumibles y añadir sus requisitos indirectos si los tienen.
+      Revisar otros consumibles y añadir sus requisitos indirectos si los tienen. Añadidos: cameraDrone → droneLauncher, truckAssault → intelCenter.
 
-- [ ] Implementar método `isInDeck(cardId, deck)` → Verifica `deck.units`
+- [x] Implementar método `isInDeck(cardId, deck)` → Verifica `deck.units`
   
-  Este método debe verificar si una carta específica está disponible en el mazo del jugador. Debe buscar en el array `deck.units` y retornar true si la encuentra, false en caso contrario.
+  Este método debe verificar si una carta específica está disponible en el mazo del jugador. Debe buscar en el array `deck.units` y retornar true si la encuentra, false en caso contrario. También verifica en `deck.bench`.
 
-- [ ] Implementar método `isEnabled(cardId)` → Lee `SERVER_NODE_CONFIG.gameplay.enabled[cardId]`
+- [x] Implementar método `isEnabled(cardId)` → Lee `SERVER_NODE_CONFIG.gameplay.enabled[cardId]`
   
   Este método debe verificar si una carta está habilitada en el juego. Debe leer desde la configuración del servidor y retornar true si está habilitada, false si está deshabilitada, o null si no existe.
 
@@ -255,43 +255,43 @@ Crear un sistema modular por capas que separe responsabilidades y permita crear 
 ## ✅ Fase 3: Crear Sistema de Evaluación Genérico
 
 ### 3.1 Crear Analizador de Estado
-- [ ] Crear archivo `server/game/ai/core/AIGameStateAnalyzer.js`
+- [x] Crear archivo `server/game/ai/core/AIGameStateAnalyzer.js`
   
   Crear un nuevo archivo que contendrá la lógica para analizar el estado actual del juego desde la perspectiva de la IA. Este analizador será usado por el evaluador de cartas para tomar decisiones.
 
-- [ ] Implementar método `analyzeState(team, gameState)`
+- [x] Implementar método `analyzeState(team, gameState)`
   
   Este método debe analizar el estado completo del juego y retornar un objeto con toda la información relevante para la toma de decisiones de la IA. Debe ser un método estático o de instancia que reciba el equipo y el gameState.
   
-  - [ ] Calcular fase del juego (`early`, `mid`, `late`)
+  - [x] Calcular fase del juego (`early`, `mid`, `late`)
     
     Determinar en qué fase del juego se encuentra basándose en el currency actual. Early: < 200, Mid: 200-400, Late: > 400.
   
-  - [ ] Contar FOBs propios
+  - [x] Contar FOBs propios
     
     Contar cuántos FOBs tiene el equipo que estén construidos y activos.
   
-  - [ ] Contar plantas nucleares propias
+  - [x] Contar plantas nucleares propias
     
     Contar cuántas plantas nucleares tiene el equipo que estén construidas y activas.
   
-  - [ ] Contar plantas nucleares del jugador
+  - [x] Contar plantas nucleares del jugador
     
     Contar cuántas plantas nucleares tiene el jugador enemigo para evaluar amenazas y urgencias.
   
-  - [ ] Verificar si tiene lanzadera
+  - [x] Verificar si tiene lanzadera
     
     Verificar si el equipo tiene al menos una lanzadera de drones construida y activa.
   
-  - [ ] Obtener currency actual
+  - [x] Obtener currency actual
     
     Obtener el currency actual del equipo desde el gameState.
   
-  - [ ] Retornar objeto con estado completo
+  - [x] Retornar objeto con estado completo
     
     Retornar un objeto con todas las propiedades calculadas: `{ phase, myFOBs, myPlants, playerPlants, hasLauncher, currency, ... }`
 
-- [ ] Implementar método `getGamePhase(currency)` → `'early' | 'mid' | 'late'`
+- [x] Implementar método `getGamePhase(currency)` → `'early' | 'mid' | 'late'`
   
   Este método helper debe calcular la fase del juego basándose únicamente en el currency. Debe retornar 'early', 'mid' o 'late' según los umbrales definidos.
 
@@ -300,59 +300,59 @@ Crear un sistema modular por capas que separe responsabilidades y permita crear 
   Verificar que el método analyzeState retorna valores correctos para diferentes situaciones del juego. Debe contar correctamente los edificios, determinar la fase correcta, y detectar correctamente las amenazas del jugador.
 
 ### 3.2 Crear Evaluador de Cartas
-- [ ] Crear archivo `server/game/ai/core/AICardEvaluator.js`
+- [x] Crear archivo `server/game/ai/core/AICardEvaluator.js`
   
   Crear un nuevo archivo que contendrá la lógica para evaluar cartas y calcular sus scores. Este evaluador será genérico y usará las reglas de scoring del perfil activo.
 
-- [ ] Implementar método `evaluateCard(cardId, gameState, team, currency, state, scoringRules)`
+- [x] Implementar método `evaluateCard(cardId, gameState, team, currency, state, scoringRules)`
   
   Este método debe evaluar una carta individual y calcular su score de prioridad. Debe retornar un objeto con la información de la acción o null si la carta no está disponible.
   
-  - [ ] Verificar si está en mazo (`AICardAdapter.isInDeck()`)
+  - [x] Verificar si está en mazo (`AICardAdapter.isInDeck()`)
     
     Primero verificar que la carta esté en el mazo del jugador. Si no está, retornar null inmediatamente.
   
-  - [ ] Verificar requisitos (`AICardAdapter.getRequirements()` → retorna `null` si faltan)
+  - [x] Verificar requisitos (`AICardAdapter.getRequirements()` → retorna `null` si faltan)
     
     Obtener los requisitos de la carta y verificar que el equipo tenga todos los edificios requeridos construidos y activos. Si faltan requisitos, retornar null.
   
-  - [ ] Verificar coste (`AICardAdapter.getCost()`)
+  - [x] Verificar coste (`AICardAdapter.getCost()`)
     
     Obtener el coste de la carta y verificar que el equipo tenga suficiente currency. Si no tiene suficiente, retornar null.
   
-  - [ ] Calcular score base (desde `scoringRules` del perfil)
+  - [x] Calcular score base (desde `scoringRules` del perfil)
     
     Obtener el score base de la carta desde las reglas de scoring del perfil. Si la carta no tiene reglas definidas, usar un score por defecto o retornar null.
   
-  - [ ] Aplicar bonificaciones del perfil
+  - [x] Aplicar bonificaciones del perfil
     
     Aplicar todas las bonificaciones definidas en las reglas del perfil. Las bonificaciones pueden depender del estado del juego (fase, cantidad de edificios, amenazas, etc.). Sumar o restar valores al score base según las condiciones.
   
-  - [ ] Retornar `{ type, cardId, score, cost }` o `null`
+  - [x] Retornar `{ type, cardId, score, cost }` o `null`
     
     Retornar un objeto con el tipo de acción ('build' para edificios, 'attack' o el tipo correspondiente para consumibles), el ID de la carta, el score calculado, y el coste. Si la carta no está disponible, retornar null.
 
-- [ ] Implementar método `evaluateDeck(deck, gameState, team, currency, state, scoringRules)`
+- [x] Implementar método `evaluateDeck(deck, gameState, team, currency, state, scoringRules)`
   
   Este método debe evaluar todas las cartas del mazo y retornar una lista ordenada de acciones disponibles.
   
-  - [ ] Iterar sobre `deck.units`
+  - [x] Iterar sobre `deck.units`
     
     Recorrer todas las cartas que están en el mazo del jugador.
   
-  - [ ] Evaluar cada carta
+  - [x] Evaluar cada carta
     
     Para cada carta, llamar a `evaluateCard()` para obtener su score y disponibilidad.
   
-  - [ ] Filtrar `null` (cartas no disponibles)
+  - [x] Filtrar `null` (cartas no disponibles)
     
     Eliminar de la lista todas las cartas que retornaron null (no disponibles, sin requisitos, sin currency, etc.).
   
-  - [ ] Ordenar por score descendente
+  - [x] Ordenar por score descendente
     
     Ordenar las acciones restantes por score de mayor a menor, para que las acciones más prioritarias estén primero.
   
-  - [ ] Retornar lista de acciones evaluadas
+  - [x] Retornar lista de acciones evaluadas
     
     Retornar el array ordenado de acciones que están disponibles y pueden ejecutarse.
 
@@ -361,19 +361,19 @@ Crear un sistema modular por capas que separe responsabilidades y permita crear 
   Verificar que las cartas se evalúan correctamente, que los requisitos se verifican, que los scores se calculan bien, y que la lista se ordena correctamente. Debe funcionar para diferentes estados del juego y diferentes mazos.
 
 ### 3.3 Crear Selector de Acciones
-- [ ] Crear archivo `server/game/ai/core/AIActionSelector.js`
+- [x] Crear archivo `server/game/ai/core/AIActionSelector.js`
   
   Crear un nuevo archivo que contendrá la lógica para seleccionar la mejor acción de una lista de acciones evaluadas. Este selector será simple pero necesario para separar responsabilidades.
 
-- [ ] Implementar método `selectBestAction(evaluatedActions, currency)`
+- [x] Implementar método `selectBestAction(evaluatedActions, currency)`
   
   Este método debe seleccionar la mejor acción de una lista de acciones ya evaluadas, teniendo en cuenta el currency disponible.
   
-  - [ ] Filtrar acciones que se puedan pagar
+  - [x] Filtrar acciones que se puedan pagar
     
     Filtrar la lista de acciones para quedarse solo con aquellas cuyo coste sea menor o igual al currency disponible. Esto es importante porque el currency puede haber cambiado desde que se evaluaron las cartas.
   
-  - [ ] Retornar mejor acción (mayor score)
+  - [x] Retornar mejor acción (mayor score)
     
     De las acciones que se pueden pagar, retornar la que tenga el mayor score. Si la lista ya está ordenada por score descendente, simplemente retornar la primera. Si no hay acciones disponibles, retornar null.
 
@@ -386,27 +386,27 @@ Crear un sistema modular por capas que separe responsabilidades y permita crear 
 ## ✅ Fase 4: Crear Perfil de Mazo por Defecto
 
 ### 4.1 Crear Clase Base de Perfil
-- [ ] Crear archivo `server/game/ai/profiles/BaseProfile.js`
+- [x] Crear archivo `server/game/ai/profiles/BaseProfile.js`
   
   Crear un nuevo archivo que contendrá la clase base para todos los perfiles de IA. Esta clase definirá la interfaz común que todos los perfiles deben implementar.
 
-- [ ] Implementar clase `BaseProfile`
+- [x] Implementar clase `BaseProfile`
   
   Crear una clase base (o abstracta) que defina la estructura común de todos los perfiles. Esta clase debe tener un constructor que reciba el mazo del perfil y almacenarlo.
 
-- [ ] Implementar método `getProfileId()` → Retorna ID del perfil
+- [x] Implementar método `getProfileId()` → Retorna ID del perfil
   
   Este método debe retornar un identificador único del perfil (por ejemplo, 'default', 'aggressive', 'defensive', etc.). Este ID se usará para identificar qué perfil está activo.
 
-- [ ] Implementar método `getDeck()` → Retorna mazo del perfil
+- [x] Implementar método `getDeck()` → Retorna mazo del perfil
   
   Este método debe retornar el objeto del mazo que está asociado a este perfil. El mazo debe tener la estructura estándar con `units` y `bench`.
 
-- [ ] Implementar método abstracto `getScoringRules()` → Retorna reglas de scoring
+- [x] Implementar método abstracto `getScoringRules()` → Retorna reglas de scoring
   
   Este método debe ser abstracto (o lanzar error si no se implementa) y debe retornar un objeto con las reglas de scoring para cada carta. Cada perfil implementará sus propias reglas según su estrategia.
 
-- [ ] Implementar método abstracto `getPriorities()` → Retorna prioridades por fase
+- [x] Implementar método abstracto `getPriorities()` → Retorna prioridades por fase
   
   Este método debe ser abstracto (o lanzar error si no se implementa) y debe retornar un objeto con las prioridades del perfil para cada fase del juego (early, mid, late). Cada perfil puede tener diferentes prioridades.
 
@@ -415,71 +415,71 @@ Crear un sistema modular por capas que separe responsabilidades y permita crear 
   Verificar que la clase se puede instanciar (aunque sea abstracta), que los métodos comunes funcionan, y que los métodos abstractos lanzan errores cuando se intentan usar sin implementar. Debe servir como contrato para los perfiles.
 
 ### 4.2 Crear Perfil de Mazo por Defecto
-- [ ] Crear archivo `server/game/ai/profiles/DefaultDeckProfile.js`
+- [x] Crear archivo `server/game/ai/profiles/DefaultDeckProfile.js`
   
   Crear un nuevo archivo que contendrá la implementación del perfil para el mazo por defecto. Este será el primer perfil implementado y servirá como referencia para futuros perfiles.
 
-- [ ] Extender `BaseProfile`
+- [x] Extender `BaseProfile`
   
   La clase `DefaultDeckProfile` debe extender `BaseProfile` para heredar los métodos comunes y cumplir con la interfaz definida.
 
-- [ ] Implementar constructor que carga `DEFAULT_DECK` desde servidor
+- [x] Implementar constructor que carga `DEFAULT_DECK` desde servidor
   
   El constructor debe recibir el mazo (que puede ser el DEFAULT_DECK del servidor o un mazo personalizado) y pasarlo al constructor de la clase base. Debe establecer el profileId como 'default'.
 
-- [ ] Implementar método `getScoringRules()` con reglas específicas:
+- [x] Implementar método `getScoringRules()` con reglas específicas:
   
   Este método debe retornar un objeto con las reglas de scoring para cada carta del mazo por defecto. Las reglas definen el score base y las bonificaciones que se aplican según el contexto del juego.
   
-  - [ ] `fob`: `{ base: 40, bonuses: { hasLessThan2: 30, earlyPhase: 20 } }`
+  - [x] `fob`: `{ base: 40, bonuses: { hasLessThan2: 30, earlyPhase: 20 } }`
     
     FOB tiene score base 40. Si tiene menos de 2 FOBs, +30. Si está en fase early, +20.
   
-  - [ ] `nuclearPlant`: `{ base: 50, bonuses: { perPlayerPlant: 30, perMyPlant: -25 } }`
+  - [x] `nuclearPlant`: `{ base: 50, bonuses: { perPlayerPlant: 30, perMyPlant: -25 } }`
     
     Planta nuclear tiene score base 50. Por cada planta del jugador, +30 (urgencia). Por cada planta propia, -25 (evitar spam).
   
-  - [ ] `droneLauncher`: `{ base: 60 }`
+  - [x] `droneLauncher`: `{ base: 60 }`
     
     Lanzadera de drones tiene score base 60, sin bonificaciones adicionales.
   
-  - [ ] `antiDrone`: `{ base: 30 }`
+  - [x] `antiDrone`: `{ base: 30 }`
     
     Anti-dron tiene score base 30, sin bonificaciones adicionales.
   
-  - [ ] `truckFactory`: `{ base: 45, bonuses: { notLate: 15 } }`
+  - [x] `truckFactory`: `{ base: 45, bonuses: { notLate: 15 } }`
     
     Fábrica de camiones tiene score base 45. Si NO está en fase late, +15.
   
-  - [ ] `engineerCenter`: `{ base: 40, bonuses: { earlyPhase: 10 } }`
+  - [x] `engineerCenter`: `{ base: 40, bonuses: { earlyPhase: 10 } }`
     
     Centro de ingenieros tiene score base 40. Si está en fase early, +10.
   
-  - [ ] `intelRadio`: `{ base: 35 }` (ajustar según balance)
+  - [x] `intelRadio`: `{ base: 35 }` (ajustar según balance)
     
     Radio de inteligencia tiene score base 35. Ajustar según el balance del juego.
   
-  - [ ] `drone`: `{ base: 65, bonuses: { hasTargets: 40 } }`
+  - [x] `drone`: `{ base: 65, bonuses: { hasTargets: 40 } }`
     
     Dron tiene score base 65. Si hay objetivos disponibles (plantas, hospitales, FOBs del jugador), +40.
   
-  - [ ] `sniperStrike`: `{ base: 30 }`
+  - [x] `sniperStrike`: `{ base: 30 }`
     
-    Ataque de francotirador tiene score base 30, sin bonificaciones adicionales.
+    Ataque de francotirador tiene score base 30, con bonus base de +20.
 
-- [ ] Implementar método `getPriorities()` con prioridades por fase
+- [x] Implementar método `getPriorities()` con prioridades por fase
   
   Este método debe retornar un objeto con las prioridades del perfil para cada fase. Por ejemplo, en early game priorizar FOBs y fábricas, en mid game priorizar plantas y lanzaderas, etc. Esto puede usarse para ajustar scores o filtrar acciones.
 
-- [ ] Implementar método `evaluateStrategicActions(gameState, team, currency, state)`
+- [x] Implementar método `evaluateStrategicActions(gameState, team, currency, state)`
   
   Este método debe evaluar todas las cartas del mazo y retornar las acciones estratégicas disponibles (construcciones principalmente).
   
-  - [ ] Usar `AICardEvaluator.evaluateDeck()` con el mazo y reglas
+  - [x] Usar `AICardEvaluator.evaluateDeck()` con el mazo y reglas
     
     Llamar al evaluador genérico pasándole el mazo del perfil, el estado del juego, y las reglas de scoring de este perfil.
   
-  - [ ] Retornar lista de acciones evaluadas
+  - [x] Retornar lista de acciones evaluadas
     
     Retornar la lista de acciones que el evaluador calculó, ya ordenadas por score.
 
@@ -492,72 +492,72 @@ Crear un sistema modular por capas que separe responsabilidades y permita crear 
 ## ✅ Fase 5: Refactorizar AISystem
 
 ### 5.1 Integrar Capa 1 (Core)
-- [ ] Modificar `server/game/managers/AISystem.js`
+- [x] Modificar `server/game/managers/AISystem.js`
   
   Modificar el archivo existente de AISystem para integrar el nuevo sistema core. Esto implica eliminar código duplicado y delegar responsabilidades al core.
 
-- [ ] Crear instancia de `AICoreSystem` en constructor
+- [x] Crear instancia de `AICoreSystem` en constructor
   
-  En el constructor de AISystem, crear una instancia de AICoreSystem pasándole gameState, io, y roomId. Esta instancia se usará para toda la lógica común.
+  En el constructor de AISystem, crear una instancia de AICoreSystem pasándole gameState, io, roomId, raceId y difficulty. Esta instancia se usará para toda la lógica común.
 
-- [ ] Delegar abastecimiento a `AICoreSystem` en `update()`
+- [x] Delegar abastecimiento a `AICoreSystem` en `update()`
   
   En el método update de AISystem, eliminar las llamadas a los métodos de abastecimiento propios y en su lugar llamar al método update del AICoreSystem, que se encargará de todo el abastecimiento.
 
-- [ ] Delegar emergencias médicas a `AICoreSystem` en `update()`
+- [x] Delegar emergencias médicas a `AICoreSystem` en `update()`
   
   Eliminar la lógica de emergencias médicas de AISystem y dejar que AICoreSystem la maneje. El core se encargará de detectar y resolver emergencias.
 
-- [ ] Delegar reparaciones a `AICoreSystem` en `update()`
+- [x] Delegar reparaciones a `AICoreSystem` en `update()`
   
   Eliminar cualquier lógica de reparaciones de AISystem (si existe) y dejar que AICoreSystem la maneje. El core se encargará de detectar edificios rotos y enviar vehículos de reparación.
 
-- [ ] Mantener timers e intervalos en `AISystem` (o mover a Core según diseño)
+- [x] Mantener timers e intervalos en `AISystem` (o mover a Core según diseño)
   
-  Decidir si los timers e intervalos para decisiones estratégicas y ofensivas se mantienen en AISystem o se mueven al Core. Probablemente se mantengan en AISystem ya que son específicos de la toma de decisiones, no de la lógica común.
+  Decidir si los timers e intervalos para decisiones estratégicas y ofensivas se mantienen en AISystem o se mueven al Core. Probablemente se mantengan en AISystem ya que son específicos de la toma de decisiones, no de la lógica común. Los timers del core están en AICoreSystem.
 
 - [ ] Probar que la integración funciona correctamente
   
   Verificar que después de la integración, el abastecimiento, emergencias y reparaciones siguen funcionando igual que antes. No debe haber regresiones en la funcionalidad.
 
 ### 5.2 Integrar Sistema de Perfiles
-- [ ] Modificar `server/game/managers/AISystem.js`
+- [x] Modificar `server/game/managers/AISystem.js`
   
   Modificar AISystem para usar el sistema de perfiles en lugar de la lógica hardcodeada de evaluación de acciones.
 
-- [ ] Crear instancia del perfil activo en constructor
+- [x] Crear instancia del perfil activo en constructor
   
   En el constructor, obtener el mazo del jugador IA y crear el perfil correspondiente. Por ahora solo habrá DefaultDeckProfile, pero la estructura debe permitir fácilmente añadir más perfiles en el futuro.
   
-  - [ ] Obtener mazo desde `gameState.raceManager.getPlayerDeck('player2')`
+  - [x] Obtener mazo desde `gameState.getPlayerDeck('player2')`
     
-    Obtener el mazo del jugador IA desde el raceManager. Este mazo contiene las cartas disponibles para la IA.
+    Obtener el mazo del jugador IA desde el gameState. Este mazo contiene las cartas disponibles para la IA. Si no hay mazo, usar DEFAULT_DECK como fallback.
   
-  - [ ] Crear `DefaultDeckProfile` con el mazo
+  - [x] Crear `DefaultDeckProfile` con el mazo
     
     Crear una instancia de DefaultDeckProfile pasándole el mazo obtenido. Esta instancia se usará para todas las decisiones estratégicas y ofensivas.
 
-- [ ] Reemplazar `handleStrategicBuilding()` para usar perfil
+- [x] Reemplazar `handleStrategicBuilding()` para usar perfil
   
   Modificar el método handleStrategicBuilding para que use el sistema de perfiles en lugar de la lógica hardcodeada.
   
-  - [ ] Usar `profile.evaluateStrategicActions()` en lugar de `evaluateActions()`
+  - [x] Usar `profile.evaluateStrategicActions()` en lugar de `evaluateActions()`
     
     En lugar de llamar al método evaluateActions propio, llamar al método evaluateStrategicActions del perfil activo. Este método retornará las acciones evaluadas usando el mazo del perfil.
   
-  - [ ] Usar `AIActionSelector.selectBestAction()` para elegir acción
+  - [x] Usar `AIActionSelector.selectBestAction()` para elegir acción
     
     De las acciones evaluadas por el perfil, usar el selector para elegir la mejor acción que se pueda pagar con el currency disponible.
 
-- [ ] Reemplazar `handleOffensiveDecision()` para usar perfil
+- [x] Reemplazar `handleOffensiveDecision()` para usar perfil
   
   Modificar el método handleOffensiveDecision para que use el sistema de perfiles para evaluar consumibles.
   
-  - [ ] Usar `AICardEvaluator.evaluateDeck()` para consumibles
+  - [x] Usar `AICardEvaluator.evaluateDeck()` para consumibles
     
     Evaluar todas las cartas del mazo usando el evaluador genérico, pero filtrar solo las que sean consumibles (no edificios).
   
-  - [ ] Filtrar solo consumibles del mazo
+  - [x] Filtrar solo consumibles del mazo
     
     De las acciones evaluadas, quedarse solo con las que corresponden a consumibles (drones, snipers, etc.) y no con edificios.
 
@@ -570,65 +570,73 @@ Crear un sistema modular por capas que separe responsabilidades y permita crear 
   Verificar que la IA solo usa consumibles que están en su mazo, que respeta las reglas de scoring del perfil, y que las decisiones son coherentes con el mazo seleccionado.
 
 ### 5.3 Actualizar AIActionHandler
-- [ ] Modificar `server/game/handlers/AIActionHandler.js`
+- [x] Modificar `server/game/handlers/AIActionHandler.js`
   
   Expandir el AIActionHandler para que pueda ejecutar todos los tipos de consumibles que están en el mazo, no solo drones y snipers.
 
-- [ ] Expandir método `executeAttack()` para más tipos de consumibles
+- [x] Expandir método `executeAttack()` para más tipos de consumibles
   
-  El método executeAttack actualmente solo maneja 'drone' y 'sniper'. Debe expandirse para manejar todos los tipos de consumibles: artillery, cameraDrone, fobSabotage, specopsCommando, etc.
+  El método executeAttack actualmente solo maneja 'drone' y 'sniper'. Debe expandirse para manejar todos los tipos de consumibles: artillery, cameraDrone, fobSabotage, specopsCommando, truckAssault, lightVehicle.
 
-- [ ] Añadir método `executeArtillery(team)`
+- [x] Añadir método `executeArtillery(team)`
   
   Crear un método específico para ejecutar ataques de artillería. La artillería requiere una posición (x, y) en el mapa, no un objetivo específico.
   
-  - [ ] Encontrar objetivo prioritario
+  - [x] Encontrar objetivo prioritario
     
     Calcular una posición estratégica donde lanzar la artillería. Debe buscar un área con múltiples edificios enemigos para maximizar el daño.
   
-  - [ ] Llamar a `gameState.handleArtilleryLaunch()`
+  - [x] Llamar a `gameState.handleArtilleryLaunch()`
     
     Llamar al handler correspondiente del gameState pasando la posición calculada. Este handler se encargará de crear el ataque de artillería.
 
-- [ ] Añadir método `executeCameraDrone(team)`
+- [x] Añadir método `executeCameraDrone(team)`
   
   Crear un método específico para desplegar drones cámara. Los drones cámara se despliegan en una posición del mapa.
   
-  - [ ] Calcular posición estratégica
+  - [x] Calcular posición estratégica
     
     Calcular una posición estratégica donde desplegar el dron cámara. Debe ser en territorio enemigo o cerca de él para obtener información.
   
-  - [ ] Llamar a `gameState.handleCameraDroneDeploy()`
+  - [x] Llamar a `gameState.handleCameraDroneDeploy()`
     
     Llamar al handler correspondiente del gameState pasando la posición calculada. Este handler se encargará de crear el dron cámara.
 
-- [ ] Añadir método `executeFobSabotage(team)`
+- [x] Añadir método `executeFobSabotage(team)`
   
   Crear un método específico para ejecutar sabotajes de FOB. Los sabotajes requieren un FOB objetivo específico.
   
-  - [ ] Encontrar FOB objetivo
+  - [x] Encontrar FOB objetivo
     
     Buscar FOBs enemigos y seleccionar uno prioritario (el más cercano, el que tiene más suministros, etc.).
   
-  - [ ] Llamar a `gameState.handleFobSabotage()`
+  - [x] Llamar a `gameState.handleFobSabotage()`
     
     Llamar al handler correspondiente del gameState pasando el ID del FOB objetivo. Este handler se encargará de aplicar el efecto de sabotaje.
 
-- [ ] Añadir método `executeSpecopsCommando(team)`
+- [x] Añadir método `executeSpecopsCommando(team)`
   
   Crear un método específico para desplegar comandos especiales. Los comandos se despliegan en una posición del mapa.
   
-  - [ ] Calcular posición estratégica
+  - [x] Calcular posición estratégica
     
     Calcular una posición estratégica donde desplegar el comando. Debe ser cerca de edificios enemigos importantes para deshabilitarlos.
   
-  - [ ] Llamar a handler correspondiente
+  - [x] Llamar a handler correspondiente
     
     Llamar al handler correspondiente del gameState pasando la posición calculada. Este handler se encargará de crear el comando especial.
 
-- [ ] Actualizar `executeAttack()` para enrutar a métodos específicos
+- [x] Añadir método `executeTruckAssault(team)`
   
-  Modificar el método executeAttack para que, según el attackType de la acción, enrute a los métodos específicos correspondientes. Debe ser un switch o if-else que llame al método correcto.
+  Crear un método específico para desplegar truck assault. Similar a specopsCommando pero para atacar convoyes.
+
+- [x] Añadir método `executeLightVehicle(team)`
+  
+  Crear un método específico para ejecutar ataques de artillado ligero. Requiere un objetivo específico.
+
+- [x] Actualizar `executeAttack()` para enrutar a métodos específicos
+  
+  Modificar el método executeAttack para que, según el cardId de la acción, enrute a los métodos específicos correspondientes. Usa un switch que llama al método correcto.
 
 - [ ] Probar que todos los consumibles se ejecutan correctamente
   
@@ -639,70 +647,78 @@ Crear un sistema modular por capas que separe responsabilidades y permita crear 
 ## ✅ Fase 6: Migración y Limpieza
 
 ### 6.1 Migrar Configuración Antigua
-- [ ] Modificar `server/game/ai/config/RaceAIConfig.js`
+- [x] Modificar `server/game/ai/config/RaceAIConfig.js`
   
   Limpiar el archivo de configuración antigua, eliminando lo que se ha migrado a perfiles y manteniendo solo lo que sigue siendo necesario.
 
-- [ ] Mantener solo `DIFFICULTY_MULTIPLIERS` y funciones de ajuste
+- [x] Simplificar `RACE_AI_CONFIG` (mantener solo intervalos y umbrales)
   
-  El archivo debe mantener solo los multiplicadores de dificultad y las funciones que ajustan valores según la dificultad. Todo lo relacionado con razas y mazos se ha movido a perfiles.
+  Simplificar el objeto RACE_AI_CONFIG eliminando `buildings`, `consumables`, `buildingScores` y `attackScores` ya que ahora están en los perfiles. Mantener solo `intervals` y `thresholds` que todavía se usan.
 
-- [ ] Eliminar `RACE_AI_CONFIG` (se migra a perfiles)
+- [x] Mantener `DIFFICULTY_MULTIPLIERS` y funciones de ajuste
   
-  Eliminar completamente el objeto RACE_AI_CONFIG ya que esa información ahora está en los perfiles. Las reglas de scoring y las cartas disponibles están definidas en cada perfil.
+  El archivo mantiene los multiplicadores de dificultad y las funciones que ajustan valores según la dificultad. Todo lo relacionado con scores y cartas disponibles se ha movido a perfiles.
 
-- [ ] Mantener funciones:
+- [x] Marcar `getAdjustedScore()` como obsoleto
+  
+  Marcar esta función como obsoleta ya que los scores ahora se obtienen desde los perfiles de mazo. Se mantiene por compatibilidad con métodos obsoletos pero retorna null y muestra un warning.
+
+- [x] Mantener funciones necesarias:
   
   Mantener las funciones de utilidad que ajustan valores según la dificultad, ya que siguen siendo útiles para el sistema de perfiles.
   
-  - [ ] `getDifficultyMultipliers()`
+  - [x] `getDifficultyMultipliers()`
     
     Mantener esta función que retorna los multiplicadores de dificultad (easy, medium, hard). Se sigue usando para ajustar intervalos y umbrales.
   
-  - [ ] `getAdjustedInterval()`
+  - [x] `getAdjustedInterval()`
     
     Mantener esta función que ajusta intervalos según la raza (ahora perfil) y dificultad. Se sigue usando para los timers de la IA.
   
-  - [ ] `getAdjustedScore()` (si se sigue usando)
+  - [x] `getAdjustedScore()` (marcado como obsoleto)
     
-    Verificar si esta función se sigue usando. Si los perfiles manejan sus propios scores, puede que ya no sea necesaria. Si se usa, mantenerla.
+    Marcado como obsoleto ya que los perfiles manejan sus propios scores. Se mantiene por compatibilidad pero retorna null.
   
-  - [ ] `getAdjustedThreshold()`
+  - [x] `getAdjustedThreshold()`
     
     Mantener esta función que ajusta umbrales según la raza (ahora perfil) y dificultad. Se sigue usando para umbrales de currency y suministros.
 
+- [x] Actualizar métodos que usaban RACE_AI_CONFIG
+  
+  Actualizar `calculateAvailableBuildings()` y `calculateAvailableConsumables()` para obtener las cartas desde el mazo del perfil en lugar de RACE_AI_CONFIG.
+
 - [ ] Verificar que no se rompe nada
   
-  Después de eliminar código, verificar que no hay referencias rotas a RACE_AI_CONFIG en otros archivos. Todas las referencias deben haberse migrado a perfiles o eliminado.
+  Después de simplificar código, verificar que no hay referencias rotas. Todas las referencias a buildings/consumables/scores deben haberse migrado a perfiles.
 
 ### 6.2 Limpiar Código Obsoleto
-- [ ] Eliminar `AISystem.evaluateActions()` (reemplazado por perfil)
+- [x] Marcar `AISystem.evaluateActions()` como obsoleto (reemplazado por perfil)
   
-  Eliminar completamente el método evaluateActions de AISystem ya que ahora se usa profile.evaluateStrategicActions(). Este método ya no es necesario.
+  Marcar el método evaluateActions de AISystem como obsoleto (prefijo `_obsolete_`) ya que ahora se usa profile.evaluateStrategicActions(). El método se puede eliminar en una limpieza posterior.
 
-- [ ] Eliminar `AISystem.evaluateOffensiveActions()` (reemplazado por perfil)
+- [x] Marcar `AISystem.evaluateOffensiveActions()` como obsoleto (reemplazado por perfil)
   
-  Eliminar completamente el método evaluateOffensiveActions de AISystem ya que ahora se usa AICardEvaluator.evaluateDeck() directamente. Este método ya no es necesario.
+  Marcar el método evaluateOffensiveActions de AISystem como obsoleto (prefijo `_obsolete_`) ya que ahora se usa AICardEvaluator.evaluateDeck() directamente. El método se puede eliminar en una limpieza posterior.
 
-- [ ] Eliminar lógica hardcodeada de abastecimiento (movida a Core)
+- [x] Marcar lógica hardcodeada de abastecimiento como obsoleta (movida a Core)
   
-  Eliminar los métodos ruleResupplyFOBs, ruleResupplyFronts, ruleResupplyHelicopters, sendSupplyConvoy, y findClosestFOBWithResources de AISystem, ya que ahora están en AISupplyManager.
+  Marcar los métodos ruleResupplyFOBs, ruleResupplyFronts, ruleResupplyHelicopters, sendSupplyConvoy, y findClosestFOBWithResources de AISystem como obsoletos (prefijo `_obsolete_`), ya que ahora están en AISupplyManager. Los métodos se pueden eliminar en una limpieza posterior.
 
-- [ ] Eliminar lógica hardcodeada de emergencias (movida a Core)
+- [x] Marcar lógica hardcodeada de emergencias como obsoleta (movida a Core)
   
-  Eliminar el método handleMedicalEmergencies de AISystem, ya que ahora está en AIMedicalManager. Eliminar también cualquier método helper relacionado.
+  Marcar el método handleMedicalEmergencies de AISystem como obsoleto (prefijo `_obsolete_`), ya que ahora está en AIMedicalManager. El método se puede eliminar en una limpieza posterior.
 
-- [ ] Eliminar lógica hardcodeada de reparaciones (si existía, movida a Core)
+- [x] Verificar lógica hardcodeada de reparaciones (si existía, movida a Core)
   
-  Si había alguna lógica de reparaciones en AISystem, eliminarla ya que ahora está en AIRepairManager. Si no existía, no hacer nada.
+  Verificado: No había lógica de reparaciones en AISystem, se creó desde cero en AIRepairManager. No hay nada que eliminar.
 
-- [ ] Limpiar métodos no utilizados
+- [x] Marcar métodos no utilizados como obsoletos
   
-  Revisar AISystem en busca de métodos que ya no se usan después de la migración. Eliminar cualquier método helper, variable, o constante que ya no sea necesaria.
+  Revisado AISystem y marcados todos los métodos obsoletos con prefijo `_obsolete_`. Los métodos se pueden eliminar en una limpieza posterior más segura.
 
-- [ ] Verificar que no quedan referencias a código eliminado
+- [x] Actualizar referencias a código obsoleto
   
-  Buscar en todo el código referencias a los métodos eliminados. Asegurarse de que todas las referencias se han actualizado para usar los nuevos sistemas (Core, perfiles, evaluadores).
+  Actualizadas todas las referencias encontradas: `handleReactions` ahora usa directamente `aiActionHandler.executeBuild()`, y `logStatus` usa `AIGameStateAnalyzer.analyzeState()`. Los métodos obsoletos están marcados y no se usan en el código activo.
 
 ### 6.3 Testing Completo
 - [ ] Probar abastecimiento funciona correctamente

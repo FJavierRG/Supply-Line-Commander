@@ -1,6 +1,8 @@
 // ===== HANDLER DE ACCIONES DE IA =====
 // Ejecuta decisiones tomadas por la IA
 
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
+
 export class AIActionHandler {
     constructor(gameState, io, roomId) {
         this.gameState = gameState;
@@ -36,9 +38,11 @@ export class AIActionHandler {
     
     /**
      * Ejecuta construcción (simulando evento de jugador real)
+     * @param {string} team - Team de la IA
+     * @param {string} cardId - ID de la carta/edificio a construir
      */
-    async executeBuild(action, team) {
-        if (!action.buildingType) {
+    async executeBuild(team, cardId) {
+        if (!cardId) {
             console.warn('⚠️ Building type no especificado');
             return false;
         }
@@ -53,7 +57,7 @@ export class AIActionHandler {
         }
         
         // Calcular posición cerca del HQ
-        const buildPosition = this.calculateBuildPosition(myHQ, myNodes, action.buildingType);
+        const buildPosition = this.calculateBuildPosition(myHQ, myNodes, cardId);
         
         if (!buildPosition) {
             console.warn('⚠️ No se pudo calcular posición de construcción');
@@ -61,13 +65,13 @@ export class AIActionHandler {
         }
         
         // 🎯 SIMULAR EVENTO DE JUGADOR REAL: Usar mismo handler que jugadores
-        const result = this.gameState.handleBuild(team, action.buildingType, buildPosition.x, buildPosition.y);
+        const result = this.gameState.handleBuild(team, cardId, buildPosition.x, buildPosition.y);
         
         if (result.success) {
             // 🎯 BROADCAST como si fuera un jugador real
             this.io.to(this.roomId).emit('building_created', {
                 nodeId: result.node.id,
-                type: action.buildingType,
+                type: cardId,
                 x: buildPosition.x,
                 y: buildPosition.y,
                 team: team,
@@ -79,27 +83,40 @@ export class AIActionHandler {
     }
     
     /**
-     * Ejecuta ataque
+     * Ejecuta ataque/consumible
+     * @param {string} team - Team de la IA
+     * @param {string} cardId - ID de la carta/consumible a usar
      */
-    async executeAttack(action, team) {
-        if (!action.attackType) {
+    async executeAttack(team, cardId) {
+        if (!cardId) {
             console.warn('⚠️ Attack type no especificado');
             return false;
         }
         
         const myNodes = this.gameState.nodes.filter(n => n.team === team);
         
-        // Dron
-        if (action.attackType === 'drone') {
-            return await this.executeDroneAttack(myNodes, team);
+        // Enrutar según el tipo de consumible
+        switch (cardId) {
+            case 'drone':
+                return await this.executeDroneAttack(myNodes, team);
+            case 'sniperStrike':
+                return await this.executeSniperAttack(myNodes, team);
+            case 'fobSabotage':
+                return await this.executeFobSabotage(myNodes, team);
+            case 'specopsCommando':
+                return await this.executeSpecopsCommando(myNodes, team);
+            case 'cameraDrone':
+                return await this.executeCameraDrone(myNodes, team);
+            case 'truckAssault':
+                return await this.executeTruckAssault(myNodes, team);
+            case 'artillery':
+                return await this.executeArtillery(myNodes, team);
+            case 'lightVehicle':
+                return await this.executeLightVehicle(myNodes, team);
+            default:
+                console.warn(`⚠️ Tipo de consumible no reconocido: ${cardId}`);
+                return false;
         }
-        
-        // Sniper
-        if (action.attackType === 'sniper') {
-            return await this.executeSniperAttack(myNodes, team);
-        }
-        
-        return false;
     }
     
     /**
@@ -128,44 +145,299 @@ export class AIActionHandler {
      * Ejecuta ataque con sniper
      */
     async executeSniperAttack(myNodes, team) {
-        // Encontrar HQ para obtener posición base
-        const hq = myNodes.find(n => n.type === 'hq');
-        
-        if (!hq) {
-            return false;
-        }
-        
-        // Encontrar objetivo aleatorio del jugador
+        // Encontrar objetivos válidos del jugador
         const playerNodes = this.gameState.nodes.filter(n => n.team === 'player1' && n.active);
         const targets = playerNodes.filter(n => 
-            n.type === 'fob' || 
-            n.type === 'campaignFront' || 
-            n.type === 'campaignHospital'
+            n.type === 'front' || 
+            n.type === 'specopsCommando' || 
+            n.type === 'truckAssault' || 
+            n.type === 'cameraDrone'
         );
         
         if (targets.length === 0) {
             return false;
         }
         
-        const target = targets[Math.floor(Math.random() * targets.length)];
+        // Seleccionar objetivo prioritario (comandos primero, luego frentes)
+        let target = targets.find(n => n.type === 'specopsCommando' || n.type === 'truckAssault' || n.type === 'cameraDrone');
+        if (!target) {
+            target = targets.find(n => n.type === 'front');
+        }
+        if (!target) {
+            target = targets[0];
+        }
         
-        // TODO: Implementar sniper en CombatHandler
+        // Llamar al handler
+        const result = this.combatHandler.handleSniperStrike(team, target.id);
         
-        return true;
+        if (result.success) {
+            // Broadcast
+            this.io.to(this.roomId).emit('sniper_strike', {
+                targetId: target.id,
+                team: team
+            });
+        }
+        
+        return result.success;
+    }
+    
+    /**
+     * Ejecuta sabotaje de FOB
+     */
+    async executeFobSabotage(myNodes, team) {
+        // Encontrar FOBs enemigas
+        const playerNodes = this.gameState.nodes.filter(n => n.team === 'player1' && n.active && n.type === 'fob');
+        
+        if (playerNodes.length === 0) {
+            return false;
+        }
+        
+        // Seleccionar FOB más cercana al HQ enemigo (o aleatoria)
+        const target = playerNodes[Math.floor(Math.random() * playerNodes.length)];
+        
+        // Llamar al handler
+        const result = this.combatHandler.handleFobSabotage(team, target.id);
+        
+        if (result.success) {
+            // Broadcast
+            this.io.to(this.roomId).emit('fob_sabotage', {
+                targetId: target.id,
+                team: team
+            });
+        }
+        
+        return result.success;
+    }
+    
+    /**
+     * Ejecuta despliegue de comando especial
+     */
+    async executeSpecopsCommando(myNodes, team) {
+        // Encontrar posición en territorio enemigo
+        const position = this.findEnemyTerritoryPosition(team);
+        
+        if (!position) {
+            return false;
+        }
+        
+        // Llamar al handler
+        const result = this.combatHandler.handleCommandoDeploy(team, position.x, position.y);
+        
+        if (result.success) {
+            // Broadcast
+            this.io.to(this.roomId).emit('commando_deployed', {
+                nodeId: result.commando.id,
+                x: position.x,
+                y: position.y,
+                team: team
+            });
+        }
+        
+        return result.success;
+    }
+    
+    /**
+     * Ejecuta despliegue de camera drone
+     */
+    async executeCameraDrone(myNodes, team) {
+        // Encontrar posición en territorio enemigo
+        const position = this.findEnemyTerritoryPosition(team);
+        
+        if (!position) {
+            return false;
+        }
+        
+        // Llamar al handler
+        const result = this.combatHandler.handleCameraDroneDeploy(team, position.x, position.y);
+        
+        if (result.success) {
+            // Broadcast
+            this.io.to(this.roomId).emit('camera_drone_deployed', {
+                nodeId: result.cameraDrone.id,
+                x: position.x,
+                y: position.y,
+                team: team
+            });
+        }
+        
+        return result.success;
+    }
+    
+    /**
+     * Ejecuta despliegue de truck assault
+     */
+    async executeTruckAssault(myNodes, team) {
+        // Encontrar posición en territorio enemigo (cerca de rutas de convoyes)
+        const position = this.findEnemyTerritoryPosition(team);
+        
+        if (!position) {
+            return false;
+        }
+        
+        // Llamar al handler
+        const result = this.combatHandler.handleTruckAssaultDeploy(team, position.x, position.y);
+        
+        if (result.success) {
+            // Broadcast
+            this.io.to(this.roomId).emit('truck_assault_deployed', {
+                nodeId: result.truckAssault.id,
+                x: position.x,
+                y: position.y,
+                team: team
+            });
+        }
+        
+        return result.success;
+    }
+    
+    /**
+     * Ejecuta ataque de artillería
+     */
+    async executeArtillery(myNodes, team) {
+        // Encontrar área con múltiples edificios enemigos
+        const position = this.findArtilleryTargetPosition(team);
+        
+        if (!position) {
+            return false;
+        }
+        
+        // Llamar al handler
+        const result = this.combatHandler.handleArtilleryLaunch(team, position.x, position.y);
+        
+        if (result.success) {
+            // Broadcast
+            this.io.to(this.roomId).emit('artillery_launched', {
+                artilleryId: result.artillery.id,
+                x: position.x,
+                y: position.y,
+                team: team
+            });
+        }
+        
+        return result.success;
+    }
+    
+    /**
+     * Ejecuta ataque de artillado ligero
+     */
+    async executeLightVehicle(myNodes, team) {
+        // Encontrar edificios enemigos válidos
+        const playerNodes = this.gameState.nodes.filter(n => n.team === 'player1' && n.active && n.constructed);
+        const validTargetTypes = SERVER_NODE_CONFIG.actions?.lightVehicleLaunch?.validTargets || [];
+        
+        const targets = playerNodes.filter(n => 
+            validTargetTypes.includes(n.type) && 
+            !n.broken
+        );
+        
+        if (targets.length === 0) {
+            return false;
+        }
+        
+        // Priorizar plantas nucleares
+        let target = targets.find(n => n.type === 'nuclearPlant');
+        if (!target) {
+            target = targets[Math.floor(Math.random() * targets.length)];
+        }
+        
+        // Llamar al handler
+        const result = this.combatHandler.handleLightVehicleLaunch(team, target.id);
+        
+        if (result.success) {
+            // Broadcast
+            this.io.to(this.roomId).emit('light_vehicle_launched', {
+                lightVehicleId: result.lightVehicle.id,
+                targetId: target.id,
+                team: team
+            });
+        }
+        
+        return result.success;
     }
     
     /**
      * Encuentra mejor objetivo para dron
      */
     findBestDroneTarget() {
-        const playerNodes = this.gameState.nodes.filter(n => n.team === 'player1' && n.active);
+        const playerNodes = this.gameState.nodes.filter(n => n.team === 'player1' && n.active && n.constructed);
+        const validTargetTypes = SERVER_NODE_CONFIG.actions?.droneLaunch?.validTargets || [];
         
-        // Prioridad: Plantas > Hospitales > FOBs
-        let target = playerNodes.find(n => n.type === 'nuclearPlant');
-        if (!target) target = playerNodes.find(n => n.type === 'campaignHospital');
-        if (!target) target = playerNodes.find(n => n.type === 'fob');
+        const validTargets = playerNodes.filter(n => validTargetTypes.includes(n.type));
+        
+        // Prioridad: Plantas > Hospitales > FOBs > Otros
+        let target = validTargets.find(n => n.type === 'nuclearPlant');
+        if (!target) target = validTargets.find(n => n.type === 'campaignHospital');
+        if (!target) target = validTargets.find(n => n.type === 'fob');
+        if (!target) target = validTargets[0];
         
         return target;
+    }
+    
+    /**
+     * Encuentra una posición en territorio enemigo para desplegar unidades especiales
+     */
+    findEnemyTerritoryPosition(team) {
+        const enemyTeam = team === 'player1' ? 'player2' : 'player1';
+        const enemyNodes = this.gameState.nodes.filter(n => n.team === enemyTeam && n.active);
+        
+        // Buscar cerca de edificios enemigos importantes
+        const priorityTargets = enemyNodes.filter(n => 
+            n.type === 'fob' || 
+            n.type === 'nuclearPlant' || 
+            n.type === 'campaignHospital'
+        );
+        
+        if (priorityTargets.length > 0) {
+            const target = priorityTargets[Math.floor(Math.random() * priorityTargets.length)];
+            // Posición cerca del objetivo pero en territorio enemigo
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 150 + Math.random() * 100;
+            return {
+                x: target.x + Math.cos(angle) * distance,
+                y: target.y + Math.sin(angle) * distance
+            };
+        }
+        
+        // Fallback: posición aleatoria en el lado enemigo del mapa
+        const worldWidth = 1920;
+        const centerX = team === 'player1' ? worldWidth * 0.75 : worldWidth * 0.25;
+        const centerY = 540; // Centro vertical del mapa
+        
+        return {
+            x: centerX + (Math.random() - 0.5) * 400,
+            y: centerY + (Math.random() - 0.5) * 200
+        };
+    }
+    
+    /**
+     * Encuentra posición óptima para artillería (área con múltiples edificios)
+     */
+    findArtilleryTargetPosition(team) {
+        const enemyTeam = team === 'player1' ? 'player2' : 'player1';
+        const enemyNodes = this.gameState.nodes.filter(n => n.team === enemyTeam && n.active && n.constructed);
+        
+        if (enemyNodes.length === 0) {
+            return null;
+        }
+        
+        // Buscar área con mayor concentración de edificios
+        let bestPosition = null;
+        let maxBuildings = 0;
+        const searchRadius = 200;
+        
+        for (const node of enemyNodes) {
+            const nearbyBuildings = enemyNodes.filter(n => {
+                const dist = Math.hypot(n.x - node.x, n.y - node.y);
+                return dist <= searchRadius;
+            }).length;
+            
+            if (nearbyBuildings > maxBuildings) {
+                maxBuildings = nearbyBuildings;
+                bestPosition = { x: node.x, y: node.y };
+            }
+        }
+        
+        return bestPosition || { x: enemyNodes[0].x, y: enemyNodes[0].y };
     }
     
     /**

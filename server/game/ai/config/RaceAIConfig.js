@@ -5,91 +5,17 @@ import AIConfig from './AIConfig.js';
 
 /**
  * Configuración base de IA para cada raza
- * Cada raza tiene sus propios scores, intervalos y estrategias
+ * 🎯 SIMPLIFICADO: Ahora solo contiene intervalos y umbrales
+ * Los scores y unidades disponibles están en los perfiles de mazo
  */
 const RACE_AI_CONFIG = {
     A_Nation: {
-        // === UNIDADES DISPONIBLES PARA LA IA ===
-        buildings: [
-            'fob', 'antiDrone', 'droneLauncher',
-            'truckFactory', 'engineerCenter', 'nuclearPlant',
-            'vigilanceTower', 'intelRadio', 'intelCenter'
-        ],
-        consumables: [
-            'drone', 'sniperStrike', 'specopsCommando', 'fobSabotage'
-        ],
-        
-        // === SCORES DE CONSTRUCCIÓN ===
-        buildingScores: {
-            intelRadio: null, // No disponible para A_Nation
-            truckFactory: {
-                base: 45,
-                bonuses: {
-                    notLate: 15  // +15 si no está en fase late
-                }
-            },
-            fob: {
-                base: 40,
-                bonuses: {
-                    hasLessThan2: 30,  // +30 si tiene <2 FOBs
-                    earlyPhase: 20     // +20 si fase early
-                }
-            },
-            nuclearPlant: {
-                base: 50,
-                bonuses: {
-                    perPlayerPlant: 30,  // +30 por cada planta del jugador
-                    perMyPlant: -25      // -25 por cada planta propia (evitar spam)
-                }
-            },
-            droneLauncher: {
-                base: 60,
-                bonuses: {}
-            },
-            antiDrone: {
-                base: 30,
-                bonuses: {}
-            },
-            engineerCenter: {
-                base: 40,
-                bonuses: {
-                    earlyPhase: 10
-                }
-            },
-            campaignHospital: null, // No disponible para A_Nation
-            aerialBase: null         // No disponible para A_Nation
-        },
-        
-        // === SCORES DE ATAQUES ===
-        attackScores: {
-            drone: {
-                base: 65,
-                bonuses: {
-                    hasTargets: 40
-                }
-            },
-            sniper: {
-                base: 30,
-                bonuses: {
-                    base: 20
-                }
-            },
-            fobSabotage: null  // No disponible para A_Nation
-        },
-        
         // === INTERVALOS ESPECÍFICOS (sobrescriben AIConfig.intervals) ===
         intervals: {
             // null = usar valor por defecto de AIConfig
             strategic: null,
             offensive: null,
             reaction: null
-        },
-        
-        // === ESTRATEGIAS ESPECÍFICAS ===
-        strategies: {
-            focusFOBs: true,      // A_Nation depende de FOBs
-            focusEconomy: true,   // Construye plantas para economía
-            aggressiveness: 0.6   // Agresividad media-alta
         },
         
         // === UMBRALES ESPECÍFICOS ===
@@ -208,7 +134,9 @@ export function getAdjustedInterval(intervalName, raceId, difficulty) {
 }
 
 /**
+ * 🗑️ OBSOLETO: Los scores ahora están en los perfiles de mazo
  * Obtiene un score ajustado por raza y dificultad
+ * @deprecated Usar perfiles de mazo (DefaultDeckProfile, etc.) en su lugar
  * @param {string} actionType - Tipo de acción ('building' o 'attack')
  * @param {string} actionName - Nombre de la acción ('fob', 'drone', etc)
  * @param {string} raceId - ID de la raza
@@ -217,79 +145,19 @@ export function getAdjustedInterval(intervalName, raceId, difficulty) {
  * @returns {number|null} Score ajustado o null si no está disponible
  */
 export function getAdjustedScore(actionType, actionName, raceId, difficulty, context = {}) {
-    const raceConfig = getRaceAIConfig(raceId);
-    const difficultyMultipliers = getDifficultyMultipliers(difficulty);
-    
-    // Obtener configuración de score según tipo
-    const scoreConfig = actionType === 'building' 
-        ? raceConfig.buildingScores?.[actionName]
-        : raceConfig.attackScores?.[actionName];
-    
-    // Si no está disponible para esta raza, retornar null
-    if (scoreConfig === null || scoreConfig === undefined) {
-        return null;
-    }
-    
-    // Calcular score base
-    let score = scoreConfig.base || 0;
-    
-    // Aplicar bonificaciones
-    if (scoreConfig.bonuses) {
-        for (const [bonusName, bonusValue] of Object.entries(scoreConfig.bonuses)) {
-            // Evaluar condición del bonus
-            if (evaluateBonusCondition(bonusName, bonusValue, context)) {
-                // Bonificaciones especiales que multiplican por cantidad
-                if (bonusName === 'perPlayerPlant' && context.playerPlants) {
-                    score += bonusValue * context.playerPlants;
-                } else if (bonusName === 'perMyPlant' && context.myPlants) {
-                    score += bonusValue * context.myPlants; // Valor negativo, así que resta
-                } else {
-                    score += bonusValue;
-                }
-            }
-        }
-    }
-    
-    // Aplicar multiplicador de dificultad
-    score *= difficultyMultipliers.actionScore;
-    
-    return score;
+    // ⚠️ DEPRECATED: Esta función solo se mantiene por compatibilidad con métodos obsoletos
+    // Los scores ahora se obtienen desde los perfiles de mazo
+    console.warn(`⚠️ getAdjustedScore() está obsoleto. Usar perfiles de mazo en su lugar.`);
+    return null;
 }
 
 /**
+ * 🗑️ OBSOLETO: Ya no se usa
  * Evalúa una condición de bonus
- * @param {string} bonusName - Nombre del bonus
- * @param {number} bonusValue - Valor del bonus
- * @param {Object} context - Contexto con información del juego
- * @returns {boolean} Si la condición se cumple
  */
 function evaluateBonusCondition(bonusName, bonusValue, context) {
-    switch (bonusName) {
-        case 'earlyPhase':
-            return context.phase === 'early';
-        case 'notLate':
-            return context.phase !== 'late';
-        case 'hasLessThan2':
-            return context.myFOBs !== undefined && context.myFOBs < 2;
-        case 'perPlayerPlant':
-            // Bonus por cada planta del jugador
-            return context.playerPlants !== undefined && context.playerPlants > 0;
-        case 'perMyPlant':
-            // Penalización por cada planta propia
-            return context.myPlants !== undefined && context.myPlants > 0;
-        case 'hasTargets':
-            return context.hasTargets === true;
-        case 'noHospital':
-            return context.hasHospital === false;
-        case 'forHelicopters':
-            return context.needsHelicopterResupply === true;
-        case 'playerHasFOBs':
-            return context.playerFOBs !== undefined && context.playerFOBs > 0;
-        case 'base':
-            return true; // Bonus base siempre aplica
-        default:
-            return false;
-    }
+    // ⚠️ DEPRECATED: Ya no se usa
+    return false;
 }
 
 /**
@@ -318,7 +186,7 @@ export default {
     getRaceAIConfig,
     getDifficultyMultipliers,
     getAdjustedInterval,
-    getAdjustedScore,
+    getAdjustedScore, // ⚠️ DEPRECATED
     getAdjustedThreshold
 };
 

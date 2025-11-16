@@ -51,6 +51,7 @@ export const DEFAULT_DECK = {
         'droneLauncher',   // Lanzador de drones
         'truckFactory',    // Fábrica de camiones
         'engineerCenter',  // Centro de ingenieros
+        'nuclearPlant',    // Planta nuclear (genera income pasivo)
         'intelRadio',      // Radio de inteligencia
         'drone',           // Dron consumible
         'sniperStrike'     // Ataque de francotirador

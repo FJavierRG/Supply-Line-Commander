@@ -2,8 +2,15 @@
 // Sistema completo de IA para el enemigo player2
 
 import { AIActionHandler } from '../handlers/AIActionHandler.js';
+import { AICoreSystem } from '../ai/core/AICoreSystem.js';
+import { DefaultDeckProfile } from '../ai/profiles/DefaultDeckProfile.js';
+import { AIGameStateAnalyzer } from '../ai/core/AIGameStateAnalyzer.js';
+import { AIActionSelector } from '../ai/core/AIActionSelector.js';
+import { AICardEvaluator } from '../ai/core/AICardEvaluator.js';
 import AIConfig from '../ai/config/AIConfig.js';
 import { GAME_CONFIG } from '../../config/gameConfig.js';
+import { DEFAULT_DECK } from '../../config/defaultDeck.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 import { 
     getRaceAIConfig, 
     getDifficultyMultipliers,
@@ -19,33 +26,48 @@ export class AISystem {
         this.roomId = roomId;   // ID de la sala para broadcast
         this.aiActionHandler = new AIActionHandler(gameState, io, roomId);
         
+        // 🎯 NUEVO: Sistema core para lógica común (abastecimiento, emergencias, reparaciones)
+        this.raceId = this.getCurrentRace();
+        this.difficulty = this.gameState.room?.aiPlayer?.difficulty || 'medium';
+        this.coreSystem = new AICoreSystem(gameState, io, roomId, this.raceId, this.difficulty);
+        
+        // 🎯 NUEVO: Sistema de perfiles - HARDCODEADO para usar DefaultDeckProfile
+        // TODO FUTURO: Seleccionar perfil aleatoriamente o según configuración
+        // Por ahora, siempre usar DefaultDeckProfile con el mazo del jugador IA
+        const aiDeck = this.gameState.getPlayerDeck('player2') || DEFAULT_DECK;
+        
+        // 🎯 HARDCODEADO: Siempre usar DefaultDeckProfile (en el futuro será random)
+        if (!aiDeck || !aiDeck.units || aiDeck.units.length === 0) {
+            console.warn('⚠️ IA: No se encontró mazo para player2, usando DEFAULT_DECK');
+            this.profile = new DefaultDeckProfile(DEFAULT_DECK);
+        } else {
+            this.profile = new DefaultDeckProfile(aiDeck);
+        }
+        
+        // Verificar que el perfil se creó correctamente
+        if (!this.profile) {
+            console.error('❌ IA: Error creando perfil, usando DEFAULT_DECK como fallback');
+            this.profile = new DefaultDeckProfile(DEFAULT_DECK);
+        }
+        
         // Estado interno
         this.active = false;
         this.currency = 0;
         this.lastCurrencyUpdate = 0;
         
-        // Timers
+        // Timers (solo para decisiones estratégicas y ofensivas, el core maneja su propio timing)
         this.timers = {
-            supply: 0,
-            fobCheck: 0,        // Timer para revisar FOBs
-            frontCheck: 0,      // Timer para revisar frentes
-            helicopterCheck: 0,
             strategic: 0,
             offensive: 0,
             harass: 0,
             statusReport: 0,
-            reaction: 0,
-            medical: 0
+            reaction: 0
         };
         
         // 🎯 ENCAPSULACIÓN: Intervalos ajustados por raza y dificultad
         // Nota: Para obtener la dificultad correcta, necesitamos calcularlos después de establecer difficulty
         // Por ahora usamos valores temporales, se recalcularán en activate()
         this.intervals = {
-            supply: AIConfig.intervals.supply,  // Temporal, se ajustará en activate()
-            fobCheck: 2.0,        // Revisar FOBs cada 2s (desde HQ)
-            frontCheck: 3.0,     // Revisar frentes cada 3s (desde FOBs)
-            helicopterCheck: 1.5,
             strategic: AIConfig.intervals.strategic, // Temporal, se ajustará en activate()
             offensive: AIConfig.intervals.offensive,  // Temporal, se ajustará en activate()
             harass: AIConfig.intervals.harass,  // Temporal, se ajustará en activate()
@@ -55,12 +77,10 @@ export class AISystem {
         // Flag para primera decisión estratégica
         this.firstStrategicDecision = true;
         
-        // Sistema de dificultad
-        this.difficulty = this.gameState.room?.aiPlayer?.difficulty || 'medium';
+        // Sistema de dificultad (ya establecido arriba)
         this.difficultyMultipliers = getDifficultyMultipliers(this.difficulty);
         
         // 🎯 ENCAPSULACIÓN: Obtener raza actual y configuración
-        this.raceId = this.getCurrentRace();
         this.raceConfig = getRaceAIConfig(this.raceId);
         
         // 🎯 OPTIMIZACIÓN: Validar edificios disponibles UNA VEZ al inicio
@@ -96,16 +116,18 @@ export class AISystem {
         this.raceConfig = getRaceAIConfig(this.raceId);
         this.difficultyMultipliers = getDifficultyMultipliers(this.difficulty);
         
+        // 🎯 NUEVO: Actualizar coreSystem con raza y dificultad actualizadas
+        // Nota: El coreSystem ya se creó en el constructor, pero necesitamos actualizar sus referencias
+        // Por ahora el coreSystem se crea con los valores correctos, pero si cambian, habría que recrearlo
+        // Por simplicidad, asumimos que no cambian después de la creación
+        
         // 🎯 ENCAPSULACIÓN: Recalcular intervalos ajustados por raza y dificultad
+        // Nota: Los intervalos de abastecimiento, emergencias y reparaciones están en AICoreSystem
         const base = getAdjustedInterval('offensive', this.raceId, this.difficulty);
         const variance = AIConfig.intervals.offensiveVariance;
         const randomOffensive = base + (Math.random() * variance * 2) - variance;
         
         this.intervals = {
-            supply: getAdjustedInterval('supply', this.raceId, this.difficulty),
-            fobCheck: 2.0,
-            frontCheck: 3.0,
-            helicopterCheck: 1.5,
             strategic: Math.min(4.0 * this.difficultyMultipliers.buildingMultiplier, getAdjustedInterval('strategic', this.raceId, this.difficulty)), // Primera decisión más rápida (ajustada por dificultad)
             offensive: randomOffensive,
             harass: getAdjustedInterval('harass', this.raceId, this.difficulty),
@@ -149,42 +171,43 @@ export class AISystem {
     
     /**
      * Calcula qué edificios puede construir la IA (una vez al inicio)
+     * 🎯 NUEVO: Obtiene edificios desde el mazo del perfil
      */
     calculateAvailableBuildings() {
-        const raceManager = this.gameState.raceManager;
-        const team = 'player2';
-        const playerRace = raceManager.getPlayerRace(team);
-        
-        if (!playerRace) {
-            console.warn('⚠️ IA: No se pudo obtener raza del jugador');
+        // Obtener edificios desde el mazo del perfil
+        const deck = this.profile?.getDeck();
+        if (!deck || !deck.units) {
             return [];
         }
         
-        // ✅ REDISTRIBUIDO: Obtener edificios desde RaceAIConfig en lugar de raceConfig
-        const raceId = playerRace || 'A_Nation';
-        const aiConfig = getRaceAIConfig(raceId);
-        const buildings = aiConfig?.buildings || [];
-        
-        if (AIConfig.debug.logActions) {
-        }
+        // Filtrar solo edificios (no consumibles)
+        // Los edificios no tienen targetType en SERVER_NODE_CONFIG
+        const buildings = deck.units.filter(cardId => {
+            const hasTargetType = SERVER_NODE_CONFIG.gameplay?.behavior?.[cardId]?.targetType !== undefined;
+            return !hasTargetType; // Edificios no tienen targetType
+        });
         
         return buildings;
     }
     
     /**
      * Calcula qué consumibles puede usar la IA (una vez al inicio)
+     * 🎯 NUEVO: Obtiene consumibles desde el mazo del perfil
      */
     calculateAvailableConsumables() {
-        const raceManager = this.gameState.raceManager;
-        const team = 'player2';
-        const playerRace = raceManager.getPlayerRace(team);
+        // Obtener consumibles desde el mazo del perfil
+        const deck = this.profile?.getDeck();
+        if (!deck || !deck.units) {
+            return [];
+        }
         
-        if (!playerRace) return [];
+        // Filtrar solo consumibles (tienen targetType en SERVER_NODE_CONFIG)
+        const consumables = deck.units.filter(cardId => {
+            const hasTargetType = SERVER_NODE_CONFIG.gameplay?.behavior?.[cardId]?.targetType !== undefined;
+            return hasTargetType; // Consumibles tienen targetType
+        });
         
-        // ✅ REDISTRIBUIDO: Obtener consumibles desde RaceAIConfig en lugar de raceConfig
-        const raceId = playerRace || 'A_Nation';
-        const aiConfig = getRaceAIConfig(raceId);
-        return aiConfig?.consumables || [];
+        return consumables;
     }
     
     /**
@@ -237,29 +260,18 @@ export class AISystem {
         const enemyTeam = 'player2';
         const currency = this.gameState.currency[enemyTeam] || 0;
         
-        // 1. Reabastecimiento FOBs desde HQ (cada 2 segundos)
-        this.timers.fobCheck += dt;
-        if (this.timers.fobCheck >= this.intervals.fobCheck) {
-            this.timers.fobCheck = 0;
-            this.ruleResupplyFOBs(enemyTeam);
-        }
+        // 🎯 NUEVO: Delegar lógica común al sistema core
+        // El core maneja: abastecimiento (FOBs, frentes, helicópteros), emergencias médicas, reparaciones
+        this.coreSystem.update(dt);
         
-        // 2. Reabastecimiento frentes desde FOBs (cada 3 segundos)
-        this.timers.frontCheck += dt;
-        if (this.timers.frontCheck >= this.intervals.frontCheck) {
-            this.timers.frontCheck = 0;
-            this.ruleResupplyFronts(enemyTeam);
-        }
-        
-        
-        // 2. Construcciones estratégicas (cada X segundos)
+        // Construcciones estratégicas (cada X segundos)
         this.timers.strategic += dt;
         if (this.timers.strategic >= this.intervals.strategic) {
             this.timers.strategic = 0;
             this.handleStrategicBuilding(enemyTeam, currency);
         }
         
-        // 3. Decisiones ofensivas (cada X segundos variable)
+        // Decisiones ofensivas (cada X segundos variable)
         this.timers.offensive += dt;
         if (this.timers.offensive >= this.intervals.offensive) {
             this.timers.offensive = 0;
@@ -270,21 +282,14 @@ export class AISystem {
             this.handleOffensiveDecision(enemyTeam, currency);
         }
         
-        // 5. Reacciones a amenazas del jugador (cada 0.5s)
+        // Reacciones a amenazas del jugador (cada 0.5s)
         this.timers.reaction += dt;
         if (this.timers.reaction >= this.intervals.reaction) {
             this.timers.reaction = 0;
             this.handleReactions(enemyTeam, currency);
         }
         
-        // 6. Emergencias médicas (cada 3s)
-        this.timers.medical += dt;
-        if (this.timers.medical >= 3.0) {
-            this.timers.medical = 0;
-            this.handleMedicalEmergencies(enemyTeam, currency);
-        }
-        
-        // 7. Reporte de estado (cada 30s)
+        // Reporte de estado (cada 30s)
         this.timers.statusReport += dt;
         if (this.timers.statusReport >= AIConfig.intervals.statusReport) {
             this.timers.statusReport = 0;
@@ -313,10 +318,11 @@ export class AISystem {
     }
     
     /**
+     * 🗑️ OBSOLETO: Movido a AISupplyManager
      * REGLA 1: Reabastecer FOBs desde HQ (cada 2 segundos)
      * Envía convoyes a TODOS los FOBs que necesiten suministros (<50%)
      */
-    ruleResupplyFOBs(team) {
+    _obsolete_ruleResupplyFOBs(team) {
         const myNodes = this.gameState.nodes.filter(n => n.team === team && n.active);
         const hq = myNodes.find(n => n.type === 'hq');
         const myFOBs = myNodes.filter(n => n.type === 'fob');
@@ -352,10 +358,11 @@ export class AISystem {
     }
     
     /**
+     * 🗑️ OBSOLETO: Movido a AISupplyManager
      * REGLA 2: Reabastecer Frentes desde FOBs (cada 3 segundos)
      * Envía convoyes a TODOS los frentes que necesiten suministros (<70%)
      */
-    ruleResupplyFronts(team) {
+    _obsolete_ruleResupplyFronts(team) {
         const myNodes = this.gameState.nodes.filter(n => n.team === team && n.active);
         const myFOBs = myNodes.filter(n => n.type === 'fob');
         const myFronts = myNodes.filter(n => n.type === 'front'); // Los frentes se crean como 'front', no 'campaignFront'
@@ -391,11 +398,12 @@ export class AISystem {
     }
     
     /**
+     * 🗑️ OBSOLETO: Movido a AISupplyManager
      * 🆕 REGLA 2.5: Reabastecimiento con helicópteros
      * - Envía helicópteros desde HQ a frentes (sin importar umbral de suministros)
      * - Regresa helicópteros vacíos a Base Aérea (si existe) o HQ para recargar
      */
-    ruleResupplyHelicopters(team) {
+    _obsolete_ruleResupplyHelicopters(team) {
         const myNodes = this.gameState.nodes.filter(n => n.team === team && n.active);
         const hq = myNodes.find(n => n.type === 'hq');
         const myFronts = myNodes.filter(n => n.type === 'front');
@@ -623,9 +631,10 @@ export class AISystem {
     }
     
     /**
+     * 🗑️ OBSOLETO: Movido a AISupplyManager
      * Encuentra el FOB más cercano con recursos y vehículos disponibles
      */
-    findClosestFOBWithResources(targetNode, fobs) {
+    _obsolete_findClosestFOBWithResources(targetNode, fobs) {
         let closestFOB = null;
         let minDistance = Infinity;
         
@@ -651,9 +660,10 @@ export class AISystem {
     }
     
     /**
+     * 🗑️ OBSOLETO: Movido a AISupplyManager
      * Envía convoy de suministros (simulando evento de jugador real)
      */
-    sendSupplyConvoy(from, to, team) {
+    _obsolete_sendSupplyConvoy(from, to, team) {
         // Verificar helicópteros si es un nodo que los usa
         if (from.type === 'front' && from.hasHelicopters) {
             // Verificar helicópteros disponibles
@@ -713,6 +723,7 @@ export class AISystem {
     
     /**
      * Maneja construcciones estratégicas (FOBs, plantas, etc)
+     * 🎯 NUEVO: Usa sistema de perfiles
      */
     handleStrategicBuilding(team, currency) {
         // Después de la primera decisión, usar intervalo normal ajustado
@@ -730,29 +741,39 @@ export class AISystem {
             return;
         }
         
-        const state = this.analyzeState(team);
-        const recommendations = this.evaluateActions(team, currency, state);
+        // 🎯 NUEVO: Usar sistema de perfiles para evaluar acciones
+        const state = AIGameStateAnalyzer.analyzeState(team, this.gameState);
+        const recommendations = this.profile.evaluateStrategicActions(this.gameState, team, currency, state);
         
-        if (recommendations.length === 0) {
+        // Filtrar solo edificios (no consumibles)
+        const buildingActions = recommendations.filter(action => action.type === 'build');
+        
+        if (buildingActions.length === 0) {
             if (AIConfig.debug.logActions) {
             }
             return;
         }
         
-        // 🎯 ENCAPSULACIÓN: Los scores ya vienen ajustados de evaluateActions
-        // Nota: actionScore ahora es 1.0 para todas las dificultades (solo velocidad cambia)
+        // Seleccionar mejor acción
+        const bestAction = AIActionSelector.selectBestAction(buildingActions, currency);
         
-        // Ejecutar mejor acción si hay alguna
-        if (recommendations.length > 0) {
-            const bestAction = recommendations[0];
+        if (!bestAction) {
             if (AIConfig.debug.logActions) {
             }
-            this.executeAction(bestAction, team);
+            return;
+        }
+        
+        // Ejecutar acción
+        if (bestAction.type === 'build') {
+            if (AIConfig.debug.logActions) {
+            }
+            this.aiActionHandler.executeBuild(team, bestAction.cardId);
         }
     }
     
     /**
-     * Maneja decisiones ofensivas (drones, snipers)
+     * Maneja decisiones ofensivas (drones, snipers, etc)
+     * 🎯 NUEVO: Usa sistema de perfiles
      */
     handleOffensiveDecision(team, currency) {
         const buildHandler = this.gameState.buildHandler;
@@ -765,21 +786,43 @@ export class AISystem {
         
         if (currency < threshold) return;
         
-        const recommendations = this.evaluateOffensiveActions(team, currency);
+        // 🎯 NUEVO: Usar sistema de perfiles para evaluar consumibles
+        const state = AIGameStateAnalyzer.analyzeState(team, this.gameState);
+        const scoringRules = this.profile.getScoringRules();
+        const recommendations = AICardEvaluator.evaluateDeck(
+            this.profile.getDeck(),
+            this.gameState,
+            team,
+            currency,
+            state,
+            scoringRules
+        );
         
-        // 🎯 ENCAPSULACIÓN: Los scores ya vienen ajustados de evaluateOffensiveActions
-        // No necesitamos aplicar multiplicador de dificultad aquí (ya está en getAdjustedScore)
+        // Filtrar solo consumibles (no edificios)
+        const consumableActions = recommendations.filter(action => action.type === 'attack');
         
-        if (recommendations.length > 0) {
-            const bestAction = recommendations[0];
-            this.executeAction(bestAction, team);
+        if (consumableActions.length === 0) {
+            return;
+        }
+        
+        // Seleccionar mejor acción
+        const bestAction = AIActionSelector.selectBestAction(consumableActions, currency);
+        
+        if (!bestAction) {
+            return;
+        }
+        
+        // Ejecutar acción
+        if (bestAction.type === 'attack') {
+            this.aiActionHandler.executeAttack(team, bestAction.cardId);
         }
     }
     
     /**
+     * 🗑️ OBSOLETO: Usar AIGameStateAnalyzer.analyzeState() en su lugar
      * Analiza el estado del juego
      */
-    analyzeState(team) {
+    _obsolete_analyzeState(team) {
         const myNodes = this.gameState.nodes.filter(n => n.team === team);
         const playerNodes = this.gameState.nodes.filter(n => n.team === 'player1');
         
@@ -809,9 +852,10 @@ export class AISystem {
     }
     
     /**
+     * 🗑️ OBSOLETO: Usar profile.evaluateStrategicActions() en su lugar
      * Evalúa acciones posibles usando costes dinámicos del servidor
      */
-    evaluateActions(team, currency, state) {
+    _obsolete_evaluateActions(team, currency, state) {
         const actions = [];
         const buildHandler = this.gameState.buildHandler;
         const costs = buildHandler.getBuildingCosts();
@@ -933,10 +977,11 @@ export class AISystem {
     }
     
     /**
+     * 🗑️ OBSOLETO: Usar AICardEvaluator.evaluateDeck() en su lugar
      * Evalúa acciones ofensivas usando costes dinámicos
      * 🎯 ENCAPSULACIÓN: Usa configuración por raza y dificultad
      */
-    evaluateOffensiveActions(team, currency) {
+    _obsolete_evaluateOffensiveActions(team, currency) {
         const actions = [];
         const buildHandler = this.gameState.buildHandler;
         const costs = buildHandler.getBuildingCosts();
@@ -1019,9 +1064,10 @@ export class AISystem {
     }
     
     /**
+     * 🗑️ OBSOLETO: Usar directamente aiActionHandler.executeBuild() o executeAttack()
      * Ejecuta una acción
      */
-    async executeAction(action, team) {
+    async _obsolete_executeAction(action, team) {
         this.stats.decisionsExecuted++;
         
         try {
@@ -1049,7 +1095,7 @@ export class AISystem {
      * Log de estado
      */
     logStatus(team, currency) {
-        const state = this.analyzeState(team);
+        const state = AIGameStateAnalyzer.analyzeState(team, this.gameState);
     }
     
     /**
@@ -1082,7 +1128,7 @@ export class AISystem {
             this.stats.decisionsExecuted++;
             if (AIConfig.debug.logActions) {
             }
-            this.executeAction({ type: 'build', buildingType: 'nuclearPlant', cost: plantCost }, team);
+            this.aiActionHandler.executeBuild(team, 'nuclearPlant');
             return;
         }
         
@@ -1102,16 +1148,17 @@ export class AISystem {
                 if (AIConfig.debug.logActions) {
                     console.log(`🤖 IA REACCIÓN: Construir anti-drone (jugador lanzó dron)`);
                 }
-                this.executeAction({ type: 'build', buildingType: 'antiDrone', cost: antiDroneCost }, team);
+                this.aiActionHandler.executeBuild(team, 'antiDrone');
             }
         }
     }
     
     /**
+     * 🗑️ OBSOLETO: Movido a AIMedicalManager (manejado por AICoreSystem)
      * Maneja emergencias médicas
      * Usa el sistema de emergencias activas del MedicalSystem
      */
-    handleMedicalEmergencies(team, currency) {
+    _obsolete_handleMedicalEmergencies(team, currency) {
         // Obtener emergencias activas del sistema médico
         const medicalSystem = this.gameState.medicalSystem;
         if (!medicalSystem || !medicalSystem.activeEmergencies) {
