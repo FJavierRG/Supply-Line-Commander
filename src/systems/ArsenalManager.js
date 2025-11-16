@@ -901,6 +901,16 @@ export class ArsenalManager {
         
         div.appendChild(info);
         
+        // Botón quitar (todas las cartas del banquillo se pueden quitar)
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'deck-item-remove'; // Usar la misma clase que el deck para mantener consistencia
+        removeBtn.textContent = '−';
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Evitar que active el modo permutación
+            this.removeFromBench(itemId);
+        });
+        div.appendChild(removeBtn);
+        
         return div;
     }
     
@@ -1257,72 +1267,75 @@ export class ArsenalManager {
         
         container.innerHTML = '';
         
-        // Categoría 1: HQ (solo el HQ)
+        // Obtener todas las cartas (HQ, edificios y consumibles)
         const allyNodes = getAllyNodes();
-        console.log('🎴 Nodos aliados obtenidos:', allyNodes.length, allyNodes.map(n => n.id));
+        const projectiles = getProjectiles();
         
+        // Recopilar todas las cartas en un solo array
+        const allItems = [];
+        
+        // Añadir HQ
         const hqNode = allyNodes.find(n => n.id === 'hq');
         if (hqNode) {
-            // Usar getNodeConfig para obtener descripción del servidor si está disponible
             const hqConfig = getNodeConfig('hq');
             if (hqConfig) {
-                const hqCategory = this.createCategory('HQ', [{
+                allItems.push({
                     id: hqConfig.id || hqNode.id,
                     name: hqConfig.name || hqNode.name,
                     description: hqConfig.description || hqNode.description,
                     details: hqConfig.details,
                     spriteKey: hqConfig.spriteKey || hqNode.spriteKey,
-                    cost: hqConfig.cost || hqNode.cost
-                }]);
-                container.appendChild(hqCategory);
+                    cost: hqConfig.cost || hqNode.cost || 0
+                });
             }
         }
         
-        // Categoría 2: Edificios
+        // Añadir edificios (excluyendo HQ y front)
         const buildings = allyNodes.filter(n => 
             n.id !== 'hq' && n.id !== 'front' && n.category === 'buildable'
         );
-        console.log('🎴 Edificios obtenidos:', buildings.length, buildings.map(b => b.id));
+        buildings.forEach(b => {
+            const nodeConfig = getNodeConfig(b.id);
+            allItems.push({
+                id: b.id,
+                name: nodeConfig?.name || b.name,
+                description: nodeConfig?.description || b.description,
+                details: nodeConfig?.details,
+                spriteKey: nodeConfig?.spriteKey || b.spriteKey,
+                cost: nodeConfig?.cost || b.cost || 0
+            });
+        });
         
-        if (buildings.length > 0) {
-            const buildingsCategory = this.createCategory('Edificios', buildings.map(b => {
-                // Usar getNodeConfig para obtener descripción del servidor si está disponible
-                const nodeConfig = getNodeConfig(b.id);
-                return {
-                    id: b.id,
-                    name: nodeConfig?.name || b.name,
-                    description: nodeConfig?.description || b.description,
-                    details: nodeConfig?.details,
-                    spriteKey: nodeConfig?.spriteKey || b.spriteKey,
-                    cost: nodeConfig?.cost || b.cost
-                };
-            }));
-            container.appendChild(buildingsCategory);
-        } else {
-            console.warn('⚠️ No se encontraron edificios para mostrar');
-        }
+        // Añadir consumibles
+        projectiles.forEach(p => {
+            const nodeConfig = getNodeConfig(p.id);
+            allItems.push({
+                id: p.id,
+                name: nodeConfig?.name || p.name,
+                description: nodeConfig?.description || p.description,
+                details: nodeConfig?.details,
+                spriteKey: nodeConfig?.spriteKey || p.spriteKey,
+                cost: nodeConfig?.cost || p.cost || 0
+            });
+        });
         
-        // Categoría 3: Consumibles
-        const projectiles = getProjectiles();
-        console.log('🎴 Consumibles obtenidos:', projectiles.length, projectiles.map(p => p.id));
+        // Ordenar todas las cartas por precio (coste)
+        allItems.sort((a, b) => {
+            const costA = a.cost || 0;
+            const costB = b.cost || 0;
+            return costA - costB;
+        });
         
-        if (projectiles.length > 0) {
-            const projectilesCategory = this.createCategory('Consumibles', projectiles.map(p => {
-                // Usar getNodeConfig para obtener descripción del servidor si está disponible
-                const nodeConfig = getNodeConfig(p.id);
-                return {
-                    id: p.id,
-                    name: nodeConfig?.name || p.name,
-                    description: nodeConfig?.description || p.description,
-                    details: nodeConfig?.details,
-                    spriteKey: nodeConfig?.spriteKey || p.spriteKey,
-                    cost: nodeConfig?.cost || p.cost
-                };
-            }));
-            container.appendChild(projectilesCategory);
-        } else {
-            console.warn('⚠️ No se encontraron consumibles para mostrar');
-        }
+        // Crear un solo contenedor de items sin categorías
+        const itemsContainer = document.createElement('div');
+        itemsContainer.className = 'arsenal-items';
+        
+        allItems.forEach(item => {
+            const itemElement = this.createItem(item);
+            itemsContainer.appendChild(itemElement);
+        });
+        
+        container.appendChild(itemsContainer);
         
         // Actualizar estado visual de items ya en el mazo
         this.updateAvailableItemsState();
@@ -1530,7 +1543,15 @@ export class ArsenalManager {
         if (costEl) costEl.textContent = item.cost ? `Coste: ${item.cost} $` : '';
         if (descEl) {
             const tip = 'Wounded: el frente consume +100% suministros';
-            const safeDesc = (item.description || '')
+            // Usar details para la vista detallada, fallback a description si no hay details
+            let descText = item.details || item.description || '';
+            
+            // Si hay details, reemplazar placeholders dinámicos
+            if (item.details) {
+                descText = this.replaceDetailsPlaceholders(item.details, item.id);
+            }
+            
+            const safeDesc = descText
                 .replace(/"wounded"|wounded/gi, (m) => `<span class="tooltip" data-tip="${tip}">${m}</span>`);
             descEl.innerHTML = safeDesc;
         }

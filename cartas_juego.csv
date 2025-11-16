@@ -1,0 +1,31 @@
+Nombre,Coste,Tipo de efecto,Valor del efecto,Precio,Requisitos
+HQ (Cuartel General),0,Ninguno,Base principal,0,Ninguno
+FOB (Base de Operaciones Avanzada),120,Ninguno,Infraestructura - almacena hasta 100 suministros,120,Ninguno
+Anti-Dron,115,Defensa,Intercepta 1 dron enemigo (rango 160px),115,Ninguno
+Lanzadera de Drones,100,Desbloqueo,Desbloquea uso de drones bomba,100,Ninguno
+Planta Nuclear,200,Buff,+2 currency/segundo,200,Ninguno
+Fábrica de Camiones,100,Buff,+1 vehículo al HQ y +15 capacidad a camiones pesados,100,Ninguno
+Centro de Ingenieros,120,Buff,+50% velocidad a camiones pesados,120,Ninguno
+Radio de Inteligencia,70,Buff,Devuelve 70 + 15 currency después de 20 segundos,70,Ninguno
+Base Aérea,150,Ninguno,Infraestructura - almacena hasta 200 suministros,150,Ninguno
+Hospital de Campaña,60,Buff,Permite enviar ambulancias (rango 240px),60,Ninguno
+Centro de Inteligencia,150,Desbloqueo,Desbloquea Comando Especial y Truck Assault,150,Ninguno
+Torre de Vigilancia,120,Defensa,Protege área 320px contra comandos y sabotajes,120,Ninguno
+Estación de Tren,170,Buff,Envía 25 suministros cada 12 segundos a FOBs,170,Ninguno
+Taller de Drones,85,Buff,50% descuento en drones (consume 15 suministros de FOB cercana),85,Ninguno
+Taller de Vehículos,100,Buff,+1 vehículo a FOBs cercanos,100,Ninguno
+Estudios de Física,60,Buff,+1 currency/segundo a todas las plantas nucleares,60,Ninguno
+Laboratorio Secreto,70,Buff,+1 currency/segundo a todas las plantas nucleares (acumulable con Estudios de Física),70,Ninguno
+Campo de Entrenamiento,120,Buff,+1 currency por cada avance de territorio (efecto Vigor),120,Ninguno
+Construcción Prohibida,120,Desbloqueo,Desbloquea Destructor de Mundos,120,Requiere Planta Nuclear + Laboratorio Secreto + Estudios de Física
+Dron Bomba,150,Destrucción,Destruye 1 edificio enemigo,150,Requiere Lanzadera de Drones
+Ataque de Francotirador,40,Debuff,Duplica consumo de suministros de frente por 15 segundos o elimina comando,40,Ninguno
+Sabotaje FOB,40,Debuff,Ralentiza 50% velocidad de los siguientes 3 camiones de un FOB,40,Ninguno
+Comando Especial,70,Disable,Deshabilita edificios enemigos en radio 200px durante 10 segundos,70,Requiere Centro de Inteligencia
+Tanque,100,Destrucción,Destruye 1 edificio enemigo (no puede atacar FOBs ni HQs),100,Ninguno
+Artillado Ligero,60,Rotura,Aplica estado "Roto" a 1 edificio enemigo (no puede atacar FOBs ni HQs),60,Ninguno
+Truck Assault,45,Debuff,Ralentiza 25% velocidad de vehículos enemigos en radio 200px durante 25 segundos,45,Requiere Centro de Inteligencia
+Dron Cámara,40,Buff,Detecta camiones ligeros (10 currency por detección) y permite construir en territorio enemigo (radio 300px),40,Requiere Lanzadera de Drones
+Artillería,150,Rotura,Aplica estado "Roto" a todos los edificios enemigos en área 150px,150,Ninguno
+Destructor de Mundos,200,Destrucción,Destruye todos los edificios enemigos (excepto HQ y FOBs) y vacía todos los FOBs y Frentes,200,Requiere Construcción Prohibida
+

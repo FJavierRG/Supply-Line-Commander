@@ -1581,8 +1581,8 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 /* ===== MENÚ DE ARSENAL ===== */
 /* ===== MENÚ DE ARSENAL ===== */
 .arsenal-container {
-    max-width: 1400px;
-    width: 95%;
+    max-width: 1600px; /* Aumentado de 1400px para más espacio */
+    width: 98%; /* Aumentado de 95% para aprovechar más espacio */
     max-height: 85vh;
     margin: 0 auto;
     padding: 32px;
@@ -1633,7 +1633,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 
 .arsenal-body {
     display: grid;
-    grid-template-columns: 1fr 400px; /* Izquierda más ancha, derecha fija */
+    grid-template-columns: 1fr 360px; /* Izquierda más ancha, derecha reducida para dar más espacio */
     gap: 32px;
     height: calc(85vh - 140px);
 }
@@ -1656,7 +1656,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 @media (min-width: 1200px) {
     .arsenal-body {
         gap: 48px;
-        grid-template-columns: 1fr 450px;
+        grid-template-columns: 1fr 380px; /* Reducido para dar más espacio al panel izquierdo */
     }
 }
 
@@ -1675,10 +1675,12 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     background: transparent; /* 🎯 Sin fondo azulado */
     border: 2px solid rgba(76, 175, 80, 0.4);
     border-radius: 12px;
-    padding: 20px;
+    padding: 20px 20px 20px 20px; /* Padding uniforme */
     overflow: hidden;
     flex: 1; /* Ocupar el espacio disponible en arsenal-left-section */
     min-height: 0; /* Necesario para que el scroll funcione */
+    width: 100%; /* Asegurar que ocupe todo el ancho disponible */
+    box-sizing: border-box;
 }
 
 .available-panel .panel-title {
@@ -1696,8 +1698,25 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding-right: 8px;
+    padding-right: 0; /* Sin padding derecho para eliminar gap */
     min-height: 0; /* Permite que el flex funcione correctamente */
+    width: 100%; /* Asegurar que ocupe todo el ancho */
+    box-sizing: border-box;
+    margin-right: 0; /* Sin margen derecho */
+}
+
+/* Ocultar scrollbar pero mantener funcionalidad (opcional, para más espacio) */
+.available-panel .arsenal-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.available-panel .arsenal-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.available-panel .arsenal-content::-webkit-scrollbar-thumb {
+    background: rgba(76, 175, 80, 0.3);
+    border-radius: 4px;
 }
 
 /* Texto informativo FUERA del panel, debajo */
@@ -1712,51 +1731,56 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 /* Grid de cartas disponibles - 2x4 o similar */
 .arsenal-items {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fill, 207px); /* Tamaño fijo: 207px de ancho */
     gap: 16px;
     padding-bottom: 80px; /* Espacio para paginación */
+    justify-content: start; /* Alinear a la izquierda */
+    width: 100%; /* Asegurar que ocupe todo el ancho disponible */
+    max-width: 100%; /* No exceder el ancho del contenedor */
+    box-sizing: border-box;
 }
 
 @media (min-width: 768px) and (max-width: 1199px) {
     .arsenal-items {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(auto-fill, 207px); /* Tamaño fijo: 207px de ancho */
     }
 }
 
 @media (min-width: 1200px) {
     .arsenal-items {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(auto-fill, 207px); /* Tamaño fijo: 207px de ancho */
     }
 }
 
 /* Carta individual en el grid */
 .arsenal-item {
     background-color: rgba(255, 255, 255, 0.05);
-    background-image: url('assets/sprites/ui/UIFrames/medium_bton.png');
+    background-image: url('assets/sprites/ui/UIFrames/card_box.png');
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: center;
-    padding: 16px;
-    border-radius: 8px;
-    border: 2px solid rgba(76, 175, 80, 0.3);
+    padding: 0; /* Sin padding, el frame ya incluye el espacio */
+    border-radius: 0; /* Sin border-radius, el frame ya tiene las esquinas redondeadas */
+    border: none; /* Sin border, el frame ya incluye el borde */
     transition: all 0.2s ease;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 0; /* Ajustar según necesidad */
     cursor: pointer;
     pointer-events: auto;
-    min-height: 336px; /* Ampliado 20% desde 280px (280 * 1.2 = 336) */
+    width: 207px; /* Ancho fijo */
+    height: 293px; /* Alto fijo */
+    box-sizing: border-box;
 }
 
 .arsenal-item:hover:not(.in-deck) {
     filter: brightness(1.2);
     transform: translateY(-4px);
-    border-color: rgba(76, 175, 80, 0.6);
 }
 
 .arsenal-item-icon {
     width: 100%;
-    height: 122px; /* Reducido 15% desde 144px (144 * 0.85 = 122.4) */
+    height: 110px; /* Ajustado para el nuevo tamaño de carta */
     object-fit: contain;
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
@@ -1764,13 +1788,15 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     background: rgba(0, 0, 0, 0.2);
     border-radius: 4px;
     padding: 8px;
+    margin: 12px 12px 8px 12px; /* Padding interno para el contenido */
 }
 
 .arsenal-item-info {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
     flex: 1;
+    padding: 0 12px 12px 12px; /* Padding interno para el contenido */
 }
 
 .arsenal-item-name {
