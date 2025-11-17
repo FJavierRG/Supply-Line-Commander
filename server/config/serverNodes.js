@@ -45,7 +45,7 @@ export const SERVER_NODE_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
     buildTimes: {
         fob: 4,
-        antiDrone: 4,
+        antiDrone: 3,
         droneLauncher: 2,
         nuclearPlant: 4,
         truckFactory: 2,

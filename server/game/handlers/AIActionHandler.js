@@ -42,7 +42,7 @@ export class AIActionHandler {
      * @param {string} team - Team de la IA
      * @param {string} cardId - ID de la carta/edificio a construir
      */
-    async executeBuild(team, cardId) {
+    async executeBuild(team, cardId, specificPosition = null) {
         if (!cardId) {
             console.warn('⚠️ Building type no especificado');
             return false;
@@ -65,8 +65,13 @@ export class AIActionHandler {
             return false;
         }
         
-        // Calcular posición cerca del HQ
-        const buildPosition = this.calculateBuildPosition(myHQ, myNodes, cardId);
+        // Si se proporciona una posición específica, usarla (para construcciones reactivas)
+        let buildPosition = specificPosition;
+        
+        // Si no hay posición específica, calcular posición cerca del HQ
+        if (!buildPosition) {
+            buildPosition = this.calculateBuildPosition(myHQ, myNodes, cardId);
+        }
         
         if (!buildPosition) {
             console.warn('⚠️ No se pudo calcular posición de construcción');
@@ -89,6 +94,113 @@ export class AIActionHandler {
         }
         
         return result.success;
+    }
+    
+    /**
+     * Calcula posición para antiDrone reactivo: delante del edificio objetivo (en dirección al drone enemigo)
+     * @param {Object} targetBuilding - Edificio objetivo que necesita protección
+     * @param {Object} droneThreat - Datos del drone enemigo (opcional, para calcular dirección)
+     * @param {string} team - Equipo de la IA
+     * @returns {Object|null} Posición { x, y } o null si no se puede calcular
+     */
+    calculateReactiveAntiDronePosition(targetBuilding, droneThreat, team) {
+        const ANTI_DRONE_RANGE = 160; // Rango de intercepción del antiDrone
+        const territoryCalculator = this.gameState.territoryCalculator;
+        
+        if (!targetBuilding) {
+            return null;
+        }
+        
+        const targetRadius = SERVER_NODE_CONFIG.radius[targetBuilding.type] || 30;
+        const optimalDistance = targetRadius + 20; // 20px de margen delante del edificio
+        
+        // Calcular dirección: si hay drone, usar dirección del drone al edificio
+        // Si no hay drone, usar dirección desde el centro del mapa hacia el edificio
+        let directionAngle = 0;
+        let droneX = null;
+        let droneY = null;
+        
+        // Intentar obtener coordenadas del drone
+        if (droneThreat) {
+            // Si el drone tiene coordenadas directamente
+            if (droneThreat.x !== undefined && droneThreat.y !== undefined) {
+                droneX = droneThreat.x;
+                droneY = droneThreat.y;
+            } else if (droneThreat.id) {
+                // Si tiene ID, buscar el drone en el sistema de drones
+                if (this.gameState.droneSystem && this.gameState.droneSystem.drones) {
+                    const activeDrone = this.gameState.droneSystem.drones.find(d => 
+                        d.id === droneThreat.id && d.team === 'player1'
+                    );
+                    if (activeDrone && activeDrone.x !== undefined && activeDrone.y !== undefined) {
+                        droneX = activeDrone.x;
+                        droneY = activeDrone.y;
+                    }
+                }
+            }
+        }
+        
+        if (droneX !== null && droneY !== null) {
+            // Dirección desde el drone hacia el edificio (el antiDrone va delante, en dirección opuesta)
+            const dx = targetBuilding.x - droneX;
+            const dy = targetBuilding.y - droneY;
+            directionAngle = Math.atan2(dy, dx);
+        } else {
+            // Si no hay drone o no se encontraron coordenadas, usar dirección desde el centro del mapa
+            // Player2 está a la derecha, así que el drone viene desde la izquierda
+            const worldCenterX = 960;
+            const dx = targetBuilding.x - worldCenterX;
+            const dy = targetBuilding.y - (this.gameState.worldHeight || 1080) / 2;
+            directionAngle = Math.atan2(dy, dx);
+        }
+        
+        // Intentar colocar el antiDrone delante del edificio (en dirección al drone)
+        // Probar varias distancias para encontrar una posición válida
+        const distances = [optimalDistance, optimalDistance + 10, optimalDistance + 20, optimalDistance - 10];
+        
+        for (const distance of distances) {
+            const x = targetBuilding.x + Math.cos(directionAngle) * distance;
+            const y = targetBuilding.y + Math.sin(directionAngle) * distance;
+            
+            // Verificar que esté en territorio propio y sea una ubicación válida
+            if (this.buildHandler.isValidLocation(x, y, 'antiDrone') && 
+                territoryCalculator.isInTeamTerritory(x, team)) {
+                
+                // Verificar que esté dentro del rango de intercepción del objetivo
+                const distanceToTarget = Math.hypot(x - targetBuilding.x, y - targetBuilding.y);
+                if (distanceToTarget <= ANTI_DRONE_RANGE) {
+                    return { x, y };
+                }
+            }
+        }
+        
+        // Si no se encontró posición exacta, probar ángulos cercanos (±30 grados)
+        const angleVariations = [-Math.PI/6, -Math.PI/12, Math.PI/12, Math.PI/6];
+        for (const angleVariation of angleVariations) {
+            const adjustedAngle = directionAngle + angleVariation;
+            for (const distance of distances) {
+                const x = targetBuilding.x + Math.cos(adjustedAngle) * distance;
+                const y = targetBuilding.y + Math.sin(adjustedAngle) * distance;
+                
+                if (this.buildHandler.isValidLocation(x, y, 'antiDrone') && 
+                    territoryCalculator.isInTeamTerritory(x, team)) {
+                    
+                    const distanceToTarget = Math.hypot(x - targetBuilding.x, y - targetBuilding.y);
+                    if (distanceToTarget <= ANTI_DRONE_RANGE) {
+                        return { x, y };
+                    }
+                }
+            }
+        }
+        
+        // Fallback: usar lógica estándar
+        const myNodes = this.gameState.nodes.filter(n => n.team === team);
+        const myHQ = myNodes.find(n => n.type === 'hq');
+        if (myHQ) {
+            return this.calculateAntiDronePosition(myHQ, myNodes);
+        }
+        
+        return null;
     }
     
     /**

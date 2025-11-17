@@ -606,13 +606,39 @@ export class AISystem {
                     reaction.targetId
                 );
             } else if (reaction.type === 'antiDrone') {
-                // Construir antiDrone cerca del edificio objetivo
+                // Construir antiDrone delante del edificio objetivo (en dirección al drone)
                 if (AIConfig.debug.logActions) {
-                    console.log(`🛡️ IA REACCIÓN: Construir antiDrone cerca de edificio ${reaction.targetId} (amenaza: ${threatType})`);
+                    console.log(`🛡️ IA REACCIÓN: Construir antiDrone delante de edificio ${reaction.targetId} (amenaza: ${threatType})`);
                 }
-                // Usar el método existente de AIActionHandler para construir antiDrone
-                // El método calculateAntiDronePosition ya maneja la lógica de posicionamiento
-                this.aiActionHandler.executeBuild(team, 'antiDrone');
+                
+                // Obtener el edificio objetivo
+                const targetBuilding = this.gameState.nodes.find(n => 
+                    n.id === reaction.targetId && 
+                    n.team === team &&
+                    n.active
+                );
+                
+                if (!targetBuilding) {
+                    console.warn(`⚠️ IA: Edificio objetivo ${reaction.targetId} no encontrado para antiDrone`);
+                    return;
+                }
+                
+                // Calcular posición delante del edificio (en dirección al drone)
+                const antiDronePosition = this.aiActionHandler.calculateReactiveAntiDronePosition(
+                    targetBuilding,
+                    threatData, // Datos del drone enemigo para calcular dirección
+                    team
+                );
+                
+                if (!antiDronePosition) {
+                    console.warn(`⚠️ IA: No se pudo calcular posición para antiDrone cerca de ${targetBuilding.type}`);
+                    return;
+                }
+                
+                console.log(`✅ IA DEFENSA: Construyendo antiDrone en (${antiDronePosition.x.toFixed(0)}, ${antiDronePosition.y.toFixed(0)}) delante de ${targetBuilding.type}`);
+                
+                // Construir antiDrone en la posición calculada
+                this.aiActionHandler.executeBuild(team, 'antiDrone', antiDronePosition);
             }
         }
     }

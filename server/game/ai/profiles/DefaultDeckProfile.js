@@ -90,12 +90,11 @@ export class DefaultDeckProfile extends BaseProfile {
                 bonuses: {}
             },
             'antiDrone': {
-                // Base defensiva baja, pero con grandes boosts cuando hay amenaza aérea
-                base: 10,
+                // 🎯 FIX: AntiDrone solo se construye de forma reactiva (cuando hay drones enemigos)
+                // Base muy baja para que no se construya proactivamente
+                base: 5,
                 bonuses: {
-                    airThreat: 95,      // Bonus cuando hay cualquier amenaza aérea
-                    airThreatHigh: 25,  // Extra si la presión aérea es alta
-                    latePhase: 15       // Más relevante en late
+                    // No hay bonuses aquí - la construcción reactiva se maneja en handleDefensiveReaction
                 }
             },
             'truckFactory': {
@@ -158,7 +157,7 @@ export class DefaultDeckProfile extends BaseProfile {
         return {
             earlyGame: ['truckFactory', 'engineerCenter', 'sniperStrike', 'intelRadio'], // FOB removido, prioridad en talleres y pokeo
             midGame: ['fob', 'droneLauncher', 'sniperStrike'], // FOBs para expansión, lanzadera, y pokeo continuo
-            lateGame: ['drone', 'nuclearPlant', 'intelRadio', 'antiDrone'] // Drones, economía, y defensa
+            lateGame: ['drone', 'nuclearPlant', 'intelRadio'] // Drones, economía (antiDrone solo reactivo)
         };
     }
     
@@ -388,6 +387,15 @@ export class DefaultDeckProfile extends BaseProfile {
             }
         }
         
+        // 🎯 FIX: AntiDrone solo se construye de forma reactiva (cuando hay drones enemigos)
+        // Bloquear completamente la construcción proactiva - solo se construye en handleDefensiveReaction
+        const antiDroneAction = filteredActions.find(action => action.cardId === 'antiDrone');
+        if (antiDroneAction) {
+            // Eliminar antiDrone de las opciones proactivas
+            // La construcción reactiva se maneja en handleDefensiveReaction cuando se detecta un drone enemigo
+            filteredActions = filteredActions.filter(action => action.cardId !== 'antiDrone');
+        }
+        
         // 🎯 NUEVO: Lógica de ahorro cuando tiene mucho dinero
         // Si tiene más de 400 de currency y tiene los talleres y radios, reducir scores para permitir ahorro
         const hasTruckFactory = gameState.nodes.some(n => 
@@ -504,9 +512,19 @@ export class DefaultDeckProfile extends BaseProfile {
         };
         
         const reactProbability = reactProbabilities[difficulty] || 0.75;
+        const randomRoll = Math.random();
+        
+        // 🎯 LOG: Detección de amenaza
+        if (threatType === 'drone' && targetBuilding) {
+            console.log(`🛡️ IA DEFENSA: Detectado drone enemigo → edificio objetivo: ${targetBuilding.type} (${targetBuilding.id.substring(0, 8)})`);
+        }
         
         // Aplicar probabilidad de error humano
-        if (Math.random() > reactProbability) {
+        if (randomRoll > reactProbability) {
+            // 🎯 LOG: Fallo por probabilidad
+            if (threatType === 'drone') {
+                console.log(`❌ IA DEFENSA: Fallo en detección (tirada: ${(randomRoll * 100).toFixed(1)}% > ${(reactProbability * 100).toFixed(1)}%, dificultad: ${difficulty})`);
+            }
             return null; // No reacciona (error humano)
         }
         
@@ -552,11 +570,16 @@ export class DefaultDeckProfile extends BaseProfile {
             case 'drone':
                 // Drones bomba: construir antiDrone cerca del edificio objetivo
                 if (!targetBuilding || !targetBuilding.id) {
+                    console.log(`❌ IA DEFENSA: No hay edificio objetivo válido para el drone`);
                     return null;
                 }
                 
+                // 🎯 LOG: IA entiende que debe poner torreta
+                console.log(`✅ IA DEFENSA: Entendido - debe construir antiDrone para proteger ${targetBuilding.type} (${targetBuilding.id.substring(0, 8)})`);
+                
                 // Verificar que tenemos currency para antiDrone
                 if (currency < antiDroneCost) {
+                    console.log(`❌ IA DEFENSA: Sin dinero suficiente (tiene: ${currency}, necesita: ${antiDroneCost})`);
                     return null;
                 }
                 
@@ -572,9 +595,11 @@ export class DefaultDeckProfile extends BaseProfile {
                 // Si ya tenemos un antiDrone, no construir otro (por ahora)
                 // TODO: En el futuro podríamos verificar si está cerca del edificio objetivo
                 if (existingAntiDrone) {
+                    console.log(`⚠️ IA DEFENSA: Ya tiene un antiDrone construido, no construye otro`);
                     return null;
                 }
                 
+                console.log(`✅ IA DEFENSA: Decisión tomada - construir antiDrone (currency: ${currency}, coste: ${antiDroneCost})`);
                 return {
                     type: 'antiDrone',
                     targetId: targetBuilding.id,
