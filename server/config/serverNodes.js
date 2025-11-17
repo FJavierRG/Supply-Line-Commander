@@ -15,7 +15,7 @@ export const SERVER_NODE_CONFIG = {
         nuclearPlant: 200,
         truckFactory: 90,
         engineerCenter: 80,
-        intelRadio: 90, 
+        intelRadio: 50, 
         aerialBase: 170, 
         campaignHospital: 50,
         intelCenter: 110, 
@@ -539,6 +539,10 @@ export const SERVER_NODE_CONFIG = {
                 cursorSprite: 'vehicle-artillery',
                 showRangePreview: true
                 // ✅ areaRadius está en gameplay.artillery.areaRadius (fuente única de verdad)
+            },
+            drone: {
+                targetType: ['building'], // Requiere un edificio enemigo como objetivo
+                cursorSprite: 'vehicle-drone'
             }
         }
     },

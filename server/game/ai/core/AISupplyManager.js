@@ -33,7 +33,7 @@ export class AISupplyManager {
         // 🎯 PROBABILIDAD DE "ERROR HUMANO" EN FÁCIL: No siempre revisa todos los FOBs
         let checkProbability = 1.0; // 100% en medium/hard
         if (this.difficulty === 'easy') {
-            checkProbability = 0.7; // 70% de probabilidad de revisar en fácil
+            checkProbability = 0.9; // 90% de probabilidad de revisar en fácil (mejorado desde 70%)
         }
         
         // Enviar a FOBs que cumplan la condición
@@ -49,13 +49,13 @@ export class AISupplyManager {
             const supplyPercentage = (fob.supplies / fob.maxSupplies) * 100;
             
             // 🎯 ENCAPSULACIÓN: Usar umbral ajustado por raza y dificultad
-            const threshold = getAdjustedThreshold('fobSupply', this.raceId, this.difficulty) || 50;
+            const threshold = getAdjustedThreshold('fobSupply', this.raceId, this.difficulty) || 55;
             
             if (supplyPercentage <= threshold) {
                 // 🎯 EN FÁCIL: A veces "duda" y no envía el convoy incluso si lo necesita
                 let sendProbability = 1.0;
                 if (this.difficulty === 'easy') {
-                    sendProbability = 0.75; // 75% de probabilidad de enviar en fácil
+                    sendProbability = 0.85; // 90% de probabilidad de enviar en fácil (mejorado desde 75%)
                 }
                 
                 if (Math.random() < sendProbability) {
@@ -86,7 +86,7 @@ export class AISupplyManager {
         // 🎯 PROBABILIDAD DE "ERROR HUMANO" EN FÁCIL: No siempre revisa todos los frentes
         let checkProbability = 1.0; // 100% en medium/hard
         if (this.difficulty === 'easy') {
-            checkProbability = 0.65; // 65% de probabilidad de revisar en fácil
+            checkProbability = 0.9; // 90% de probabilidad de revisar en fácil (mejorado desde 65%)
         }
         
         // Revisar frentes
@@ -102,7 +102,7 @@ export class AISupplyManager {
             const supplyPercentage = (front.supplies / front.maxSupplies) * 100;
             
             // 🎯 ENCAPSULACIÓN: Usar umbral ajustado por raza y dificultad
-            const threshold = getAdjustedThreshold('frontSupply', this.raceId, this.difficulty) || 70;
+            const threshold = getAdjustedThreshold('frontSupply', this.raceId, this.difficulty) || 75;
             
             if (supplyPercentage < threshold) {
                 // Buscar el FOB más cercano con recursos y vehículos disponibles
@@ -112,7 +112,7 @@ export class AISupplyManager {
                     // 🎯 EN FÁCIL: A veces "duda" y no envía el convoy incluso si lo necesita
                     let sendProbability = 1.0;
                     if (this.difficulty === 'easy') {
-                        sendProbability = 0.7; // 70% de probabilidad de enviar en fácil
+                        sendProbability = 0.9; // 90% de probabilidad de enviar en fácil (mejorado desde 70%)
                     }
                     
                     if (Math.random() < sendProbability) {
@@ -374,7 +374,8 @@ export class AISupplyManager {
             
             // Verificar que tenga recursos y vehículos
             if (!fob.availableVehicles || fob.availableVehicles <= 0) continue;
-            if (!fob.supplies || fob.supplies < 10) continue;
+            // 🎯 MEJORADO: Reducido de 10 a 5 suministros mínimos para ser menos restrictivo
+            if (!fob.supplies || fob.supplies < 5) continue;
             
             // Calcular distancia
             const dx = fob.x - targetNode.x;

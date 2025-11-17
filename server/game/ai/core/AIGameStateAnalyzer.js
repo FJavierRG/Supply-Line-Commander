@@ -87,10 +87,10 @@ export class AIGameStateAnalyzer {
      */
     static getGamePhase(elapsedTime, gameState = null) {
         // Fases definidas principalmente por tiempo de partida:
-        // Early: 0 – 210s (0 – 3:30)
-        // Mid:   210 – 360s (3:30 – 6:00)
-        // Late:  > 360s
-        if (elapsedTime < 210) {
+        // Early: 0 – 180s (0 – 3:00)
+        // Mid:   180 – 360s (3:00 – 6:00)
+        // Late:  > 360s (6:00+)
+        if (elapsedTime < 180) {
             return 'early';
         } else if (elapsedTime < 360) {
             return 'mid';

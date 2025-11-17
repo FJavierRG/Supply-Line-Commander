@@ -3,6 +3,7 @@
 
 import { AICardAdapter } from './AICardAdapter.js';
 import { AIGameStateAnalyzer } from './AIGameStateAnalyzer.js';
+import AIConfig from '../config/AIConfig.js';
 import { SERVER_NODE_CONFIG } from '../../../config/serverNodes.js';
 
 export class AICardEvaluator {
@@ -15,9 +16,10 @@ export class AICardEvaluator {
      * @param {Object} state - Estado analizado del juego (de AIGameStateAnalyzer)
      * @param {Object} scoringRules - Reglas de scoring del perfil
      * @param {Object} deck - Mazo del jugador
+     * @param {Object} profile - Perfil de IA (opcional, para condiciones personalizadas)
      * @returns {Object|null} Objeto con { type, cardId, score, cost } o null si no está disponible
      */
-    static evaluateCard(cardId, gameState, team, currency, state, scoringRules, deck) {
+    static evaluateCard(cardId, gameState, team, currency, state, scoringRules, deck, profile = null) {
         // 1. Verificar si está en mazo
         if (!AICardAdapter.isInDeck(cardId, deck)) {
             return null; // No está en el mazo
@@ -56,7 +58,7 @@ export class AICardEvaluator {
         // 7. Aplicar bonificaciones
         if (cardScoringRules.bonuses) {
             for (const [bonusName, bonusValue] of Object.entries(cardScoringRules.bonuses)) {
-                if (this.evaluateBonusCondition(bonusName, bonusValue, state, gameState, team)) {
+                if (this.evaluateBonusCondition(bonusName, bonusValue, state, gameState, team, profile)) {
                     // Bonificaciones especiales que multiplican por cantidad
                     if (bonusName === 'perPlayerPlant' && state.playerPlants) {
                         score += bonusValue * state.playerPlants;
@@ -75,39 +77,7 @@ export class AICardEvaluator {
         const actionType = hasTargetType ? 'attack' : 'build';
         
         // 9. Verificaciones adicionales para edificios
-        if (actionType === 'build') {
-            // Verificar si ya tiene el edificio (para algunos edificios que no se pueden tener múltiples)
-            const hasBuilding = gameState.nodes.some(n => 
-                n.team === team && 
-                n.type === cardId && 
-                n.active &&
-                n.constructed
-            );
-            
-            // Edificios que solo se pueden tener uno
-            const singleOnlyBuildings = ['truckFactory', 'antiDrone', 'engineerCenter', 'droneLauncher'];
-            if (hasBuilding && singleOnlyBuildings.includes(cardId)) {
-                return null; // Ya tiene este edificio y no puede tener múltiples
-            }
-            
-            // Casos especiales
-            if (cardId === 'droneLauncher' && state.hasLauncher) {
-                return null; // Ya tiene lanzadera
-            }
-            
-            if (cardId === 'aerialBase' && state.myAerialBases >= 1) {
-                return null; // Ya tiene base aérea (o ajustar según estrategia)
-            }
-            
-            if (cardId === 'campaignHospital' && state.myHospitals >= 1) {
-                return null; // Ya tiene hospital
-            }
-            
-            // Antenas: si ya tiene 2, aumentar score para priorizar más
-            if (cardId === 'intelRadio' && state.myIntelRadios >= 2) {
-                score *= 1.5; // +50% de score para priorizar antenas adicionales
-            }
-        }
+        // Las verificaciones de límites (caps, edificios únicos, etc.) se manejan en el perfil
         
         // 10. Verificaciones adicionales para consumibles
         if (actionType === 'attack') {
@@ -136,21 +106,32 @@ export class AICardEvaluator {
      * @param {number} currency - Currency actual del equipo
      * @param {Object} state - Estado analizado del juego (de AIGameStateAnalyzer)
      * @param {Object} scoringRules - Reglas de scoring del perfil
+     * @param {Object} profile - Perfil de IA (opcional, para condiciones personalizadas)
      * @returns {Array} Lista de acciones evaluadas ordenadas por score descendente
      */
-    static evaluateDeck(deck, gameState, team, currency, state, scoringRules) {
+    static evaluateDeck(deck, gameState, team, currency, state, scoringRules, profile = null) {
         const actions = [];
         
         // Iterar sobre todas las cartas del mazo
         for (const cardId of deck.units) {
-            const action = this.evaluateCard(cardId, gameState, team, currency, state, scoringRules, deck);
+            const action = this.evaluateCard(cardId, gameState, team, currency, state, scoringRules, deck, profile);
             if (action) {
                 actions.push(action);
             }
         }
         
         // Ordenar por score descendente
-        return actions.sort((a, b) => b.score - a.score);
+        const sorted = actions.sort((a, b) => b.score - a.score);
+        
+        if (AIConfig?.debug?.logScoring && sorted.length > 0) {
+            const phaseLabel = state?.phase || 'unknown';
+            const actionSummary = sorted
+                .map(action => `${action.cardId}:${Number(action.score).toFixed(1)}`)
+                .join(', ');
+            console.log(`🤖 [IA][${phaseLabel}] Scores (${team}) → ${actionSummary}`);
+        }
+        
+        return sorted;
     }
     
     /**
@@ -182,14 +163,17 @@ export class AICardEvaluator {
     
     /**
      * Evalúa una condición de bonus
+     * Primero intenta condiciones genéricas, luego delega al perfil si existe
      * @param {string} bonusName - Nombre del bonus
      * @param {number} bonusValue - Valor del bonus
      * @param {Object} state - Estado del juego analizado
      * @param {Object} gameState - Estado del juego completo
      * @param {string} team - Equipo de la IA
+     * @param {Object} profile - Perfil de IA (opcional, para condiciones personalizadas)
      * @returns {boolean} Si la condición se cumple
      */
-    static evaluateBonusCondition(bonusName, bonusValue, state, gameState, team) {
+    static evaluateBonusCondition(bonusName, bonusValue, state, gameState, team, profile = null) {
+        // Condiciones genéricas (disponibles para todos los perfiles)
         switch (bonusName) {
             case 'earlyPhase':
                 return state.phase === 'early';
@@ -201,23 +185,6 @@ export class AICardEvaluator {
                 return state.phase !== 'late';
             case 'notEarly':
                 return state.phase !== 'early';
-            case 'hasLessThan2':
-                return state.myFOBs !== undefined && state.myFOBs < 2;
-            case 'hasLessThan3':
-                return state.myFOBs !== undefined && state.myFOBs < 3;
-            case 'hasLessThan4':
-                return state.myFOBs !== undefined && state.myFOBs < 4;
-            case 'has4OrMore':
-                return state.myFOBs !== undefined && state.myFOBs >= 4;
-            case 'midPhaseAndLessThan3':
-                // Solo en mid Y si tiene <3 FOBs
-                return state.phase === 'mid' && state.myFOBs !== undefined && state.myFOBs < 3;
-            case 'latePhaseAndLessThan4':
-                // Solo en late Y si tiene <4 FOBs
-                return state.phase === 'late' && state.myFOBs !== undefined && state.myFOBs < 4;
-            case 'midPhaseAndHas2OrMore':
-                // Penalización: en mid, si ya tiene >=2 FOBs
-                return state.phase === 'mid' && state.myFOBs !== undefined && state.myFOBs >= 2;
             case 'perPlayerPlant':
                 // Bonus por cada planta del jugador
                 return state.playerPlants !== undefined && state.playerPlants > 0;
@@ -229,10 +196,6 @@ export class AICardEvaluator {
                 return this.hasDroneTargets(gameState, team);
             case 'noHospital':
                 return state.myHospitals === 0;
-            case 'forHelicopters':
-                // Verificar si necesita reabastecimiento con helicópteros
-                // Por ahora retornar false, se puede implementar después
-                return false;
             case 'playerHasFOBs':
                 const playerFOBs = gameState.nodes.filter(n => 
                     n.team === 'player1' && 
@@ -247,9 +210,18 @@ export class AICardEvaluator {
                 return state.airThreatLevel === 'high';
             case 'base':
                 return true; // Bonus base siempre aplica
-            default:
-                return false;
         }
+        
+        // Si no es una condición genérica, delegar al perfil (si existe)
+        if (profile && typeof profile.evaluateCustomBonusCondition === 'function') {
+            const result = profile.evaluateCustomBonusCondition(bonusName, bonusValue, state, gameState, team);
+            if (result !== undefined) {
+                return result;
+            }
+        }
+        
+        // Si no se encontró la condición, retornar false
+        return false;
     }
     
     /**

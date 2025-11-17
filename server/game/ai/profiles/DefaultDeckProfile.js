@@ -38,6 +38,7 @@
 import { BaseProfile } from './BaseProfile.js';
 import { AICardEvaluator } from '../core/AICardEvaluator.js';
 import { AIGameStateAnalyzer } from '../core/AIGameStateAnalyzer.js';
+import AIConfig from '../config/AIConfig.js';
 
 export class DefaultDeckProfile extends BaseProfile {
     constructor(deck) {
@@ -88,9 +89,9 @@ export class DefaultDeckProfile extends BaseProfile {
             },
             'antiDrone': {
                 // Base defensiva baja, pero con grandes boosts cuando hay amenaza aérea
-                base: 20,
+                base: 10,
                 bonuses: {
-                    airThreat: 25,      // Bonus cuando hay cualquier amenaza aérea
+                    airThreat: 95,      // Bonus cuando hay cualquier amenaza aérea
                     airThreatHigh: 25,  // Extra si la presión aérea es alta
                     latePhase: 15       // Más relevante en late
                 }
@@ -152,9 +153,21 @@ export class DefaultDeckProfile extends BaseProfile {
      */
     getPriorities() {
         return {
-            earlyGame: ['fob', 'truckFactory', 'engineerCenter'],
-            midGame: ['nuclearPlant', 'droneLauncher', 'intelRadio'],
-            lateGame: ['antiDrone', 'drone', 'sniperStrike']
+            earlyGame: ['truckFactory', 'engineerCenter', 'sniperStrike', 'intelRadio'], // FOB removido, prioridad en talleres y pokeo
+            midGame: ['fob', 'droneLauncher', 'sniperStrike'], // FOBs para expansión, lanzadera, y pokeo continuo
+            lateGame: ['drone', 'nuclearPlant', 'intelRadio', 'antiDrone'] // Drones, economía, y defensa
+        };
+    }
+    
+    /**
+     * Configuración de caps de FOBs por fase
+     * Define cuántos FOBs máximo puede construir la IA en cada fase
+     */
+    getFOBPhaseCaps() {
+        return {
+            early: 2,  // Early: máximo 2 FOBs (no es tan necesario al principio)
+            mid: 5,    // Mid: hasta 5 FOBs (expansión: 2 más que early)
+            late: 6    // Late: hasta 6 FOBs
         };
     }
     
@@ -209,17 +222,179 @@ export class DefaultDeckProfile extends BaseProfile {
         // Obtener reglas de scoring del perfil
         const scoringRules = this.getScoringRules();
         
-        // Evaluar todas las cartas del mazo
+        // Evaluar todas las cartas del mazo (pasar el perfil para condiciones personalizadas)
         const actions = AICardEvaluator.evaluateDeck(
             this.deck,
             gameState,
             team,
             currency,
             state,
-            scoringRules
+            scoringRules,
+            this // Pasar el perfil para condiciones personalizadas
         );
         
+        // 🎯 Aplicar reglas específicas del perfil (penalizaciones, etc.)
+        const actionsWithProfileRules = this.applyProfileSpecificRules(actions, state, gameState, currency);
+        
+        return this.applyPhasePriorities(actionsWithProfileRules, state.phase);
+    }
+    
+    /**
+     * Evalúa condiciones personalizadas de bonus específicas del perfil
+     * @param {string} bonusName - Nombre del bonus
+     * @param {number} bonusValue - Valor del bonus
+     * @param {Object} state - Estado analizado del juego
+     * @param {Object} gameState - Estado completo del juego
+     * @param {string} team - Equipo de la IA
+     * @returns {boolean|undefined} Si la condición se cumple, o undefined si no es una condición de este perfil
+     */
+    evaluateCustomBonusCondition(bonusName, bonusValue, state, gameState, team) {
+        // Condiciones específicas del perfil default
+        switch (bonusName) {
+            case 'hasLessThan2':
+                return state.myFOBs !== undefined && state.myFOBs < 2;
+            case 'hasLessThan3':
+                return state.myFOBs !== undefined && state.myFOBs < 3;
+            case 'hasLessThan4':
+                return state.myFOBs !== undefined && state.myFOBs < 4;
+            case 'has4OrMore':
+                return state.myFOBs !== undefined && state.myFOBs >= 4;
+            case 'midPhaseAndLessThan3':
+                // Solo en mid Y si tiene <3 FOBs
+                return state.phase === 'mid' && state.myFOBs !== undefined && state.myFOBs < 3;
+            case 'latePhaseAndLessThan4':
+                // Solo en late Y si tiene <4 FOBs
+                return state.phase === 'late' && state.myFOBs !== undefined && state.myFOBs < 4;
+            case 'midPhaseAndHas2OrMore':
+                // Penalización: en mid, si ya tiene >=2 FOBs
+                return state.phase === 'mid' && state.myFOBs !== undefined && state.myFOBs >= 2;
+            case 'forHelicopters':
+                // Verificar si necesita reabastecimiento con helicópteros
+                // Por ahora retornar false, se puede implementar después
+                return false;
+            default:
+                return undefined; // No es una condición de este perfil
+        }
+    }
+    
+    /**
+     * Aplica reglas específicas del perfil default (penalizaciones, etc.)
+     * @param {Array} actions - Lista de acciones evaluadas
+     * @param {Object} state - Estado analizado del juego
+     * @param {Object} gameState - Estado completo del juego
+     * @param {number} currency - Currency actual
+     * @returns {Array} Lista de acciones con reglas del perfil aplicadas
+     */
+    applyProfileSpecificRules(actions, state, gameState, currency) {
+        if (!Array.isArray(actions) || actions.length === 0) {
+            return actions;
+        }
+        
+        // 🎯 REGLA ESPECÍFICA DEL PERFIL DEFAULT: Bloquear spam de intelRadio
+        // Si las últimas 2 construcciones fueron intelRadio, BLOQUEAR completamente la tercera
+        if (state.lastBuildings && state.lastBuildings.length >= 2) {
+            const lastTwo = state.lastBuildings.slice(-2);
+            if (lastTwo[0] === 'intelRadio' && lastTwo[1] === 'intelRadio') {
+                // Eliminar completamente la opción de construir otra intelRadio
+                return actions.filter(action => action.cardId !== 'intelRadio');
+            }
+        }
+        
+        // 🎯 ALGORITMO DE EVALUACIÓN DE INTEL RADIO EN MID GAME
+        // Intel radio es una inversión, solo construirla si:
+        // 1. Estamos en mid game
+        // 2. Tenemos menos de 2 intel radios
+        // 3. Tenemos suficiente currency (coste + margen de seguridad del 50%)
+        // 4. Tenemos al menos 1 planta nuclear (economía estable) O tenemos mucha currency
+        if (state.phase === 'mid') {
+            const intelRadioAction = actions.find(action => action.cardId === 'intelRadio');
+            if (intelRadioAction) {
+                const intelRadioCost = intelRadioAction.cost || 50;
+                const hasEnoughCurrency = currency >= (intelRadioCost * 1.5); // Margen de seguridad 50%
+                const hasStableEconomy = (state.myPlants >= 1) || (currency >= intelRadioCost * 3); // Planta nuclear o mucha currency
+                const hasLessThan2Radios = (state.myIntelRadios || 0) < 2;
+                
+                // Si no cumple las condiciones, eliminar intel radio de las opciones
+                if (!hasEnoughCurrency || !hasStableEconomy || !hasLessThan2Radios) {
+                    return actions.filter(action => action.cardId !== 'intelRadio');
+                }
+            }
+        }
+        
+        // 🎯 CAPS DE FOBS POR FASE (específico del perfil)
+        // Aplicar límites de FOBs según la fase actual
+        const fobAction = actions.find(action => action.cardId === 'fob');
+        if (fobAction && state.myFOBs !== undefined) {
+            const fobCaps = this.getFOBPhaseCaps();
+            const phaseCap = fobCaps[state.phase] ?? 3;
+            if (state.myFOBs >= phaseCap) {
+                // Eliminar FOB de las opciones si ya se alcanzó el cap
+                return actions.filter(action => action.cardId !== 'fob');
+            }
+        }
+        
         return actions;
+    }
+    
+    /**
+     * Ajusta los scores según las prioridades configuradas para la fase actual
+     * @param {Array} actions - Lista de acciones evaluadas
+     * @param {string} phase - Fase del juego ('early' | 'mid' | 'late')
+     * @returns {Array} Lista reordenada con boosts aplicados
+     */
+    applyPhasePriorities(actions, phase) {
+        if (!Array.isArray(actions) || actions.length === 0) {
+            return actions;
+        }
+        
+        if (typeof this.getPriorities !== 'function') {
+            return actions;
+        }
+        
+        const phaseMap = {
+            early: 'earlyGame',
+            mid: 'midGame',
+            late: 'lateGame'
+        };
+        const priorities = this.getPriorities();
+        const phaseKey = phaseMap[phase];
+        const phasePriorities = priorities?.[phaseKey];
+        
+        if (!Array.isArray(phasePriorities) || phasePriorities.length === 0) {
+            return actions;
+        }
+        
+        // Boost decreciente para respetar el orden relativo dentro de la lista
+        const PRIORITY_MAX_BOOST = 25;
+        const PRIORITY_DECAY = 5;
+        const priorityBoostMap = new Map();
+        phasePriorities.forEach((cardId, index) => {
+            const boost = Math.max(PRIORITY_MAX_BOOST - (PRIORITY_DECAY * index), PRIORITY_DECAY);
+            priorityBoostMap.set(cardId, boost);
+        });
+        
+        const boostedActions = actions.map(action => {
+            const boost = priorityBoostMap.get(action.cardId);
+            if (boost) {
+                return {
+                    ...action,
+                    score: action.score + boost
+                };
+            }
+            return action;
+        });
+        
+        const sorted = boostedActions.sort((a, b) => b.score - a.score);
+        
+        if (AIConfig?.debug?.logScoring && sorted.length > 0) {
+            const phaseLabel = phaseKey || phase || 'unknown';
+            const summary = sorted
+                .map(action => `${action.cardId}:${Number(action.score).toFixed(1)}`)
+                .join(', ');
+            console.log(`🤖 [IA][${phaseLabel}] Prioridades (${this.getProfileId?.() || 'profile'}) → ${summary}`);
+        }
+        
+        return sorted;
     }
 }
 

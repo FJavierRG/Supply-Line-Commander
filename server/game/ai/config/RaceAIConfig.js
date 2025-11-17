@@ -20,8 +20,8 @@ const RACE_AI_CONFIG = {
         
         // === UMBRALES ESPECÍFICOS ===
         thresholds: {
-            fobSupply: 50,        // Reabastecer FOBs cuando <50%
-            frontSupply: 70,      // Reabastecer frentes cuando <70%
+            fobSupply: 55,        // Reabastecer FOBs cuando <55% (mejorado desde 50% para reaccionar antes)
+            frontSupply: 75,      // Reabastecer frentes cuando <75% (mejorado desde 70% para reaccionar antes)
             currencyStrategic: 50 // Mínimo currency para decisiones estratégicas
         }
     }

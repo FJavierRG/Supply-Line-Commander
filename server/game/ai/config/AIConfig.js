@@ -13,9 +13,9 @@ export default {
     
     // === DEBUGGING ===
     debug: {
-        logScoring: false,
-        logDecisions: false,
-        logThreats: false,
+        logScoring: true,
+        logDecisions: true,
+        logThreats: true,
         logActions: true,        // Logs de acciones (construcción, ataques)
         logSupply: true          // Logs de reabastecimiento
     }
