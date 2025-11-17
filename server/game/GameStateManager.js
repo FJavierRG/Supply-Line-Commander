@@ -142,84 +142,119 @@ export class GameStateManager {
      * 🆕 USO: Ahora usa configuración compartida del generador de mapas
      */
     getInitialState() {
-        // 🆕 USAR CONFIGURACIÓN COMPARTIDA DEL GENERADOR DE MAPAS
-        const baseWidth = MAP_CONFIG.width;
-        const baseHeight = MAP_CONFIG.height;
-        
-        // 1. Generar HQ Jugador 1 (izquierda)
-        const hq1Pos = calculateAbsolutePosition(
-            MAP_CONFIG.hq.player1.xPercent,
-            MAP_CONFIG.hq.player1.yPercent,
-            baseWidth,
-            baseHeight
-        );
-        this.nodes.push(this.createNode('hq', 'player1', hq1Pos.x, hq1Pos.y));
-        
-        // 2. Generar HQ Jugador 2 (derecha)
-        const hq2Pos = calculateAbsolutePosition(
-            MAP_CONFIG.hq.player2.xPercent,
-            MAP_CONFIG.hq.player2.yPercent,
-            baseWidth,
-            baseHeight
-        );
-        this.nodes.push(this.createNode('hq', 'player2', hq2Pos.x, hq2Pos.y));
-        
-        // 3. ✅ SIMPLIFICADO: FOBs siempre se crean (ya no hay sistema de naciones)
-        MAP_CONFIG.fobs.player1.forEach(fobPos => {
-            const absPos = calculateAbsolutePosition(
-                fobPos.xPercent,
-                fobPos.yPercent,
+        try {
+            console.log(`🌍 [getInitialState] Iniciando generación de estado inicial...`);
+            // 🆕 USAR CONFIGURACIÓN COMPARTIDA DEL GENERADOR DE MAPAS
+            const baseWidth = MAP_CONFIG.width;
+            const baseHeight = MAP_CONFIG.height;
+            console.log(`🌍 [getInitialState] Dimensiones del mapa: ${baseWidth}x${baseHeight}`);
+            
+            // 1. Generar HQ Jugador 1 (izquierda)
+            console.log(`🌍 [getInitialState] Creando HQ player1...`);
+            const hq1Pos = calculateAbsolutePosition(
+                MAP_CONFIG.hq.player1.xPercent,
+                MAP_CONFIG.hq.player1.yPercent,
                 baseWidth,
                 baseHeight
             );
-            this.nodes.push(this.createNode('fob', 'player1', absPos.x, absPos.y, 50));
-        });
-        
-        MAP_CONFIG.fobs.player2.forEach(fobPos => {
-            const absPos = calculateAbsolutePosition(
-                fobPos.xPercent,
-                fobPos.yPercent,
+            this.nodes.push(this.createNode('hq', 'player1', hq1Pos.x, hq1Pos.y));
+            console.log(`✅ [getInitialState] HQ player1 creado en (${hq1Pos.x}, ${hq1Pos.y})`);
+            
+            // 2. Generar HQ Jugador 2 (derecha)
+            console.log(`🌍 [getInitialState] Creando HQ player2...`);
+            const hq2Pos = calculateAbsolutePosition(
+                MAP_CONFIG.hq.player2.xPercent,
+                MAP_CONFIG.hq.player2.yPercent,
                 baseWidth,
                 baseHeight
             );
-            this.nodes.push(this.createNode('fob', 'player2', absPos.x, absPos.y, 50));
-        });
-        
-        // 4. Generar Frentes Jugador 1
-        MAP_CONFIG.fronts.player1.forEach(frontPos => {
-            const absPos = calculateAbsolutePosition(
-                frontPos.xPercent,
-                frontPos.yPercent,
-                baseWidth,
-                baseHeight
-            );
-            this.nodes.push(this.createNode('front', 'player1', absPos.x, absPos.y, 100));
-        });
-        
-        // 5. Generar Frentes Jugador 2
-        MAP_CONFIG.fronts.player2.forEach(frontPos => {
-            const absPos = calculateAbsolutePosition(
-                frontPos.xPercent,
-                frontPos.yPercent,
-                baseWidth,
-                baseHeight
-            );
-            this.nodes.push(this.createNode('front', 'player2', absPos.x, absPos.y, 100));
-        });
-        
-        // ✅ SIMPLIFICADO: Ya no hay sistema de naciones, no se crean helicópteros iniciales
-        
-        return {
-            nodes: this.stateSerializer.serializeNodes(),
-            helicopters: this.stateSerializer.serializeAllHelicopters(), // Incluir helicópteros
-            currency: { ...this.currency },
-            duration: this.duration,
-            worldWidth: baseWidth,
-            worldHeight: baseHeight,
-            // ✅ ELIMINADO: Ya no hay sistema de naciones, solo se mantiene playerRaces para compatibilidad
-            playerRaces: { ...this.playerRaces },
-            // 🆕 SERVIDOR COMO AUTORIDAD: Configuración de edificios
-            buildingConfig: {
+            this.nodes.push(this.createNode('hq', 'player2', hq2Pos.x, hq2Pos.y));
+            console.log(`✅ [getInitialState] HQ player2 creado en (${hq2Pos.x}, ${hq2Pos.y})`);
+            
+            // 3. ✅ SIMPLIFICADO: FOBs siempre se crean (ya no hay sistema de naciones)
+            console.log(`🌍 [getInitialState] Creando FOBs player1 (${MAP_CONFIG.fobs.player1.length} FOBs)...`);
+            MAP_CONFIG.fobs.player1.forEach((fobPos, index) => {
+                try {
+                    const absPos = calculateAbsolutePosition(
+                        fobPos.xPercent,
+                        fobPos.yPercent,
+                        baseWidth,
+                        baseHeight
+                    );
+                    this.nodes.push(this.createNode('fob', 'player1', absPos.x, absPos.y, 50));
+                    console.log(`✅ [getInitialState] FOB player1 #${index + 1} creado en (${absPos.x}, ${absPos.y})`);
+                } catch (error) {
+                    console.error(`❌ [getInitialState] Error creando FOB player1 #${index + 1}:`, error);
+                    throw error;
+                }
+            });
+            
+            console.log(`🌍 [getInitialState] Creando FOBs player2 (${MAP_CONFIG.fobs.player2.length} FOBs)...`);
+            MAP_CONFIG.fobs.player2.forEach((fobPos, index) => {
+                try {
+                    const absPos = calculateAbsolutePosition(
+                        fobPos.xPercent,
+                        fobPos.yPercent,
+                        baseWidth,
+                        baseHeight
+                    );
+                    this.nodes.push(this.createNode('fob', 'player2', absPos.x, absPos.y, 50));
+                    console.log(`✅ [getInitialState] FOB player2 #${index + 1} creado en (${absPos.x}, ${absPos.y})`);
+                } catch (error) {
+                    console.error(`❌ [getInitialState] Error creando FOB player2 #${index + 1}:`, error);
+                    throw error;
+                }
+            });
+            
+            // 4. Generar Frentes Jugador 1
+            console.log(`🌍 [getInitialState] Creando frentes player1 (${MAP_CONFIG.fronts.player1.length} frentes)...`);
+            MAP_CONFIG.fronts.player1.forEach((frontPos, index) => {
+                try {
+                    const absPos = calculateAbsolutePosition(
+                        frontPos.xPercent,
+                        frontPos.yPercent,
+                        baseWidth,
+                        baseHeight
+                    );
+                    this.nodes.push(this.createNode('front', 'player1', absPos.x, absPos.y, 100));
+                    console.log(`✅ [getInitialState] Frente player1 #${index + 1} creado en (${absPos.x}, ${absPos.y})`);
+                } catch (error) {
+                    console.error(`❌ [getInitialState] Error creando frente player1 #${index + 1}:`, error);
+                    throw error;
+                }
+            });
+            
+            // 5. Generar Frentes Jugador 2
+            console.log(`🌍 [getInitialState] Creando frentes player2 (${MAP_CONFIG.fronts.player2.length} frentes)...`);
+            MAP_CONFIG.fronts.player2.forEach((frontPos, index) => {
+                try {
+                    const absPos = calculateAbsolutePosition(
+                        frontPos.xPercent,
+                        frontPos.yPercent,
+                        baseWidth,
+                        baseHeight
+                    );
+                    this.nodes.push(this.createNode('front', 'player2', absPos.x, absPos.y, 100));
+                    console.log(`✅ [getInitialState] Frente player2 #${index + 1} creado en (${absPos.x}, ${absPos.y})`);
+                } catch (error) {
+                    console.error(`❌ [getInitialState] Error creando frente player2 #${index + 1}:`, error);
+                    throw error;
+                }
+            });
+            
+            // ✅ SIMPLIFICADO: Ya no hay sistema de naciones, no se crean helicópteros iniciales
+            console.log(`🌍 [getInitialState] Total de nodos creados: ${this.nodes.length}`);
+            
+            console.log(`🌍 [getInitialState] Serializando nodos...`);
+            const serializedNodes = this.stateSerializer.serializeNodes();
+            console.log(`✅ [getInitialState] Nodos serializados: ${serializedNodes.length}`);
+            
+            console.log(`🌍 [getInitialState] Serializando helicópteros...`);
+            const serializedHelicopters = this.stateSerializer.serializeAllHelicopters();
+            console.log(`✅ [getInitialState] Helicópteros serializados: ${serializedHelicopters.length}`);
+            
+            console.log(`🌍 [getInitialState] Obteniendo configuración de edificios...`);
+            const buildingConfig = {
                 costs: this.buildHandler.getBuildingCosts(),
                 buildTimes: this.buildHandler.getBuildingTimes(),
                 effects: this.buildHandler.getBuildingEffects(),
@@ -235,8 +270,30 @@ export class GameStateManager {
                 specialNodes: this.buildHandler.getSpecialNodes(), // 🆕 Configuración de nodos especiales (comando, truck assault)
                 vehicleTypes: this.buildHandler.getVehicleTypes(), // 🆕 NUEVO: Tipos de vehículos
                 vehicleSystems: this.buildHandler.getVehicleSystems() // 🆕 NUEVO: Sistemas de vehículos por tipo de nodo
-            }
-        };
+            };
+            console.log(`✅ [getInitialState] Configuración de edificios obtenida`);
+            
+            const initialState = {
+                nodes: serializedNodes,
+                helicopters: serializedHelicopters, // Incluir helicópteros
+                currency: { ...this.currency },
+                duration: this.duration,
+                worldWidth: baseWidth,
+                worldHeight: baseHeight,
+                // ✅ ELIMINADO: Ya no hay sistema de naciones, solo se mantiene playerRaces para compatibilidad
+                playerRaces: { ...this.playerRaces },
+                // 🆕 SERVIDOR COMO AUTORIDAD: Configuración de edificios
+                buildingConfig: buildingConfig
+            };
+            
+            console.log(`✅ [getInitialState] Estado inicial generado exitosamente`);
+            return initialState;
+        } catch (error) {
+            console.error(`❌ [getInitialState] ERROR CRÍTICO generando estado inicial:`, error);
+            console.error(`❌ [getInitialState] Mensaje:`, error.message);
+            console.error(`❌ [getInitialState] Stack trace:`, error.stack);
+            throw error;
+        }
     }
     
     /**
@@ -517,25 +574,44 @@ export class GameStateManager {
      * Inicia el loop de actualización del juego
      */
     startGameLoop(updateCallback, victoryCallback = null) {
-        const tickInterval = 1000 / this.tickRate; // 50ms para 20 TPS
-        
-        this.updateInterval = setInterval(() => {
-            // Actualizar simulación del juego
-            const gameState = this.update(tickInterval / 1000); // dt en segundos
+        try {
+            console.log(`🔄 [startGameLoop] Iniciando game loop...`);
+            const tickInterval = 1000 / this.tickRate; // 50ms para 20 TPS
+            console.log(`🔄 [startGameLoop] Configuración: ${this.tickRate} TPS, intervalo: ${tickInterval}ms`);
             
-            // Enviar estado completo cada tick (20 TPS)
-            if (gameState) {
-                updateCallback(gameState);
-            }
+            // Guardar callbacks
+            this.updateCallback = updateCallback;
+            this.victoryCallback = victoryCallback;
             
-            // CRÍTICO: Si hay victoria, enviar evento de victoria
-            if (this.victoryResult && victoryCallback) {
-                victoryCallback(this.victoryResult);
-                this.victoryResult = null; // Limpiar para evitar spam
-            }
-        }, tickInterval);
-        
-        console.log(`🎮 Game loop iniciado: ${this.tickRate} TPS (cada ${tickInterval}ms)`);
+            this.updateInterval = setInterval(() => {
+                try {
+                    // Actualizar simulación del juego
+                    const gameState = this.update(tickInterval / 1000); // dt en segundos
+                    
+                    // Enviar estado completo cada tick (20 TPS)
+                    if (gameState) {
+                        updateCallback(gameState);
+                    }
+                    
+                    // CRÍTICO: Si hay victoria, enviar evento de victoria
+                    if (this.victoryResult && victoryCallback) {
+                        victoryCallback(this.victoryResult);
+                        this.victoryResult = null; // Limpiar para evitar spam
+                    }
+                } catch (error) {
+                    console.error(`❌ [startGameLoop] Error en update:`, error);
+                    console.error(`❌ [startGameLoop] Stack trace:`, error.stack);
+                    // No detener el loop, pero registrar el error
+                }
+            }, tickInterval);
+            
+            console.log(`✅ [startGameLoop] Game loop iniciado: ${this.tickRate} TPS (cada ${tickInterval}ms)`);
+        } catch (error) {
+            console.error(`❌ [startGameLoop] ERROR CRÍTICO iniciando game loop:`, error);
+            console.error(`❌ [startGameLoop] Mensaje:`, error.message);
+            console.error(`❌ [startGameLoop] Stack trace:`, error.stack);
+            throw error;
+        }
     }
     
     /**

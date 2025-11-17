@@ -552,7 +552,7 @@ export class AISystem {
             targetBuilding
         });
         
-        if (AIConfig.debug.logActions) {
+                    if (AIConfig.debug.logActions) {
             console.log(`⏱️ IA: Reacción programada contra ${threatType} para ejecutarse en ${reactionDelay.toFixed(1)}s`);
         }
     }

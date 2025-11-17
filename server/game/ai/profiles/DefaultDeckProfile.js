@@ -82,7 +82,9 @@ export class DefaultDeckProfile extends BaseProfile {
                     perMyPlant: -25,     // -25 por cada planta propia (evitar spam)
                     midPhase: 15,        // En mid, empujar a construir si es viable
                     latePhase: 25,       // En late, aún más peso si vamos por detrás
-                    hasExcessCurrency: 20 // +20 si tiene mucho dinero (flexibilidad para construir antes de late)
+                    hasExcessCurrency: 20, // +20 si tiene mucho dinero (flexibilidad para construir antes de late)
+                    hasAdvantage: -50,   // 🎯 Penalización cuando tiene 2 plantas de ventaja (debe priorizar aggro)
+                    hasBigAdvantage: -100 // 🎯 NUEVO: Penalización mayor cuando tiene 3+ plantas de ventaja (bloquear construcción)
                 }
             },
             'droneLauncher': {
@@ -125,9 +127,10 @@ export class DefaultDeckProfile extends BaseProfile {
                 bonuses: {
                     hasTargets: 40,   // +40 si hay objetivos disponibles
                     earlyPhase: -999, // Penalización enorme en early → se filtra al fondo de la lista
-                    midPhase: 15,     // Pequeño empuje en mid
-                    latePhase: 40,    // Gran empuje en late
-                    hasExcessCurrency: 25 // +25 si tiene mucho dinero (flexibilidad para usar drones antes de late)
+                    midPhase: 25,     // Pequeño empuje en mid
+                    latePhase: 55,    // Gran empuje en late
+                    hasExcessCurrency: 25, // +25 si tiene mucho dinero (flexibilidad para usar drones antes de late)
+                    hasAdvantage: 35  // 🎯 NUEVO: Bonus cuando tiene ventaja (priorizar aggro)
                 }
             },
             'sniperStrike': {
@@ -135,7 +138,8 @@ export class DefaultDeckProfile extends BaseProfile {
                 base: 10,
                 bonuses: {
                     base: 20,   // Bonus base siempre aplica
-                    notEarly: 20 // +20 extra en mid/late → más uso fuera de early
+                    notEarly: 20, // +20 extra en mid/late → más uso fuera de early
+                    hasAdvantage: 25 // 🎯 NUEVO: Bonus cuando tiene ventaja (priorizar aggro)
                 }
             },
             // 🎯 Preparado para futuros mazos que incluyan fobSabotage
@@ -274,6 +278,51 @@ export class DefaultDeckProfile extends BaseProfile {
                 // 🎯 NUEVO: Tiene mucho dinero (más de 400) - permite flexibilidad para construir antes de late
                 // Esto permite que la IA use drones y plantas nucleares en mid si tiene mucho dinero
                 return currency >= 400;
+            case 'hasAdvantage':
+                // 🎯 La IA tiene ventaja moderada (a partir del minuto 5)
+                // Condiciones: tiene mucho dinero (>=500) O tiene exactamente 2 plantas más que el jugador
+                // A partir del minuto 5 (300 segundos) para evitar penalizar en early
+                const elapsedTime = state.elapsedTime || 0;
+                if (elapsedTime < 300) {
+                    return false; // Antes del minuto 5, no aplicar
+                }
+                
+                const hasMuchMoney = currency >= 500;
+                const plantDifference = (state.myPlants !== undefined && state.playerPlants !== undefined) 
+                    ? (state.myPlants - state.playerPlants) 
+                    : 0;
+                const hasPlantAdvantage2 = plantDifference === 2; // Exactamente 2 plantas de ventaja
+                
+                const hasAdvantage = hasMuchMoney || hasPlantAdvantage2;
+                
+                // Log para debugging
+                if (hasAdvantage) {
+                    const reason = hasMuchMoney ? `mucho dinero (${currency})` : `ventaja de 2 plantas (${state.myPlants} vs ${state.playerPlants})`;
+                    console.log(`⚡ IA VENTAJA: Activada - ${reason} (minuto ${(elapsedTime / 60).toFixed(1)}) → Priorizando aggro sobre plantas nucleares`);
+                }
+                
+                return hasAdvantage;
+                
+            case 'hasBigAdvantage':
+                // 🎯 NUEVO: La IA tiene ventaja grande (3+ plantas de ventaja)
+                // Penalización mayor para bloquear completamente la construcción de más plantas
+                // A partir del minuto 5 (300 segundos) para evitar penalizar en early
+                const elapsedTimeBig = state.elapsedTime || 0;
+                if (elapsedTimeBig < 300) {
+                    return false; // Antes del minuto 5, no aplicar
+                }
+                
+                const plantDifferenceBig = (state.myPlants !== undefined && state.playerPlants !== undefined) 
+                    ? (state.myPlants - state.playerPlants) 
+                    : 0;
+                const hasBigPlantAdvantage = plantDifferenceBig >= 3; // 3+ plantas de ventaja
+                
+                // Log para debugging
+                if (hasBigPlantAdvantage) {
+                    console.log(`🚫 IA GRAN VENTAJA: Activada - ${state.myPlants} vs ${state.playerPlants} (diferencia: ${plantDifferenceBig}) (minuto ${(elapsedTimeBig / 60).toFixed(1)}) → BLOQUEANDO construcción de plantas nucleares`);
+                }
+                
+                return hasBigPlantAdvantage;
             case 'forHelicopters':
                 // Verificar si necesita reabastecimiento con helicópteros
                 // Por ahora retornar false, se puede implementar después

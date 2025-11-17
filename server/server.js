@@ -1517,13 +1517,19 @@ function startGameCountdown(roomId) {
 
 async function startGame(roomId) {
     try {
+        console.log(`🚀 [startGame] Iniciando partida para sala: ${roomId}`);
         const room = roomManager.getRoom(roomId);
-        if (!room) throw new Error('Sala no encontrada');
+        if (!room) {
+            throw new Error(`Sala ${roomId} no encontrada`);
+        }
+        console.log(`✅ [startGame] Sala encontrada: ${roomId}, jugadores: ${room.players.length}, IA: ${room.aiPlayer ? 'Sí' : 'No'}`);
         
         // Crear estado inicial del juego
+        console.log(`📦 [startGame] Creando GameStateManager...`);
         const gameState = new GameStateManager(room);
         room.gameState = gameState;
         room.status = 'playing';
+        console.log(`✅ [startGame] GameStateManager creado exitosamente`);
         
         // 🆕 CENTRALIZADO: Establecer mazos seleccionados ANTES de crear estado inicial
         const player1 = room.players.find(p => p.team === 'player1');
@@ -1532,142 +1538,218 @@ async function startGame(roomId) {
         // 🤖 NUEVO: Si hay IA, usar sus datos
         const hasAI = room.aiPlayer !== null && room.aiPlayer !== undefined;
         
-        if (player1 && player1.selectedDeck) {
-            // 🎯 NUEVO: Usar mazo en lugar de raza (automáticamente establece A_Nation)
-            gameState.setPlayerDeck('player1', player1.selectedDeck);
-            console.log(`🎴 Mazo establecido para player1: "${player1.selectedDeck.name}" (${player1.selectedDeck.units.length} unidades)`);
-        } else if (player1 && player1.selectedRace) {
-            // Fallback: Si solo hay selectedRace (compatibilidad), crear mazo predeterminado
-            const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
-            gameState.setPlayerDeck('player1', DEFAULT_DECK);
-            console.log(`🎴 Mazo predeterminado establecido para player1 (fallback)`);
-        } else {
-            // 🎯 NUEVO: Si no hay mazo ni raza, establecer mazo predeterminado y A_Nation
-            const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
-            gameState.setPlayerDeck('player1', DEFAULT_DECK);
-            console.log(`🎴 Mazo predeterminado establecido para player1 (sin selección previa)`);
+        console.log(`🎴 [startGame] Configurando mazos - player1: ${player1 ? 'existe' : 'no existe'}, player2: ${player2 ? 'existe' : 'no existe'}, hasAI: ${hasAI}`);
+        
+        try {
+            if (player1 && player1.selectedDeck) {
+                // 🎯 NUEVO: Usar mazo en lugar de raza (automáticamente establece A_Nation)
+                console.log(`🎴 [startGame] Estableciendo mazo para player1: "${player1.selectedDeck.name}" (${player1.selectedDeck.units?.length || 0} unidades)`);
+                gameState.setPlayerDeck('player1', player1.selectedDeck);
+                console.log(`✅ [startGame] Mazo establecido para player1: "${player1.selectedDeck.name}" (${player1.selectedDeck.units.length} unidades)`);
+            } else if (player1 && player1.selectedRace) {
+                // Fallback: Si solo hay selectedRace (compatibilidad), crear mazo predeterminado
+                console.log(`⚠️ [startGame] Player1 solo tiene selectedRace, usando DEFAULT_DECK`);
+                const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
+                gameState.setPlayerDeck('player1', DEFAULT_DECK);
+                console.log(`✅ [startGame] Mazo predeterminado establecido para player1 (fallback)`);
+            } else {
+                // 🎯 NUEVO: Si no hay mazo ni raza, establecer mazo predeterminado y A_Nation
+                console.log(`⚠️ [startGame] Player1 sin mazo ni raza, usando DEFAULT_DECK`);
+                const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
+                gameState.setPlayerDeck('player1', DEFAULT_DECK);
+                console.log(`✅ [startGame] Mazo predeterminado establecido para player1 (sin selección previa)`);
+            }
+        } catch (error) {
+            console.error(`❌ [startGame] Error configurando mazo player1:`, error);
+            console.error(`❌ [startGame] Stack trace:`, error.stack);
+            throw error;
         }
         
-        if (hasAI) {
-            // IA en player2 - usar raza para compatibilidad con IA
-            gameState.setPlayerRace('player2', room.aiPlayer.race);
-            console.log(`🤖 Raza establecida para IA (player2): ${room.aiPlayer.race} (${room.aiPlayer.difficulty})`);
-            room.hasAI = true;
-            room.aiDifficulty = room.aiPlayer.difficulty;
-        } else if (player2 && player2.selectedDeck) {
-            // 🎯 NUEVO: Usar mazo en lugar de raza (automáticamente establece A_Nation)
-            gameState.setPlayerDeck('player2', player2.selectedDeck);
-            console.log(`🎴 Mazo establecido para player2: "${player2.selectedDeck.name}" (${player2.selectedDeck.units.length} unidades)`);
-        } else if (player2 && player2.selectedRace) {
-            // Fallback: Si solo hay selectedRace (compatibilidad), crear mazo predeterminado
-            const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
-            gameState.setPlayerDeck('player2', DEFAULT_DECK);
-            console.log(`🎴 Mazo predeterminado establecido para player2 (fallback)`);
-        } else {
-            // 🎯 NUEVO: Si no hay mazo ni raza, establecer mazo predeterminado y A_Nation
-            const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
-            gameState.setPlayerDeck('player2', DEFAULT_DECK);
-            console.log(`🎴 Mazo predeterminado establecido para player2 (sin selección previa)`);
+        try {
+            if (hasAI) {
+                // IA en player2 - usar raza para compatibilidad con IA
+                console.log(`🤖 [startGame] Configurando IA para player2: ${room.aiPlayer.race} (${room.aiPlayer.difficulty})`);
+                gameState.setPlayerRace('player2', room.aiPlayer.race);
+                console.log(`✅ [startGame] Raza establecida para IA (player2): ${room.aiPlayer.race} (${room.aiPlayer.difficulty})`);
+                room.hasAI = true;
+                room.aiDifficulty = room.aiPlayer.difficulty;
+            } else if (player2 && player2.selectedDeck) {
+                // 🎯 NUEVO: Usar mazo en lugar de raza (automáticamente establece A_Nation)
+                console.log(`🎴 [startGame] Estableciendo mazo para player2: "${player2.selectedDeck.name}" (${player2.selectedDeck.units?.length || 0} unidades)`);
+                gameState.setPlayerDeck('player2', player2.selectedDeck);
+                console.log(`✅ [startGame] Mazo establecido para player2: "${player2.selectedDeck.name}" (${player2.selectedDeck.units.length} unidades)`);
+            } else if (player2 && player2.selectedRace) {
+                // Fallback: Si solo hay selectedRace (compatibilidad), crear mazo predeterminado
+                console.log(`⚠️ [startGame] Player2 solo tiene selectedRace, usando DEFAULT_DECK`);
+                const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
+                gameState.setPlayerDeck('player2', DEFAULT_DECK);
+                console.log(`✅ [startGame] Mazo predeterminado establecido para player2 (fallback)`);
+            } else {
+                // 🎯 NUEVO: Si no hay mazo ni raza, establecer mazo predeterminado y A_Nation
+                console.log(`⚠️ [startGame] Player2 sin mazo ni raza, usando DEFAULT_DECK`);
+                const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
+                gameState.setPlayerDeck('player2', DEFAULT_DECK);
+                console.log(`✅ [startGame] Mazo predeterminado establecido para player2 (sin selección previa)`);
+            }
+        } catch (error) {
+            console.error(`❌ [startGame] Error configurando mazo player2:`, error);
+            console.error(`❌ [startGame] Stack trace:`, error.stack);
+            throw error;
         }
         
         // 🤖 NUEVO: Inicializar AISystem con io y roomId para simular eventos de jugador
-        if (hasAI) {
-            gameState.aiSystem = new AISystem(gameState, io, roomId);
+        try {
+            if (hasAI) {
+                console.log(`🤖 [startGame] Inicializando AISystem...`);
+                gameState.aiSystem = new AISystem(gameState, io, roomId);
+                console.log(`✅ [startGame] AISystem inicializado exitosamente`);
+            }
+        } catch (error) {
+            console.error(`❌ [startGame] Error inicializando AISystem:`, error);
+            console.error(`❌ [startGame] Stack trace:`, error.stack);
+            throw error;
         }
         
         // 🆕 CENTRALIZADO: Ahora crear estado inicial con las razas ya configuradas
-        const initialState = gameState.getInitialState();
+        console.log(`🌍 [startGame] Generando estado inicial del juego...`);
+        let initialState;
+        try {
+            initialState = gameState.getInitialState();
+            console.log(`✅ [startGame] Estado inicial generado: ${initialState.nodes?.length || 0} nodos, ${initialState.helicopters?.length || 0} helicópteros`);
+        } catch (error) {
+            console.error(`❌ [startGame] Error generando estado inicial:`, error);
+            console.error(`❌ [startGame] Stack trace:`, error.stack);
+            throw error;
+        }
         
         // Enviar estado inicial a cada jugador (con su team asignado)
-        room.players.forEach(player => {
-            const playerSocket = io.sockets.sockets.get(player.id);
-            if (playerSocket) {
-                playerSocket.emit('game_start', {
-                    myTeam: player.team,
-                    opponentTeam: player.team === 'player1' ? 'player2' : 'player1',
-                    selectedRace: player.selectedRace, // 🆕 NUEVO: Enviar raza seleccionada
-                    initialState: initialState,
-                    duration: 520
-                });
-            }
-        });
+        console.log(`📤 [startGame] Enviando estado inicial a ${room.players.length} jugadores...`);
+        try {
+            room.players.forEach((player, index) => {
+                const playerSocket = io.sockets.sockets.get(player.id);
+                if (playerSocket) {
+                    console.log(`📤 [startGame] Enviando game_start a jugador ${index + 1}/${room.players.length} (${player.id}, team: ${player.team})`);
+                    playerSocket.emit('game_start', {
+                        myTeam: player.team,
+                        opponentTeam: player.team === 'player1' ? 'player2' : 'player1',
+                        selectedRace: player.selectedRace, // 🆕 NUEVO: Enviar raza seleccionada
+                        initialState: initialState,
+                        duration: 520
+                    });
+                    console.log(`✅ [startGame] game_start enviado a jugador ${player.id}`);
+                } else {
+                    console.warn(`⚠️ [startGame] Socket no encontrado para jugador ${player.id}`);
+                }
+            });
+        } catch (error) {
+            console.error(`❌ [startGame] Error enviando estado inicial:`, error);
+            console.error(`❌ [startGame] Stack trace:`, error.stack);
+            throw error;
+        }
         
         // Iniciar loop del servidor
-        gameState.startGameLoop(
-            // updateCallback - enviar estado cada tick
-            (updates) => {
-                io.to(roomId).emit('game_update', updates);
-                
-                // Enviar impactos de drones si hay
-                if (gameState.droneImpacts && gameState.droneImpacts.length > 0) {
-                    gameState.droneImpacts.forEach(impact => {
-                        io.to(roomId).emit('drone_impact', impact);
-                        console.log(`💥 Dron ${impact.droneId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`);
-                    });
-                    gameState.droneImpacts = []; // Limpiar después de enviar
+        console.log(`🔄 [startGame] Iniciando game loop...`);
+        try {
+            gameState.startGameLoop(
+                // updateCallback - enviar estado cada tick
+                (updates) => {
+                    try {
+                        io.to(roomId).emit('game_update', updates);
+                        
+                        // Enviar impactos de drones si hay
+                        if (gameState.droneImpacts && gameState.droneImpacts.length > 0) {
+                            gameState.droneImpacts.forEach(impact => {
+                                io.to(roomId).emit('drone_impact', impact);
+                                console.log(`💥 Dron ${impact.droneId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`);
+                            });
+                            gameState.droneImpacts = []; // Limpiar después de enviar
+                        }
+                        
+                        // Enviar impactos de tanques si hay
+                        if (gameState.tankImpacts && gameState.tankImpacts.length > 0) {
+                            gameState.tankImpacts.forEach(impact => {
+                                io.to(roomId).emit('tank_impact', impact);
+                                console.log(`💥 Tanque ${impact.tankId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`);
+                            });
+                            gameState.tankImpacts = []; // Limpiar después de enviar
+                        }
+                        
+                        // 🆕 NUEVO: Enviar impactos de artillados ligeros si hay
+                        if (gameState.lightVehicleImpacts && gameState.lightVehicleImpacts.length > 0) {
+                            gameState.lightVehicleImpacts.forEach(impact => {
+                                io.to(roomId).emit('light_vehicle_impact', impact);
+                                console.log(`💥 Artillado ligero ${impact.lightVehicleId} impactó ${impact.targetType} (aplicó broken) en (${impact.x}, ${impact.y})`);
+                            });
+                            gameState.lightVehicleImpacts = []; // Limpiar después de enviar
+                        }
+                        
+                        // 🆕 NUEVO: Enviar evento del Destructor de mundos si se ejecutó
+                        if (gameState.worldDestroyerEvent) {
+                            io.to(roomId).emit('world_destroyer_executed', gameState.worldDestroyerEvent);
+                            console.log(`☠️ Destructor de mundos ejecutado - ${gameState.worldDestroyerEvent.destroyedBuildings.length} edificios destruidos`);
+                            gameState.worldDestroyerEvent = null; // Limpiar después de enviar
+                        }
+                        
+                        // 🆕 NUEVO: Enviar evento de artillería si se ejecutó
+                        if (gameState.artilleryEvent) {
+                            io.to(roomId).emit('artillery_executed', gameState.artilleryEvent);
+                            console.log(`💣 Artillería ejecutada - ${gameState.artilleryEvent.affectedBuildings.length} edificios afectados`);
+                            gameState.artilleryEvent = null; // Limpiar después de enviar
+                        }
+                        
+                        // Enviar intercepciones de anti-drones si hay
+                        if (gameState.droneInterceptions && gameState.droneInterceptions.length > 0) {
+                            gameState.droneInterceptions.forEach(interception => {
+                                io.to(roomId).emit('drone_intercepted', interception);
+                                console.log(`🎯 Anti-drone ${interception.antiDroneId} interceptó dron ${interception.droneId}`);
+                            });
+                            gameState.droneInterceptions = []; // Limpiar después de enviar
+                        }
+                        
+                        // Enviar alertas de anti-drones si hay
+                        if (gameState.droneAlerts && gameState.droneAlerts.length > 0) {
+                            gameState.droneAlerts.forEach(alert => {
+                                io.to(roomId).emit('antidrone_alert', alert);
+                            });
+                            gameState.droneAlerts = []; // Limpiar después de enviar
+                        }
+                    } catch (error) {
+                        console.error(`❌ [startGame] Error en updateCallback:`, error);
+                        console.error(`❌ [startGame] Stack trace:`, error.stack);
+                    }
+                },
+                // victoryCallback - enviar victoria cuando termine
+                (victoryResult) => {
+                    try {
+                        console.log(`🏆 Partida terminada en sala ${roomId}: ${victoryResult.winner} ganó`);
+                        io.to(roomId).emit('game_over', victoryResult);
+                    } catch (error) {
+                        console.error(`❌ [startGame] Error en victoryCallback:`, error);
+                        console.error(`❌ [startGame] Stack trace:`, error.stack);
+                    }
                 }
-                
-                // Enviar impactos de tanques si hay
-                if (gameState.tankImpacts && gameState.tankImpacts.length > 0) {
-                    gameState.tankImpacts.forEach(impact => {
-                        io.to(roomId).emit('tank_impact', impact);
-                        console.log(`💥 Tanque ${impact.tankId} impactó ${impact.targetType} en (${impact.x}, ${impact.y})`);
-                    });
-                    gameState.tankImpacts = []; // Limpiar después de enviar
-                }
-                
-                // 🆕 NUEVO: Enviar impactos de artillados ligeros si hay
-                if (gameState.lightVehicleImpacts && gameState.lightVehicleImpacts.length > 0) {
-                    gameState.lightVehicleImpacts.forEach(impact => {
-                        io.to(roomId).emit('light_vehicle_impact', impact);
-                        console.log(`💥 Artillado ligero ${impact.lightVehicleId} impactó ${impact.targetType} (aplicó broken) en (${impact.x}, ${impact.y})`);
-                    });
-                    gameState.lightVehicleImpacts = []; // Limpiar después de enviar
-                }
-                
-                // 🆕 NUEVO: Enviar evento del Destructor de mundos si se ejecutó
-                if (gameState.worldDestroyerEvent) {
-                    io.to(roomId).emit('world_destroyer_executed', gameState.worldDestroyerEvent);
-                    console.log(`☠️ Destructor de mundos ejecutado - ${gameState.worldDestroyerEvent.destroyedBuildings.length} edificios destruidos`);
-                    gameState.worldDestroyerEvent = null; // Limpiar después de enviar
-                }
-                
-                // 🆕 NUEVO: Enviar evento de artillería si se ejecutó
-                if (gameState.artilleryEvent) {
-                    io.to(roomId).emit('artillery_executed', gameState.artilleryEvent);
-                    console.log(`💣 Artillería ejecutada - ${gameState.artilleryEvent.affectedBuildings.length} edificios afectados`);
-                    gameState.artilleryEvent = null; // Limpiar después de enviar
-                }
-                
-                // Enviar intercepciones de anti-drones si hay
-                if (gameState.droneInterceptions && gameState.droneInterceptions.length > 0) {
-                    gameState.droneInterceptions.forEach(interception => {
-                        io.to(roomId).emit('drone_intercepted', interception);
-                        console.log(`🎯 Anti-drone ${interception.antiDroneId} interceptó dron ${interception.droneId}`);
-                    });
-                    gameState.droneInterceptions = []; // Limpiar después de enviar
-                }
-                
-                // Enviar alertas de anti-drones si hay
-                if (gameState.droneAlerts && gameState.droneAlerts.length > 0) {
-                    gameState.droneAlerts.forEach(alert => {
-                        io.to(roomId).emit('antidrone_alert', alert);
-                    });
-                    gameState.droneAlerts = []; // Limpiar después de enviar
-                }
-            },
-            // victoryCallback - enviar victoria cuando termine
-            (victoryResult) => {
-                console.log(`🏆 Partida terminada en sala ${roomId}: ${victoryResult.winner} ganó`);
-                io.to(roomId).emit('game_over', victoryResult);
-            }
-        );
+            );
+            console.log(`✅ [startGame] Game loop iniciado exitosamente`);
+        } catch (error) {
+            console.error(`❌ [startGame] Error iniciando game loop:`, error);
+            console.error(`❌ [startGame] Stack trace:`, error.stack);
+            throw error;
+        }
         
         console.log(`🎮 Partida iniciada en sala: ${roomId}`);
         
     } catch (error) {
-        console.error('Error al iniciar partida:', error);
-        io.to(roomId).emit('error', { message: 'Error al iniciar partida' });
+        console.error(`❌ [startGame] ERROR CRÍTICO al iniciar partida en sala ${roomId}:`, error);
+        console.error(`❌ [startGame] Mensaje de error:`, error.message);
+        console.error(`❌ [startGame] Stack trace completo:`, error.stack);
+        if (error.cause) {
+            console.error(`❌ [startGame] Error cause:`, error.cause);
+        }
+        io.to(roomId).emit('error', { 
+            message: 'Error al iniciar partida',
+            details: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 }
 
