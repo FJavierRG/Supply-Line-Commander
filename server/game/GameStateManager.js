@@ -497,6 +497,11 @@ export class GameStateManager {
                 cameraDrone.isConstructing = false;
                 
                 console.log(`📹 Camera Drone ${cameraDrone.id.substring(0, 8)} desplegado en (${cameraDrone.x.toFixed(0)}, ${cameraDrone.y.toFixed(0)})`);
+                
+                // 🎯 NUEVO: Notificar a la IA si existe (amenaza ahora desplegada)
+                if (this.aiSystem) {
+                    this.aiSystem.onThreatDetected('cameraDrone', cameraDrone, true, null);
+                }
             } else {
                 // Mover hacia el objetivo
                 const vx = (dx / distance) * cameraDroneSpeed * dt;

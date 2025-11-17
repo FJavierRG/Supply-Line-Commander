@@ -182,38 +182,57 @@ export class AIActionHandler {
     
     /**
      * Ejecuta ataque con sniper
+     * @param {Array} myNodes - Nodos del equipo de la IA
+     * @param {string} team - Equipo de la IA
+     * @param {string} targetId - (Opcional) ID del objetivo específico a atacar
      */
-    async executeSniperAttack(myNodes, team) {
-        // Encontrar objetivos válidos del jugador
-        const playerNodes = this.gameState.nodes.filter(n => n.team === 'player1' && n.active);
-        const targets = playerNodes.filter(n => 
-            n.type === 'front' || 
-            n.type === 'specopsCommando' || 
-            n.type === 'truckAssault' || 
-            n.type === 'cameraDrone'
-        );
+    async executeSniperAttack(myNodes, team, targetId = null) {
+        let target = null;
         
-        if (targets.length === 0) {
-            return false;
-        }
-        
-        // Seleccionar objetivo prioritario (comandos primero, luego frentes)
-        let target = targets.find(n => n.type === 'specopsCommando' || n.type === 'truckAssault' || n.type === 'cameraDrone');
-        if (!target) {
-            target = targets.find(n => n.type === 'front');
-        }
-        if (!target) {
-            target = targets[0];
+        // Si se especifica un targetId, usarlo directamente
+        if (targetId) {
+            target = this.gameState.nodes.find(n => n.id === targetId && n.team === 'player1' && n.active);
+            if (!target) {
+                return false;
+            }
+        } else {
+            // Buscar objetivos válidos del jugador
+            const playerNodes = this.gameState.nodes.filter(n => n.team === 'player1' && n.active);
+            const targets = playerNodes.filter(n => 
+                n.type === 'front' || 
+                n.type === 'specopsCommando' || 
+                n.type === 'truckAssault' || 
+                n.type === 'cameraDrone'
+            );
+            
+            if (targets.length === 0) {
+                return false;
+            }
+            
+            // Seleccionar objetivo prioritario (comandos primero, luego frentes)
+            target = targets.find(n => n.type === 'specopsCommando' || n.type === 'truckAssault' || n.type === 'cameraDrone');
+            if (!target) {
+                target = targets.find(n => n.type === 'front');
+            }
+            if (!target) {
+                target = targets[0];
+            }
         }
         
         // Llamar al handler
         const result = this.combatHandler.handleSniperStrike(team, target.id);
         
         if (result.success) {
-            // Broadcast
-            this.io.to(this.roomId).emit('sniper_strike', {
-                targetId: target.id,
-                team: team
+            // 🎯 FIX: Emitir el mismo evento que cuando un jugador dispara (sniper_fired)
+            // Esto asegura que el cliente reciba los sonidos, efectos visuales y feed correctos
+            this.io.to(this.roomId).emit('sniper_fired', {
+                shooterId: team,
+                targetId: result.targetId,
+                effect: result.effect,
+                targetType: result.targetType || 'front',
+                eliminated: result.eliminated || false,
+                targetX: result.targetX,
+                targetY: result.targetY
             });
         }
         

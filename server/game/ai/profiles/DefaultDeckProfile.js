@@ -39,6 +39,7 @@ import { BaseProfile } from './BaseProfile.js';
 import { AICardEvaluator } from '../core/AICardEvaluator.js';
 import { AIGameStateAnalyzer } from '../core/AIGameStateAnalyzer.js';
 import AIConfig from '../config/AIConfig.js';
+import { SERVER_NODE_CONFIG } from '../../../config/serverNodes.js';
 
 export class DefaultDeckProfile extends BaseProfile {
     constructor(deck) {
@@ -80,7 +81,8 @@ export class DefaultDeckProfile extends BaseProfile {
                     perPlayerPlant: 30,  // +30 por cada planta del jugador
                     perMyPlant: -25,     // -25 por cada planta propia (evitar spam)
                     midPhase: 15,        // En mid, empujar a construir si es viable
-                    latePhase: 25        // En late, aún más peso si vamos por detrás
+                    latePhase: 25,       // En late, aún más peso si vamos por detrás
+                    hasExcessCurrency: 20 // +20 si tiene mucho dinero (flexibilidad para construir antes de late)
                 }
             },
             'droneLauncher': {
@@ -125,7 +127,8 @@ export class DefaultDeckProfile extends BaseProfile {
                     hasTargets: 40,   // +40 si hay objetivos disponibles
                     earlyPhase: -999, // Penalización enorme en early → se filtra al fondo de la lista
                     midPhase: 15,     // Pequeño empuje en mid
-                    latePhase: 40     // Gran empuje en late
+                    latePhase: 40,    // Gran empuje en late
+                    hasExcessCurrency: 25 // +25 si tiene mucho dinero (flexibilidad para usar drones antes de late)
                 }
             },
             'sniperStrike': {
@@ -248,7 +251,7 @@ export class DefaultDeckProfile extends BaseProfile {
      * @param {string} team - Equipo de la IA
      * @returns {boolean|undefined} Si la condición se cumple, o undefined si no es una condición de este perfil
      */
-    evaluateCustomBonusCondition(bonusName, bonusValue, state, gameState, team) {
+    evaluateCustomBonusCondition(bonusName, bonusValue, state, gameState, team, currency = 0) {
         // Condiciones específicas del perfil default
         switch (bonusName) {
             case 'hasLessThan2':
@@ -268,6 +271,10 @@ export class DefaultDeckProfile extends BaseProfile {
             case 'midPhaseAndHas2OrMore':
                 // Penalización: en mid, si ya tiene >=2 FOBs
                 return state.phase === 'mid' && state.myFOBs !== undefined && state.myFOBs >= 2;
+            case 'hasExcessCurrency':
+                // 🎯 NUEVO: Tiene mucho dinero (más de 400) - permite flexibilidad para construir antes de late
+                // Esto permite que la IA use drones y plantas nucleares en mid si tiene mucho dinero
+                return currency >= 400;
             case 'forHelicopters':
                 // Verificar si necesita reabastecimiento con helicópteros
                 // Por ahora retornar false, se puede implementar después
@@ -366,6 +373,52 @@ export class DefaultDeckProfile extends BaseProfile {
             }
         }
         
+        // 🎯 NUEVO: Drone Launcher: solo una es suficiente (evitar spam)
+        const droneLauncherAction = filteredActions.find(action => action.cardId === 'droneLauncher');
+        if (droneLauncherAction) {
+            const hasDroneLauncher = gameState.nodes.some(n => 
+                n.team === 'player2' && 
+                n.type === 'droneLauncher' && 
+                n.active &&
+                n.constructed
+            );
+            if (hasDroneLauncher) {
+                // Eliminar droneLauncher de las opciones si ya tiene una
+                filteredActions = filteredActions.filter(action => action.cardId !== 'droneLauncher');
+            }
+        }
+        
+        // 🎯 NUEVO: Lógica de ahorro cuando tiene mucho dinero
+        // Si tiene más de 400 de currency y tiene los talleres y radios, reducir scores para permitir ahorro
+        const hasTruckFactory = gameState.nodes.some(n => 
+            n.team === 'player2' && 
+            n.type === 'truckFactory' && 
+            n.active &&
+            n.constructed
+        );
+        const hasEngineerCenter = gameState.nodes.some(n => 
+            n.team === 'player2' && 
+            n.type === 'engineerCenter' && 
+            n.active &&
+            n.constructed
+        );
+        const intelRadiosCount = gameState.nodes.filter(n => 
+            n.team === 'player2' && 
+            n.type === 'intelRadio' && 
+            n.active &&
+            n.constructed
+        ).length;
+        
+        // Si tiene los dos talleres y al menos 2 radios, y tiene mucho dinero, reducir scores para permitir ahorro
+        if (currency >= 400 && hasTruckFactory && hasEngineerCenter && intelRadiosCount >= 2) {
+            // Reducir scores de todas las acciones para que sea menos probable que gaste todo
+            // Esto permite que la IA ahorre dinero para usar drones y plantas nucleares
+            filteredActions = filteredActions.map(action => ({
+                ...action,
+                score: action.score * 0.7 // Reducir score en 30% para hacer menos probable el gasto
+            }));
+        }
+        
         return filteredActions;
     }
     
@@ -428,6 +481,110 @@ export class DefaultDeckProfile extends BaseProfile {
         }
         
         return sorted;
+    }
+    
+    /**
+     * Maneja reacciones defensivas a amenazas del jugador
+     * @param {string} threatType - Tipo de amenaza ('commando', 'truckAssault', 'cameraDrone', 'drone')
+     * @param {Object} threatData - Datos de la amenaza (nodo, posición, etc.)
+     * @param {boolean} isDeployed - Si la amenaza está desplegada/lista para atacar (para camera drone)
+     * @param {Object} targetBuilding - Para drones bomba, el edificio objetivo
+     * @param {Object} gameState - Estado completo del juego
+     * @param {string} team - Equipo de la IA
+     * @param {number} currency - Currency actual
+     * @param {string} difficulty - Dificultad de la IA ('easy', 'medium', 'hard')
+     * @returns {Object|null} Acción a ejecutar { type: 'sniper' | 'antiDrone', targetId?: string, targetX?: number, targetY?: number } o null si no reacciona
+     */
+    handleDefensiveReaction(threatType, threatData, isDeployed, targetBuilding, gameState, team, currency, difficulty) {
+        // Probabilidades de reaccionar según dificultad
+        const reactProbabilities = {
+            easy: 0.65,    // 65% de reaccionar
+            medium: 0.82,  // 82% de reaccionar
+            hard: 0.92     // 92% de reaccionar
+        };
+        
+        const reactProbability = reactProbabilities[difficulty] || 0.75;
+        
+        // Aplicar probabilidad de error humano
+        if (Math.random() > reactProbability) {
+            return null; // No reacciona (error humano)
+        }
+        
+        // 🎯 FIX: Definir costos antes del switch para que estén disponibles en todos los casos
+        const sniperCost = SERVER_NODE_CONFIG.costs.sniperStrike || 60;
+        const antiDroneCost = SERVER_NODE_CONFIG.costs.antiDrone || 115;
+        
+        // Manejar según tipo de amenaza
+        switch (threatType) {
+            case 'commando':
+            case 'truckAssault':
+                // Amenazas inmediatas: responder con sniper
+                if (!threatData || !threatData.id) {
+                    return null;
+                }
+                
+                // Verificar que tenemos currency para sniper
+                if (currency < sniperCost) {
+                    return null;
+                }
+                
+                return {
+                    type: 'sniper',
+                    targetId: threatData.id
+                };
+                
+            case 'cameraDrone':
+                // Camera drone: solo reaccionar cuando está desplegado
+                if (!isDeployed || !threatData || !threatData.id) {
+                    return null;
+                }
+                
+                // Verificar que tenemos currency para sniper
+                if (currency < sniperCost) {
+                    return null;
+                }
+                
+                return {
+                    type: 'sniper',
+                    targetId: threatData.id
+                };
+                
+            case 'drone':
+                // Drones bomba: construir antiDrone cerca del edificio objetivo
+                if (!targetBuilding || !targetBuilding.id) {
+                    return null;
+                }
+                
+                // Verificar que tenemos currency para antiDrone
+                if (currency < antiDroneCost) {
+                    return null;
+                }
+                
+                // Verificar que no tenemos ya un antiDrone cerca de este edificio
+                const existingAntiDrone = gameState.nodes.find(n => 
+                    n.type === 'antiDrone' && 
+                    n.team === team && 
+                    n.active && 
+                    n.constructed &&
+                    !n.isAbandoning
+                );
+                
+                // Si ya tenemos un antiDrone, no construir otro (por ahora)
+                // TODO: En el futuro podríamos verificar si está cerca del edificio objetivo
+                if (existingAntiDrone) {
+                    return null;
+                }
+                
+                return {
+                    type: 'antiDrone',
+                    targetId: targetBuilding.id,
+                    targetX: targetBuilding.x,
+                    targetY: targetBuilding.y
+                };
+                
+            default:
+                return null;
+        }
     }
 }
 

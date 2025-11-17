@@ -94,6 +94,9 @@ export class AISystem {
         // 🎯 Tracking de últimas construcciones (para evitar spam de mismo edificio)
         this.lastBuildings = []; // Array de los últimos buildingIds construidos (máx 5)
         
+        // 🎯 Sistema de reacciones defensivas programadas (con delay para que el cliente vea la amenaza)
+        this.pendingReactions = []; // Array de { executeAt, reaction, threatType, threatData, targetBuilding }
+        
         // Stats
         this.stats = {
             dronesLaunched: 0,
@@ -295,6 +298,9 @@ export class AISystem {
             this.handleReactions(enemyTeam, currency);
         }
         
+        // 🎯 NUEVO: Procesar reacciones defensivas programadas (con delay)
+        this.processPendingReactions();
+        
         // Reporte de estado (cada 30s)
         this.timers.statusReport += dt;
         if (this.timers.statusReport >= AIConfig.intervals.statusReport) {
@@ -487,6 +493,128 @@ export class AISystem {
      */
     getDifficultyMultipliers() {
         return getDifficultyMultipliers(this.difficulty);
+    }
+    
+    /**
+     * Maneja detección de amenazas del jugador (llamado desde handlers cuando se despliegan amenazas)
+     * @param {string} threatType - Tipo de amenaza ('commando', 'truckAssault', 'cameraDrone', 'drone')
+     * @param {Object} threatData - Datos de la amenaza (nodo, posición, etc.)
+     * @param {boolean} isDeployed - Si la amenaza está desplegada/lista para atacar (para camera drone)
+     * @param {Object} targetBuilding - Para drones bomba, el edificio objetivo
+     */
+    onThreatDetected(threatType, threatData, isDeployed = true, targetBuilding = null) {
+        if (!this.active || !this.profile) {
+            return;
+        }
+        
+        const team = 'player2';
+        const currency = this.gameState.currency[team] || 0;
+        
+        // Delegar al perfil para decidir la respuesta
+        const reaction = this.profile.handleDefensiveReaction(
+            threatType,
+            threatData,
+            isDeployed,
+            targetBuilding,
+            this.gameState,
+            team,
+            currency,
+            this.difficulty
+        );
+        
+        if (!reaction) {
+            return; // No reacciona
+        }
+        
+        // 🎯 FIX: Programar la reacción con un delay para que el cliente pueda ver la amenaza
+        // Delays según dificultad (simula tiempo de reacción humano)
+        const reactionDelays = {
+            easy: 2.5,    // 2.5 segundos (más lento, más error humano)
+            medium: 1.8,  // 1.8 segundos (medio)
+            hard: 1.2     // 1.2 segundos (más rápido, pero aún con delay)
+        };
+        
+        const baseDelay = reactionDelays[this.difficulty] || 1.8;
+        // Añadir variación aleatoria (±0.3s) para simular reacciones más naturales
+        const variance = 0.3;
+        const randomVariation = (Math.random() * variance * 2) - variance;
+        const reactionDelay = Math.max(1.0, baseDelay + randomVariation); // Mínimo 1 segundo
+        
+        const gameTime = this.gameState.gameTime || 0;
+        const executeAt = gameTime + reactionDelay;
+        
+        // Programar la reacción
+        this.pendingReactions.push({
+            executeAt,
+            reaction,
+            threatType,
+            threatData,
+            targetBuilding
+        });
+        
+        if (AIConfig.debug.logActions) {
+            console.log(`⏱️ IA: Reacción programada contra ${threatType} para ejecutarse en ${reactionDelay.toFixed(1)}s`);
+        }
+    }
+    
+    /**
+     * Procesa reacciones defensivas programadas que ya deben ejecutarse
+     */
+    processPendingReactions() {
+        if (!this.active || this.pendingReactions.length === 0) {
+            return;
+        }
+        
+        const gameTime = this.gameState.gameTime || 0;
+        const team = 'player2';
+        
+        // Filtrar reacciones que ya deben ejecutarse
+        const reactionsToExecute = this.pendingReactions.filter(pr => gameTime >= pr.executeAt);
+        
+        // Eliminar las reacciones que vamos a ejecutar
+        this.pendingReactions = this.pendingReactions.filter(pr => gameTime < pr.executeAt);
+        
+        // Ejecutar cada reacción
+        for (const pendingReaction of reactionsToExecute) {
+            const { reaction, threatType, threatData, targetBuilding } = pendingReaction;
+            
+            // Verificar que la amenaza aún existe (puede haber sido eliminada)
+            if (reaction.type === 'sniper' && threatData && threatData.id) {
+                const threatStillExists = this.gameState.nodes.find(n => 
+                    n.id === threatData.id && 
+                    n.active && 
+                    !n.isAbandoning
+                );
+                
+                if (!threatStillExists) {
+                    if (AIConfig.debug.logActions) {
+                        console.log(`⚠️ IA: Amenaza ${threatType} ${threatData.id} ya no existe, cancelando reacción`);
+                    }
+                    continue;
+                }
+            }
+            
+            // Ejecutar la reacción
+            if (reaction.type === 'sniper') {
+                // Lanzar sniper strike contra el objetivo específico
+                if (AIConfig.debug.logActions) {
+                    console.log(`🎯 IA REACCIÓN: Sniper strike contra ${threatType} ${reaction.targetId}`);
+                }
+                this.aiActionHandler.executeSniperAttack(
+                    this.gameState.nodes.filter(n => n.team === team && n.active),
+                    team,
+                    reaction.targetId
+                );
+            } else if (reaction.type === 'antiDrone') {
+                // Construir antiDrone cerca del edificio objetivo
+                if (AIConfig.debug.logActions) {
+                    console.log(`🛡️ IA REACCIÓN: Construir antiDrone cerca de edificio ${reaction.targetId} (amenaza: ${threatType})`);
+                }
+                // Usar el método existente de AIActionHandler para construir antiDrone
+                // El método calculateAntiDronePosition ya maneja la lógica de posicionamiento
+                this.aiActionHandler.executeBuild(team, 'antiDrone');
+            }
+        }
     }
     
     /**

@@ -58,7 +58,7 @@ export class AICardEvaluator {
         // 7. Aplicar bonificaciones
         if (cardScoringRules.bonuses) {
             for (const [bonusName, bonusValue] of Object.entries(cardScoringRules.bonuses)) {
-                if (this.evaluateBonusCondition(bonusName, bonusValue, state, gameState, team, profile)) {
+                if (this.evaluateBonusCondition(bonusName, bonusValue, state, gameState, team, profile, currency)) {
                     // Bonificaciones especiales que multiplican por cantidad
                     if (bonusName === 'perPlayerPlant' && state.playerPlants) {
                         score += bonusValue * state.playerPlants;
@@ -172,7 +172,7 @@ export class AICardEvaluator {
      * @param {Object} profile - Perfil de IA (opcional, para condiciones personalizadas)
      * @returns {boolean} Si la condición se cumple
      */
-    static evaluateBonusCondition(bonusName, bonusValue, state, gameState, team, profile = null) {
+    static evaluateBonusCondition(bonusName, bonusValue, state, gameState, team, profile = null, currency = 0) {
         // Condiciones genéricas (disponibles para todos los perfiles)
         switch (bonusName) {
             case 'earlyPhase':
@@ -214,7 +214,7 @@ export class AICardEvaluator {
         
         // Si no es una condición genérica, delegar al perfil (si existe)
         if (profile && typeof profile.evaluateCustomBonusCondition === 'function') {
-            const result = profile.evaluateCustomBonusCondition(bonusName, bonusValue, state, gameState, team);
+            const result = profile.evaluateCustomBonusCondition(bonusName, bonusValue, state, gameState, team, currency);
             if (result !== undefined) {
                 return result;
             }

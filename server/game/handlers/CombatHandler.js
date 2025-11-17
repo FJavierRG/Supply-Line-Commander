@@ -318,6 +318,11 @@ export class CombatHandler {
         
         console.log(`💣 Dron ${drone.id} lanzado por ${playerTeam} → ${targetNode.type} ${targetId}`);
         
+        // 🎯 NUEVO: Notificar a la IA si existe (amenaza inmediata con edificio objetivo)
+        if (this.gameState.aiSystem) {
+            this.gameState.aiSystem.onThreatDetected('drone', drone, true, targetNode);
+        }
+        
         return { success: true, drone, launcherId: launcher.id, targetId };
     }
     
@@ -514,6 +519,11 @@ export class CombatHandler {
         
         console.log(`🎖️ Comando especial operativo desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)}) - Radio: ${commandoDetectionRadius}px, Duración: ${commandoDuration}s`);
         
+        // 🎯 NUEVO: Notificar a la IA si existe (amenaza inmediata)
+        if (this.gameState.aiSystem) {
+            this.gameState.aiSystem.onThreatDetected('commando', commandoNode, true, null);
+        }
+        
         return { success: true, commando: commandoNode };
     }
     
@@ -578,6 +588,11 @@ export class CombatHandler {
         this.gameState.nodes.push(truckAssaultNode);
         
         console.log(`🚛 Truck Assault desplegado por ${playerTeam} en (${x.toFixed(0)}, ${y.toFixed(0)}) - Radio: ${truckAssaultDetectionRadius}px, Duración: ${truckAssaultDuration}s`);
+        
+        // 🎯 NUEVO: Notificar a la IA si existe (amenaza inmediata)
+        if (this.gameState.aiSystem) {
+            this.gameState.aiSystem.onThreatDetected('truckAssault', truckAssaultNode, true, null);
+        }
         
         return { success: true, truckAssault: truckAssaultNode };
     }
