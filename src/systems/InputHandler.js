@@ -1104,14 +1104,19 @@ export class InputHandler {
             description = config?.description || 'Edificio.';
             
             // Rango de acción/alerta/detección si aplica
-            if (config?.actionRange) {
-                ranges.push({ radius: config.actionRange, color: 'rgba(0, 255, 100, 0.6)', dash: [10, 5] });
-            }
-            if (config?.detectionRange) {
-                ranges.push({ radius: config.detectionRange, color: 'rgba(255, 200, 0, 0.6)', dash: [10, 5] });
-            }
-            if (config?.alertRange) {
-                ranges.push({ radius: config.alertRange, color: 'rgba(255, 120, 0, 0.5)', dash: [6, 6] });
+            // 🎯 NUEVO: Para anti-drone, NO mostrar el rango en hover (solo se muestra cuando se selecciona)
+            if (target.type === 'antiDrone') {
+                // No añadir rangos para anti-drone en hover - se muestra solo cuando está seleccionado
+            } else {
+                if (config?.actionRange) {
+                    ranges.push({ radius: config.actionRange, color: 'rgba(0, 255, 100, 0.6)', dash: [10, 5] });
+                }
+                if (config?.detectionRange) {
+                    ranges.push({ radius: config.detectionRange, color: 'rgba(255, 200, 0, 0.6)', dash: [10, 5] });
+                }
+                if (config?.alertRange) {
+                    ranges.push({ radius: config.alertRange, color: 'rgba(255, 120, 0, 0.5)', dash: [6, 6] });
+                }
             }
         }
         

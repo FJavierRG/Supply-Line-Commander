@@ -1020,6 +1020,19 @@ export class Game {
             }
         }
         
+        // 🎯 NUEVO: Mostrar rango de intercepción de anti-drone cuando se selecciona una torreta propia
+        if (this.selectedNode && 
+            this.selectedNode.type === 'antiDrone' && 
+            this.selectedNode.team === this.myTeam &&
+            this.selectedNode.active &&
+            this.selectedNode.constructed) {
+            // Usar el mismo visual que se usa para las torretas enemigas en modo drone
+            this.renderer.renderAntiDroneInterceptionRange(
+                this.selectedNode.x, 
+                this.selectedNode.y
+            );
+        }
+        
         // Preview de construcción o dron
         if (this.buildSystem.isActive()) {
             const mousePos = this.inputHandler.getMousePosition();

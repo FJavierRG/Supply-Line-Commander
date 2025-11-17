@@ -2469,6 +2469,35 @@ export class RenderSystem {
         this.ctx.restore();
     }
     
+    /**
+     * 🎯 NUEVO: Renderiza el rango de intercepción de una torreta anti-drone (cuando se selecciona)
+     * Usa el mismo visual que se muestra para las torretas enemigas en modo drone
+     * @param {number} x - Coordenada X de la torreta
+     * @param {number} y - Coordenada Y de la torreta
+     */
+    renderAntiDroneInterceptionRange(x, y) {
+        // Leer el rango de intercepción desde la configuración del servidor
+        const interceptionRange = this.game?.serverBuildingConfig?.specialNodes?.antiDrone?.detectionRange || 160;
+        
+        // Si el rango es 0 o no válido, no renderizar nada
+        if (!interceptionRange || interceptionRange <= 0) {
+            return;
+        }
+        
+        this.ctx.save();
+        
+        // Círculo de rango de intercepción (mismo estilo que en renderEnemyBuildPreview y tooltip de hover)
+        this.ctx.strokeStyle = 'rgba(255, 200, 0, 0.6)';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([10, 5]);
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, interceptionRange, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+        
+        this.ctx.restore();
+    }
+    
     renderBuildPreview(x, y, bases, buildingType = 'fob') {
         // Verificar colisiones usando la nueva lógica de detectionRadius
         let tooClose = false;

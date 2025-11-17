@@ -201,8 +201,8 @@ export function getExclusionRadius(node, radiusType, game = null) {
             return node.detectionRadius || config?.detectionRadius || (config?.radius || 30) * 2.5;
             
         case 'droneInterception':
-            // 🆕 Radio de intercepción de drones por torretas antidrones (160px según DroneSystemServer)
-            return 160;
+            // 🆕 Radio de intercepción de drones por torretas antidrones (desde serverNodes)
+            return game?.serverBuildingConfig?.specialNodes?.antiDrone?.detectionRange || 160;
             
         case 'physical':
             // Solo el radio físico del nodo
