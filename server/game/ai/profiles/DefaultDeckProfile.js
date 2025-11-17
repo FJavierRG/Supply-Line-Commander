@@ -290,13 +290,15 @@ export class DefaultDeckProfile extends BaseProfile {
             return actions;
         }
         
+        let filteredActions = actions;
+        
         // 🎯 REGLA ESPECÍFICA DEL PERFIL DEFAULT: Bloquear spam de intelRadio
         // Si las últimas 2 construcciones fueron intelRadio, BLOQUEAR completamente la tercera
         if (state.lastBuildings && state.lastBuildings.length >= 2) {
             const lastTwo = state.lastBuildings.slice(-2);
             if (lastTwo[0] === 'intelRadio' && lastTwo[1] === 'intelRadio') {
                 // Eliminar completamente la opción de construir otra intelRadio
-                return actions.filter(action => action.cardId !== 'intelRadio');
+                filteredActions = filteredActions.filter(action => action.cardId !== 'intelRadio');
             }
         }
         
@@ -307,7 +309,7 @@ export class DefaultDeckProfile extends BaseProfile {
         // 3. Tenemos suficiente currency (coste + margen de seguridad del 50%)
         // 4. Tenemos al menos 1 planta nuclear (economía estable) O tenemos mucha currency
         if (state.phase === 'mid') {
-            const intelRadioAction = actions.find(action => action.cardId === 'intelRadio');
+            const intelRadioAction = filteredActions.find(action => action.cardId === 'intelRadio');
             if (intelRadioAction) {
                 const intelRadioCost = intelRadioAction.cost || 50;
                 const hasEnoughCurrency = currency >= (intelRadioCost * 1.5); // Margen de seguridad 50%
@@ -316,24 +318,55 @@ export class DefaultDeckProfile extends BaseProfile {
                 
                 // Si no cumple las condiciones, eliminar intel radio de las opciones
                 if (!hasEnoughCurrency || !hasStableEconomy || !hasLessThan2Radios) {
-                    return actions.filter(action => action.cardId !== 'intelRadio');
+                    filteredActions = filteredActions.filter(action => action.cardId !== 'intelRadio');
                 }
             }
         }
         
         // 🎯 CAPS DE FOBS POR FASE (específico del perfil)
         // Aplicar límites de FOBs según la fase actual
-        const fobAction = actions.find(action => action.cardId === 'fob');
+        const fobAction = filteredActions.find(action => action.cardId === 'fob');
         if (fobAction && state.myFOBs !== undefined) {
             const fobCaps = this.getFOBPhaseCaps();
             const phaseCap = fobCaps[state.phase] ?? 3;
             if (state.myFOBs >= phaseCap) {
                 // Eliminar FOB de las opciones si ya se alcanzó el cap
-                return actions.filter(action => action.cardId !== 'fob');
+                filteredActions = filteredActions.filter(action => action.cardId !== 'fob');
             }
         }
         
-        return actions;
+        // 🎯 EDIFICIOS ÚNICOS: Solo se puede tener uno de cada
+        // Truck Factory: solo uno en early es suficiente
+        const truckFactoryAction = filteredActions.find(action => action.cardId === 'truckFactory');
+        if (truckFactoryAction) {
+            const hasTruckFactory = gameState.nodes.some(n => 
+                n.team === 'player2' && 
+                n.type === 'truckFactory' && 
+                n.active &&
+                n.constructed
+            );
+            if (hasTruckFactory) {
+                // Eliminar truckFactory de las opciones si ya tiene uno
+                filteredActions = filteredActions.filter(action => action.cardId !== 'truckFactory');
+            }
+        }
+        
+        // Engineer Center: solo uno es suficiente
+        const engineerCenterAction = filteredActions.find(action => action.cardId === 'engineerCenter');
+        if (engineerCenterAction) {
+            const hasEngineerCenter = gameState.nodes.some(n => 
+                n.team === 'player2' && 
+                n.type === 'engineerCenter' && 
+                n.active &&
+                n.constructed
+            );
+            if (hasEngineerCenter) {
+                // Eliminar engineerCenter de las opciones si ya tiene uno
+                filteredActions = filteredActions.filter(action => action.cardId !== 'engineerCenter');
+            }
+        }
+        
+        return filteredActions;
     }
     
     /**
@@ -361,7 +394,7 @@ export class DefaultDeckProfile extends BaseProfile {
         const phasePriorities = priorities?.[phaseKey];
         
         if (!Array.isArray(phasePriorities) || phasePriorities.length === 0) {
-            return actions;
+        return actions;
         }
         
         // Boost decreciente para respetar el orden relativo dentro de la lista
