@@ -82,7 +82,7 @@ export class DefaultDeckProfile extends BaseProfile {
                     perMyPlant: -25,     // -25 por cada planta propia (evitar spam)
                     midPhase: 15,        // En mid, empujar a construir si es viable
                     latePhase: 25,       // En late, aún más peso si vamos por detrás
-                    hasExcessCurrency: 20, // +20 si tiene mucho dinero (flexibilidad para construir antes de late)
+                    hasExcessCurrency: 20, // +30 si tiene mucho dinero (flexibilidad para construir antes de late)
                     hasAdvantage: -50,   // 🎯 Penalización cuando tiene 2 plantas de ventaja (debe priorizar aggro)
                     hasBigAdvantage: -100 // 🎯 NUEVO: Penalización mayor cuando tiene 3+ plantas de ventaja (bloquear construcción)
                 }
@@ -129,8 +129,8 @@ export class DefaultDeckProfile extends BaseProfile {
                     earlyPhase: -999, // Penalización enorme en early → se filtra al fondo de la lista
                     midPhase: 25,     // Pequeño empuje en mid
                     latePhase: 55,    // Gran empuje en late
-                    hasExcessCurrency: 25, // +25 si tiene mucho dinero (flexibilidad para usar drones antes de late)
-                    hasAdvantage: 35  // 🎯 NUEVO: Bonus cuando tiene ventaja (priorizar aggro)
+                    hasExcessCurrency: 45, // +25 si tiene mucho dinero (flexibilidad para usar drones antes de late)
+                    hasAdvantage: 45  // 🎯 NUEVO: Bonus cuando tiene ventaja (priorizar aggro)
                 }
             },
             'sniperStrike': {
@@ -140,15 +140,6 @@ export class DefaultDeckProfile extends BaseProfile {
                     base: 20,   // Bonus base siempre aplica
                     notEarly: 20, // +20 extra en mid/late → más uso fuera de early
                     hasAdvantage: 25 // 🎯 NUEVO: Bonus cuando tiene ventaja (priorizar aggro)
-                }
-            },
-            // 🎯 Preparado para futuros mazos que incluyan fobSabotage
-            'fobSabotage': {
-                base: 20,
-                bonuses: {
-                    playerHasFOBs: 20, // Solo tiene sentido si el jugador tiene FOBs
-                    midPhase: 20,      // Relevante en mid
-                    latePhase: 20      // Y en late
                 }
             }
         };
@@ -224,6 +215,14 @@ export class DefaultDeckProfile extends BaseProfile {
         if (!state) {
             state = AIGameStateAnalyzer.analyzeState(team, gameState);
         }
+
+        // 🛟 Actualizar colchón dinámico compartido
+        this.updateCurrencyBuffer(gameState);
+        const buffer = this.getCurrencyBuffer();
+        const hasFobEmergency = state?.myFOBs !== undefined && state.myFOBs < 2;
+        const availableCurrency = hasFobEmergency
+            ? this.getRawCurrency(gameState)  // Emergencia FOB: ignorar colchón
+            : this.getAvailableCurrency(gameState);
         
         // Obtener reglas de scoring del perfil
         const scoringRules = this.getScoringRules();
@@ -233,7 +232,7 @@ export class DefaultDeckProfile extends BaseProfile {
             this.deck,
             gameState,
             team,
-            currency,
+            availableCurrency,
             state,
             scoringRules,
             this // Pasar el perfil para condiciones personalizadas
@@ -241,6 +240,14 @@ export class DefaultDeckProfile extends BaseProfile {
         
         // 🎯 Aplicar reglas específicas del perfil (penalizaciones, etc.)
         const actionsWithProfileRules = this.applyProfileSpecificRules(actions, state, gameState, currency);
+        
+        // 🎯 DEBUG: Log de acciones después de aplicar reglas del perfil
+        if (AIConfig?.debug?.logScoring && actionsWithProfileRules.length > 0) {
+            const summary = actionsWithProfileRules
+                .map(action => `${action.cardId}:${Number(action.score).toFixed(1)}`)
+                .join(', ');
+            console.log(`🔍 [IA][${state.phase}] Acciones después de reglas del perfil (${actionsWithProfileRules.length}): ${summary}`);
+        }
         
         return this.applyPhasePriorities(actionsWithProfileRules, state.phase);
     }
@@ -277,7 +284,7 @@ export class DefaultDeckProfile extends BaseProfile {
             case 'hasExcessCurrency':
                 // 🎯 NUEVO: Tiene mucho dinero (más de 400) - permite flexibilidad para construir antes de late
                 // Esto permite que la IA use drones y plantas nucleares en mid si tiene mucho dinero
-                return currency >= 400;
+                return currency >= 300;
             case 'hasAdvantage':
                 // 🎯 La IA tiene ventaja moderada (a partir del minuto 5)
                 // Condiciones: tiene mucho dinero (>=500) O tiene exactamente 2 plantas más que el jugador
@@ -346,6 +353,45 @@ export class DefaultDeckProfile extends BaseProfile {
         }
         
         let filteredActions = actions;
+        
+        // 🚨 EMERGENCIA: si tenemos menos de 2 FOBs, la IA debe priorizar reconstruirlos por encima de todo
+        if (state?.myFOBs !== undefined && state.myFOBs < 2) {
+            const fobAction = filteredActions.find(action => action.cardId === 'fob');
+            if (fobAction) {
+                const missingFOBs = 2 - state.myFOBs;
+                const emergencyBoost = 1000; // Suficiente para colocarlo por encima de cualquier otra acción
+                
+                if (AIConfig.debug?.logActions) {
+                    console.log(`🚨 IA DOBLE FOB: Tiene ${state.myFOBs} FOBs (<2). Reconstrucción prioritaria (faltan ${missingFOBs}).`);
+                }
+                
+                filteredActions = filteredActions.map(action => {
+                    if (action.cardId === 'fob') {
+                        return {
+                            ...action,
+                            score: action.score + emergencyBoost,
+                            emergency: 'fob_rebuild'
+                        };
+                    }
+                    // Reducir el resto de acciones para favorecer el ahorro hasta construir el FOB
+                    return {
+                        ...action,
+                        score: action.score * 0.2
+                    };
+                });
+                
+                // No aplicar reglas adicionales: la IA debe enfocarse en reconstruir el FOB
+                return filteredActions;
+            }
+        }
+        
+        // 🚫 BLOQUEO: No construir plantas nucleares si ya tenemos 2 más que el jugador
+        if (state?.myPlants !== undefined && state?.playerPlants !== undefined) {
+            const plantDifference = state.myPlants - state.playerPlants;
+            if (plantDifference >= 2) {
+                filteredActions = filteredActions.filter(action => action.cardId !== 'nuclearPlant');
+            }
+        }
         
         // 🎯 REGLA ESPECÍFICA DEL PERFIL DEFAULT: Bloquear spam de intelRadio
         // Si las últimas 2 construcciones fueron intelRadio, BLOQUEAR completamente la tercera
@@ -444,6 +490,10 @@ export class DefaultDeckProfile extends BaseProfile {
             // La construcción reactiva se maneja en handleDefensiveReaction cuando se detecta un drone enemigo
             filteredActions = filteredActions.filter(action => action.cardId !== 'antiDrone');
         }
+        
+        // 🎯 NOTA: El sistema de ahorro ahora se maneja completamente por el colchón dinámico en BaseProfile
+        // No necesitamos márgenes adicionales 1.2/1.6 porque el colchón ya reserva dinero progresivamente
+        // Las acciones se evalúan con availableCurrency (currency - buffer), así que ya están limitadas
         
         // 🎯 NUEVO: Lógica de ahorro cuando tiene mucho dinero
         // Si tiene más de 400 de currency y tiene los talleres y radios, reducir scores para permitir ahorro
@@ -618,6 +668,8 @@ export class DefaultDeckProfile extends BaseProfile {
                 
             case 'drone':
                 // Drones bomba: construir antiDrone cerca del edificio objetivo
+                // NOTA: Este caso ya no se usa para drones - ahora se usa createEmergencyAntiDroneOrder
+                // Se mantiene por compatibilidad con otras amenazas
                 if (!targetBuilding || !targetBuilding.id) {
                     console.log(`❌ IA DEFENSA: No hay edificio objetivo válido para el drone`);
                     return null;
@@ -632,22 +684,6 @@ export class DefaultDeckProfile extends BaseProfile {
                     return null;
                 }
                 
-                // Verificar que no tenemos ya un antiDrone cerca de este edificio
-                const existingAntiDrone = gameState.nodes.find(n => 
-                    n.type === 'antiDrone' && 
-                    n.team === team && 
-                    n.active && 
-                    n.constructed &&
-                    !n.isAbandoning
-                );
-                
-                // Si ya tenemos un antiDrone, no construir otro (por ahora)
-                // TODO: En el futuro podríamos verificar si está cerca del edificio objetivo
-                if (existingAntiDrone) {
-                    console.log(`⚠️ IA DEFENSA: Ya tiene un antiDrone construido, no construye otro`);
-                    return null;
-                }
-                
                 console.log(`✅ IA DEFENSA: Decisión tomada - construir antiDrone (currency: ${currency}, coste: ${antiDroneCost})`);
                 return {
                     type: 'antiDrone',
@@ -659,6 +695,57 @@ export class DefaultDeckProfile extends BaseProfile {
             default:
                 return null;
         }
+    }
+    
+    /**
+     * Crea una orden de emergencia para construir antiDrone cuando se detecta un drone enemigo
+     * Este método tiene prioridad absoluta sobre todas las demás decisiones
+     * @param {Object} droneThreat - Datos del drone enemigo
+     * @param {Object} targetBuilding - Edificio objetivo del drone
+     * @param {Object} gameState - Estado completo del juego
+     * @param {string} team - Equipo de la IA
+     * @param {number} currency - Currency actual
+     * @param {string} difficulty - Dificultad de la IA
+     * @returns {Object|null} Orden de emergencia { type: 'antiDrone', targetId: string } o null si no se crea
+     */
+    createEmergencyAntiDroneOrder(droneThreat, targetBuilding, gameState, team, currency, difficulty) {
+        if (!targetBuilding || !targetBuilding.id) {
+            console.log(`❌ IA EMERGENCIA: No hay edificio objetivo válido para el drone`);
+            return null;
+        }
+        
+        // Probabilidades de reaccionar según dificultad (más altas que reacciones normales)
+        const reactProbabilities = {
+            easy: 0.75,    // 75% de reaccionar (más alto que reacciones normales)
+            medium: 0.88,  // 88% de reaccionar
+            hard: 0.95     // 95% de reaccionar
+        };
+        
+        const reactProbability = reactProbabilities[difficulty] || 0.85;
+        const randomRoll = Math.random();
+        
+        console.log(`🚨 IA EMERGENCIA: Detectado drone enemigo → edificio objetivo: ${targetBuilding.type} (${targetBuilding.id.substring(0, 8)})`);
+        
+        // Aplicar probabilidad de error humano
+        if (randomRoll > reactProbability) {
+            console.log(`❌ IA EMERGENCIA: Fallo en detección (tirada: ${(randomRoll * 100).toFixed(1)}% > ${(reactProbability * 100).toFixed(1)}%, dificultad: ${difficulty})`);
+            return null; // No reacciona (error humano)
+        }
+        
+        const antiDroneCost = SERVER_NODE_CONFIG.costs.antiDrone || 115;
+        
+        // Verificar que tenemos suficiente currency
+        if (currency < antiDroneCost) {
+            console.log(`❌ IA EMERGENCIA: Sin dinero suficiente (tiene: ${currency}, necesita: ${antiDroneCost})`);
+            return null;
+        }
+        
+        console.log(`✅ IA EMERGENCIA: Decisión tomada - crear orden de emergencia antiDrone (currency: ${currency}, coste: ${antiDroneCost})`);
+        
+        return {
+            type: 'antiDrone',
+            targetId: targetBuilding.id
+        };
     }
 }
 

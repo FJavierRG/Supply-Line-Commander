@@ -756,6 +756,11 @@ export class InputHandler {
         const enabledTypes = this.game.getEnabledVehicleTypes(base.type);
         if (enabledTypes.length === 0) return null;
         
+        // 🆕 NUEVO: Las coordenadas del clic (x, y) ya están en coordenadas visuales (transformadas por mirror view)
+        // Necesitamos calcular las posiciones de los botones en coordenadas visuales también,
+        // porque el renderizado aplica mirror compensation que hace flip de los botones alrededor del HQ.
+        const isPlayer2WithMirror = this.game.isMultiplayer && this.game.myTeam === 'player2';
+        
         const buttonSize = 40; // +15% más grande (35 * 1.15 = 40.25 ≈ 40)
         const buttonRadius = buttonSize / 2;
         const hitboxPadding = 5; // Padding extra para hitbox circular
@@ -784,11 +789,28 @@ export class InputHandler {
             // Si hay más, distribuirlos uniformemente
             const angle = centerAngle !== null ? centerAngle : (startAngle + (angleStep * index));
             
-            // Calcular posición en el círculo (igual que en renderResourceSelector)
-            const centerX = base.x + Math.cos(angle) * buttonDistance;
-            const centerY = base.y + Math.sin(angle) * buttonDistance;
+            // Calcular posición física del botón (igual que en renderResourceSelector)
+            const physicalOffsetX = Math.cos(angle) * buttonDistance;
+            const physicalOffsetY = Math.sin(angle) * buttonDistance;
+            const physicalCenterX = base.x + physicalOffsetX;
+            const physicalCenterY = base.y + physicalOffsetY;
             
-            // Verificar si el click está dentro del botón
+            // 🆕 NUEVO: Transformar a coordenadas visuales si el jugador 2 tiene mirror view
+            // El mirror compensation hace flip horizontal alrededor del centro del HQ
+            // Si el botón físico está en base.x + offsetX, el botón visual está en base.x - offsetX
+            let centerX, centerY;
+            if (isPlayer2WithMirror) {
+                // Aplicar el mismo flip que hace applyMirrorCompensation en el renderizado
+                // Flip horizontal alrededor del centro del HQ
+                centerX = base.x - physicalOffsetX; // Invertir el offset X
+                centerY = physicalCenterY; // Y no cambia
+            } else {
+                // Sin mirror view, usar coordenadas físicas directamente
+                centerX = physicalCenterX;
+                centerY = physicalCenterY;
+            }
+            
+            // Verificar si el click está dentro del botón (ambas en coordenadas visuales)
             const distance = Math.hypot(x - centerX, y - centerY);
             
             if (distance < buttonRadius + hitboxPadding) {

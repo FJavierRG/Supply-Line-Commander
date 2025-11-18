@@ -18,6 +18,15 @@ export default {
         logThreats: true,
         logActions: true,        // Logs de acciones (construcción, ataques)
         logSupply: true          // Logs de reabastecimiento
+    },
+
+    // === BUFFS ECONÓMICOS ===
+    economy: {
+        passiveIncomeBonus: {
+            easy: 0.5,
+            medium: 1.0,
+            hard: 1.5
+        }
     }
 };
 

@@ -1,6 +1,7 @@
 // ===== SISTEMA DE CURRENCY (SERVIDOR) =====
 import { GAME_CONFIG } from '../../config/gameConfig.js';
 import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
+import AIConfig from '../ai/config/AIConfig.js';
 
 export class CurrencySystem {
     constructor(gameState) {
@@ -16,6 +17,13 @@ export class CurrencySystem {
         // Base pasiva
         let player1Income = GAME_CONFIG.currency.passiveRate;
         let player2Income = GAME_CONFIG.currency.passiveRate;
+
+        const passiveBonus = AIConfig.economy.passiveIncomeBonus || {};
+        const aiDifficulty = this.gameState.room?.aiPlayer?.difficulty || 'medium';
+        const aiPassiveBonus = passiveBonus[aiDifficulty] || 0;
+
+        // Asumimos player2 como IA
+        player2Income += aiPassiveBonus;
         
         // Bonus de Plantas Nucleares (solo si no están disabled)
         const nuclearBonus = SERVER_NODE_CONFIG.effects.nuclearPlant.incomeBonus;

@@ -85,6 +85,63 @@ export class RenderSystem {
         this.mirrorViewApplied = false;
     }
     
+    /**
+     * 🆕 NUEVO: Aplica compensación del mirror view para UI centrada en un punto
+     * Usar para elementos de UI que deben verse correctamente orientados (textos, iconos, botones)
+     * @param {number} centerX - Coordenada X del centro del elemento
+     * @param {number} centerY - Coordenada Y del centro del elemento
+     * @returns {boolean} - True si se aplicó la compensación (para saber si hacer restore después)
+     */
+    applyMirrorCompensation(centerX, centerY) {
+        if (!this.mirrorViewApplied) return false;
+        
+        this.ctx.save();
+        this.ctx.translate(centerX, centerY);
+        this.ctx.scale(-1, 1);
+        this.ctx.translate(-centerX, -centerY);
+        return true;
+    }
+    
+    /**
+     * 🆕 NUEVO: Restaura la compensación del mirror view aplicada con applyMirrorCompensation
+     * @param {boolean} wasApplied - Resultado de applyMirrorCompensation
+     */
+    restoreMirrorCompensation(wasApplied) {
+        if (wasApplied) {
+            this.ctx.restore();
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Ejecuta una función de renderizado con compensación automática del mirror view
+     * Útil para simplificar el código y evitar olvidar el restore
+     * @param {Function} renderFn - Función que realiza el renderizado
+     * @param {number} centerX - Coordenada X del centro del elemento
+     * @param {number} centerY - Coordenada Y del centro del elemento
+     */
+    renderWithMirrorCompensation(renderFn, centerX, centerY) {
+        const wasApplied = this.applyMirrorCompensation(centerX, centerY);
+        try {
+            renderFn();
+        } finally {
+            this.restoreMirrorCompensation(wasApplied);
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Aplica compensación del mirror view para elementos globales (tooltips, textos flotantes)
+     * Usar para elementos que no están centrados en un nodo específico
+     * @returns {boolean} - True si se aplicó la compensación
+     */
+    applyGlobalMirrorCompensation() {
+        if (!this.mirrorViewApplied) return false;
+        
+        const worldWidth = this.game?.worldWidth || this.width;
+        this.ctx.scale(-1, 1);
+        this.ctx.translate(-worldWidth, 0);
+        return true;
+    }
+    
     clear() {
         // Limpiar el canvas completo (solo la parte visible en pantalla)
         this.ctx.clearRect(0, 0, this.width, this.height);
@@ -670,13 +727,8 @@ export class RenderSystem {
     renderHQVehicles(node) {
         if (!this.game) return;
         
-        // Compensar Mirror View si está activo
-        if (this.mirrorViewApplied) {
-            this.ctx.save();
-            this.ctx.translate(node.x, node.y);
-            this.ctx.scale(-1, 1);
-            this.ctx.translate(-node.x, -node.y);
-        }
+        // 🆕 NUEVO: Compensar Mirror View usando método unificado
+        const wasCompensated = this.applyMirrorCompensation(node.x, node.y);
         
         const barWidth = node.radius * 2;
         const barHeight = 9;
@@ -727,10 +779,8 @@ export class RenderSystem {
         this.ctx.strokeText(vehicleText, textX, barY + 26 + shakeY);
         this.ctx.fillText(vehicleText, textX, barY + 26 + shakeY);
         
-        // Restaurar Mirror View si está activo
-        if (this.mirrorViewApplied) {
-            this.ctx.restore();
-        }
+        // 🆕 NUEVO: Restaurar Mirror View usando método unificado
+        this.restoreMirrorCompensation(wasCompensated);
     }
     
     // ========== UI DEL HOSPITAL DE CAMPAÑA ==========
@@ -940,122 +990,129 @@ export class RenderSystem {
         const enabledTypes = this.game.getEnabledVehicleTypes(base.type);
         if (enabledTypes.length === 0) return; // No hay tipos habilitados, no renderizar
         
-        const buttonSize = 40; // +15% más grande (35 * 1.15 = 40.25 ≈ 40)
-        const buttonRadius = buttonSize / 2;
+        // 🆕 NUEVO: Compensar mirror view para que la UI se vea correctamente orientada
+        const wasCompensated = this.applyMirrorCompensation(base.x, base.y);
         
-        // Color verde militar
-        const militaryGreen = '#4a5d23';
-        const militaryGreenSolid = '#4a5d23'; // 100% opaco
-        
-        // 🆕 NUEVO: Calcular posición de los botones en un arco alrededor del HQ
-        // El arco comienza desde arriba-izquierda y se distribuye uniformemente
-        const ringRadius = base.radius * 1.6; // Radio del anillo de selección
-        const buttonDistance = ringRadius + 35; // Distancia del centro del HQ al centro de los botones
-        
-        // Ángulo inicial: comenzar desde arriba-izquierda (aproximadamente -135 grados desde arriba)
-        // Distribuir los botones en un arco que va de arriba-izquierda a arriba-derecha
-        const startAngle = -Math.PI * 0.75; // -135 grados (arriba-izquierda)
-        const endAngle = -Math.PI * 0.25; // -45 grados (arriba-derecha)
-        const angleSpan = endAngle - startAngle; // Rango total del arco
-        
-        // 🆕 NUEVO: Calcular espaciado dinámicamente según el número de botones
-        // Si hay 1 botón, se centra en el medio del arco
-        // Si hay más, se distribuyen uniformemente
-        const angleStep = enabledTypes.length > 1 ? angleSpan / (enabledTypes.length - 1) : 0;
-        const centerAngle = enabledTypes.length === 1 ? (startAngle + endAngle) / 2 : null;
-        
-        enabledTypes.forEach((vehicleTypeId, index) => {
-            const vehicleType = this.game.getVehicleTypeConfig(vehicleTypeId);
-            if (!vehicleType) return;
+        try {
+            const buttonSize = 40; // +15% más grande (35 * 1.15 = 40.25 ≈ 40)
+            const buttonRadius = buttonSize / 2;
             
-            // Calcular ángulo para este botón
-            // Si solo hay 1 botón, centrarlo en el medio del arco
-            // Si hay más, distribuirlos uniformemente
-            const angle = centerAngle !== null ? centerAngle : (startAngle + (angleStep * index));
+            // Color verde militar
+            const militaryGreen = '#4a5d23';
+            const militaryGreenSolid = '#4a5d23'; // 100% opaco
             
-            // Calcular posición en el círculo
-            const centerX = base.x + Math.cos(angle) * buttonDistance;
-            const centerY = base.y + Math.sin(angle) * buttonDistance;
+            // 🆕 NUEVO: Calcular posición de los botones en un arco alrededor del HQ
+            // El arco comienza desde arriba-izquierda y se distribuye uniformemente
+            const ringRadius = base.radius * 1.6; // Radio del anillo de selección
+            const buttonDistance = ringRadius + 35; // Distancia del centro del HQ al centro de los botones
             
-            const isSelected = base.selectedResourceType === vehicleTypeId;
-            const isAvailable = this.game.isVehicleAvailable(base, vehicleTypeId);
+            // Ángulo inicial: comenzar desde arriba-izquierda (aproximadamente -135 grados desde arriba)
+            // Distribuir los botones en un arco que va de arriba-izquierda a arriba-derecha
+            const startAngle = -Math.PI * 0.75; // -135 grados (arriba-izquierda)
+            const endAngle = -Math.PI * 0.25; // -45 grados (arriba-derecha)
+            const angleSpan = endAngle - startAngle; // Rango total del arco
             
-            // Color más apagado si no está disponible
-            const bgColor = !isAvailable ? 'rgba(100, 100, 100, 0.5)' : 
-                           isSelected ? militaryGreenSolid : 'rgba(0, 0, 0, 0.7)';
-            const borderColor = !isAvailable ? 'rgba(150, 150, 150, 0.5)' :
-                               isSelected ? militaryGreen : 'rgba(74, 93, 35, 0.5)';
+            // 🆕 NUEVO: Calcular espaciado dinámicamente según el número de botones
+            // Si hay 1 botón, se centra en el medio del arco
+            // Si hay más, se distribuyen uniformemente
+            const angleStep = enabledTypes.length > 1 ? angleSpan / (enabledTypes.length - 1) : 0;
+            const centerAngle = enabledTypes.length === 1 ? (startAngle + endAngle) / 2 : null;
             
-            // Renderizar botón (REDONDO)
-            this.ctx.fillStyle = bgColor;
-            this.ctx.beginPath();
-            this.ctx.arc(centerX, centerY, buttonRadius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.strokeStyle = borderColor;
-            this.ctx.lineWidth = isSelected ? 3 : 2;
-            this.ctx.stroke();
-            
-            // Renderizar icono del tipo de vehículo
-            const icon = this.assetManager.getSprite(vehicleType.icon);
-            if (icon) {
-                const iconSize = 34; // Tamaño del icono +20% (28 * 1.2 = 33.6 ≈ 34)
-                // Aplicar opacidad si no está disponible
-                if (!isAvailable) {
-                    this.ctx.globalAlpha = 0.4;
+            enabledTypes.forEach((vehicleTypeId, index) => {
+                const vehicleType = this.game.getVehicleTypeConfig(vehicleTypeId);
+                if (!vehicleType) return;
+                
+                // Calcular ángulo para este botón
+                // Si solo hay 1 botón, centrarlo en el medio del arco
+                // Si hay más, distribuirlos uniformemente
+                const angle = centerAngle !== null ? centerAngle : (startAngle + (angleStep * index));
+                
+                // Calcular posición en el círculo
+                const centerX = base.x + Math.cos(angle) * buttonDistance;
+                const centerY = base.y + Math.sin(angle) * buttonDistance;
+                
+                const isSelected = base.selectedResourceType === vehicleTypeId;
+                const isAvailable = this.game.isVehicleAvailable(base, vehicleTypeId);
+                
+                // Color más apagado si no está disponible
+                const bgColor = !isAvailable ? 'rgba(100, 100, 100, 0.5)' : 
+                               isSelected ? militaryGreenSolid : 'rgba(0, 0, 0, 0.7)';
+                const borderColor = !isAvailable ? 'rgba(150, 150, 150, 0.5)' :
+                                   isSelected ? militaryGreen : 'rgba(74, 93, 35, 0.5)';
+                
+                // Renderizar botón (REDONDO)
+                this.ctx.fillStyle = bgColor;
+                this.ctx.beginPath();
+                this.ctx.arc(centerX, centerY, buttonRadius, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.strokeStyle = borderColor;
+                this.ctx.lineWidth = isSelected ? 3 : 2;
+                this.ctx.stroke();
+                
+                // Renderizar icono del tipo de vehículo
+                const icon = this.assetManager.getSprite(vehicleType.icon);
+                if (icon) {
+                    const iconSize = 34; // Tamaño del icono +20% (28 * 1.2 = 33.6 ≈ 34)
+                    // Aplicar opacidad si no está disponible
+                    if (!isAvailable) {
+                        this.ctx.globalAlpha = 0.4;
+                    }
+                    this.ctx.drawImage(icon, 
+                        centerX - iconSize/2, centerY - iconSize/2, 
+                        iconSize, iconSize);
+                    if (!isAvailable) {
+                        this.ctx.globalAlpha = 1.0; // Restaurar opacidad
+                    }
+                } else {
+                    // Fallback a emoji si no hay sprite
+                    this.ctx.font = '25px Arial';
+                    this.ctx.fillStyle = isAvailable ? '#fff' : '#999';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    // 🆕 NUEVO: Emoji por defecto según el tipo (genérico para cualquier tipo)
+                    // Mapeo de tipos conocidos a emojis
+                    const emojiMap = {
+                        'medical': '🚑',
+                        'helicopter': '🚁',
+                        'repair': '🔧',
+                        'ammo': '🚛'
+                    };
+                    const emoji = emojiMap[vehicleTypeId] || '🚚'; // Fallback genérico si no hay mapeo
+                    this.ctx.fillText(emoji, centerX, centerY);
                 }
-                this.ctx.drawImage(icon, 
-                    centerX - iconSize/2, centerY - iconSize/2, 
-                    iconSize, iconSize);
-                if (!isAvailable) {
-                    this.ctx.globalAlpha = 1.0; // Restaurar opacidad
-                }
-            } else {
-                // Fallback a emoji si no hay sprite
-                this.ctx.font = '25px Arial';
-                this.ctx.fillStyle = isAvailable ? '#fff' : '#999';
-                this.ctx.textAlign = 'center';
-                this.ctx.textBaseline = 'middle';
-                // 🆕 NUEVO: Emoji por defecto según el tipo (genérico para cualquier tipo)
-                // Mapeo de tipos conocidos a emojis
-                const emojiMap = {
-                    'medical': '🚑',
-                    'helicopter': '🚁',
-                    'repair': '🔧',
-                    'ammo': '🚛'
-                };
-                const emoji = emojiMap[vehicleTypeId] || '🚚'; // Fallback genérico si no hay mapeo
-                this.ctx.fillText(emoji, centerX, centerY);
-            }
-        });
-        
-        // 🆕 NUEVO: Texto indicador del modo seleccionado (arriba del HQ, encima de los botones)
-        const selectedType = this.game.getVehicleTypeConfig(base.selectedResourceType);
-        const modeText = selectedType ? selectedType.name.toUpperCase() : 'SELECCIONAR';
-        const modeColor = '#4a5d23'; // Verde militar
-        
-        // Posición del texto arriba del HQ (encima de los botones en el arco)
-        // Calcular la posición más alta de los botones para colocar el texto arriba
-        const topButtonY = base.y + Math.sin(startAngle) * buttonDistance; // Y del primer botón (más arriba)
-        const textY = topButtonY - 70; // 50px arriba del botón más alto para no tapar los botones
-        
-        // Fondo para el texto
-        this.ctx.font = 'bold 17px Arial'; // +20% (14 * 1.2 = 16.8 ≈ 17)
-        const textMetrics = this.ctx.measureText(modeText);
-        const textWidth = textMetrics.width;
-        const textHeight = 19; // +20% (16 * 1.2 = 19.2 ≈ 19)
-        const textX = base.x - textWidth / 2;
-        
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        this.ctx.fillRect(textX - 4, textY - textHeight / 2, textWidth + 8, textHeight);
-        
-        this.ctx.strokeStyle = modeColor;
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(textX - 4, textY - textHeight / 2, textWidth + 8, textHeight);
-        
-        this.ctx.fillStyle = modeColor;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(modeText, base.x, textY);
+            });
+            
+            // 🆕 NUEVO: Texto indicador del modo seleccionado (arriba del HQ, encima de los botones)
+            const selectedType = this.game.getVehicleTypeConfig(base.selectedResourceType);
+            const modeText = selectedType ? selectedType.name.toUpperCase() : 'SELECCIONAR';
+            const modeColor = '#4a5d23'; // Verde militar
+            
+            // Posición del texto arriba del HQ (encima de los botones en el arco)
+            // Calcular la posición más alta de los botones para colocar el texto arriba
+            const topButtonY = base.y + Math.sin(startAngle) * buttonDistance; // Y del primer botón (más arriba)
+            const textY = topButtonY - 70; // 50px arriba del botón más alto para no tapar los botones
+            
+            // Fondo para el texto
+            this.ctx.font = 'bold 17px Arial'; // +20% (14 * 1.2 = 16.8 ≈ 17)
+            const textMetrics = this.ctx.measureText(modeText);
+            const textWidth = textMetrics.width;
+            const textHeight = 19; // +20% (16 * 1.2 = 19.2 ≈ 19)
+            const textX = base.x - textWidth / 2;
+            
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            this.ctx.fillRect(textX - 4, textY - textHeight / 2, textWidth + 8, textHeight);
+            
+            this.ctx.strokeStyle = modeColor;
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(textX - 4, textY - textHeight / 2, textWidth + 8, textHeight);
+            
+            this.ctx.fillStyle = modeColor;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(modeText, base.x, textY);
+        } finally {
+            this.restoreMirrorCompensation(wasCompensated);
+        }
     }
     
     renderSupplyBar(base) {
@@ -1071,6 +1128,12 @@ export class RenderSystem {
         const barX = base.x - barWidth / 2;
         const barY = base.y + base.radius + 20;  // Bajado 25% más (16 * 1.25 = 20)
         
+        // HQ ALIADO no muestra barra de recursos
+        // Los vehículos se renderizan en renderVehicleUI() para evitar duplicación
+        if (base.type === 'hq' && !base.type.startsWith('enemy_')) {
+            return;
+        }
+        
         // Calcular offset de shake si está activo
         let shakeX = 0;
         let shakeY = 0;
@@ -1081,19 +1144,8 @@ export class RenderSystem {
             shakeY = Math.cos(base.noVehiclesShakeTime * shakeSpeed * 1.5) * shakeIntensity;
         }
         
-        // Compensar Mirror View si está activo
-        if (this.mirrorViewApplied) {
-            this.ctx.save();
-            this.ctx.translate(base.x, base.y);
-            this.ctx.scale(-1, 1);
-            this.ctx.translate(-base.x, -base.y);
-        }
-        
-        // HQ ALIADO no muestra barra de recursos
-        // Los vehículos se renderizan en renderVehicleUI() para evitar duplicación
-        if (base.type === 'hq' && !base.type.startsWith('enemy_')) {
-            return;
-        }
+        // 🆕 NUEVO: Compensar Mirror View usando método unificado
+        const wasCompensated = this.applyMirrorCompensation(base.x, base.y);
         
         // Icono de recursos (para FOB y Frentes)
         const resourceIcon = this.assetManager?.getSprite('ui-supplies');
@@ -1125,10 +1177,8 @@ export class RenderSystem {
         
         // Los contadores de vehículos se renderizan en renderVehicleUI() para evitar duplicación
         
-        // Restaurar Mirror View si está activo
-        if (this.mirrorViewApplied) {
-            this.ctx.restore();
-        }
+        // 🆕 NUEVO: Restaurar Mirror View usando método unificado
+        this.restoreMirrorCompensation(wasCompensated);
     }
     
     renderEffects(base) {
@@ -1177,11 +1227,8 @@ export class RenderSystem {
         
         this.ctx.save();
         
-        // Compensar Mirror View si está activo (para que texto no salga al revés)
-        if (this.mirrorViewApplied) {
-            this.ctx.scale(-1, 1);
-            this.ctx.translate(-this.game.worldWidth, 0);
-        }
+        // 🆕 NUEVO: Compensar Mirror View usando método unificado para elementos globales
+        const wasCompensated = this.applyGlobalMirrorCompensation();
         
         this.ctx.font = `${fontSize}px Arial`;
         this.ctx.textAlign = 'left';
@@ -1321,10 +1368,8 @@ export class RenderSystem {
                 // 🆕 Compensar Mirror View para textos "Disabled" (no deben verse volteados)
                 if (isDisabledText && this.mirrorViewApplied) {
                     this.ctx.save();
-                    // Compensar el mirror view con un flip adicional
-                    const worldWidth = this.game?.worldWidth || this.width;
-                    this.ctx.scale(-1, 1);
-                    this.ctx.translate(-worldWidth, 0);
+                    // 🆕 NUEVO: Compensar el mirror view usando método unificado para elementos globales
+                    this.applyGlobalMirrorCompensation();
                     
                     // Contorno negro (stroke) para mejor legibilidad
                     this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
@@ -3627,13 +3672,8 @@ export class RenderSystem {
             // HQ aliado: usa renderHQVehicles
             this.renderHQVehicles(node);
         } else if (node.type === 'campaignHospital' && node.constructed && !node.isConstructing) {
-            // Compensar Mirror View si está activo
-            if (this.mirrorViewApplied) {
-                this.ctx.save();
-                this.ctx.translate(node.x, node.y);
-                this.ctx.scale(-1, 1);
-                this.ctx.translate(-node.x, -node.y);
-            }
+            // 🆕 NUEVO: Compensar Mirror View usando método unificado
+            const wasCompensated1 = this.applyMirrorCompensation(node.x, node.y);
             
             // Hospital de campaña: solo contador de vehículos (sin rango)
             const vehicleIconSprite = this.assetManager.getSprite('ui-medic-vehicle-icon');
@@ -3659,18 +3699,11 @@ export class RenderSystem {
             this.ctx.strokeText(counterText, textX, textY);
             this.ctx.fillText(counterText, textX, textY);
             
-            // Restaurar Mirror View si está activo
-            if (this.mirrorViewApplied) {
-                this.ctx.restore();
-            }
+            // 🆕 NUEVO: Restaurar Mirror View usando método unificado
+            this.restoreMirrorCompensation(wasCompensated1);
         } else if (node.maxVehicles > 0 && node.type !== 'hq' && !node.type.startsWith('enemy_') && node.hasSupplies !== false) {
-            // Compensar Mirror View si está activo
-            if (this.mirrorViewApplied) {
-                this.ctx.save();
-                this.ctx.translate(node.x, node.y);
-                this.ctx.scale(-1, 1);
-                this.ctx.translate(-node.x, -node.y);
-            }
+            // 🆕 NUEVO: Compensar Mirror View usando método unificado
+            const wasCompensated2 = this.applyMirrorCompensation(node.x, node.y);
             
             // FOBs y otros nodos con vehículos (no HQ, no enemigos)
             const barWidth = node.radius * 2;
@@ -3711,21 +3744,14 @@ export class RenderSystem {
             this.ctx.strokeText(vehicleText, textX, barY + barHeight + 26 + shakeY);
             this.ctx.fillText(vehicleText, textX, barY + barHeight + 26 + shakeY);
             
-            // Restaurar Mirror View si está activo
-            if (this.mirrorViewApplied) {
-                this.ctx.restore();
-            }
+            // 🆕 NUEVO: Restaurar Mirror View usando método unificado
+            this.restoreMirrorCompensation(wasCompensated2);
         }
         
         // 🆕 NUEVO: Renderizar helicópteros aterrizados
         if (node.landedHelicopters && node.landedHelicopters.length > 0 && game.helicopters) {
-            // Compensar Mirror View si está activo
-            if (this.mirrorViewApplied) {
-                this.ctx.save();
-                this.ctx.translate(node.x, node.y);
-                this.ctx.scale(-1, 1);
-                this.ctx.translate(-node.x, -node.y);
-            }
+            // 🆕 NUEVO: Compensar Mirror View usando método unificado
+            const wasCompensated3 = this.applyMirrorCompensation(node.x, node.y);
             
             // Obtener sprite del helicóptero
             const helicopterSprite = this.assetManager?.getSprite('ui-chopper-icon');
@@ -3826,10 +3852,8 @@ export class RenderSystem {
                 }
             }
             
-            // Restaurar Mirror View si está activo
-            if (this.mirrorViewApplied) {
-                this.ctx.restore();
-            }
+            // 🆕 NUEVO: Restaurar Mirror View usando método unificado
+            this.restoreMirrorCompensation(wasCompensated3);
         }
     }
     

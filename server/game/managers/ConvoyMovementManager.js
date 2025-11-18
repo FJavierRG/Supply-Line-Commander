@@ -28,12 +28,33 @@ export class ConvoyMovementManager {
                 continue;
             }
             
-            // 🆕 NUEVO: Si el nodo origen o destino está destruido (inactivo), eliminar convoy
-            // Esto evita que los camiones se queden atascados cuando un FOB es destruido
-            if (fromNode.active === false || toNode.active === false) {
-                console.warn(`⚠️ Convoy ${convoy.id} tiene nodo destruido (fromId: ${convoy.fromId}, toId: ${convoy.toId}), eliminando`);
+            // 🆕 CORREGIDO: Manejo diferenciado según tipo de vehículo y nodo origen
+            // - Camiones pesados del HQ (heavy_truck): continúan aunque el FOB destino esté destruido
+            // - Camiones ligeros del FOB (truck): se eliminan si el FOB origen está destruido
+            // - Si el HQ está destruido, eliminar todos los convoyes (no debería pasar)
+            const isHeavyTruckFromHQ = convoy.vehicleType === 'heavy_truck';
+            const isOriginDestroyed = fromNode.active === false;
+            const isDestinationDestroyed = toNode.active === false;
+            
+            if (isOriginDestroyed) {
+                // Si el origen está destruido, eliminar convoy (incluye HQ destruido, aunque no debería pasar)
+                console.warn(`⚠️ Convoy ${convoy.id} tiene nodo origen destruido (fromId: ${convoy.fromId}, type: ${fromNode.type}), eliminando`);
                 this.gameState.convoys.splice(i, 1);
                 continue;
+            }
+            
+            if (isDestinationDestroyed) {
+                // Si el destino está destruido:
+                if (isHeavyTruckFromHQ) {
+                    // Camiones pesados del HQ: permitir que continúen y regresen al HQ
+                    // No eliminar, el convoy llegará al destino destruido y regresará
+                    // (se maneja en handleConvoyArrival)
+                } else {
+                    // Camiones ligeros del FOB u otros: eliminar si el destino está destruido
+                    console.warn(`⚠️ Convoy ${convoy.id} tiene nodo destino destruido (toId: ${convoy.toId}, type: ${toNode.type}), eliminando`);
+                    this.gameState.convoys.splice(i, 1);
+                    continue;
+                }
             }
             
             // Usar distancia inicial fija (no recalcular cada frame)
@@ -224,6 +245,16 @@ export class ConvoyMovementManager {
             }
             
             // === CONVOY NORMAL: Entregar cargo ===
+            // 🆕 CORREGIDO: Si el destino está destruido (solo puede pasar con heavy_truck del HQ),
+            // no entregar cargo y regresar directamente al HQ
+            if (toNode.active === false) {
+                // Destino destruido: regresar al HQ sin entregar
+                console.log(`⚠️ Convoy ${convoy.id} (heavy_truck) llegó a FOB destruido ${toNode.id}, regresando al HQ sin entregar`);
+                convoy.returning = true;
+                convoy.progress = 0; // RESETEAR progress para el viaje de vuelta
+                return;
+            }
+            
             this.deliverCargo(convoy, toNode);
             
             // Iniciar regreso

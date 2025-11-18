@@ -261,49 +261,9 @@ export class CombatHandler {
             return { success: false, reason: 'Necesitas construir una Lanzadera de Drones' };
         }
         
-        // ✅ Costo del dron (lee de costs - fuente única de verdad)
-        let droneCost = SERVER_NODE_CONFIG.costs.drone;
-        
-        // 🆕 NUEVO: Aplicar descuento del 50% si hay talleres de drones y algún FOB tiene 10+ suministros
-        const droneWorkshops = this.gameState.nodes.filter(n => 
-            n.type === 'droneWorkshop' && 
-            n.team === playerTeam && 
-            n.active && 
-            n.constructed &&
-            !n.isAbandoning
-        );
-        
-        if (droneWorkshops.length > 0) {
-            // ✅ Leer configuración del taller de drones desde serverNodes
-            const workshopConfig = SERVER_NODE_CONFIG.effects.droneWorkshop || {};
-            const requiredSupplies = workshopConfig.requiredSupplies || 10;
-            const discountMultiplier = workshopConfig.discountMultiplier || 0.5;
-            const suppliesCost = workshopConfig.suppliesCost || 10;
-            
-            // Buscar FOBs aliados con suficientes suministros
-            const fobs = this.gameState.nodes.filter(n => 
-                n.type === 'fob' && 
-                n.team === playerTeam && 
-                n.active && 
-                n.constructed &&
-                !n.isAbandoning &&
-                n.supplies !== null &&
-                n.supplies >= requiredSupplies
-            );
-            
-            if (fobs.length > 0) {
-                // Aplicar descuento según configuración
-                droneCost = Math.floor(droneCost * discountMultiplier);
-                
-                // 🆕 NUEVO: Sustraer suministros del primer FOB disponible según configuración
-                const selectedFob = fobs[0];
-                const oldSupplies = selectedFob.supplies;
-                selectedFob.supplies = Math.max(0, selectedFob.supplies - suppliesCost);
-                
-                console.log(`💰 Taller de drones activo: costo de dron reducido de ${SERVER_NODE_CONFIG.costs.drone} a ${droneCost} (${(discountMultiplier * 100).toFixed(0)}% descuento)`);
-                console.log(`📦 FOB ${selectedFob.id} suministros: ${oldSupplies} → ${selectedFob.supplies} (-${suppliesCost})`);
-            }
-        }
+        // ✅ Costo del dron (centralizado en DroneWorkshopSystem)
+        const droneCostResult = this.gameState.droneWorkshopSystem.getDroneCost('drone', playerTeam);
+        const droneCost = droneCostResult.cost;
         
         // Verificar currency
         if (this.gameState.currency[playerTeam] < droneCost) {
@@ -602,7 +562,7 @@ export class CombatHandler {
      * 🆕 NUEVO: Crea un dron de vigilancia que detecta vehículos y permite construir en territorio enemigo
      */
     handleCameraDroneDeploy(playerTeam, x, y) {
-        const cameraDroneCost = SERVER_NODE_CONFIG.costs.cameraDrone;
+        const cameraDroneCost = this.gameState.droneWorkshopSystem.getDroneCost('cameraDrone', playerTeam).cost;
         const cameraDroneConfig = SERVER_NODE_CONFIG.specialNodes?.cameraDrone || {};
         const detectionRadius = cameraDroneConfig.detectionRadius || 200;
         

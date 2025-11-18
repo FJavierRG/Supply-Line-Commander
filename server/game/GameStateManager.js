@@ -4,6 +4,7 @@ import { MedicalSystemServer } from '../systems/MedicalSystemServer.js';
 import { FrontMovementSystemServer } from '../systems/FrontMovementSystemServer.js';
 import { TerritorySystemServer } from '../systems/TerritorySystemServer.js';
 import { DroneSystemServer } from '../systems/DroneSystemServer.js';
+import { DroneWorkshopSystem } from '../systems/DroneWorkshopSystem.js';
 import { TankSystemServer } from '../systems/TankSystemServer.js';
 import { LightVehicleSystemServer } from '../systems/LightVehicleSystemServer.js'; // 🆕 NUEVO: Sistema de artillado ligero
 import { ArtillerySystemServer } from '../systems/ArtillerySystemServer.js'; // 🆕 NUEVO: Sistema de artillería
@@ -68,6 +69,7 @@ export class GameStateManager {
         this.frontMovement = new FrontMovementSystemServer(this);
         this.territory = new TerritorySystemServer(this);
         this.droneSystem = new DroneSystemServer(this);
+        this.droneWorkshopSystem = new DroneWorkshopSystem(this);
         this.tankSystem = new TankSystemServer(this);
         this.lightVehicleSystem = new LightVehicleSystemServer(this); // 🆕 NUEVO: Sistema de artillado ligero
         this.artillerySystem = new ArtillerySystemServer(this); // 🆕 NUEVO: Sistema de artillería

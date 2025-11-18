@@ -21,7 +21,7 @@ export const SERVER_NODE_CONFIG = {
         intelCenter: 110, 
         vigilanceTower: 140, 
         trainStation: 170,
-        droneWorkshop: 115,
+        droneWorkshop: 125,
         vehicleWorkshop: 90,
         physicStudies: 80,
         secretLaboratory: 90,
@@ -44,24 +44,24 @@ export const SERVER_NODE_CONFIG = {
     // TIEMPOS DE CONSTRUCCIÓN (segundos)
     // ═══════════════════════════════════════════════════════════════
     buildTimes: {
-        fob: 4,
-        antiDrone: 3,
-        droneLauncher: 2,
-        nuclearPlant: 4,
-        truckFactory: 2,
+        fob: 5,
+        antiDrone: 2.3,
+        droneLauncher: 5,
+        nuclearPlant: 6,
+        truckFactory: 4,
         engineerCenter: 4,
-        campaignHospital: 2,
-        intelRadio: 2, 
-        aerialBase: 3, 
-        intelCenter: 3, 
-        vigilanceTower: 3, 
-        trainStation: 4,
-        droneWorkshop: 3,
-        vehicleWorkshop: 3,
-        physicStudies: 3,
-        secretLaboratory: 3,
-        trainingCamp: 3,
-        deadlyBuild: 4
+        campaignHospital: 3,
+        intelRadio: 4, 
+        aerialBase: 4, 
+        intelCenter: 4, 
+        vigilanceTower: 4, 
+        trainStation: 7,
+        droneWorkshop: 5,
+        vehicleWorkshop: 5,
+        physicStudies: 5,
+        secretLaboratory: 5,
+        trainingCamp: 6,
+        deadlyBuild: 7
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -89,9 +89,10 @@ export const SERVER_NODE_CONFIG = {
             trainCargo: 25          // 🆕 Suministros que entrega cada tren
         },
         droneWorkshop: {
-            discountMultiplier: 0.5,     // 🆕 Multiplicador de descuento (50% = 0.5)
-            requiredSupplies: 15,       // 🆕 Suministros mínimos requeridos en FOB
-            suppliesCost: 15             // 🆕 Suministros que se sustraen del FOB al usar el descuento
+            discountMultiplier: 0.7,     // Descuento del 30% (70% del costo base)
+            requiredSupplies: 15,        // Suministros mínimos requeridos en FOB
+            suppliesCost: 15,            // Suministros que se sustraen del FOB al aplicar el descuento
+            discountedDroneTypes: ['drone', 'cameraDrone'] // Tipos de dron afectados
         },
         vehicleWorkshop: {
             vehicleBonus: 1              // 🆕 +1 vehículo máximo y disponible a FOBs en su área

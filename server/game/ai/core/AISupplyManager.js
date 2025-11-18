@@ -12,6 +12,9 @@ export class AISupplyManager {
         this.roomId = roomId;
         this.raceId = raceId;
         this.difficulty = difficulty;
+
+        // 🌀 Seguimiento de turnos para evitar que siempre se alimente el mismo frente
+        this.lastFrontSuppliedId = null;
     }
     
     /**
@@ -90,7 +93,10 @@ export class AISupplyManager {
         }
         
         // Revisar frentes
-        for (const front of myFronts) {
+        // 🌀 Alternancia: iniciar revisión desde el frente posterior al último abastecido
+        const orderedFronts = this.getFrontsInRotationOrder(myFronts);
+        
+        for (const front of orderedFronts) {
             if (!front.active) continue;
             
             // 🎯 EN FÁCIL: A veces "olvida" revisar algunos frentes
@@ -119,6 +125,7 @@ export class AISupplyManager {
                         const success = this.sendSupplyConvoy(closestFOB, front, team);
                         
                         if (success) {
+                            this.lastFrontSuppliedId = front.id;
                             if (AIConfig.debug.logSupply || AIConfig.debug.logActions) {
                             }
                             // NO hacer return - continuar revisando otros Frentes
@@ -389,6 +396,30 @@ export class AISupplyManager {
         }
         
         return closestFOB;
+    }
+
+    /**
+     * Devuelve los frentes en orden rotativo, empezando por el siguiente al último abastecido
+     */
+    getFrontsInRotationOrder(fronts) {
+        if (!Array.isArray(fronts) || fronts.length === 0) {
+            return [];
+        }
+
+        const lastIndex = this.lastFrontSuppliedId
+            ? fronts.findIndex(front => front.id === this.lastFrontSuppliedId)
+            : -1;
+
+        // Si no se encontró, empezar desde 0
+        const startIndex = (lastIndex + 1) % fronts.length;
+
+        const ordered = [];
+        for (let offset = 0; offset < fronts.length; offset++) {
+            const idx = (startIndex + offset) % fronts.length;
+            ordered.push(fronts[idx]);
+        }
+
+        return ordered;
     }
     
     /**

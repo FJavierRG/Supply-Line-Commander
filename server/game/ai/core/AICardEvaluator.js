@@ -22,12 +22,18 @@ export class AICardEvaluator {
     static evaluateCard(cardId, gameState, team, currency, state, scoringRules, deck, profile = null) {
         // 1. Verificar si está en mazo
         if (!AICardAdapter.isInDeck(cardId, deck)) {
+            if (AIConfig?.debug?.logScoring) {
+                console.log(`  ❌ ${cardId}: No está en mazo`);
+            }
             return null; // No está en el mazo
         }
         
         // 2. Verificar si está habilitada
         const isEnabled = AICardAdapter.isEnabled(cardId);
         if (isEnabled === false) {
+            if (AIConfig?.debug?.logScoring) {
+                console.log(`  ❌ ${cardId}: Está deshabilitada`);
+            }
             return null; // Está deshabilitada
         }
         
@@ -36,6 +42,9 @@ export class AICardEvaluator {
         if (requirements && requirements.length > 0) {
             const missingRequirements = this.checkRequirements(requirements, gameState, team);
             if (missingRequirements.length > 0) {
+                if (AIConfig?.debug?.logScoring) {
+                    console.log(`  ❌ ${cardId}: Faltan requisitos: ${missingRequirements.join(', ')}`);
+                }
                 return null; // Faltan requisitos
             }
         }
@@ -43,12 +52,18 @@ export class AICardEvaluator {
         // 4. Verificar coste
         const cost = AICardAdapter.getCost(cardId);
         if (cost === null || currency < cost) {
+            if (AIConfig?.debug?.logScoring) {
+                console.log(`  ❌ ${cardId}: Currency insuficiente (coste: ${cost}, tiene: ${currency.toFixed(1)})`);
+            }
             return null; // No tiene coste definido o no hay suficiente currency
         }
         
         // 5. Obtener reglas de scoring del perfil
         const cardScoringRules = scoringRules[cardId];
         if (!cardScoringRules) {
+            if (AIConfig?.debug?.logScoring) {
+                console.log(`  ❌ ${cardId}: No tiene reglas de scoring definidas`);
+            }
             return null; // No tiene reglas de scoring definidas
         }
         
@@ -85,9 +100,16 @@ export class AICardEvaluator {
             if (cardId === 'drone') {
                 const hasTargets = this.hasDroneTargets(gameState, team);
                 if (!hasTargets) {
+                    if (AIConfig?.debug?.logScoring) {
+                        console.log(`  ❌ ${cardId}: No hay objetivos disponibles para drones`);
+                    }
                     return null; // No hay objetivos para drones
                 }
             }
+        }
+        
+        if (AIConfig?.debug?.logScoring) {
+            console.log(`  ✅ ${cardId}: Score ${score.toFixed(1)}, coste ${cost}, tipo ${actionType}`);
         }
         
         return {
@@ -111,13 +133,25 @@ export class AICardEvaluator {
      */
     static evaluateDeck(deck, gameState, team, currency, state, scoringRules, profile = null) {
         const actions = [];
+        const filteredCards = [];
         
         // Iterar sobre todas las cartas del mazo
         for (const cardId of deck.units) {
             const action = this.evaluateCard(cardId, gameState, team, currency, state, scoringRules, deck, profile);
             if (action) {
                 actions.push(action);
+            } else {
+                filteredCards.push(cardId);
             }
+        }
+        
+        // 🎯 DEBUG: Log de cartas filtradas
+        if (AIConfig?.debug?.logScoring) {
+            console.log(`🔍 [IA] Evaluación de mazo: ${actions.length} acciones válidas, ${filteredCards.length} filtradas`);
+            if (filteredCards.length > 0) {
+                console.log(`  📋 Cartas filtradas: ${filteredCards.join(', ')}`);
+            }
+            console.log(`  💰 Currency disponible: ${currency.toFixed(1)}`);
         }
         
         // Ordenar por score descendente

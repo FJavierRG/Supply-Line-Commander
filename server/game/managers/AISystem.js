@@ -55,6 +55,9 @@ export class AISystem {
         this.currency = 0;
         this.lastCurrencyUpdate = 0;
         
+        // 🎯 NUEVO: Sistema de órdenes de emergencia (prioridad absoluta)
+        this.emergencyOrders = []; // Órdenes que deben ejecutarse inmediatamente
+        
         // Timers (solo para decisiones estratégicas y ofensivas, el core maneja su propio timing)
         this.timers = {
             strategic: 0,
@@ -269,18 +272,22 @@ export class AISystem {
         const enemyTeam = 'player2';
         const currency = this.gameState.currency[enemyTeam] || 0;
         
+        // 🎯 PRIORIDAD ABSOLUTA: Procesar órdenes de emergencia ANTES que cualquier otra cosa
+        this.processEmergencyOrders();
+        
         // 🎯 NUEVO: Delegar lógica común al sistema core
         // El core maneja: abastecimiento (FOBs, frentes, helicópteros), emergencias médicas, reparaciones
         this.coreSystem.update(dt);
         
-        // Construcciones estratégicas (cada X segundos)
+        // 🎯 NUEVO: Evaluación unificada de todas las acciones (edificios + consumibles)
+        // Esto evita que se ejecuten decisiones separadas que compiten por el mismo dinero
         this.timers.strategic += dt;
         if (this.timers.strategic >= this.intervals.strategic) {
             this.timers.strategic = 0;
-            this.handleStrategicBuilding(enemyTeam, currency);
+            this.handleUnifiedDecision(enemyTeam, currency);
         }
         
-        // Decisiones ofensivas (cada X segundos variable)
+        // Decisiones ofensivas (cada X segundos variable) - MANTENER para cooldowns y timing específico
         this.timers.offensive += dt;
         if (this.timers.offensive >= this.intervals.offensive) {
             this.timers.offensive = 0;
@@ -288,6 +295,8 @@ export class AISystem {
             const base = getAdjustedInterval('offensive', this.raceId, this.difficulty);
             const variance = AIConfig.intervals.offensiveVariance;
             this.intervals.offensive = base + (Math.random() * variance * 2) - variance;
+            // 🎯 NOTA: handleOffensiveDecision ahora solo se usa para consumibles con cooldowns específicos
+            // La decisión principal se toma en handleUnifiedDecision
             this.handleOffensiveDecision(enemyTeam, currency);
         }
         
@@ -330,8 +339,67 @@ export class AISystem {
     }
     
     /**
+     * 🎯 NUEVO: Maneja decisiones unificadas (edificios + consumibles)
+     * Evalúa TODAS las acciones juntas y ejecuta la mejor, evitando que decisiones separadas compitan por dinero
+     */
+    async handleUnifiedDecision(team, currency) {
+        // Después de la primera decisión, usar intervalo normal ajustado
+        if (this.firstStrategicDecision) {
+            this.firstStrategicDecision = false;
+            this.intervals.strategic = getAdjustedInterval('strategic', this.raceId, this.difficulty);
+        }
+            
+            // 🎯 ENCAPSULACIÓN: Usar umbral ajustado por raza y dificultad
+        const threshold = getAdjustedThreshold('currencyStrategic', this.raceId, this.difficulty) || 50;
+        if (currency < threshold) {
+            return;
+        }
+        
+        // 🎯 NUEVO: Usar sistema de perfiles para evaluar TODAS las acciones
+        const state = AIGameStateAnalyzer.analyzeState(team, this.gameState);
+        state.lastBuildings = this.lastBuildings;
+        
+        // 🎯 Obtener currency disponible (ya con colchón descontado)
+        this.profile.updateCurrencyBuffer(this.gameState);
+        const hasFobEmergency = state?.myFOBs !== undefined && state.myFOBs < 2;
+        const availableCurrency = hasFobEmergency
+            ? this.profile.getRawCurrency(this.gameState)
+            : this.profile.getAvailableCurrency(this.gameState);
+        
+        // Evaluar TODAS las acciones (edificios + consumibles) juntas
+        const allActions = this.profile.evaluateStrategicActions(this.gameState, team, currency, state);
+        
+        if (allActions.length === 0) {
+            return;
+        }
+        
+        // Seleccionar la mejor acción global (puede ser edificio o consumible)
+        const bestAction = AIActionSelector.selectBestAction(allActions, availableCurrency);
+        
+        if (!bestAction) {
+            return;
+        }
+        
+        // Ejecutar la mejor acción (puede ser build o attack)
+        if (bestAction.type === 'build') {
+            const success = await this.aiActionHandler.executeBuild(team, bestAction.cardId);
+                        if (success) {
+                this.lastBuildings.push(bestAction.cardId);
+                if (this.lastBuildings.length > 5) {
+                    this.lastBuildings.shift();
+                }
+            }
+        } else if (bestAction.type === 'attack') {
+            this.aiActionHandler.executeAttack(team, bestAction.cardId);
+            const now = this.gameState.gameTime || 0;
+            this.lastConsumableUse[bestAction.cardId] = now;
+        }
+    }
+    
+    /**
      * Maneja construcciones estratégicas (FOBs, plantas, etc)
-     * 🎯 NUEVO: Usa sistema de perfiles
+     * 🎯 DEPRECATED: Ahora se usa handleUnifiedDecision, pero mantenemos esto para compatibilidad
+     * @deprecated Usar handleUnifiedDecision en su lugar
      */
     async handleStrategicBuilding(team, currency) {
         // Después de la primera decisión, usar intervalo normal ajustado
@@ -353,6 +421,14 @@ export class AISystem {
         const state = AIGameStateAnalyzer.analyzeState(team, this.gameState);
         // 🎯 Añadir historial de últimas construcciones al state
         state.lastBuildings = this.lastBuildings;
+        
+        // 🎯 Obtener currency disponible (ya con colchón descontado)
+        this.profile.updateCurrencyBuffer(this.gameState);
+        const hasFobEmergency = state?.myFOBs !== undefined && state.myFOBs < 2;
+        const availableCurrency = hasFobEmergency
+            ? this.profile.getRawCurrency(this.gameState)  // Emergencia FOB: ignorar colchón
+            : this.profile.getAvailableCurrency(this.gameState);
+        
         const recommendations = this.profile.evaluateStrategicActions(this.gameState, team, currency, state);
         
         // Filtrar solo edificios (no consumibles)
@@ -364,14 +440,19 @@ export class AISystem {
             return;
         }
         
-        // Seleccionar mejor acción
-        const bestAction = AIActionSelector.selectBestAction(buildingActions, currency);
+        // Seleccionar mejor acción usando availableCurrency (con colchón ya descontado)
+        const bestAction = AIActionSelector.selectBestAction(buildingActions, availableCurrency);
         
         if (!bestAction) {
             if (AIConfig.debug.logActions) {
             }
             return;
         }
+        
+        // 🎯 NOTA: El sistema de ahorro se maneja por el colchón dinámico en BaseProfile
+        // Las acciones ya fueron evaluadas con availableCurrency (currency - buffer)
+        // Si la mejor acción pasó el filtro, significa que tiene suficiente margen
+        // No necesitamos verificación adicional aquí
         
         // Ejecutar acción
         if (bestAction.type === 'build') {
@@ -407,15 +488,23 @@ export class AISystem {
         
         // 🎯 NUEVO: Usar sistema de perfiles para evaluar consumibles
         const state = AIGameStateAnalyzer.analyzeState(team, this.gameState);
+        
+        // 🎯 Obtener currency disponible (ya con colchón descontado)
+        this.profile.updateCurrencyBuffer(this.gameState);
+        const hasFobEmergency = state?.myFOBs !== undefined && state.myFOBs < 2;
+        const availableCurrency = hasFobEmergency
+            ? this.profile.getRawCurrency(this.gameState)  // Emergencia FOB: ignorar colchón
+            : this.profile.getAvailableCurrency(this.gameState);
+        
         const scoringRules = this.profile.getScoringRules();
         
         // 🎯 PRESUPUESTO DE CONSUMIBLES POR FASE
-        let maxConsumableBudget = currency;
+        let maxConsumableBudget = availableCurrency;
         if (typeof this.profile.getConsumableBudgetConfig === 'function') {
             const budgetConfig = this.profile.getConsumableBudgetConfig();
             const phaseBudgetFraction = budgetConfig?.[state.phase];
             if (typeof phaseBudgetFraction === 'number' && phaseBudgetFraction > 0) {
-                maxConsumableBudget = currency * phaseBudgetFraction;
+                maxConsumableBudget = availableCurrency * phaseBudgetFraction;
             }
         }
         
@@ -423,7 +512,7 @@ export class AISystem {
             this.profile.getDeck(),
             this.gameState,
             team,
-            currency,
+            availableCurrency,
             state,
             scoringRules,
             this.profile // Pasar el perfil para condiciones personalizadas
@@ -463,12 +552,17 @@ export class AISystem {
             return;
         }
         
-        // Seleccionar mejor acción
-        const bestAction = AIActionSelector.selectBestAction(consumableActions, currency);
+        // Seleccionar mejor acción usando availableCurrency (con colchón ya descontado)
+        const bestAction = AIActionSelector.selectBestAction(consumableActions, availableCurrency);
         
         if (!bestAction) {
             return;
         }
+        
+        // 🎯 NOTA: El sistema de ahorro se maneja por el colchón dinámico en BaseProfile
+        // Las acciones ya fueron evaluadas con availableCurrency (currency - buffer)
+        // Si la mejor acción pasó el filtro, significa que tiene suficiente margen
+        // No necesitamos verificación adicional aquí
         
         // Ejecutar acción
         if (bestAction.type === 'attack') {
@@ -510,7 +604,37 @@ export class AISystem {
         const team = 'player2';
         const currency = this.gameState.currency[team] || 0;
         
-        // Delegar al perfil para decidir la respuesta
+        // 🎯 NUEVO: Para drones, crear orden de emergencia (prioridad absoluta)
+        if (threatType === 'drone' && targetBuilding) {
+            // Delegar al perfil para crear orden de emergencia
+            const emergencyOrder = this.profile.createEmergencyAntiDroneOrder(
+                threatData,
+                targetBuilding,
+                this.gameState,
+                team,
+                currency,
+                this.difficulty
+            );
+            
+            if (emergencyOrder) {
+                const gameTime = this.gameState.gameTime || 0;
+                const executeAt = gameTime; // Sin delay: reacción inmediata
+                
+                this.emergencyOrders.push({
+                    executeAt,
+                    order: emergencyOrder,
+                    threatType,
+                    threatData,
+                    targetBuilding
+                });
+                
+                // Procesar inmediatamente
+                this.processEmergencyOrders();
+                return; // No procesar como reacción normal
+            }
+        }
+        
+        // Para otras amenazas, usar sistema de reacciones normal
         const reaction = this.profile.handleDefensiveReaction(
             threatType,
             threatData,
@@ -543,7 +667,13 @@ export class AISystem {
         const gameTime = this.gameState.gameTime || 0;
         const executeAt = gameTime + reactionDelay;
         
-        // Programar la reacción
+        // Para drones, ejecutar la reacción inmediatamente (sin delay extra)
+        if (threatType === 'drone' && reaction.type === 'antiDrone') {
+            this.buildReactiveAntiDrone(reaction.targetId, threatData, team);
+            return;
+        }
+        
+        // Programar la reacción (para amenazas no aéreas)
         this.pendingReactions.push({
             executeAt,
             reaction,
@@ -552,9 +682,88 @@ export class AISystem {
             targetBuilding
         });
         
-                    if (AIConfig.debug.logActions) {
+                if (AIConfig.debug.logActions) {
             console.log(`⏱️ IA: Reacción programada contra ${threatType} para ejecutarse en ${reactionDelay.toFixed(1)}s`);
         }
+    }
+    
+    /**
+     * Procesa órdenes de emergencia (prioridad absoluta sobre todo lo demás)
+     */
+    processEmergencyOrders() {
+        if (!this.active || this.emergencyOrders.length === 0) {
+            return;
+        }
+        
+        const gameTime = this.gameState.gameTime || 0;
+        const team = 'player2';
+
+        // Filtrar órdenes que ya deben ejecutarse
+        const ordersToExecute = this.emergencyOrders.filter(eo => gameTime >= eo.executeAt);
+        
+        // Eliminar las órdenes que vamos a ejecutar
+        this.emergencyOrders = this.emergencyOrders.filter(eo => gameTime < eo.executeAt);
+        
+        // Ejecutar cada orden de emergencia
+        for (const emergencyOrder of ordersToExecute) {
+            const { order, threatType, threatData, targetBuilding } = emergencyOrder;
+            
+            if (order.type === 'antiDrone') {
+                console.log(`🚨 IA EMERGENCIA: Ejecutando orden de emergencia antiDrone para proteger ${targetBuilding?.type || 'edificio'}`);
+                this.buildReactiveAntiDrone(order.targetId, threatData, team);
+            }
+        }
+    }
+
+    /**
+     * Construye un antiDrone delante del edificio objetivo (sin delays)
+     */
+    buildReactiveAntiDrone(targetId, threatData, team) {
+        if (!targetId) {
+            console.warn('⚠️ IA: Orden antiDrone sin targetId');
+            return false;
+        }
+
+        console.log(`🔍 buildReactiveAntiDrone: Buscando edificio con ID ${targetId.substring(0, 8)} para team ${team}`);
+
+        const targetBuilding = this.gameState.nodes.find(n => 
+            n.id === targetId && 
+            n.team === team &&
+            n.active
+        );
+
+        if (!targetBuilding) {
+            console.warn(`⚠️ IA: Edificio objetivo ${targetId.substring(0, 8)} no encontrado para antiDrone`);
+            // Listar todos los nodos del team para debug
+            const teamNodes = this.gameState.nodes.filter(n => n.team === team && n.active);
+            console.log(`🔍 Nodos del team ${team}: ${teamNodes.map(n => `${n.type}(${n.id.substring(0, 8)})`).join(', ')}`);
+            return false;
+        }
+
+        console.log(`✅ buildReactiveAntiDrone: Edificio encontrado = ${targetBuilding.type} (${targetBuilding.id.substring(0, 8)}) en (${targetBuilding.x.toFixed(0)}, ${targetBuilding.y.toFixed(0)})`);
+
+        const antiDronePosition = this.aiActionHandler.calculateReactiveAntiDronePosition(
+            targetBuilding,
+            threatData,
+            team
+        );
+
+        if (!antiDronePosition) {
+            console.warn(`⚠️ IA: No se pudo calcular posición para antiDrone cerca de ${targetBuilding.type}`);
+            return false;
+        }
+
+        const antiDroneCost = SERVER_NODE_CONFIG.costs.antiDrone || 115;
+        const currentCurrency = this.gameState.currency[team] || 0;
+
+        if (currentCurrency < antiDroneCost) {
+            console.warn(`⚠️ IA: Sin dinero suficiente para antiDrone (tiene: ${currentCurrency}, necesita: ${antiDroneCost})`);
+            return false;
+        }
+
+        console.log(`✅ IA DEFENSA: Construyendo antiDrone en (${antiDronePosition.x.toFixed(0)}, ${antiDronePosition.y.toFixed(0)}) delante de ${targetBuilding.type} (${targetBuilding.id.substring(0, 8)})`);
+        this.aiActionHandler.executeBuild(team, 'antiDrone', antiDronePosition);
+        return true;
     }
     
     /**
@@ -606,39 +815,10 @@ export class AISystem {
                     reaction.targetId
                 );
             } else if (reaction.type === 'antiDrone') {
-                // Construir antiDrone delante del edificio objetivo (en dirección al drone)
                 if (AIConfig.debug.logActions) {
                     console.log(`🛡️ IA REACCIÓN: Construir antiDrone delante de edificio ${reaction.targetId} (amenaza: ${threatType})`);
                 }
-                
-                // Obtener el edificio objetivo
-                const targetBuilding = this.gameState.nodes.find(n => 
-                    n.id === reaction.targetId && 
-                    n.team === team &&
-                    n.active
-                );
-                
-                if (!targetBuilding) {
-                    console.warn(`⚠️ IA: Edificio objetivo ${reaction.targetId} no encontrado para antiDrone`);
-                    return;
-                }
-                
-                // Calcular posición delante del edificio (en dirección al drone)
-                const antiDronePosition = this.aiActionHandler.calculateReactiveAntiDronePosition(
-                    targetBuilding,
-                    threatData, // Datos del drone enemigo para calcular dirección
-                    team
-                );
-                
-                if (!antiDronePosition) {
-                    console.warn(`⚠️ IA: No se pudo calcular posición para antiDrone cerca de ${targetBuilding.type}`);
-                    return;
-                }
-                
-                console.log(`✅ IA DEFENSA: Construyendo antiDrone en (${antiDronePosition.x.toFixed(0)}, ${antiDronePosition.y.toFixed(0)}) delante de ${targetBuilding.type}`);
-                
-                // Construir antiDrone en la posición calculada
-                this.aiActionHandler.executeBuild(team, 'antiDrone', antiDronePosition);
+                this.buildReactiveAntiDrone(reaction.targetId, threatData, team);
             }
         }
     }
@@ -671,28 +851,7 @@ export class AISystem {
         // Detectar presión aérea usando el analizador de estado
         const state = AIGameStateAnalyzer.analyzeState(team, this.gameState);
         
-        // Si jugador tiene lanzadera o hay presión aérea reciente: considerar construir anti-drone
-        const antiDroneCost = this.gameState.buildHandler.getBuildingCosts()['antiDrone'] || 115;
-        if ((playerHasLauncher || state.hasAirThreat) && currency >= antiDroneCost) {
-            const hasAntiDrone = myNodes.some(n => n.type === 'antiDrone');
-            if (!hasAntiDrone) {
-                // Probabilidad de "acierto" dependiente de dificultad
-                let reactProbability = 0.7; // medium por defecto
-                if (this.difficulty === 'easy') {
-                    reactProbability = 0.45;
-                } else if (this.difficulty === 'hard') {
-                    reactProbability = 0.9;
-                }
-                
-                if (Math.random() < reactProbability) {
-                    this.stats.decisionsExecuted++;
-                    if (AIConfig.debug.logActions) {
-                        console.log(`🤖 IA REACCIÓN: Construir anti-drone (presión aérea detectada, dificultad=${this.difficulty})`);
-                    }
-                    this.aiActionHandler.executeBuild(team, 'antiDrone');
-                }
-            }
-        }
+        // (AntiDrone proactivo eliminado: se gestiona exclusivamente vía perfil y sistema de reacciones)
     }
     
 }

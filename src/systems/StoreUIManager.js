@@ -750,6 +750,8 @@ export class StoreUIManager {
         // 🆕 NUEVO: Verificar si el destructor de mundos está bloqueado (requiere Construcción Prohibida)
         const isWorldDestroyerLocked = itemId === 'worldDestroyer' && !this.buildSystem.hasDeadlyBuild();
         
+        const isLocked = isDroneLocked || isCommandoLocked || isTruckAssaultLocked || isCameraDroneLocked || isWorldDestroyerLocked;
+        
         // Fondo del botón usando el sprite bton_background
         const buttonBg = this.assetManager.getSprite('ui-button-background');
         
@@ -768,10 +770,11 @@ export class StoreUIManager {
         const config = getNodeConfig(itemId);
         if (!config) return;
         
-        // 🆕 NUEVO: Para el dron, obtener el costo real considerando el descuento del taller de drones
+        // 🆕 NUEVO: Para drones, obtener el costo real considerando el descuento del taller de drones
         let displayCost = config.cost;
-        if (itemId === 'drone' && this.buildSystem) {
-            displayCost = this.buildSystem.getDroneCost();
+        const usesDroneWorkshopDiscount = this.buildSystem?.isDroneWorkshopItem?.(itemId);
+        if (usesDroneWorkshopDiscount) {
+            displayCost = this.buildSystem.getDroneCost(itemId);
         }
         
         // Icono del item (+20% más grande)
@@ -782,7 +785,6 @@ export class StoreUIManager {
             const iconY = y + (size - iconSize) / 2 - 8; // Ajustado para el precio
             
             // Si está bloqueado, renderizar en gris
-            const isLocked = isDroneLocked || isCommandoLocked || isTruckAssaultLocked || isCameraDroneLocked || isWorldDestroyerLocked;
             if (isLocked) {
                 ctx.save();
                 ctx.globalAlpha = 0.4;
@@ -797,16 +799,18 @@ export class StoreUIManager {
         }
         
         // Verificar si se puede permitir (solo si no está bloqueado)
-        // 🆕 NUEVO: Para el dron, usar el costo real con descuento
+        // 🆕 NUEVO: Para drones, usar el costo real con descuento
         let canAfford = false;
-        if (itemId === 'drone' && this.buildSystem) {
-            canAfford = !isDroneLocked && !isCommandoLocked && !isTruckAssaultLocked && !isCameraDroneLocked && !isWorldDestroyerLocked && this.game.currency.canAfford(displayCost);
-        } else {
-            canAfford = !isDroneLocked && !isCommandoLocked && !isTruckAssaultLocked && !isCameraDroneLocked && !isWorldDestroyerLocked && this.buildSystem.canAffordBuilding(itemId);
+        if (this.buildSystem) {
+            if (usesDroneWorkshopDiscount) {
+                canAfford = !isLocked && this.game.currency.canAfford(displayCost);
+            } else {
+                canAfford = !isLocked && this.buildSystem.canAffordBuilding(itemId);
+            }
         }
         
         // Precio (más legible) - color rojo si no se puede permitir, gris si está bloqueado
-        if (isDroneLocked || isCommandoLocked || isTruckAssaultLocked || isCameraDroneLocked || isWorldDestroyerLocked) {
+        if (isLocked) {
             ctx.fillStyle = '#888888';
         } else {
             ctx.fillStyle = canAfford ? '#ffffff' : '#ff4444';

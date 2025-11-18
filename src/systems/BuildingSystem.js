@@ -75,8 +75,10 @@ export class BuildingSystem {
      */
     canAffordBuilding(buildingId) {
         // Validación UI únicamente - la validación real está en el servidor
-        // 🆕 NUEVO: Para el dron, usar getDroneCost() que incluye el descuento del taller de drones
-        const cost = buildingId === 'drone' ? this.getDroneCost() : this.getBuildingCost(buildingId);
+        // 🆕 NUEVO: Para drones, usar getDroneCost() que incluye el descuento del taller de drones
+        const cost = this.isDroneWorkshopItem(buildingId)
+            ? this.getDroneCost(buildingId)
+            : this.getBuildingCost(buildingId);
         return this.game.currency.canAfford(cost);
     }
     
@@ -97,46 +99,68 @@ export class BuildingSystem {
     }
     
     /**
-     * Obtiene el costo del dron (proyectil)
+     * Obtiene el costo de un dron (proyectil o cámara)
      * 🆕 NUEVO: Aplica descuento del taller de drones si hay talleres activos y FOBs con suficientes suministros
      */
-    getDroneCost() {
-        const baseCost = this.getBuildingCost('drone');
+    getDroneCost(droneType = 'drone') {
+        const baseCost = this.getBuildingCost(droneType);
+        
+        if (!this.isDroneWorkshopItem(droneType)) {
+            return baseCost;
+        }
         
         // Verificar si hay talleres de drones activos
+        const myTeam = this.game.myTeam || 'ally';
         const droneWorkshops = this.game.nodes.filter(n => 
             n.type === 'droneWorkshop' && 
-            n.team === this.game.myTeam && 
+            n.team === myTeam && 
             n.active && 
             n.constructed &&
             !n.isAbandoning
         );
         
-        if (droneWorkshops.length > 0) {
-            // Leer configuración del taller de drones desde el servidor
-            const effects = this.game.serverBuildingConfig?.effects || {};
-            const workshopConfig = effects.droneWorkshop || {};
-            const requiredSupplies = workshopConfig.requiredSupplies || 10;
-            const discountMultiplier = workshopConfig.discountMultiplier || 0.5;
-            
-            // Buscar FOBs aliados con suficientes suministros
-            const fobs = this.game.nodes.filter(n => 
-                n.type === 'fob' && 
-                n.team === this.game.myTeam && 
-                n.active && 
-                n.constructed &&
-                !n.isAbandoning &&
-                n.supplies !== null &&
-                n.supplies >= requiredSupplies
-            );
-            
-            if (fobs.length > 0) {
-                // Aplicar descuento según configuración
-                return Math.floor(baseCost * discountMultiplier);
-            }
+        if (droneWorkshops.length === 0) {
+            return baseCost;
         }
         
-        return baseCost;
+        // Leer configuración del taller de drones desde el servidor
+        const workshopConfig = this.game.serverBuildingConfig?.effects?.droneWorkshop || {};
+        const requiredSupplies = workshopConfig.requiredSupplies || 0;
+        const discountMultiplier = typeof workshopConfig.discountMultiplier === 'number'
+            ? workshopConfig.discountMultiplier
+            : 1;
+        
+        // Buscar FOBs aliados con suficientes suministros (si aplica)
+        const fobs = this.game.nodes.filter(n => 
+            n.type === 'fob' && 
+            n.team === myTeam && 
+            n.active && 
+            n.constructed &&
+            !n.isAbandoning &&
+            (requiredSupplies <= 0 || (
+                typeof n.supplies === 'number' &&
+                n.supplies >= requiredSupplies
+            ))
+        );
+        
+        if (fobs.length === 0) {
+            return baseCost;
+        }
+        
+        // Aplicar descuento según configuración
+        return Math.floor(baseCost * discountMultiplier);
+    }
+
+    /**
+     * Determina si un building usa los descuentos del taller de drones
+     */
+    isDroneWorkshopItem(buildingId) {
+        const discountedTypesConfig = this.game.serverBuildingConfig?.effects?.droneWorkshop?.discountedDroneTypes;
+        const defaultTypes = ['drone'];
+        const discountedTypes = Array.isArray(discountedTypesConfig) && discountedTypesConfig.length > 0
+            ? discountedTypesConfig
+            : defaultTypes;
+        return discountedTypes.includes(buildingId);
     }
     
     /**
@@ -156,8 +180,8 @@ export class BuildingSystem {
         }
         
         // Verificar si tiene suficiente currency
-        // 🆕 NUEVO: Para el dron, usar getDroneCost() que incluye el descuento del taller de drones
-        const actualCost = buildingId === 'drone' ? this.getDroneCost() : building.cost;
+        // 🆕 NUEVO: Para drones, usar getDroneCost() que incluye el descuento del taller de drones
+        const actualCost = this.isDroneWorkshopItem(buildingId) ? this.getDroneCost(buildingId) : building.cost;
         if (!this.canAffordBuilding(buildingId)) {
             console.log(`⚠️ No tienes suficiente currency (Necesitas: ${actualCost}, Tienes: ${this.game.getMissionCurrency()})`);
             return;

@@ -1487,10 +1487,10 @@ export class Game {
      * Verifica si se puede pagar un edificio
      */
     canAffordBuilding(buildingId) {
-        // 🆕 NUEVO: Para el dron, usar getDroneCost() que incluye el descuento del taller de drones
+        // 🆕 NUEVO: Para drones, usar getDroneCost() que incluye el descuento del taller de drones
         let cost;
-        if (buildingId === 'drone' && this.buildSystem) {
-            cost = this.buildSystem.getDroneCost();
+        if (this.buildSystem && this.buildSystem.isDroneWorkshopItem(buildingId)) {
+            cost = this.buildSystem.getDroneCost(buildingId);
         } else {
             cost = this.serverBuildingConfig?.costs?.[buildingId] || 0;
         }
