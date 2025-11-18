@@ -183,6 +183,28 @@ export class ConvoyHandler {
         const dy = toNode.y - fromNode.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
+        // ✅ CRÍTICO: Aplicar sabotaje cuando el camión SALE (no cuando regresa)
+        // Consumir contador de sabotaje si el FOB está saboteado
+        let sabotagePenaltyApplied = false;
+        if (fromNode.type === 'fob' && fromNode.effects) {
+            const sabotageEffect = fromNode.effects.find(e => e.type === 'fobSabotage');
+            if (sabotageEffect && sabotageEffect.truckCount > 0) {
+                // Marcar este convoy como afectado por sabotaje
+                sabotagePenaltyApplied = true;
+                
+                // Consumir un camión del contador (cuando SALE, no cuando regresa)
+                sabotageEffect.truckCount--;
+                
+                console.log(`🐌 Convoy desde FOB ${fromId} afectado por sabotaje - quedan ${sabotageEffect.truckCount} camiones por afectar`);
+                
+                // Eliminar efecto si se agotaron los camiones
+                if (sabotageEffect.truckCount <= 0) {
+                    fromNode.effects = fromNode.effects.filter(e => e.type !== 'fobSabotage');
+                    console.log(`✅ Efecto de sabotaje eliminado del FOB ${fromId} - todos los camiones afectados`);
+                }
+            }
+        }
+        
         // Crear convoy
         const convoy = {
             id: `convoy_${uuidv4().substring(0, 8)}`,
@@ -193,7 +215,8 @@ export class ConvoyHandler {
             cargo: suppliesToTransport,
             progress: 0, // 0 a 1
             returning: false,
-            initialDistance: distance // Guardar distancia fija
+            initialDistance: distance, // Guardar distancia fija
+            sabotagePenaltyApplied: sabotagePenaltyApplied // ✅ Flag para aplicar penalización durante todo el viaje
         };
         
         this.gameState.convoys.push(convoy);

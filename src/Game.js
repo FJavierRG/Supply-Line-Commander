@@ -1637,12 +1637,16 @@ export class Game {
         }
         
         // Aplicar efecto sabotaje
+        // ✅ CORREGIDO: Calcular porcentaje correctamente desde la configuración
+        const speedPenalty = fobSabotageConfig.speedPenalty || 0.35;
+        const penaltyPercent = ((1 - speedPenalty) * 100).toFixed(0);
+        
         targetFOB.addEffect({
             type: 'fobSabotage',
-            speedPenalty: fobSabotageConfig.speedPenalty,
+            speedPenalty: speedPenalty,
             truckCount: fobSabotageConfig.truckCount,
             icon: fobSabotageConfig.effectIcon,
-            tooltip: `Saboteada: -50% velocidad en los siguientes ${fobSabotageConfig.truckCount} camiones`
+            tooltip: `Saboteada: -${penaltyPercent}% velocidad en los siguientes ${fobSabotageConfig.truckCount} camiones`
         });
         
         this.matchStats.snipersLaunched++; // Usar este contador temporalmente

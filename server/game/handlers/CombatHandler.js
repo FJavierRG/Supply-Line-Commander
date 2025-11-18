@@ -207,17 +207,21 @@ export class CombatHandler {
         // Añadir efecto de sabotaje
         if (!targetNode.effects) targetNode.effects = [];
         
+        // ✅ SERVIDOR COMO AUTORIDAD: Usar configuración de serverNodes.js (fuente única de verdad)
+        const sabotageConfig = SERVER_NODE_CONFIG.gameplay.fobSabotage;
+        const behaviorConfig = SERVER_NODE_CONFIG.gameplay.behavior.fobSabotage;
+        
         const sabotageEffect = {
             type: 'fobSabotage',
-            speedPenalty: 0.5, // 50% de penalización
-            truckCount: 3, // Número de camiones afectados
-            icon: 'ui-no-supplies',
-            tooltip: 'Saboteada: -50% velocidad en los siguientes 3 camiones'
+            speedPenalty: sabotageConfig.speedPenalty, // Penalización de velocidad
+            truckCount: sabotageConfig.truckCount, // Número de camiones afectados
+            icon: behaviorConfig.effectIcon,
+            tooltip: `Saboteada: -${((1 - sabotageConfig.speedPenalty) * 100).toFixed(0)}% velocidad en los siguientes ${sabotageConfig.truckCount} camiones`
         };
         
         targetNode.effects.push(sabotageEffect);
         
-        console.log(`⚡ FOB ${targetId} saboteada por ${playerTeam} - Los siguientes 3 camiones tendrán -50% velocidad`);
+        console.log(`⚡ FOB ${targetId} saboteada por ${playerTeam} - Los siguientes ${sabotageConfig.truckCount} camiones tendrán -${((1 - sabotageConfig.speedPenalty) * 100).toFixed(0)}% velocidad`);
         
         return { success: true, targetId, effect: sabotageEffect };
     }

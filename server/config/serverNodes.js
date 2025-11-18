@@ -31,12 +31,12 @@ export const SERVER_NODE_CONFIG = {
         drone: 170,
         sniperStrike: 40,
         fobSabotage: 40,
-        specopsCommando: 140,  
+        specopsCommando: 130,  
         tank: 170,
-        lightVehicle: 40, // 🆕 NUEVO: Artillado ligero
+        lightVehicle: 40, 
         truckAssault: 50,
         cameraDrone: 50,
-        artillery: 140, // 🆕 NUEVO: Artillería (efecto de área)
+        artillery: 100, 
         worldDestroyer: 220
     },
 
@@ -85,8 +85,8 @@ export const SERVER_NODE_CONFIG = {
         },
         trainStation: {
             trainInterval: 12,      // 🆕 Segundos entre envíos de tren
-            trainSpeed: 55,        // 🆕 Velocidad del tren (píxeles por segundo)
-            trainCargo: 25          // 🆕 Suministros que entrega cada tren
+            trainSpeed: 60,        // 🆕 Velocidad del tren (píxeles por segundo)
+            trainCargo: 35          // 🆕 Suministros que entrega cada tren
         },
         droneWorkshop: {
             discountMultiplier: 0.7,     // Descuento del 30% (70% del costo base)
@@ -148,6 +148,7 @@ export const SERVER_NODE_CONFIG = {
 
     // ═══════════════════════════════════════════════════════════════
     // EFECTOS TEMPORALES
+    // Bufos y debufos
     // ═══════════════════════════════════════════════════════════════
     temporaryEffects: {
         wounded: {
@@ -427,8 +428,8 @@ export const SERVER_NODE_CONFIG = {
         
         // Propiedades de sabotaje
         fobSabotage: {
-            speedPenalty: 0.5,
-            truckCount: 3
+            speedPenalty: 0.35,
+            truckCount: 2
         },
         
         // Propiedades de comando especial operativo

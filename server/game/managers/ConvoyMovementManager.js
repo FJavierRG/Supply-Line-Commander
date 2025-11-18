@@ -107,41 +107,30 @@ export class ConvoyMovementManager {
     /**
      * Aplica penalización por sabotaje de FOB
      * La penalización se aplica tanto en la ida como en la vuelta
+     * ✅ CORREGIDO: El contador se consume cuando el camión SALE (en ConvoyHandler), no aquí
      * @param {Object} convoy - Convoy
      * @param {Object} fromNode - Nodo origen
      * @param {number} vehicleSpeed - Velocidad actual
      * @returns {number} Velocidad con penalización aplicada
      */
     applySabotagePenalty(convoy, fromNode, vehicleSpeed) {
-        // Si el convoy ya tiene la penalización aplicada (flag), aplicar la velocidad reducida
-        // Esto asegura que se aplique tanto al ir como al volver
+        // ✅ CORREGIDO: Solo aplicar si el convoy tiene el flag (se establece cuando SALE)
         if (convoy.sabotagePenaltyApplied) {
-            // 🆕 SERVIDOR COMO AUTORIDAD: Usar configuración centralizada
-            vehicleSpeed *= GAME_CONFIG.convoy.penalties.sabotage;
-            return vehicleSpeed;
+            // ✅ SERVIDOR COMO AUTORIDAD: Obtener speedPenalty del efecto del FOB (fuente única de verdad)
+            // Si el efecto ya fue eliminado, usar configuración por defecto
+            let speedPenalty = SERVER_NODE_CONFIG.gameplay.fobSabotage.speedPenalty;
+            
+            if (fromNode && fromNode.effects) {
+                const sabotageEffect = fromNode.effects.find(e => e.type === 'fobSabotage');
+                if (sabotageEffect && sabotageEffect.speedPenalty) {
+                    // Usar el speedPenalty del efecto (puede variar si se modifica la configuración)
+                    speedPenalty = sabotageEffect.speedPenalty;
+                }
+            }
+            
+            vehicleSpeed *= speedPenalty;
         }
         
-        // Si aún no se ha aplicado, verificar si el nodo origen tiene el efecto de sabotaje
-        if (fromNode && fromNode.effects) {
-            const sabotageEffect = fromNode.effects.find(e => e.type === 'fobSabotage');
-            if (sabotageEffect && sabotageEffect.truckCount > 0) {
-                // 🆕 SERVIDOR COMO AUTORIDAD: Usar configuración centralizada
-                vehicleSpeed *= GAME_CONFIG.convoy.penalties.sabotage;
-                
-                // Marcar como aplicado para que se mantenga en el viaje de vuelta
-                convoy.sabotagePenaltyApplied = true;
-                
-                // Consumir un camión del contador (solo una vez cuando se crea el convoy)
-                sabotageEffect.truckCount--;
-                
-                // Eliminar efecto si se agotaron los camiones
-                if (sabotageEffect.truckCount <= 0) {
-                    fromNode.effects = fromNode.effects.filter(e => e.type !== 'fobSabotage');
-                }
-                
-                console.log(`🐌 Convoy ${convoy.id} afectado por sabotaje FOB ${fromNode.id} - velocidad reducida a 50% (ida y vuelta)`);
-            }
-        }
         return vehicleSpeed;
     }
     

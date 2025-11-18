@@ -10,6 +10,7 @@ import { AICardEvaluator } from '../ai/core/AICardEvaluator.js';
 import AIConfig from '../ai/config/AIConfig.js';
 import { GAME_CONFIG } from '../../config/gameConfig.js';
 import { DEFAULT_DECK } from '../../config/defaultDeck.js';
+import { getDefaultAIDeck } from '../ai/config/AIDecks.js';
 import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 import { 
     getRaceAIConfig, 
@@ -31,22 +32,24 @@ export class AISystem {
         this.difficulty = this.gameState.room?.aiPlayer?.difficulty || 'medium';
         this.coreSystem = new AICoreSystem(gameState, io, roomId, this.raceId, this.difficulty);
         
-        // 🎯 NUEVO: Sistema de perfiles - HARDCODEADO para usar DefaultDeckProfile
+        // 🎯 NUEVO: Sistema de perfiles - Usa mazos de IA separados del mazo del jugador
+        // Los mazos de IA están definidos en game/ai/config/AIDecks.js
         // TODO FUTURO: Seleccionar perfil aleatoriamente o según configuración
-        // Por ahora, siempre usar DefaultDeckProfile con el mazo del jugador IA
-        const aiDeck = this.gameState.getPlayerDeck('player2') || DEFAULT_DECK;
+        const aiDeck = getDefaultAIDeck();
         
-        // 🎯 HARDCODEADO: Siempre usar DefaultDeckProfile (en el futuro será random)
+        // 🎯 HARDCODEADO: Siempre usar DefaultDeckProfile con el mazo default de IA
         if (!aiDeck || !aiDeck.units || aiDeck.units.length === 0) {
-            console.warn('⚠️ IA: No se encontró mazo para player2, usando DEFAULT_DECK');
+            console.error('❌ IA: Error cargando mazo de IA, usando fallback');
+            // Fallback: usar DEFAULT_DECK del servidor (solo en caso de error)
             this.profile = new DefaultDeckProfile(DEFAULT_DECK);
         } else {
             this.profile = new DefaultDeckProfile(aiDeck);
+            console.log(`✅ IA: Mazo cargado desde AIDecks: ${aiDeck.name} (${aiDeck.units.length} unidades)`);
         }
         
         // Verificar que el perfil se creó correctamente
         if (!this.profile) {
-            console.error('❌ IA: Error creando perfil, usando DEFAULT_DECK como fallback');
+            console.error('❌ IA: Error creando perfil, usando fallback');
             this.profile = new DefaultDeckProfile(DEFAULT_DECK);
         }
         
@@ -367,17 +370,29 @@ export class AISystem {
             : this.profile.getAvailableCurrency(this.gameState);
         
         // Evaluar TODAS las acciones (edificios + consumibles) juntas
+        // 🎯 IMPORTANTE: Evaluar con currency real, no availableCurrency, para calcular scores correctos
         const allActions = this.profile.evaluateStrategicActions(this.gameState, team, currency, state);
         
         if (allActions.length === 0) {
             return;
         }
         
-        // Seleccionar la mejor acción global (puede ser edificio o consumible)
-        const bestAction = AIActionSelector.selectBestAction(allActions, availableCurrency);
+        // 🎯 NUEVO: Seleccionar la mejor acción por score (sin filtrar por currency)
+        // Ordenar por score descendente y tomar la primera
+        const sortedActions = allActions.sort((a, b) => b.score - a.score);
+        const bestAction = sortedActions[0];
         
         if (!bestAction) {
             return;
+        }
+        
+        // 🎯 NUEVO: Verificar si la mejor acción tiene suficiente currency disponible
+        // Si no la tiene, ESPERAR en lugar de ejecutar una acción de menor prioridad
+        if (bestAction.cost > availableCurrency) {
+            if (AIConfig.debug?.logActions) {
+                console.log(`⏳ IA: Mejor acción ${bestAction.cardId} (score: ${bestAction.score.toFixed(1)}) requiere ${bestAction.cost}, tiene ${availableCurrency.toFixed(1)} → ESPERANDO`);
+            }
+            return; // Esperar a la siguiente evaluación
         }
         
         // Ejecutar la mejor acción (puede ser build o attack)

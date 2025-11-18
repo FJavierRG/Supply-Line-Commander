@@ -49,14 +49,16 @@ export class AICardEvaluator {
             }
         }
         
-        // 4. Verificar coste
+        // 4. Obtener coste (pero NO filtrar por currency aquí - se hará después de evaluar scores)
         const cost = AICardAdapter.getCost(cardId);
-        if (cost === null || currency < cost) {
+        if (cost === null) {
             if (AIConfig?.debug?.logScoring) {
-                console.log(`  ❌ ${cardId}: Currency insuficiente (coste: ${cost}, tiene: ${currency.toFixed(1)})`);
+                console.log(`  ❌ ${cardId}: No tiene coste definido`);
             }
-            return null; // No tiene coste definido o no hay suficiente currency
+            return null; // No tiene coste definido
         }
+        // 🎯 NOTA: NO filtramos por currency aquí - evaluamos TODAS las acciones y luego seleccionamos la mejor
+        // Si la mejor acción no tiene suficiente currency, esperamos en lugar de ejecutar una acción de menor prioridad
         
         // 5. Obtener reglas de scoring del perfil
         const cardScoringRules = scoringRules[cardId];

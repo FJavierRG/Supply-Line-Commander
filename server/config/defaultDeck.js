@@ -39,24 +39,27 @@ function getEnabledUnits() {
 /**
  * Mazo predeterminado del juego
  * Incluye unidades básicas y equilibradas para empezar a jugar
- * 🆕 NUEVO: Incluye banquillo vacío (se rellenará después)
+ * 🆕 NUEVO: Incluye banquillo con unidades adicionales
  */
 export const DEFAULT_DECK = {
     id: 'default',
     name: 'Mazo Predeterminado',
     units: [
         'hq',              // Siempre incluido
-        'fob',             // Base de operaciones avanzada
-        'antiDrone',       // Defensa anti-dron
-        'droneLauncher',   // Lanzador de drones
-        'truckFactory',    // Fábrica de camiones
-        'engineerCenter',  // Centro de ingenieros
-        'nuclearPlant',    // Planta nuclear (genera income pasivo)
+        'sniperStrike',    // Ataque de francotirador
         'intelRadio',      // Radio de inteligencia
-        'drone',           // Dron consumible
-        'sniperStrike'     // Ataque de francotirador
+        'engineerCenter',  // Centro de ingenieros
+        'truckFactory',    // Fábrica de camiones
+        'lightVehicle',    // Artillado ligero
+        'fobSabotage',     // Sabotaje FOB
+        'fob',             // Base de operaciones avanzada
+        'antiDrone',       // Torreta anti drones
+        'nuclearPlant'     // Planta nuclear (genera income pasivo)
     ],
-    bench: [], // 🆕 NUEVO: Banquillo vacío (se rellenará después)
+    bench: [
+        'tank',            // Tanque
+        'artillery'        // Artillería
+    ],
     createdAt: Date.now(),
     updatedAt: Date.now(),
     isDefault: true

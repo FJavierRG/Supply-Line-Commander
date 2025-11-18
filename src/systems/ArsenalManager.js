@@ -49,11 +49,6 @@ export class ArsenalManager {
             saveBtn.addEventListener('click', () => this.saveDeck());
         }
         
-        const confirmBtn = document.getElementById('deck-confirm-btn');
-        if (confirmBtn) {
-            confirmBtn.addEventListener('click', () => this.confirmDeck());
-        }
-        
         // Event listeners del modal de nombre del mazo
         const deckNameModal = document.getElementById('deck-name-modal-overlay');
         const deckNameInput = document.getElementById('deck-name-input');
@@ -260,22 +255,31 @@ export class ArsenalManager {
     
     /**
      * Carga el mazo seleccionado desde DeckManager
-     * Si hay un mazo seleccionado del jugador, lo carga; si no, empieza con mazo vacío
+     * Si hay un mazo seleccionado del jugador, lo carga; si no, usa el default o empieza con mazo vacío
      * 🆕 NUEVO: También carga el banquillo
+     * 🆕 NUEVO: Permite cargar el mazo default (pero al guardar creará uno nuevo)
      */
     loadSelectedDeck() {
         const selectedDeck = this.deckManager.getSelectedDeck();
         
-        // Solo cargar si es un mazo creado por el jugador (no predeterminado)
+        // Si hay un mazo seleccionado del jugador, cargarlo
         if (selectedDeck && !selectedDeck.isDefault) {
             this.currentDeckId = selectedDeck.id;
             this.deck = [...selectedDeck.units]; // Copia del array
             this.bench = [...(selectedDeck.bench || [])]; // 🆕 NUEVO: Copia del banquillo
         } else {
-            // Empezar con mazo vacío (solo HQ)
-            this.currentDeckId = null;
-            this.deck = ['hq'];
-            this.bench = []; // 🆕 NUEVO: Banquillo vacío
+            // Si no hay mazo del jugador, intentar cargar el default
+            const defaultDeck = this.deckManager.getDefaultDeck();
+            if (defaultDeck) {
+                this.currentDeckId = defaultDeck.id; // 🆕 NUEVO: Permitir cargar default
+                this.deck = [...defaultDeck.units]; // Copia del array
+                this.bench = [...(defaultDeck.bench || [])]; // 🆕 NUEVO: Copia del banquillo
+            } else {
+                // Empezar con mazo vacío (solo HQ)
+                this.currentDeckId = null;
+                this.deck = ['hq'];
+                this.bench = []; // 🆕 NUEVO: Banquillo vacío
+            }
         }
         
         // 🆕 NUEVO: Inicializar el selector de destino y actualizar límites
@@ -610,8 +614,12 @@ export class ArsenalManager {
             return;
         }
         
-        // Si estamos editando un mazo existente, actualizarlo
-        if (this.currentDeckId) {
+        // 🆕 NUEVO: Si estamos editando el mazo default, siempre crear uno nuevo (nunca sobreescribir)
+        const currentDeck = this.currentDeckId ? this.deckManager.getDeck(this.currentDeckId) : null;
+        const isDefaultDeck = currentDeck && currentDeck.isDefault;
+        
+        // Si estamos editando un mazo existente Y no es el default, actualizarlo
+        if (this.currentDeckId && !isDefaultDeck) {
             const updated = this.deckManager.updateDeck(this.currentDeckId, {
                 units: [...this.deck],
                 bench: [...this.bench] // 🆕 NUEVO: Guardar banquillo
@@ -625,6 +633,11 @@ export class ArsenalManager {
             }
         } else {
             // Crear nuevo mazo - pedir nombre con modal
+            // Esto incluye: mazo nuevo (currentDeckId === null) o mazo default (isDefaultDeck === true)
+            const promptMessage = isDefaultDeck 
+                ? 'El mazo predeterminado no se puede modificar. Introduce un nombre para crear un nuevo mazo basado en él:'
+                : 'Introduce un nombre para el nuevo mazo:';
+            
             this.showDeckNameModal((name) => {
                 if (!name || name.trim() === '') {
                     return;
@@ -632,20 +645,21 @@ export class ArsenalManager {
                 
                 const newDeck = this.deckManager.createDeck(name.trim(), [...this.deck], [...this.bench]); // 🆕 NUEVO: Incluir banquillo
                 if (newDeck) {
-                    this.currentDeckId = newDeck.id;
+                    this.currentDeckId = newDeck.id; // 🆕 NUEVO: Actualizar currentDeckId al nuevo mazo
                     this.deckManager.selectDeck(newDeck.id);
-                    console.log('Nuevo mazo creado:', newDeck.name);
+                    console.log('Nuevo mazo creado:', newDeck.name, isDefaultDeck ? '(basado en default)' : '');
                     this.showNotification(`Mazo "${newDeck.name}" creado y guardado`, 'success');
                 } else {
                     this.showNotification('Error al crear el mazo', 'error');
                 }
-            });
+            }, promptMessage);
         }
     }
     
     /**
      * Carga un mazo guardado (asegurando que el HQ siempre esté presente)
      * @param {string} deckId - ID del mazo a cargar (opcional, usa el seleccionado si no se especifica)
+     * 🆕 NUEVO: Permite cargar el mazo default (pero al guardar creará uno nuevo)
      */
     loadDeck(deckId = null) {
         const deckToLoad = deckId ? this.deckManager.getDeck(deckId) : this.deckManager.getSelectedDeck();
@@ -655,17 +669,12 @@ export class ArsenalManager {
             return false;
         }
         
-        // No permitir cargar el mazo predeterminado
-        if (deckToLoad.isDefault) {
-            console.log('No se puede cargar el mazo predeterminado');
-            return false;
-        }
-        
+        // 🆕 NUEVO: Permitir cargar el mazo predeterminado (pero al guardar creará uno nuevo)
         this.currentDeckId = deckToLoad.id;
         this.deck = [...deckToLoad.units]; // Copia del array
         this.bench = [...(deckToLoad.bench || [])]; // 🆕 NUEVO: Cargar banquillo
         this.updateDeckDisplay();
-        console.log('Mazo cargado:', deckToLoad.name);
+        console.log('Mazo cargado:', deckToLoad.name, deckToLoad.isDefault ? '(default - se creará nuevo al guardar)' : '');
         return true;
     }
     
@@ -1612,12 +1621,74 @@ export class ArsenalManager {
         
         listContainer.innerHTML = '';
         
-        // Filtrar solo mazos creados por el jugador (excluir predeterminados)
+        // 🆕 NUEVO: Incluir el mazo default en la lista (pero marcado como no editable)
         const allDecks = this.deckManager.getAllDecks();
+        const defaultDeck = allDecks.find(deck => deck.isDefault);
         const playerDecks = allDecks.filter(deck => !deck.isDefault);
         const selectedDeckId = this.deckManager.lastSelectedDeckId;
         
-        if (playerDecks.length === 0) {
+        // 🆕 NUEVO: Mostrar el mazo default primero si existe
+        if (defaultDeck) {
+            const item = document.createElement('div');
+            item.className = 'deck-selector-item';
+            if (defaultDeck.id === selectedDeckId) {
+                item.classList.add('selected');
+            }
+            item.classList.add('default-deck'); // 🆕 NUEVO: Clase para estilizar el default
+            
+            // Info del mazo
+            const info = document.createElement('div');
+            info.className = 'deck-selector-item-info';
+            
+            const name = document.createElement('div');
+            name.className = 'deck-selector-item-name';
+            name.textContent = defaultDeck.name + ' (Predeterminado)';
+            info.appendChild(name);
+            
+            const meta = document.createElement('div');
+            meta.className = 'deck-selector-item-meta';
+            meta.innerHTML = `
+                <span>${defaultDeck.units.length} unidades</span>
+                <span>•</span>
+                <span>Mazo base del juego</span>
+            `;
+            info.appendChild(meta);
+            
+            item.appendChild(info);
+            
+            // Acciones
+            const actions = document.createElement('div');
+            actions.className = 'deck-selector-item-actions';
+            
+            // Botón cargar/seleccionar
+            const loadBtn = document.createElement('button');
+            loadBtn.className = 'deck-selector-item-btn';
+            loadBtn.textContent = defaultDeck.id === selectedDeckId ? 'Seleccionado' : 'Cargar';
+            loadBtn.disabled = defaultDeck.id === selectedDeckId;
+            loadBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.loadDeckFromSelector(defaultDeck.id);
+            });
+            actions.appendChild(loadBtn);
+            
+            // 🆕 NUEVO: No mostrar botón borrar para el default
+            // (el default no se puede borrar)
+            
+            item.appendChild(actions);
+            
+            // Click en el item también carga el mazo
+            item.addEventListener('click', (e) => {
+                if (e.target === item || e.target.closest('.deck-selector-item-info')) {
+                    if (defaultDeck.id !== selectedDeckId) {
+                        this.loadDeckFromSelector(defaultDeck.id);
+                    }
+                }
+            });
+            
+            listContainer.appendChild(item);
+        }
+        
+        if (playerDecks.length === 0 && !defaultDeck) {
             const emptyMsg = document.createElement('div');
             emptyMsg.className = 'deck-selector-empty';
             emptyMsg.textContent = 'No hay mazos guardados. Crea uno desde el constructor.';
@@ -1734,14 +1805,27 @@ export class ArsenalManager {
     /**
      * Muestra el modal para pedir el nombre del mazo
      * @param {Function} callback - Función a llamar cuando se confirme el nombre
+     * @param {string} message - Mensaje opcional a mostrar en el modal
      */
-    showDeckNameModal(callback) {
+    showDeckNameModal(callback, message = null) {
         this.deckNameCallback = callback;
         const modal = document.getElementById('deck-name-modal-overlay');
         const input = document.getElementById('deck-name-input');
+        const messageEl = document.getElementById('deck-name-message');
         
         if (modal && input) {
             input.value = '';
+            
+            // 🆕 NUEVO: Mostrar mensaje personalizado si se proporciona
+            if (messageEl) {
+                if (message) {
+                    messageEl.textContent = message;
+                    messageEl.style.display = 'block';
+                } else {
+                    messageEl.style.display = 'none';
+                }
+            }
+            
             // Remover la clase hidden para mostrar el modal
             modal.classList.remove('hidden');
             // 🆕 FIX: Asegurar que el modal capture eventos explícitamente

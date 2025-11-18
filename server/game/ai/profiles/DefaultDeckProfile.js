@@ -1,7 +1,10 @@
 // ===== PERFIL DE MAZO POR DEFECTO =====
-// Implementa el perfil de IA para el mazo por defecto del juego
+// Implementa el perfil de IA para el mazo por defecto de la IA
+// 
+// NOTA: Este perfil usa el mazo definido en game/ai/config/AIDecks.js (AI_DEFAULT_DECK)
+// El mazo del jugador (DEFAULT_DECK en config/defaultDeck.js) es independiente
 //
-// MAZO: ['hq', 'fob', 'antiDrone', 'droneLauncher', 'truckFactory', 'engineerCenter', 'nuclearPlant', 'intelRadio', 'drone', 'sniperStrike']
+// MAZO DE IA: ['hq', 'fob', 'antiDrone', 'droneLauncher', 'truckFactory', 'engineerCenter', 'nuclearPlant', 'intelRadio', 'drone', 'sniperStrike']
 //
 // LÓGICA DEL PERFIL:
 // ==================
@@ -115,7 +118,7 @@ export class DefaultDeckProfile extends BaseProfile {
                 base: 35,
                 bonuses: {
                     earlyPhase: 15, // Priorizar antena en early como parte del núcleo eco/logístico
-                    midPhase: 10    // Mantenerla relevante en mid
+                    midPhase: 15    // Mantenerla relevante en mid
                 }
             },
             'drone': {
@@ -127,7 +130,7 @@ export class DefaultDeckProfile extends BaseProfile {
                 bonuses: {
                     hasTargets: 40,   // +40 si hay objetivos disponibles
                     earlyPhase: -999, // Penalización enorme en early → se filtra al fondo de la lista
-                    midPhase: 25,     // Pequeño empuje en mid
+                    midPhase: 20,     // Pequeño empuje en mid
                     latePhase: 55,    // Gran empuje en late
                     hasExcessCurrency: 45, // +25 si tiene mucho dinero (flexibilidad para usar drones antes de late)
                     hasAdvantage: 45  // 🎯 NUEVO: Bonus cuando tiene ventaja (priorizar aggro)
