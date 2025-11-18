@@ -21,24 +21,60 @@ export class ConvoyMovementManager {
             const fromNode = this.gameState.nodes.find(n => n.id === convoy.fromId);
             const toNode = this.gameState.nodes.find(n => n.id === convoy.toId);
             
-            if (!fromNode || !toNode) {
-                // Nodo no existe, eliminar convoy
-                console.warn(`⚠️ Convoy ${convoy.id} tiene nodo inexistente, eliminando`);
+            // ✅ FIX CRÍTICO: Si el origen no existe, siempre devolver vehículo y eliminar
+            if (!fromNode) {
+                console.warn(`⚠️ Convoy ${convoy.id} tiene nodo origen inexistente (fromId: ${convoy.fromId}), devolviendo vehículo y eliminando`);
+                // No podemos devolver el vehículo si el origen no existe
                 this.gameState.convoys.splice(i, 1);
                 continue;
+            }
+            
+            // ✅ FIX CRÍTICO: Manejo especial para heavy_trucks cuando el destino desaparece
+            // Si es un heavy_truck del HQ y el destino desapareció, hacer que regrese inmediatamente
+            if (!toNode) {
+                const isHeavyTruckFromHQ = convoy.vehicleType === 'heavy_truck' && fromNode.type === 'hq';
+                // Destino no existe
+                if (isHeavyTruckFromHQ) {
+                    // Heavy_truck del HQ con destino desaparecido: regresar inmediatamente al HQ
+                    console.warn(`⚠️ Heavy_truck ${convoy.id} tiene destino desaparecido (FOB ${convoy.toId} eliminado), regresando inmediatamente al HQ`);
+                    
+                    // Si ya está regresando, puede continuar normalmente (está viajando hacia el HQ)
+                    if (convoy.returning) {
+                        // Continuar el regreso normalmente, el convoy está viajando hacia fromNode (HQ)
+                        // No necesitamos toNode para regresar
+                    } else {
+                        // Si no está regresando, iniciar el regreso inmediatamente
+                        convoy.returning = true;
+                        convoy.progress = 0; // Resetear progress para el viaje de vuelta
+                    }
+                    // Continuar el loop para que el convoy regrese normalmente (sin toNode)
+                    // Necesitamos usar la distancia inicial guardada para calcular el regreso
+                } else {
+                    // Para trucks normales u otros vehículos con destino desaparecido
+                    console.warn(`⚠️ Convoy ${convoy.id} tiene destino inexistente (toId: ${convoy.toId}), devolviendo vehículo y eliminando`);
+                    this.returnVehicleToOrigin(convoy, fromNode);
+                    this.gameState.convoys.splice(i, 1);
+                    continue;
+                }
             }
             
             // 🆕 CORREGIDO: Manejo diferenciado según tipo de vehículo y nodo origen
             // - Camiones pesados del HQ (heavy_truck): continúan aunque el FOB destino esté destruido
             // - Camiones ligeros del FOB (truck): se eliminan si el FOB origen está destruido
             // - Si el HQ está destruido, eliminar todos los convoyes (no debería pasar)
-            const isHeavyTruckFromHQ = convoy.vehicleType === 'heavy_truck';
+            const isHeavyTruckFromHQ = convoy.vehicleType === 'heavy_truck' && fromNode.type === 'hq';
             const isOriginDestroyed = fromNode.active === false;
-            const isDestinationDestroyed = toNode.active === false;
+            // ✅ FIX: Solo verificar isDestinationDestroyed si toNode existe
+            const isDestinationDestroyed = toNode ? toNode.active === false : false;
             
             if (isOriginDestroyed) {
-                // Si el origen está destruido, eliminar convoy (incluye HQ destruido, aunque no debería pasar)
-                console.warn(`⚠️ Convoy ${convoy.id} tiene nodo origen destruido (fromId: ${convoy.fromId}, type: ${fromNode.type}), eliminando`);
+                // ✅ FIX: Si el origen está destruido, devolver vehículo antes de eliminar convoy
+                // (incluye HQ destruido, aunque no debería pasar)
+                console.warn(`⚠️ Convoy ${convoy.id} tiene nodo origen destruido (fromId: ${convoy.fromId}, type: ${fromNode.type}), devolviendo vehículo y eliminando`);
+                
+                // Intentar devolver el vehículo (aunque el nodo esté destruido, puede que aún exista en el array)
+                this.returnVehicleToOrigin(convoy, fromNode);
+                
                 this.gameState.convoys.splice(i, 1);
                 continue;
             }
@@ -50,19 +86,44 @@ export class ConvoyMovementManager {
                     // No eliminar, el convoy llegará al destino destruido y regresará
                     // (se maneja en handleConvoyArrival)
                 } else {
-                    // Camiones ligeros del FOB u otros: eliminar si el destino está destruido
-                    console.warn(`⚠️ Convoy ${convoy.id} tiene nodo destino destruido (toId: ${convoy.toId}, type: ${toNode.type}), eliminando`);
+                    // ✅ FIX: Camiones ligeros del FOB u otros: devolver vehículo antes de eliminar si el destino está destruido
+                    console.warn(`⚠️ Convoy ${convoy.id} tiene nodo destino destruido (toId: ${convoy.toId}, type: ${toNode.type}), devolviendo vehículo y eliminando`);
+                    
+                    // Devolver el vehículo al nodo origen
+                    this.returnVehicleToOrigin(convoy, fromNode);
+                    
                     this.gameState.convoys.splice(i, 1);
                     continue;
                 }
             }
             
+            // ✅ FIX: Cuando toNode es null (heavy_truck regresando), usar fromNode como destino
+            // Cuando está regresando, el destino es el nodo origen (HQ)
+            const actualToNode = (convoy.returning && !toNode) ? fromNode : toNode;
+            
             // Usar distancia inicial fija (no recalcular cada frame)
-            const distance = convoy.initialDistance || 1; // Fallback a 1 para convoys viejos
+            let distance = convoy.initialDistance || 1; // Fallback a 1 para convoys viejos
+            
+            // ✅ FIX: Si estamos regresando sin toNode (FOB desapareció), calcular distancia restante al HQ
+            if (convoy.returning && !toNode && fromNode && distance >= 1) {
+                // El convoy estaba viajando al FOB que desapareció
+                // Si tenía progress p (ej: 0.5 = 50% del camino), la distancia restante al HQ es aproximadamente
+                // distance * (1 - progress_original). Pero como resetamos progress a 0, usamos la distancia completa
+                // como aproximación (el convoy regresa desde donde estaba, que podría ser cerca del FOB desaparecido)
+                // Usar la distancia inicial completa es una buena aproximación
+                distance = convoy.initialDistance || distance;
+            } else if ((distance < 1 || !distance) && convoy.returning && !toNode && fromNode) {
+                // Si no hay distancia inicial guardada, calcular distancia estimada al HQ
+                distance = 100; // Fallback razonable
+            }
             
             if (distance < 1) {
-                // Distancia inválida, eliminar convoy
-                console.warn(`⚠️ Convoy ${convoy.id} tiene distancia 0, eliminando`);
+                // ✅ FIX: Distancia inválida, devolver vehículo antes de eliminar convoy
+                console.warn(`⚠️ Convoy ${convoy.id} tiene distancia inválida (${distance}), devolviendo vehículo y eliminando`);
+                
+                // Devolver el vehículo al nodo origen
+                this.returnVehicleToOrigin(convoy, fromNode);
+                
                 this.gameState.convoys.splice(i, 1);
                 continue;
             }
@@ -89,7 +150,8 @@ export class ConvoyMovementManager {
             
             // Llegó al destino
             if (convoy.progress >= 1) {
-                this.handleConvoyArrival(convoy, fromNode, toNode, i);
+                // ✅ FIX: Si está regresando sin toNode, el destino es fromNode (HQ)
+                this.handleConvoyArrival(convoy, fromNode, actualToNode || fromNode, i);
             }
         }
     }
@@ -203,7 +265,8 @@ export class ConvoyMovementManager {
                     return;
                 } else {
                     console.warn(`⚠️ Camión de reparación ${convoy.id} llegó a un edificio que no está roto: ${toNode?.type} ${toNode?.id}`);
-                    // Eliminar convoy si el edificio ya no está roto (por si acaso)
+                    // ✅ FIX: Devolver vehículo antes de eliminar convoy si el edificio ya no está roto
+                    this.returnVehicleToOrigin(convoy, fromNode);
                     this.gameState.convoys.splice(convoyIndex, 1);
                     return;
                 }
@@ -276,6 +339,50 @@ export class ConvoyMovementManager {
         }
     }
     
+    /**
+     * ✅ FIX: Devuelve un vehículo al nodo origen sin eliminar el convoy
+     * Útil cuando se necesita devolver un vehículo antes de eliminar el convoy por condiciones excepcionales
+     * @param {Object} convoy - Convoy
+     * @param {Object} fromNode - Nodo origen (puede ser null si no existe)
+     * @returns {boolean} true si se devolvió el vehículo, false si no se pudo
+     */
+    returnVehicleToOrigin(convoy, fromNode) {
+        if (!fromNode) {
+            return false;
+        }
+
+        // === CAMIÓN DE REPARACIÓN: Devolver al HQ ===
+        if (convoy.isRepair) {
+            if (fromNode.hasRepairSystem && fromNode.type === 'hq') {
+                fromNode.availableRepairVehicles = Math.min(fromNode.maxRepairVehicles, fromNode.availableRepairVehicles + 1);
+                fromNode.repairVehicleAvailable = fromNode.availableRepairVehicles > 0;
+                console.log(`✅ Camión de reparación ${convoy.id} devuelto al HQ - Disponibles: ${fromNode.availableRepairVehicles}/${fromNode.maxRepairVehicles}`);
+                return true;
+            }
+            return false;
+        }
+
+        // === AMBULANCIA: Solo HQ regresa, Hospital se consume ===
+        if (convoy.isMedical) {
+            if (fromNode.hasMedicalSystem && fromNode.type === 'hq') {
+                fromNode.ambulanceAvailable = true;
+                console.log(`✅ Ambulancia ${convoy.id} devuelta al HQ`);
+                return true;
+            }
+            // Hospital de campaña: NO devolver - se consume (comportamiento intencional)
+            return false;
+        }
+
+        // === CONVOY NORMAL: Devolver vehículo ===
+        if (fromNode.hasVehicles) {
+            fromNode.availableVehicles = Math.min(fromNode.maxVehicles, fromNode.availableVehicles + 1);
+            console.log(`✅ Vehículo ${convoy.vehicleType} ${convoy.id} devuelto a ${fromNode.type} ${fromNode.id} - Disponibles: ${fromNode.availableVehicles}/${fromNode.maxVehicles}`);
+            return true;
+        }
+
+        return false;
+    }
+
     /**
      * Devuelve el vehículo al nodo origen
      * @param {Object} convoy - Convoy
