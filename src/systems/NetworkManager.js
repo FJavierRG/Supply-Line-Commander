@@ -2013,9 +2013,13 @@ export class NetworkManager {
                         
                         // Sonido especial de anti-drone al COMPLETAR construcción (x2 velocidad)
                         if (node.type === 'antiDrone') {
+                            const spawnVolume = this.game.audio.sounds.antiDroneSpawn ? 
+                                this.game.audio.sounds.antiDroneSpawn.volume : 
+                                this.game.audio.volumes.antiDroneSpawn;
                             const audio = this.game.audio.playSoundInstance(
                                 'assets/sounds/normalized/antidrone_spawn_normalized.wav', 
-                                this.game.audio.volumes.antiDroneSpawn
+                                spawnVolume,
+                                'antiDroneSpawn'
                             );
                             audio.playbackRate = 2.0; // Doble velocidad
                         }
@@ -2036,7 +2040,14 @@ export class NetworkManager {
                     node.isAbandoning = nodeData.isAbandoning;
                     node.abandonPhase = nodeData.abandonPhase;
                     if (nodeData.abandonStartTime !== undefined) {
-                        node.abandonStartTime = nodeData.abandonStartTime; // 🆕 NUEVO: Sincronizar timestamp del abandono
+                        node.abandonStartTime = nodeData.abandonStartTime; // Sincronizar timestamp del abandono
+                    }
+                    // Sincronizar tiempos de abandono desde el servidor (autoridad)
+                    if (nodeData.abandonPhase1Duration !== undefined) {
+                        node.abandonPhase1Duration = nodeData.abandonPhase1Duration;
+                    }
+                    if (nodeData.abandonPhase2Duration !== undefined) {
+                        node.abandonPhase2Duration = nodeData.abandonPhase2Duration;
                     }
                     
                     // Actualizar efectos (wounded, etc.)

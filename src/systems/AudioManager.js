@@ -14,6 +14,7 @@ export class AudioManager {
         // Pool de sonidos activos para permitir múltiples simultáneos
         this.activeDroneSounds = new Map(); // droneId -> Audio instance
         this.soundInstances = []; // Array de todas las instancias de audio activas
+        this.soundInstanceMap = new Map(); // Audio instance -> { soundType, baseVolume }
         
         // Timers para sonidos ambientales
         this.clearShootsTimer = 0;
@@ -229,11 +230,57 @@ export class AudioManager {
      * @param {string} src - Ruta del archivo de audio
      * @param {number} volume - Volumen (0.0 a 1.0) - se usa directamente sin aplicar volumen maestro adicional
      *                          (el volumen ya debe venir con el volumen maestro aplicado si viene del objeto original)
+     * @param {string} soundType - Tipo de sonido (opcional, para poder actualizar el volumen después)
      * @returns {Audio} Instancia de audio creada
      */
-    playSoundInstance(src, volume) {
+    playSoundInstance(src, volume, soundType = null) {
+        // Detectar el tipo de sonido si no se proporciona
+        if (!soundType) {
+            // Intentar detectar el tipo basándose en la ruta del archivo
+            const srcLower = src.toLowerCase();
+            if (srcLower.includes('man_down')) soundType = 'manDown';
+            else if (srcLower.includes('no_ammo')) soundType = 'noAmmo';
+            else if (srcLower.includes('radio_effect')) soundType = 'radioEffect';
+            else if (srcLower.includes('explosion')) soundType = 'explosion';
+            else if (srcLower.includes('place_building')) soundType = 'placeBuilding';
+            else if (srcLower.includes('bom_shoot')) soundType = 'bomShoot';
+            else if (srcLower.includes('antidrone_spawn')) soundType = 'antiDroneSpawn';
+            else if (srcLower.includes('antidrone_attack')) soundType = 'antiDroneAttack';
+            else if (srcLower.includes('alarm_sound')) soundType = 'alarm';
+            else if (srcLower.includes('nucelar_explosion')) soundType = 'nuclearExplosion';
+        }
+        
+        // Obtener volumen base original (sin volumen maestro aplicado)
+        // Necesitamos el volumen base del OptionsManager para recalcular correctamente
+        let baseVolume = volume;
+        if (soundType && this.optionsManager && this.optionsManager.baseVolumes[soundType] !== undefined) {
+            // Usar el volumen base original del OptionsManager
+            baseVolume = this.optionsManager.baseVolumes[soundType];
+        } else if (soundType && this.volumes[soundType] !== undefined) {
+            // Fallback: usar el volumen actual (ya tiene volumen maestro aplicado)
+            // Esto no es ideal pero funciona si no hay OptionsManager
+            baseVolume = this.volumes[soundType];
+            // Intentar deshacer el volumen maestro si está disponible
+            if (this.optionsManager) {
+                const masterVol = this.optionsManager.settings.masterVolume || 1.0;
+                const sfxVol = this.optionsManager.settings.sfxVolume || 1.0;
+                const musicSounds = ['ambiance', 'mainTheme', 'victoryMarch'];
+                if (musicSounds.includes(soundType)) {
+                    const musicVol = this.optionsManager.settings.musicVolume || 1.0;
+                    baseVolume = this.volumes[soundType] / (masterVol * musicVol);
+                } else {
+                    baseVolume = this.volumes[soundType] / (masterVol * sfxVol);
+                }
+            }
+        }
+        
         // Usar el volumen directamente - si viene del objeto original ya tiene el volumen maestro aplicado
         const audio = this.createAudio(src, volume, false);
+        
+        // Guardar información de la instancia para poder actualizar su volumen después
+        if (soundType) {
+            this.soundInstanceMap.set(audio, { soundType, baseVolume });
+        }
         
         // Limpiar cuando termine
         audio.addEventListener('ended', () => {
@@ -241,6 +288,7 @@ export class AudioManager {
             if (index > -1) {
                 this.soundInstances.splice(index, 1);
             }
+            this.soundInstanceMap.delete(audio);
         });
         
         audio.play().catch(e => {});
@@ -348,7 +396,7 @@ export class AudioManager {
     playExplosionSound() {
         // Usar el volumen del objeto original que ya tiene el volumen maestro aplicado
         const explosionVolume = this.sounds.explosion ? this.sounds.explosion.volume : this.volumes.explosion;
-        this.playSoundInstance('assets/sounds/normalized/explosion_normalized.wav', explosionVolume);
+        this.playSoundInstance('assets/sounds/normalized/explosion_normalized.wav', explosionVolume, 'explosion');
     }
     
     /**
@@ -401,7 +449,7 @@ export class AudioManager {
         }
         
         // Reproducir sonido (usar instancia para permitir múltiples reproducciones)
-        this.playSoundInstance('assets/sounds/normalized/alarm_sound_normalized.wav', finalVolume);
+        this.playSoundInstance('assets/sounds/normalized/alarm_sound_normalized.wav', finalVolume, 'alarm');
     }
     
     /**
@@ -418,7 +466,7 @@ export class AudioManager {
         }
         
         // Reproducir sonido (usar instancia para permitir múltiples reproducciones)
-        this.playSoundInstance('assets/sounds/normalized/nucelar_explosion_normalized.wav', finalVolume);
+        this.playSoundInstance('assets/sounds/normalized/nucelar_explosion_normalized.wav', finalVolume, 'nuclearExplosion');
     }
     
     /**
@@ -445,6 +493,49 @@ export class AudioManager {
         
         for (const [droneId, audio] of this.activeDroneSounds.entries()) {
             audio.volume = finalVolume;
+        }
+    }
+    
+    /**
+     * Actualiza el volumen de todas las instancias de sonido dinámicas activas
+     * con el volumen maestro y de efectos actual
+     */
+    updateActiveSoundInstances() {
+        if (!this.optionsManager) return;
+        
+        const masterVolume = this.optionsManager.settings.masterVolume || 1.0;
+        const sfxVolume = this.optionsManager.settings.sfxVolume || 1.0;
+        
+        // Clasificar sonidos de música (no deberían estar aquí, pero por si acaso)
+        const musicSounds = ['ambiance', 'mainTheme', 'victoryMarch'];
+        const musicVolume = this.optionsManager.settings.musicVolume || 1.0;
+        
+        // Actualizar todas las instancias activas
+        for (const audio of this.soundInstances) {
+            const instanceInfo = this.soundInstanceMap.get(audio);
+            
+            if (instanceInfo && instanceInfo.soundType) {
+                // Tenemos información del tipo de sonido, recalcular volumen usando el volumen base guardado
+                let baseVol = instanceInfo.baseVolume;
+                
+                // Si tenemos el volumen base en OptionsManager, usarlo (es más confiable)
+                if (this.optionsManager.baseVolumes[instanceInfo.soundType] !== undefined) {
+                    baseVol = this.optionsManager.baseVolumes[instanceInfo.soundType];
+                }
+                
+                let finalVolume = baseVol * masterVolume;
+                
+                // Aplicar volumen de música o efectos según corresponda
+                if (musicSounds.includes(instanceInfo.soundType)) {
+                    finalVolume *= musicVolume;
+                } else {
+                    finalVolume *= sfxVolume;
+                }
+                
+                audio.volume = Math.max(0, Math.min(1, finalVolume));
+            }
+            // Si no tenemos información del tipo, no podemos actualizar correctamente
+            // Esto no debería pasar si todas las llamadas pasan el soundType
         }
     }
     
@@ -601,7 +692,7 @@ export class AudioManager {
     playPlaceBuildingSound() {
         // Usar el volumen del objeto original que ya tiene el volumen maestro aplicado
         const placeVolume = this.sounds.placeBuilding ? this.sounds.placeBuilding.volume : this.volumes.placeBuilding;
-        this.playSoundInstance('assets/sounds/normalized/place_building_normalized.wav', placeVolume);
+        this.playSoundInstance('assets/sounds/normalized/place_building_normalized.wav', placeVolume, 'placeBuilding');
     }
     
     /**
@@ -611,7 +702,7 @@ export class AudioManager {
         // Usar el volumen del objeto original que ya tiene el volumen maestro aplicado
         const baseVolume = this.sounds.bomShoot ? this.sounds.bomShoot.volume : this.volumes.bomShoot;
         const volume = playbackRate === 2.0 ? baseVolume * 2.4 : baseVolume; // +140% si es sniper
-        const audio = this.playSoundInstance('assets/sounds/normalized/bom_shoot1_normalized.wav', volume);
+        const audio = this.playSoundInstance('assets/sounds/normalized/bom_shoot1_normalized.wav', volume, 'bomShoot');
         
         // Aplicar velocidad de reproducción
         audio.playbackRate = playbackRate;
@@ -634,7 +725,7 @@ export class AudioManager {
     playAntiDroneSpawnSound() {
         // Usar el volumen del objeto original que ya tiene el volumen maestro aplicado
         const spawnVolume = this.sounds.antiDroneSpawn ? this.sounds.antiDroneSpawn.volume : this.volumes.antiDroneSpawn;
-        this.playSoundInstance('assets/sounds/normalized/antidrone_spawn_normalized.wav', spawnVolume);
+        this.playSoundInstance('assets/sounds/normalized/antidrone_spawn_normalized.wav', spawnVolume, 'antiDroneSpawn');
     }
     
     /**
@@ -643,7 +734,7 @@ export class AudioManager {
     playAntiDroneAttackSound() {
         // Usar el volumen del objeto original que ya tiene el volumen maestro aplicado
         const attackVolume = this.sounds.antiDroneAttack ? this.sounds.antiDroneAttack.volume : this.volumes.antiDroneAttack;
-        this.playSoundInstance('assets/sounds/normalized/antidrone_attack_normalized.wav', attackVolume);
+        this.playSoundInstance('assets/sounds/normalized/antidrone_attack_normalized.wav', attackVolume, 'antiDroneAttack');
     }
     
     /**
@@ -669,7 +760,7 @@ export class AudioManager {
         // Usar el volumen del objeto original que ya tiene el volumen maestro aplicado
         const manDownVolume = this.sounds.manDown1 ? this.sounds.manDown1.volume : this.volumes.manDown;
         const variant = Math.random() < 0.5 ? 1 : 2;
-        this.playSoundInstance(`assets/sounds/normalized/man_down${variant}_normalized.wav`, manDownVolume);
+        this.playSoundInstance(`assets/sounds/normalized/man_down${variant}_normalized.wav`, manDownVolume, 'manDown');
         
         // Marcar como reproducido para este frente
         if (frontId) {
@@ -689,7 +780,7 @@ export class AudioManager {
         // Usar el volumen del objeto original que ya tiene el volumen maestro aplicado
         const noAmmoVolume = this.sounds.noAmmo1 ? this.sounds.noAmmo1.volume : this.volumes.noAmmo;
         const variantNum = Math.floor(Math.random() * 4) + 1;
-        this.playSoundInstance(`assets/sounds/normalized/no_ammo${variantNum}_normalized.wav`, noAmmoVolume);
+        this.playSoundInstance(`assets/sounds/normalized/no_ammo${variantNum}_normalized.wav`, noAmmoVolume, 'noAmmo');
         
         // Marcar como reproducido para este frente
         if (frontId) {
@@ -712,7 +803,9 @@ export class AudioManager {
      */
     playRandomRadioEffect() {
         const variantNum = Math.floor(Math.random() * 4) + 1;
-        this.playSoundInstance(`assets/sounds/normalized/radio_effect${variantNum}_normalized.wav`, this.volumes.radioEffect);
+        // Usar el volumen del objeto original que ya tiene el volumen maestro aplicado
+        const radioVolume = this.sounds.radioEffect1 ? this.sounds.radioEffect1.volume : this.volumes.radioEffect;
+        this.playSoundInstance(`assets/sounds/normalized/radio_effect${variantNum}_normalized.wav`, radioVolume, 'radioEffect');
     }
     
     /**

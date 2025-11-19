@@ -25,6 +25,14 @@ export class DeckManager {
         this.deckPointLimit = DEFAULT_DECK_POINT_LIMIT; // 🎯 Límite dinámico (actualizado desde servidor)
         this.benchPointLimit = DEFAULT_BENCH_POINT_LIMIT; // 🆕 NUEVO: Límite dinámico para banquillo (actualizado desde servidor)
         
+        // 🆕 NUEVO: Gestión de disponibilidad del mazo por defecto
+        this.defaultDeckReady = false;
+        this._defaultDeckResolve = null;
+        this._defaultDeckReadyPromise = new Promise((resolve) => {
+            this._defaultDeckResolve = resolve;
+        });
+        this.defaultDeckListeners = new Set();
+        
         this.initialize();
     }
     
@@ -53,6 +61,7 @@ export class DeckManager {
         
         // Si no hay mazo seleccionado o solo hay el predeterminado, no seleccionar ninguno
         // El arsenal empezará con mazo vacío
+        this.markDefaultDeckReady();
     }
     
     /**
@@ -132,13 +141,8 @@ export class DeckManager {
         // Actualizar o crear el mazo por defecto en localStorage
         const existingIndex = this.decks.findIndex(d => d.id === 'default');
         if (existingIndex >= 0) {
-            // Actualizar el existente, pero mantener bench si el usuario lo ha modificado
-            const existingBench = this.decks[existingIndex].bench || [];
-            this.decks[existingIndex] = {
-                ...this.decks[existingIndex],
-                ...DEFAULT_DECK_FROM_SERVER,
-                bench: existingBench.length > 0 ? existingBench : (DEFAULT_DECK_FROM_SERVER.bench || [])
-            };
+            // Sobrescribir completamente con la versión del servidor (fuente única de verdad)
+            this.decks[existingIndex] = { ...DEFAULT_DECK_FROM_SERVER };
         } else {
             this.decks.push({ ...DEFAULT_DECK_FROM_SERVER });
         }
@@ -150,6 +154,8 @@ export class DeckManager {
         
         this.saveDecks();
         console.log('🎴 Mazo por defecto actualizado desde servidor:', DEFAULT_DECK_FROM_SERVER);
+        this.markDefaultDeckReady();
+        this.notifyDefaultDeckUpdated();
     }
     
     /**
@@ -180,7 +186,7 @@ export class DeckManager {
         const defaultDeck = {
             id: 'default',
             name: 'Mazo Predeterminado',
-            units: ['hq'], // Solo HQ como fallback
+            units: ['hq', 'fob'], // HQ y FOB como fallback
             bench: [],
             isDefault: true,
             createdAt: now,
@@ -214,8 +220,8 @@ export class DeckManager {
         let totalCost = 0;
         
         units.forEach(unitId => {
-            // El HQ es gratis (no tiene costo o costo 0)
-            if (unitId === 'hq') {
+            // El HQ y FOB son gratis (no tienen costo o costo 0)
+            if (unitId === 'hq' || unitId === 'fob') {
                 return; // Continuar sin sumar
             }
             
@@ -626,9 +632,9 @@ export class DeckManager {
             errors.push(`La unidad "${benchUnitId}" no está en el banquillo`);
         }
         
-        // Verificar que no se intente intercambiar el HQ
-        if (deckUnitId === 'hq') {
-            errors.push('No se puede intercambiar el HQ');
+        // Verificar que no se intente intercambiar el HQ ni el FOB
+        if (deckUnitId === 'hq' || deckUnitId === 'fob') {
+            errors.push('No se puede intercambiar el HQ ni el FOB');
         }
         
         // Simular el intercambio para validar límites
@@ -658,6 +664,65 @@ export class DeckManager {
             valid: errors.length === 0,
             errors
         };
+    }
+
+    /**
+     * 🆕 NUEVO: Marca que el mazo por defecto está disponible
+     */
+    markDefaultDeckReady() {
+        if (!this.defaultDeckReady) {
+            this.defaultDeckReady = true;
+        }
+        
+        if (this._defaultDeckResolve) {
+            this._defaultDeckResolve();
+            this._defaultDeckResolve = null;
+        }
+    }
+
+    /**
+     * 🆕 NUEVO: Permite esperar a que el mazo por defecto esté listo
+     * @returns {Promise<void>}
+     */
+    ensureDefaultDeckReady() {
+        if (this.defaultDeckReady) {
+            return Promise.resolve();
+        }
+        return this._defaultDeckReadyPromise;
+    }
+
+    /**
+     * 🆕 NUEVO: Registrar listeners para cambios del mazo predeterminado
+     * @param {Function} callback
+     */
+    onDefaultDeckUpdated(callback) {
+        if (typeof callback === 'function') {
+            this.defaultDeckListeners.add(callback);
+        }
+    }
+
+    /**
+     * 🆕 NUEVO: Quitar listeners registrados
+     * @param {Function} callback
+     */
+    offDefaultDeckUpdated(callback) {
+        if (callback && this.defaultDeckListeners.has(callback)) {
+            this.defaultDeckListeners.delete(callback);
+        }
+    }
+
+    /**
+     * 🆕 NUEVO: Notifica a los listeners que el mazo predeterminado cambió
+     */
+    notifyDefaultDeckUpdated() {
+        const defaultDeck = this.getDefaultDeck();
+        this.defaultDeckListeners.forEach((listener) => {
+            try {
+                listener(defaultDeck);
+            } catch (error) {
+                console.error('❌ Error notificando actualización del mazo por defecto:', error);
+            }
+        });
     }
 }
 

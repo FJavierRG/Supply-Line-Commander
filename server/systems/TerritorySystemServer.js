@@ -3,19 +3,20 @@
 // Maneja abandono de FOBs fuera de territorio
 
 import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
-
-const TERRITORY_CONFIG = {
-    frontierGapPx: 25,
-    checkAbandonmentInterval: 1.0, // Verificar cada 1 segundo
-    graceTime: 3.0, // 3 segundos de gracia antes de empezar a derrumbarse
-    phaseTime: 1.0  // 1 segundo por fase de animación
-};
+import { GAME_CONFIG } from '../config/gameConfig.js';
 
 export class TerritorySystemServer {
     constructor(gameState) {
         this.gameState = gameState;
         this.checkAbandonmentTimer = 0;
-        this.checkAbandonmentInterval = TERRITORY_CONFIG.checkAbandonmentInterval;
+        this.checkAbandonmentInterval = GAME_CONFIG.territory.checkAbandonmentInterval;
+    }
+    
+    /**
+     * Obtiene la configuración de territorio
+     */
+    getConfig() {
+        return GAME_CONFIG.territory;
     }
 
     /**
@@ -45,106 +46,67 @@ export class TerritorySystemServer {
             return;
         }
         
-        // DEBUG: Log desactivado - reduce spam en consola
-        // if (Math.floor(this.checkAbandonmentTimer * 10) % 50 === 0) {
-        //     console.log(`🔍 Territory check - P1 frontier: ${player1Frontier.toFixed(0)} | P2 frontier: ${player2Frontier.toFixed(0)}`);
-        // }
+        // Verificar edificios de ambos equipos usando función común
+        this.checkBuildingsForTeam('player1', player1Frontier, (building, radius) => {
+            // Player1: edificio fuera si su borde izquierdo está fuera de la frontera
+            return (building.x - radius) > player1Frontier;
+        }, 'leftEdge');
         
-        // Verificar TODOS los edificios de player1 (todos excepto HQ y frentes)
+        this.checkBuildingsForTeam('player2', player2Frontier, (building, radius) => {
+            // Player2: edificio fuera si su borde derecho está fuera de la frontera
+            return (building.x + radius) < player2Frontier;
+        }, 'rightEdge');
+    }
+    
+    /**
+     * Verifica edificios de un equipo para ver si están fuera de territorio
+     * @param {string} team - Equipo a verificar ('player1' o 'player2')
+     * @param {number} frontier - Frontera calculada para este equipo
+     * @param {Function} isOutOfTerritoryFn - Función que calcula si un edificio está fuera (recibe building, radius)
+     * @param {string} edgeName - Nombre del borde para logs ('leftEdge' o 'rightEdge')
+     */
+    checkBuildingsForTeam(team, frontier, isOutOfTerritoryFn, edgeName) {
+        // Filtrar edificios del equipo (todos excepto HQ, frentes y unidades especiales)
         // Los edificios con abandono automático (aerialBase, intelRadio) también pueden abandonarse por territorio
-        // 🆕 Excluir specopsCommando, truckAssault y cameraDrone: están diseñados para desplegarse en territorio enemigo
-        const player1Buildings = this.gameState.nodes.filter(n => 
-            n.team === 'player1' && 
+        // Excluir specopsCommando, truckAssault y cameraDrone: están diseñados para desplegarse en territorio enemigo
+        const buildings = this.gameState.nodes.filter(n => 
+            n.team === team && 
             n.constructed && 
             n.type !== 'hq' && 
             n.type !== 'front' &&
-            n.type !== 'specopsCommando' && // 🆕 Excluir comando - puede estar en territorio enemigo
-            n.type !== 'truckAssault' && // 🆕 Excluir truck assault - puede estar en territorio enemigo
-            n.type !== 'cameraDrone' // 🆕 Excluir camera drone - puede estar en territorio enemigo
+            n.type !== 'specopsCommando' &&
+            n.type !== 'truckAssault' &&
+            n.type !== 'cameraDrone'
         );
         
-        for (const building of player1Buildings) {
-            // Obtener radio del edificio (para considerar la hitbox completa)
+        for (const building of buildings) {
             const buildingRadius = SERVER_NODE_CONFIG.radius[building.type] || 30;
-            // El edificio está fuera de territorio cuando TODO su borde izquierdo está fuera de la frontera
-            // (es decir, cuando el edificio está completamente fuera del territorio)
-            const isOutOfTerritory = (building.x - buildingRadius) > player1Frontier;
+            const isOutOfTerritory = isOutOfTerritoryFn(building, buildingRadius);
             
             if (isOutOfTerritory) {
                 // Edificio fuera de territorio
                 if (!building.outOfTerritoryTimer) {
                     // Primera vez que se detecta fuera, iniciar timer
                     building.outOfTerritoryTimer = 0;
-                    console.log(`⏱️ ${building.type} ${building.id} FUERA de territorio - iniciando gracia de ${TERRITORY_CONFIG.graceTime}s (x: ${building.x.toFixed(0)}, radius: ${buildingRadius}, leftEdge: ${(building.x - buildingRadius).toFixed(0)}, frontier: ${player1Frontier.toFixed(0)})`);
+                    const config = this.getConfig();
+                    const edgePosition = edgeName === 'leftEdge' 
+                        ? (building.x - buildingRadius).toFixed(0)
+                        : (building.x + buildingRadius).toFixed(0);
+                    console.log(`⏱️ ${building.type} ${building.id} FUERA de territorio - iniciando gracia de ${config.graceTime}s (x: ${building.x.toFixed(0)}, radius: ${buildingRadius}, ${edgeName}: ${edgePosition}, frontier: ${frontier.toFixed(0)})`);
                 }
                 // NO incrementar el timer aquí - se hace en updateAbandonmentProgress
             } else {
                 // Edificio de vuelta en territorio, cancelar timer y abandono
-                // 🆕 FIX: Solo resetear abandono si fue causado por territorio (outOfTerritoryTimer)
+                // FIX: Solo resetear abandono si fue causado por territorio
                 // NO resetear si el abandono fue iniciado por otras razones (investmentCompleted, supplies agotados)
                 if (building.outOfTerritoryTimer !== null) {
-                    // console.log(`✅ ${building.type} ${building.id} DE VUELTA en territorio - cancelando timer`);
                     building.outOfTerritoryTimer = null;
-                    // Solo resetear abandono si estaba en proceso Y fue causado por territorio
-                    // Verificar si el abandono fue causado por territorio revisando si había timer
-                    if (building.isAbandoning) {
-                        // Si tiene outOfTerritoryTimer, significa que el abandono fue por territorio
-                        // Pero ya lo pusimos en null arriba, así que necesitamos otra forma de saberlo
-                        // Mejor: NO resetear si es intelRadio o aerialBase (tienen abandono automático)
-                        if (building.type !== 'intelRadio' && building.type !== 'aerialBase' && !building.isAerialBase) {
-                            this.gameState.abandonmentSystem.resetAbandonment(building);
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Verificar TODOS los edificios de player2 (todos excepto HQ y frentes)
-        // Los edificios con abandono automático (aerialBase, intelRadio) también pueden abandonarse por territorio
-        // 🆕 Excluir specopsCommando y truckAssault: están diseñados para desplegarse en territorio enemigo
-        // 🆕 Excluir specopsCommando, truckAssault y cameraDrone: están diseñados para desplegarse en territorio enemigo
-        const player2Buildings = this.gameState.nodes.filter(n =>
-            n.team === 'player2' && 
-            n.constructed && 
-            n.type !== 'hq' && 
-            n.type !== 'front' &&
-            n.type !== 'specopsCommando' && // 🆕 Excluir comando - puede estar en territorio enemigo
-            n.type !== 'truckAssault' && // 🆕 Excluir truck assault - puede estar en territorio enemigo
-            n.type !== 'cameraDrone' // 🆕 Excluir camera drone - puede estar en territorio enemigo
-        );
-        
-        for (const building of player2Buildings) {
-            // Obtener radio del edificio (para considerar la hitbox completa)
-            const buildingRadius = SERVER_NODE_CONFIG.radius[building.type] || 30;
-            // El edificio está fuera de territorio cuando TODO su borde derecho está fuera de la frontera
-            // (es decir, cuando el edificio está completamente fuera del territorio)
-            const isOutOfTerritory = (building.x + buildingRadius) < player2Frontier;
-            
-            if (isOutOfTerritory) {
-                // Edificio fuera de territorio
-                if (!building.outOfTerritoryTimer) {
-                    // Primera vez que se detecta fuera, iniciar timer
-                    building.outOfTerritoryTimer = 0;
-                    console.log(`⏱️ ${building.type} ${building.id} FUERA de territorio - iniciando gracia de ${TERRITORY_CONFIG.graceTime}s (x: ${building.x.toFixed(0)}, radius: ${buildingRadius}, rightEdge: ${(building.x + buildingRadius).toFixed(0)}, frontier: ${player2Frontier.toFixed(0)})`);
-                }
-                // NO incrementar el timer aquí - se hace en updateAbandonmentProgress
-            } else {
-                // Edificio de vuelta en territorio, cancelar timer y abandono
-                // 🆕 FIX: Solo resetear abandono si fue causado por territorio (outOfTerritoryTimer)
-                // NO resetear si el abandono fue iniciado por otras razones (investmentCompleted, supplies agotados)
-                if (building.outOfTerritoryTimer !== null || building.isAbandoning) {
-                    // console.log(`✅ ${building.type} ${building.id} DE VUELTA en territorio - cancelando timer`);
-                    if (building.outOfTerritoryTimer !== null) {
-                        building.outOfTerritoryTimer = null;
-                        // Solo resetear abandono si NO es intelRadio o aerialBase (tienen abandono automático)
-                        // Estos edificios pueden abandonarse por otras razones que no deben ser reseteadas
-                        if (building.isAbandoning && building.type !== 'intelRadio' && building.type !== 'aerialBase' && !building.isAerialBase) {
-                            this.gameState.abandonmentSystem.resetAbandonment(building);
-                        }
-                    } else if (building.isAbandoning) {
-                        // Si está abandonando pero no tenía outOfTerritoryTimer, 
-                        // significa que el abandono fue por otra razón (investmentCompleted, supplies, etc)
-                        // NO resetear en este caso
+                    // Solo resetear abandono si estaba en proceso Y NO es intelRadio o aerialBase (tienen abandono automático)
+                    if (building.isAbandoning && 
+                        building.type !== 'intelRadio' && 
+                        building.type !== 'aerialBase' && 
+                        !building.isAerialBase) {
+                        this.gameState.abandonmentSystem.resetAbandonment(building);
                     }
                 }
             }
@@ -159,12 +121,13 @@ export class TerritorySystemServer {
         
         if (fronts.length === 0) return null;
         
+        const config = this.getConfig();
         if (team === 'player1') {
             // Player1 avanza a la derecha: frontera es el X más alto
-            return Math.max(...fronts.map(f => f.x + TERRITORY_CONFIG.frontierGapPx));
+            return Math.max(...fronts.map(f => f.x + config.frontierGapPx));
         } else {
             // Player2 avanza a la izquierda: frontera es el X más bajo
-            return Math.min(...fronts.map(f => f.x - TERRITORY_CONFIG.frontierGapPx));
+            return Math.min(...fronts.map(f => f.x - config.frontierGapPx));
         }
     }
 

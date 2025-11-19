@@ -5,7 +5,7 @@ import { AISupplyManager } from './AISupplyManager.js';
 import { AIMedicalManager } from './AIMedicalManager.js';
 import { AIRepairManager } from './AIRepairManager.js';
 import AIConfig from '../config/AIConfig.js';
-import { getAdjustedInterval } from '../config/RaceAIConfig.js';
+import { getAdjustedInterval } from '../config/AIConfig.js';
 
 export class AICoreSystem {
     constructor(gameState, io, roomId, raceId, difficulty) {
@@ -30,13 +30,13 @@ export class AICoreSystem {
         };
         
         // 🎯 INTERVALOS AJUSTADOS POR DIFICULTAD usando getAdjustedInterval
-        // Base: 2.0s para FOBs, 3.0s para frentes, 1.5s para helicópteros
+        // Ahora los intervalos están definidos directamente en AIConfig.intervals
         this.intervals = {
-            fobCheck: getAdjustedInterval('supply', raceId, difficulty) * 2.0, // Base 2.0s ajustado
-            frontCheck: getAdjustedInterval('supply', raceId, difficulty) * 3.0, // Base 3.0s ajustado
-            helicopterCheck: getAdjustedInterval('supply', raceId, difficulty) * 1.5, // Base 1.5s ajustado
-            medical: 3.0, // No ajustado por dificultad (emergencias médicas)
-            repair: 4.0 // No ajustado por dificultad (reparaciones)
+            fobCheck: getAdjustedInterval('supplyFob', difficulty),
+            frontCheck: getAdjustedInterval('supplyFront', difficulty),
+            helicopterCheck: getAdjustedInterval('supplyHelicopter', difficulty),
+            medical: getAdjustedInterval('medical', difficulty),
+            repair: getAdjustedInterval('repair', difficulty)
         };
         
         // Currency tracking

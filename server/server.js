@@ -378,15 +378,20 @@ io.on('connection', (socket) => {
                     return isEnabled;
                 });
                 
-                // El HQ siempre debe estar presente
+                // El HQ y FOB siempre deben estar presentes
                 if (!validUnits.includes('hq')) {
                     validUnits.unshift('hq');
                 }
+                if (!validUnits.includes('fob')) {
+                    // Añadir FOB después del HQ
+                    const hqIndex = validUnits.indexOf('hq');
+                    validUnits.splice(hqIndex + 1, 0, 'fob');
+                }
                 
                 // 🎯 VALIDACIÓN ANTI-HACK: Calcular costo total del mazo
-                // El HQ siempre está presente y no cuenta para el límite
+                // El HQ y FOB siempre están presentes y no cuentan para el límite
                 const deckCost = validUnits
-                    .filter(unitId => unitId !== 'hq') // Excluir HQ del cálculo
+                    .filter(unitId => unitId !== 'hq' && unitId !== 'fob') // Excluir HQ y FOB del cálculo
                     .reduce((total, unitId) => {
                         const unitCost = costs[unitId] || 0;
                         return total + unitCost;
@@ -561,11 +566,11 @@ io.on('connection', (socket) => {
                 return;
             }
             
-            // Verificar que no se intente intercambiar el HQ
-            if (deckUnitId === 'hq') {
+            // Verificar que no se intente intercambiar el HQ ni el FOB
+            if (deckUnitId === 'hq' || deckUnitId === 'fob') {
                 socket.emit('swap_card_error', {
-                    error: 'CANNOT_SWAP_HQ',
-                    message: 'No se puede intercambiar el HQ'
+                    error: 'CANNOT_SWAP_HQ_OR_FOB',
+                    message: 'No se puede intercambiar el HQ ni el FOB'
                 });
                 return;
             }

@@ -1219,6 +1219,38 @@ export class InputHandler {
     }
     
     /**
+     * Detecta si hay un consumible de ataque activo consultando la configuración del servidor
+     * @returns {boolean} True si hay un consumible de ataque activo
+     */
+    isAttackConsumableActive() {
+        const buildSystem = this.game.buildSystem;
+        const serverConfig = this.game.serverBuildingConfig;
+        
+        if (!serverConfig || !serverConfig.actions) {
+            return false;
+        }
+        
+        // Mapeo de modos a claves de acción en la configuración del servidor
+        const attackModeMappings = [
+            { mode: buildSystem.tankMode, actionKey: 'tankLaunch' },
+            { mode: buildSystem.lightVehicleMode, actionKey: 'lightVehicleLaunch' },
+            { mode: buildSystem.sniperMode, actionKey: 'sniperStrike' },
+            { mode: buildSystem.droneMode, actionKey: 'droneLaunch' },
+            { mode: buildSystem.fobSabotageMode, actionKey: 'fobSabotage' },
+            { mode: buildSystem.artilleryMode, actionKey: 'artilleryLaunch' }
+        ];
+        
+        // Verificar si algún modo de ataque está activo y tiene configuración de objetivos
+        return attackModeMappings.some(({ mode, actionKey }) => {
+            if (!mode) return false;
+            
+            const actionConfig = serverConfig.actions[actionKey];
+            // Un consumible de ataque tiene validTargets o targetType
+            return actionConfig && (actionConfig.validTargets || actionConfig.targetType);
+        });
+    }
+    
+    /**
      * Calcula la prioridad de un nodo para selección según el contexto actual
      * @param {Object} node - Nodo a evaluar
      * @param {Object} selectedNode - Nodo actualmente seleccionado (puede ser null)
@@ -1228,10 +1260,29 @@ export class InputHandler {
     calculateNodePriority(node, selectedNode, myTeam) {
         const isAlly = node.team === myTeam;
         const isEnemy = !isAlly;
+        const buildSystem = this.game.buildSystem;
         
-        // Base priority según tipo
-        let priority = 0;
+        // === REGLA ESPECIAL 1: FOB seleccionado → priorizar Fronts aliados sobre TODO ===
+        if (selectedNode && selectedNode.type === 'fob' && isAlly) {
+            if (node.type === 'front') return 200; // Máxima prioridad para Fronts aliados
+            return 10; // Otros aliados tienen prioridad normal
+        }
         
+        // === REGLA ESPECIAL 2: HQ en modo médico → priorizar Fronts aliados ===
+        if (selectedNode && selectedNode.type === 'hq' && 
+            selectedNode.selectedResourceType === 'medical' && isAlly) {
+            if (node.type === 'front') return 200; // Máxima prioridad para Fronts aliados
+            return 10; // Otros aliados tienen prioridad normal
+        }
+        
+        // === REGLA ESPECIAL 3: Consumible de ataque activo → priorizar enemigos sobre aliados ===
+        const attackConsumableActive = this.isAttackConsumableActive();
+        if (attackConsumableActive && isAlly) {
+            // Cuando hay consumible de ataque activo, aliados tienen prioridad muy baja
+            return 1;
+        }
+        
+        // === REGLAS NORMALES ===
         if (isAlly) {
             // === REGLAS PARA NODOS ALIADOS ===
             if (!selectedNode) {
@@ -1264,7 +1315,6 @@ export class InputHandler {
         } else {
             // === REGLAS PARA NODOS ENEMIGOS ===
             // Verificar qué acciones son posibles según el modo activo
-            const buildSystem = this.game.buildSystem;
             
             // Modo tanque: puede atacar edificios pero NO FOBs ni HQs
             if (buildSystem.tankMode) {

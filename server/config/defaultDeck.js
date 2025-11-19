@@ -72,10 +72,12 @@ export const DEFAULT_DECK = {
  */
 export function createFullDefaultDeck() {
     const enabledUnits = getEnabledUnits();
+    // Filtrar FOB de enabledUnits si está presente (ya que se añade por defecto)
+    const filteredUnits = enabledUnits.filter(id => id !== 'fob');
     return {
         id: 'default',
         name: 'Mazo Predeterminado',
-        units: ['hq', ...enabledUnits], // HQ siempre primero
+        units: ['hq', 'fob', ...filteredUnits], // HQ y FOB siempre primero
         bench: [], // 🆕 NUEVO: Banquillo vacío
         createdAt: Date.now(),
         updatedAt: Date.now(),

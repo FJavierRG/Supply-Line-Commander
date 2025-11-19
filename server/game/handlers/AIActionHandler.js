@@ -212,8 +212,10 @@ export class AIActionHandler {
      * Ejecuta ataque/consumible
      * @param {string} team - Team de la IA
      * @param {string} cardId - ID de la carta/consumible a usar
+     * @param {Array} lastDroneTargets - (Opcional) Historial de últimos objetivos atacados con drones
+     * @param {Function} updateDroneTargets - (Opcional) Función para actualizar el historial de objetivos
      */
-    async executeAttack(team, cardId) {
+    async executeAttack(team, cardId, lastDroneTargets = null, updateDroneTargets = null) {
         if (!cardId) {
             console.warn('⚠️ Attack type no especificado');
             return false;
@@ -224,7 +226,7 @@ export class AIActionHandler {
         // Enrutar según el tipo de consumible
         switch (cardId) {
             case 'drone':
-                return await this.executeDroneAttack(myNodes, team);
+                return await this.executeDroneAttack(myNodes, team, lastDroneTargets, updateDroneTargets);
             case 'sniperStrike':
                 return await this.executeSniperAttack(myNodes, team);
             case 'fobSabotage':
@@ -248,8 +250,12 @@ export class AIActionHandler {
     /**
      * Ejecuta ataque con dron
      * 🎯 CORREGIDO: Usa CombatHandler.handleDroneLaunch para validar currency y descuentos
+     * @param {Array} myNodes - Nodos del equipo de la IA
+     * @param {string} team - Equipo de la IA
+     * @param {Array} lastDroneTargets - (Opcional) Historial de últimos objetivos atacados con drones
+     * @param {Function} updateDroneTargets - (Opcional) Función para actualizar el historial de objetivos
      */
-    async executeDroneAttack(myNodes, team) {
+    async executeDroneAttack(myNodes, team, lastDroneTargets = null, updateDroneTargets = null) {
         // Encontrar lanzadera
         const launcher = myNodes.find(n => n.type === 'droneLauncher' && n.active && n.constructed);
         
@@ -260,8 +266,8 @@ export class AIActionHandler {
             return false;
         }
         
-        // Encontrar objetivo prioritario
-        const target = this.findBestDroneTarget();
+        // Encontrar objetivo prioritario (pasar historial para evitar obsesión)
+        const target = this.findBestDroneTarget(lastDroneTargets);
         
         if (!target) {
             if (AIConfig.debug.logActions) {
@@ -274,6 +280,11 @@ export class AIActionHandler {
         const result = this.combatHandler.handleDroneLaunch(team, target.id);
         
         if (result.success) {
+            // 🎯 Registrar objetivo atacado en el historial (si se proporcionó función de actualización)
+            if (updateDroneTargets && typeof updateDroneTargets === 'function') {
+                updateDroneTargets(target.id);
+            }
+            
             // Broadcast como si fuera un jugador real
             this.io.to(this.roomId).emit('drone_launched', {
                 droneId: result.drone.id,
@@ -532,18 +543,82 @@ export class AIActionHandler {
     
     /**
      * Encuentra mejor objetivo para dron
+     * 🎯 MEJORADO: Selección aleatoria entre múltiples objetivos del mismo tipo y detección de obsesión
+     * @param {Array} lastDroneTargets - (Opcional) Historial de últimos objetivos atacados (máx 2)
+     * @returns {Object|null} Objetivo seleccionado o null si no hay objetivos válidos
      */
-    findBestDroneTarget() {
+    findBestDroneTarget(lastDroneTargets = null) {
         const playerNodes = this.gameState.nodes.filter(n => n.team === 'player1' && n.active && n.constructed);
         const validTargetTypes = SERVER_NODE_CONFIG.actions?.droneLaunch?.validTargets || [];
         
         const validTargets = playerNodes.filter(n => validTargetTypes.includes(n.type));
         
+        if (validTargets.length === 0) {
+            return null;
+        }
+        
+        // 🎯 Verificar si hay obsesión (los dos últimos IDs son iguales)
+        let skipType = null; // Tipo de edificio a saltar si hay obsesión
+        if (lastDroneTargets && Array.isArray(lastDroneTargets) && lastDroneTargets.length === 2) {
+            if (lastDroneTargets[0] === lastDroneTargets[1]) {
+                // Los dos últimos son el mismo ID → obsesión detectada
+                // Buscar el nodo para obtener su tipo
+                const obsessedNode = this.gameState.nodes.find(n => n.id === lastDroneTargets[0]);
+                if (obsessedNode) {
+                    skipType = obsessedNode.type;
+                    if (AIConfig.debug?.logActions) {
+                        console.log(`🔄 IA: Obsesión detectada (mismo objetivo atacado 2 veces: ${lastDroneTargets[0]} de tipo ${skipType}). Cambiando tipo de objetivo.`);
+                    }
+                }
+            }
+        }
+        
         // Prioridad: Plantas > Hospitales > FOBs > Otros
-        let target = validTargets.find(n => n.type === 'nuclearPlant');
-        if (!target) target = validTargets.find(n => n.type === 'campaignHospital');
-        if (!target) target = validTargets.find(n => n.type === 'fob');
-        if (!target) target = validTargets[0];
+        // 🎯 MEJORADO: Selección aleatoria entre múltiples objetivos del mismo tipo
+        let target = null;
+        let currentTypeIndex = 0;
+        const priorityTypes = ['nuclearPlant', 'campaignHospital', 'fob'];
+        
+        // Si hay obsesión, encontrar el índice del tipo a saltar
+        if (skipType) {
+            const skipIndex = priorityTypes.indexOf(skipType);
+            if (skipIndex !== -1) {
+                // Empezar desde el siguiente tipo después del obsesivo
+                currentTypeIndex = skipIndex + 1;
+            }
+        }
+        
+        // Buscar objetivo según prioridad
+        while (!target && currentTypeIndex < priorityTypes.length) {
+            const targetType = priorityTypes[currentTypeIndex];
+            const targetsOfType = validTargets.filter(n => n.type === targetType);
+            
+            if (targetsOfType.length > 0) {
+                // 🎯 Selección aleatoria entre múltiples objetivos del mismo tipo
+                if (targetsOfType.length === 1) {
+                    target = targetsOfType[0];
+                } else {
+                    // Seleccionar aleatoriamente
+                    const randomIndex = Math.floor(Math.random() * targetsOfType.length);
+                    target = targetsOfType[randomIndex];
+                    if (AIConfig.debug?.logActions) {
+                        console.log(`🎲 IA: Selección aleatoria entre ${targetsOfType.length} objetivos de tipo ${targetType} → ${target.id}`);
+                    }
+                }
+            }
+            
+            currentTypeIndex++;
+        }
+        
+        // Si no se encontró ningún objetivo de los tipos prioritarios, usar cualquier otro válido
+        if (!target && validTargets.length > 0) {
+            // Selección aleatoria entre todos los objetivos restantes
+            const randomIndex = Math.floor(Math.random() * validTargets.length);
+            target = validTargets[randomIndex];
+            if (AIConfig.debug?.logActions) {
+                console.log(`🎲 IA: Selección aleatoria entre ${validTargets.length} objetivos restantes → ${target.type} ${target.id}`);
+            }
+        }
         
         return target;
     }

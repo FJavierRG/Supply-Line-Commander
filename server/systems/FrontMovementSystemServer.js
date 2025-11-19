@@ -148,7 +148,11 @@ export class FrontMovementSystemServer {
             // Player1: avanza a la derecha (+X)
             if (!front.maxXReached) front.maxXReached = front.x;
             
-            if (front.x > front.maxXReached) {
+            // 🔧 FIX: Si retrocedió, actualizar maxXReached para que cuente desde la nueva posición
+            if (front.x < front.maxXReached) {
+                front.maxXReached = front.x;
+            } else if (front.x > front.maxXReached) {
+                // Avanzó: otorgar currency
                 const pixelsGained = front.x - front.maxXReached;
                 front.maxXReached = front.x;
                 this.awardCurrencyForAdvance('player1', pixelsGained, front);
@@ -157,7 +161,11 @@ export class FrontMovementSystemServer {
             // Player2: avanza a la izquierda (-X)
             if (!front.minXReached) front.minXReached = front.x;
             
-            if (front.x < front.minXReached) {
+            // 🔧 FIX: Si retrocedió, actualizar minXReached para que cuente desde la nueva posición
+            if (front.x > front.minXReached) {
+                front.minXReached = front.x;
+            } else if (front.x < front.minXReached) {
+                // Avanzó: otorgar currency
                 const pixelsGained = front.minXReached - front.x;
                 front.minXReached = front.x;
                 this.awardCurrencyForAdvance('player2', pixelsGained, front);

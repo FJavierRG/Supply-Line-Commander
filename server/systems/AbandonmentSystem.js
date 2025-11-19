@@ -32,17 +32,19 @@ export class AbandonmentSystem {
             }
             
             // 1. ABANDONO POR TERRITORIO (prioridad alta - afecta a TODOS los nodos excepto HQ, front y specopsCommando)
-            // Después del tiempo de gracia (outOfTerritoryTimer >= 3s), iniciar abandono
+            // Después del tiempo de gracia, iniciar abandono
             // 🆕 Excluir specopsCommando: está diseñado para desplegarse en territorio enemigo
             if (node.type !== 'specopsCommando' &&
                 node.outOfTerritoryTimer !== null && 
-                node.outOfTerritoryTimer !== undefined &&
-                node.outOfTerritoryTimer >= 3.0) {
-                // Tiempo de gracia completado -> iniciar abandono
-                console.log(`💥 ${node.type} ${node.id} - tiempo de gracia completado (${node.outOfTerritoryTimer.toFixed(1)}s) - iniciando abandono`);
-                this.startAbandonment(node);
-                node.outOfTerritoryTimer = null; // Resetear timer
-                continue;
+                node.outOfTerritoryTimer !== undefined) {
+                const graceTime = GAME_CONFIG.territory.graceTime;
+                if (node.outOfTerritoryTimer >= graceTime) {
+                    // Tiempo de gracia completado -> iniciar abandono
+                    console.log(`💥 ${node.type} ${node.id} - tiempo de gracia completado (${node.outOfTerritoryTimer.toFixed(1)}s >= ${graceTime}s) - iniciando abandono`);
+                    this.startAbandonment(node);
+                    node.outOfTerritoryTimer = null; // Resetear timer
+                    continue;
+                }
             }
             
             // 2. IntelRadio: abandono cuando completa inversión (si no está ya en abandono por territorio)

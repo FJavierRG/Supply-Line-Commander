@@ -10,8 +10,12 @@ export class ArsenalManager {
         
         // Sistema de mazo - ahora usa DeckManager
         this.deckManager = game.deckManager;
+        this.handleDefaultDeckUpdated = this.handleDefaultDeckUpdated.bind(this);
+        if (this.deckManager && this.deckManager.onDefaultDeckUpdated) {
+            this.deckManager.onDefaultDeckUpdated(this.handleDefaultDeckUpdated);
+        }
         this.currentDeckId = null; // ID del mazo que estamos editando
-        this.deck = ['hq']; // Array de IDs únicos - HQ siempre incluido por defecto
+        this.deck = ['hq', 'fob']; // Array de IDs únicos - HQ y FOB siempre incluidos por defecto
         this.deckLimit = 20; // Límite máximo de unidades en el mazo (DEPRECATED: ahora se usa sistema de puntos)
         // 🆕 FIX: NO guardar copia del límite - siempre obtenerlo dinámicamente desde DeckManager (fuente única de verdad)
         
@@ -152,6 +156,28 @@ export class ArsenalManager {
             });
         }
     }
+
+    handleDefaultDeckUpdated(defaultDeck) {
+        if (!defaultDeck) return;
+        
+        if (this.isVisible) {
+            // 🔧 FIX: Si estamos editando el default, actualizar el contenido sin resetear
+            if (this.currentDeckId === 'default') {
+                // Ya estamos editando el default, solo actualizar el contenido
+                this.deck = [...defaultDeck.units];
+                this.bench = [...(defaultDeck.bench || [])];
+                this.updateDeckDisplay();
+            } else {
+                // No estamos editando el default, usar loadSelectedDeck normalmente
+                this.loadSelectedDeck();
+                this.updateDeckDisplay();
+            }
+        } else {
+            this.currentDeckId = defaultDeck.id;
+            this.deck = [...defaultDeck.units];
+            this.bench = [...(defaultDeck.bench || [])];
+        }
+    }
     
     /**
      * 🆕 NUEVO: Establece el destino de las cartas (mazo o banquillo)
@@ -190,7 +216,7 @@ export class ArsenalManager {
         this.updateDeckDisplay();
     }
     
-    show() {
+    async show() {
         this.isVisible = true;
         
         // 🆕 FIX: Pausar renderizado ANTES de mostrar el arsenal (canvas sigue visible pero limpio)
@@ -215,6 +241,15 @@ export class ArsenalManager {
             menuOverlay.style.display = 'none';
             menuOverlay.style.visibility = 'hidden';
             menuOverlay.style.pointerEvents = 'none';
+        }
+        
+        // Asegurar que el mazo por defecto esté disponible antes de cargar datos
+        try {
+            await this.deckManager.ensureDefaultDeckReady();
+        } catch (error) {
+            console.error('❌ Error esperando el mazo por defecto:', error);
+            this.showNotification('Error obteniendo el mazo predeterminado. Intenta de nuevo.', 'error');
+            // Continuar con fallback para no bloquear el arsenal
         }
         
         // Asegurar que serverBuildingConfig esté inicializado antes de mostrar
@@ -255,29 +290,30 @@ export class ArsenalManager {
     
     /**
      * Carga el mazo seleccionado desde DeckManager
-     * Si hay un mazo seleccionado del jugador, lo carga; si no, usa el default o empieza con mazo vacío
+     * Si hay un mazo seleccionado del jugador, lo carga; si no, empieza con mazo vacío
      * 🆕 NUEVO: También carga el banquillo
-     * 🆕 NUEVO: Permite cargar el mazo default (pero al guardar creará uno nuevo)
+     * 🆕 NUEVO: Siempre empieza con mazo vacío (no carga el default automáticamente)
+     * 🔧 FIX: Si ya estamos editando el default, mantenerlo o recargarlo
      */
     loadSelectedDeck() {
         const selectedDeck = this.deckManager.getSelectedDeck();
         
+        // 🔧 FIX: Si ya estamos editando el default, mantenerlo o recargarlo desde el selector
+        if (this.currentDeckId === 'default' && selectedDeck && selectedDeck.isDefault) {
+            // Ya estamos editando el default, recargarlo desde el DeckManager
+            this.deck = [...selectedDeck.units]; // Copia del array
+            this.bench = [...(selectedDeck.bench || [])]; // 🆕 NUEVO: Copia del banquillo
+        }
         // Si hay un mazo seleccionado del jugador, cargarlo
-        if (selectedDeck && !selectedDeck.isDefault) {
+        else if (selectedDeck && !selectedDeck.isDefault) {
             this.currentDeckId = selectedDeck.id;
             this.deck = [...selectedDeck.units]; // Copia del array
             this.bench = [...(selectedDeck.bench || [])]; // 🆕 NUEVO: Copia del banquillo
         } else {
-            // Si no hay mazo del jugador, intentar cargar el default
-            const defaultDeck = this.deckManager.getDefaultDeck();
-            if (defaultDeck) {
-                this.currentDeckId = defaultDeck.id; // 🆕 NUEVO: Permitir cargar default
-                this.deck = [...defaultDeck.units]; // Copia del array
-                this.bench = [...(defaultDeck.bench || [])]; // 🆕 NUEVO: Copia del banquillo
-            } else {
-                // Empezar con mazo vacío (solo HQ)
+            // Solo resetear a mazo vacío si NO estamos editando el default
+            if (this.currentDeckId !== 'default') {
                 this.currentDeckId = null;
-                this.deck = ['hq'];
+                this.deck = ['hq', 'fob'];
                 this.bench = []; // 🆕 NUEVO: Banquillo vacío
             }
         }
@@ -302,12 +338,12 @@ export class ArsenalManager {
     }
     
     /**
-     * 🆕 NUEVO: Crea un nuevo mazo vacío (solo con HQ)
+     * 🆕 NUEVO: Crea un nuevo mazo vacío (solo con HQ y FOB)
      */
     createNewDeck() {
-        // Limpiar el mazo actual y empezar con uno nuevo (solo HQ)
+        // Limpiar el mazo actual y empezar con uno nuevo (solo HQ y FOB)
         this.currentDeckId = null;
-        this.deck = ['hq'];
+        this.deck = ['hq', 'fob'];
         this.bench = []; // 🆕 NUEVO: Limpiar banquillo
         
         // Salir del modo permutación si está activo
@@ -521,12 +557,16 @@ export class ArsenalManager {
     }
     
     /**
-     * Quita una unidad del mazo (el HQ no se puede quitar)
+     * Quita una unidad del mazo (el HQ y FOB no se pueden quitar)
      */
     removeFromDeck(itemId) {
-        // El HQ siempre debe estar en el mazo
+        // El HQ y FOB siempre deben estar en el mazo
         if (itemId === 'hq') {
             console.log('El HQ no se puede quitar del mazo');
+            return false;
+        }
+        if (itemId === 'fob') {
+            console.log('El FOB no se puede quitar del mazo');
             return false;
         }
         
@@ -546,14 +586,14 @@ export class ArsenalManager {
     }
     
     /**
-     * Limpia el mazo completamente (excepto el HQ que siempre permanece)
+     * Limpia el mazo completamente (excepto el HQ y FOB que siempre permanecen)
      */
     clearDeck() {
-        const nonHQItems = this.deck.filter(id => id !== 'hq');
-        if (nonHQItems.length === 0) return;
+        const nonEssentialItems = this.deck.filter(id => id !== 'hq' && id !== 'fob');
+        if (nonEssentialItems.length === 0) return;
         
-        if (confirm('¿Estás seguro de que quieres limpiar el mazo? (El HQ permanecerá)')) {
-            this.deck = ['hq']; // Mantener solo el HQ
+        if (confirm('¿Estás seguro de que quieres limpiar el mazo? (El HQ y FOB permanecerán)')) {
+            this.deck = ['hq', 'fob']; // Mantener solo el HQ y FOB
             this.updateDeckDisplay();
         }
     }
@@ -821,10 +861,10 @@ export class ArsenalManager {
             // Limpiar lista
             deckList.innerHTML = '';
             
-            // Renderizar todas las unidades del mazo (siempre mostrar al menos el HQ)
+            // Renderizar todas las unidades del mazo (siempre mostrar al menos el HQ y FOB)
             if (this.deck.length === 0) {
-                // Por seguridad, asegurar que el HQ esté presente
-                this.deck = ['hq'];
+                // Por seguridad, asegurar que el HQ y FOB estén presentes
+                this.deck = ['hq', 'fob'];
             }
             
             this.deck.forEach(itemId => {
@@ -835,9 +875,9 @@ export class ArsenalManager {
                 deckList.appendChild(deckItemEl);
             });
             
-            // Si solo está el HQ, mostrar mensaje adicional
-            const nonHQItems = this.deck.filter(id => id !== 'hq');
-            if (nonHQItems.length === 0) {
+            // Si solo están el HQ y FOB, mostrar mensaje adicional
+            const nonEssentialItems = this.deck.filter(id => id !== 'hq' && id !== 'fob');
+            if (nonEssentialItems.length === 0) {
                 const hintMsg = document.createElement('div');
                 hintMsg.className = 'deck-empty';
                 hintMsg.style.marginTop = '16px';
@@ -985,11 +1025,11 @@ export class ArsenalManager {
             }
         });
         
-        // Resaltar las cartas del deck que se pueden permutar (todas excepto HQ)
+        // Resaltar las cartas del deck que se pueden permutar (todas excepto HQ y FOB)
         const deckItems = document.querySelectorAll('.deck-item');
         deckItems.forEach(item => {
             const deckUnitId = item.dataset.itemId;
-            if (deckUnitId && deckUnitId !== 'hq') {
+            if (deckUnitId && deckUnitId !== 'hq' && deckUnitId !== 'fob') {
                 item.classList.add('swap-target');
                 // Añadir listener de click para permutar
                 item.addEventListener('click', this.handleDeckItemSwapClick.bind(this, deckUnitId, benchUnitId), { once: true });
@@ -1189,9 +1229,11 @@ export class ArsenalManager {
         const div = document.createElement('div');
         div.className = 'deck-item';
         
-        // El HQ no se puede quitar
+        // El HQ y FOB no se pueden quitar
         const isHQ = itemId === 'hq';
-        if (isHQ) {
+        const isFOB = itemId === 'fob';
+        const isLocked = isHQ || isFOB;
+        if (isLocked) {
             div.classList.add('deck-item-locked');
         }
         
@@ -1234,8 +1276,8 @@ export class ArsenalManager {
         }
         info.appendChild(name);
         
-        // 🎯 NUEVO: Añadir precio (solo el número)
-        if (itemConfig.cost && itemConfig.cost > 0) {
+        // 🎯 NUEVO: Añadir precio (solo el número) - No mostrar precio para HQ ni FOB (son gratis)
+        if (itemConfig.cost && itemConfig.cost > 0 && !isLocked) {
             const cost = document.createElement('div');
             cost.className = 'deck-item-cost';
             cost.textContent = itemConfig.cost;
@@ -1244,8 +1286,8 @@ export class ArsenalManager {
         
         div.appendChild(info);
         
-        // Botón quitar (solo si no es HQ)
-        if (!isHQ) {
+        // Botón quitar (solo si no es HQ ni FOB)
+        if (!isLocked) {
             const removeBtn = document.createElement('button');
             removeBtn.className = 'deck-item-remove';
             removeBtn.textContent = '−';
@@ -1792,7 +1834,7 @@ export class ArsenalManager {
             // Si se borró el mazo que estábamos editando, empezar con mazo vacío
             if (this.currentDeckId === deckId) {
                 this.currentDeckId = null;
-                this.deck = ['hq'];
+                this.deck = ['hq', 'fob'];
                 this.updateDeckDisplay();
                 this.populateArsenal();
             }

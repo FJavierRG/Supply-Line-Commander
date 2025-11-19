@@ -714,7 +714,7 @@ export class StoreUIManager {
             
             // 🆕 NUEVO: Resaltar si está en modo permutación y la carta está en el deck
             const isInDeck = currentDeck && currentDeck.units && currentDeck.units.includes(itemId);
-            const isSwapTarget = this.swapMode && isInDeck && itemId !== 'hq';
+            const isSwapTarget = this.swapMode && isInDeck && itemId !== 'hq' && itemId !== 'fob';
             
             if (isSwapTarget) {
                 // Resaltar carta del deck durante permutación
@@ -1104,8 +1104,8 @@ export class StoreUIManager {
         const currentDeck = this.getCurrentDeck();
         if (!currentDeck || !currentDeck.units) return;
         
-        // Obtener TODAS las cartas del mazo (excluyendo HQ) para permutación
-        const deckCardsToShow = currentDeck.units.filter(unitId => unitId !== 'hq');
+        // Obtener TODAS las cartas del mazo (excluyendo HQ y FOB) para permutación
+        const deckCardsToShow = currentDeck.units.filter(unitId => unitId !== 'hq' && unitId !== 'fob');
         
         if (deckCardsToShow.length === 0) return;
         
@@ -1488,8 +1488,8 @@ export class StoreUIManager {
         const currentDeck = this.getCurrentDeck();
         if (!currentDeck || !currentDeck.units) return false;
         
-        // Obtener TODAS las cartas del mazo (excluyendo HQ)
-        const deckCardsToShow = currentDeck.units.filter(unitId => unitId !== 'hq');
+        // Obtener TODAS las cartas del mazo (excluyendo HQ y FOB)
+        const deckCardsToShow = currentDeck.units.filter(unitId => unitId !== 'hq' && unitId !== 'fob');
         
         if (deckCardsToShow.length === 0) return false;
         
@@ -1620,8 +1620,8 @@ export class StoreUIManager {
             return false;
         }
         
-        if (deckUnitId === 'hq') {
-            console.error('No se puede intercambiar el HQ');
+        if (deckUnitId === 'hq' || deckUnitId === 'fob') {
+            console.error('No se puede intercambiar el HQ ni el FOB');
             return false;
         }
         

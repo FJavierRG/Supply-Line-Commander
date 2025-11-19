@@ -306,11 +306,33 @@ body.menu-open #game-canvas {
 }
 
 /* Menú principal rediseñado */
+/* Fondo del menú principal con imagen */
+#main-menu-overlay {
+    background-image: url('assets/sprites/ui/main_menu_backgrouind.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+#main-menu-overlay::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 0;
+    pointer-events: none;
+}
+
 .main-menu-container {
     max-width: 500px;
     width: 90%;
     margin: 0 auto;
     padding: 60px 40px;
+    position: relative;
+    z-index: 1; /* Asegurar que el contenido esté encima del overlay oscuro */
 }
 
 .menu-header {
@@ -358,13 +380,26 @@ body.menu-open #game-canvas {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    /* Fondo con la imagen del frame */
+    background-image: url('assets/sprites/ui/UIFrames/main_menu_options.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    /* Ajustar padding para que el contenido quede dentro del frame - estrechado 10px */
+    padding: 40px 50px;
+    /* Asegurar que el contenedor tenga el tamaño adecuado */
+    min-height: 500px;
+    position: relative;
+    /* Estrechar el ancho del frame */
+    max-width: calc(100% - 10px);
+    width: calc(100% - 10px);
 }
 
 .menu-btn {
-    width: 75%; /* -25% del ancho original */
+    width: 100%; /* Ocupar todo el ancho disponible dentro del frame */
     margin: 0 auto; /* Centrar horizontalmente */
     padding: 24px;
-    font-size: 18px;
+    font-size: 20px; /* Aumentado de 18px a 20px (+2 puntos) */
     font-weight: 600;
     font-family: 'Courier New', monospace;
     border: none;
@@ -372,22 +407,25 @@ body.menu-open #game-canvas {
     cursor: pointer;
     transition: all 0.2s ease;
     letter-spacing: 0.3px;
+    /* Sin fondo - solo texto sobre la imagen del frame */
     background: none;
-    background-image: url('assets/sprites/ui/UIFrames/medium_bton.png');
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
-    background-position: center;
+    background-image: none;
+    /* Asegurar que el botón sea clickeable en toda su área */
+    position: relative;
+    z-index: 1;
 }
 
 .menu-btn.primary {
-    color: #fff;
-    font-size: 20px;
+    color: #ccc; /* Cambiado de #fff a #ccc para que no parezca siempre resaltado */
+    font-size: 22px; /* Aumentado de 20px a 22px (+2 puntos) */
     padding: 28px;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    filter: brightness(0.8); /* Mismo filtro que los secundarios */
 }
 
 .menu-btn.primary:hover {
-    filter: brightness(1.2);
+    filter: brightness(1.1); /* Mismo que los secundarios */
+    color: #fff; /* Solo blanco en hover */
     transform: translateY(-2px);
 }
 
@@ -399,6 +437,32 @@ body.menu-open #game-canvas {
 .menu-btn.secondary:hover {
     filter: brightness(1.1);
     color: #fff;
+}
+
+/* Sprite de "shoot" a la izquierda de la opción resaltada */
+.menu-btn:hover::before {
+    content: '';
+    position: absolute;
+    left: -10px; /* Pegado al texto */
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    background-image: url('assets/sprites/ui/UIFrames/shoot.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    z-index: 2;
+    pointer-events: none;
+}
+
+/* Asegurar que el botón primario no tenga el sprite por defecto, solo en hover */
+.menu-btn.primary::before {
+    display: none;
+}
+
+.menu-btn.primary:hover::before {
+    display: block;
 }
 
 /* ===== PANTALLA DE MEJORAS - SISTEMA DE DISEÑO ===== */
@@ -449,6 +513,12 @@ body.menu-open #game-canvas {
     cursor: pointer;
     padding: 8px 0;
     transition: color 0.2s ease;
+}
+
+/* Botones del arsenal en negrita */
+#arsenal-new-btn,
+#arsenal-load-btn {
+    font-weight: bold;
 }
 
 .back-btn:hover {
@@ -693,6 +763,49 @@ body.menu-open #game-canvas {
     pointer-events: auto; /* Permitir interacción cuando está visible */
 }
 
+/* Excepción: Menú principal con imagen de fondo */
+#ui-layer #main-menu-overlay.overlay {
+    background-color: transparent;
+    background-image: url('assets/sprites/ui/main_menu_backgrouind.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    backdrop-filter: none;
+    overflow: hidden; /* Para que la lluvia no se salga */
+}
+
+/* Excepción: Lobby multijugador y Arsenal con imagen de fondo de submenú */
+#ui-layer #multiplayer-lobby-overlay.overlay,
+#ui-layer #arsenal-overlay.overlay {
+    background-color: transparent;
+    background-image: url('assets/sprites/ui/submenu_background.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    backdrop-filter: none;
+}
+
+/* Overlay oscuro para legibilidad en submenús */
+#multiplayer-lobby-overlay::before,
+#arsenal-overlay::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 0;
+    pointer-events: none;
+}
+
+/* Asegurar que el contenido esté encima del overlay oscuro */
+#multiplayer-lobby-overlay .main-menu-container,
+#arsenal-overlay .arsenal-container {
+    position: relative;
+    z-index: 1;
+}
+
 /* Overlays ocultos no capturan eventos */
 #ui-layer .overlay.hidden {
     display: none;
@@ -727,9 +840,594 @@ body:has(#ui-layer .overlay:not(.hidden)) #game-canvas {
     pointer-events: auto;
 }
 
+
 .overlay.hidden {
     display: none;
     pointer-events: none;
+}
+
+/* ===== EFECTO DE LLUVIA PIXEL ART ===== */
+.rain-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* No interfiere con los clics */
+    z-index: 0; /* Detrás del contenido del menú */
+    overflow: hidden;
+}
+
+.rain-drop {
+    position: absolute;
+    width: 2px; /* Más anchas */
+    height: 17px; /* Más largas (+1px) */
+    background: rgba(180, 200, 255, 1.0); /* Opacidad completa */
+    /* Efecto pixel art - bordes nítidos */
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    /* Sombra sutil para profundidad */
+    box-shadow: 0 0 3px rgba(180, 200, 255, 0.8);
+    /* Optimización de rendimiento */
+    will-change: transform;
+    /* Aceleración por hardware */
+    backface-visibility: hidden;
+    /* Rotar -55 grados (menos inclinado) para que apunte hacia abajo-derecha */
+    transform: rotate(-55deg);
+    transform-origin: center center;
+}
+
+/* Animación de lluvia a 55 grados (desde vertical) - menos inclinado */
+/* 55 grados desde vertical = tan(55°) ≈ 1.43 unidades horizontales por 1 vertical */
+@keyframes rain-fall {
+    0% {
+        /* Posición inicial: arriba-izquierda fuera de pantalla */
+        transform: translateX(calc(-150px * 1.43)) translateY(-150px) rotate(-55deg);
+        opacity: 0;
+    }
+    5% {
+        opacity: 1.0;
+    }
+    95% {
+        opacity: 1.0;
+    }
+    100% {
+        /* Movimiento diagonal hacia abajo-derecha */
+        /* Por cada unidad vertical, 1.43 unidades horizontales (menos inclinado) */
+        transform: translateX(calc((100vh + 150px) * 1.43)) translateY(calc(100vh + 150px)) rotate(-55deg);
+        opacity: 0;
+    }
+}
+
+/* Aplicar animación a cada gota con delays aleatorios y distribución por toda la pantalla */
+/* Distribución horizontal MUY amplia: desde -20% hasta 120% para cubrir toda la pantalla */
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(1) {
+    left: -20%;
+    top: -10%;
+    animation: rain-fall 2s linear infinite;
+    animation-delay: 0s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(2) {
+    left: -15%;
+    top: -20%;
+    animation: rain-fall 2.2s linear infinite;
+    animation-delay: 0.1s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(3) {
+    left: -10%;
+    top: -5%;
+    animation: rain-fall 1.8s linear infinite;
+    animation-delay: 0.2s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(4) {
+    left: -5%;
+    top: -25%;
+    animation: rain-fall 2.3s linear infinite;
+    animation-delay: 0.3s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(5) {
+    left: 0%;
+    top: -15%;
+    animation: rain-fall 2.1s linear infinite;
+    animation-delay: 0.4s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(6) {
+    left: 5%;
+    top: -8%;
+    animation: rain-fall 1.9s linear infinite;
+    animation-delay: 0.5s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(7) {
+    left: 10%;
+    top: -30%;
+    animation: rain-fall 2.4s linear infinite;
+    animation-delay: 0.6s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(8) {
+    left: 15%;
+    top: -12%;
+    animation: rain-fall 2s linear infinite;
+    animation-delay: 0.7s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(9) {
+    left: 20%;
+    top: -18%;
+    animation: rain-fall 2.2s linear infinite;
+    animation-delay: 0.8s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(10) {
+    left: 25%;
+    top: -5%;
+    animation: rain-fall 1.8s linear infinite;
+    animation-delay: 0.9s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(11) {
+    left: 30%;
+    top: -22%;
+    animation: rain-fall 2.3s linear infinite;
+    animation-delay: 1s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(12) {
+    left: 35%;
+    top: -10%;
+    animation: rain-fall 2.1s linear infinite;
+    animation-delay: 1.1s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(13) {
+    left: 40%;
+    top: -28%;
+    animation: rain-fall 1.9s linear infinite;
+    animation-delay: 1.2s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(14) {
+    left: 45%;
+    top: -15%;
+    animation: rain-fall 2.4s linear infinite;
+    animation-delay: 1.3s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(15) {
+    left: 50%;
+    top: -35%;
+    animation: rain-fall 2s linear infinite;
+    animation-delay: 1.4s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(16) {
+    left: 55%;
+    top: -20%;
+    animation: rain-fall 2.2s linear infinite;
+    animation-delay: 1.5s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(17) {
+    left: 60%;
+    top: -32%;
+    animation: rain-fall 1.8s linear infinite;
+    animation-delay: 1.6s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(18) {
+    left: 65%;
+    top: -18%;
+    animation: rain-fall 2.3s linear infinite;
+    animation-delay: 1.7s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(19) {
+    left: 70%;
+    top: -38%;
+    animation: rain-fall 2.1s linear infinite;
+    animation-delay: 1.8s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(20) {
+    left: 75%;
+    top: -25%;
+    animation: rain-fall 1.9s linear infinite;
+    animation-delay: 1.9s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(21) {
+    left: 80%;
+    top: -12%;
+    animation: rain-fall 2.2s linear infinite;
+    animation-delay: 2s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(22) {
+    left: 85%;
+    top: -30%;
+    animation: rain-fall 2.4s linear infinite;
+    animation-delay: 2.1s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(23) {
+    left: 90%;
+    top: -8%;
+    animation: rain-fall 1.8s linear infinite;
+    animation-delay: 2.2s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(24) {
+    left: 95%;
+    top: -22%;
+    animation: rain-fall 2.1s linear infinite;
+    animation-delay: 2.3s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(25) {
+    left: 100%;
+    top: -15%;
+    animation: rain-fall 2.3s linear infinite;
+    animation-delay: 2.4s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(26) {
+    left: 105%;
+    top: -28%;
+    animation: rain-fall 2s linear infinite;
+    animation-delay: 2.5s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(27) {
+    left: 110%;
+    top: -10%;
+    animation: rain-fall 1.9s linear infinite;
+    animation-delay: 2.6s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(28) {
+    left: 115%;
+    top: -35%;
+    animation: rain-fall 2.2s linear infinite;
+    animation-delay: 2.7s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(29) {
+    left: 120%;
+    top: -18%;
+    animation: rain-fall 2.4s linear infinite;
+    animation-delay: 2.8s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(30) {
+    left: -18%;
+    top: -12%;
+    animation: rain-fall 2.1s linear infinite;
+    animation-delay: 2.9s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(31) {
+    left: -12%;
+    top: -25%;
+    animation: rain-fall 1.9s linear infinite;
+    animation-delay: 3s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(32) {
+    left: -8%;
+    top: -8%;
+    animation: rain-fall 2.3s linear infinite;
+    animation-delay: 3.1s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(33) {
+    left: 8%;
+    top: -20%;
+    animation: rain-fall 2s linear infinite;
+    animation-delay: 3.2s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(34) {
+    left: 12%;
+    top: -32%;
+    animation: rain-fall 2.2s linear infinite;
+    animation-delay: 3.3s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(35) {
+    left: 18%;
+    top: -6%;
+    animation: rain-fall 1.8s linear infinite;
+    animation-delay: 3.4s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(36) {
+    left: 22%;
+    top: -28%;
+    animation: rain-fall 2.4s linear infinite;
+    animation-delay: 3.5s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(37) {
+    left: 28%;
+    top: -14%;
+    animation: rain-fall 2.1s linear infinite;
+    animation-delay: 3.6s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(38) {
+    left: 32%;
+    top: -36%;
+    animation: rain-fall 1.9s linear infinite;
+    animation-delay: 3.7s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(39) {
+    left: 38%;
+    top: -10%;
+    animation: rain-fall 2.3s linear infinite;
+    animation-delay: 3.8s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(40) {
+    left: 42%;
+    top: -24%;
+    animation: rain-fall 2s linear infinite;
+    animation-delay: 3.9s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(41) {
+    left: 48%;
+    top: -16%;
+    animation: rain-fall 2.2s linear infinite;
+    animation-delay: 4s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(42) {
+    left: 52%;
+    top: -30%;
+    animation: rain-fall 1.8s linear infinite;
+    animation-delay: 4.1s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(43) {
+    left: 58%;
+    top: -12%;
+    animation: rain-fall 2.4s linear infinite;
+    animation-delay: 4.2s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(44) {
+    left: 62%;
+    top: -26%;
+    animation: rain-fall 2.1s linear infinite;
+    animation-delay: 4.3s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(45) {
+    left: 68%;
+    top: -14%;
+    animation: rain-fall 1.9s linear infinite;
+    animation-delay: 4.4s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(46) {
+    left: 72%;
+    top: -34%;
+    animation: rain-fall 2.3s linear infinite;
+    animation-delay: 4.5s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(47) {
+    left: 78%;
+    top: -8%;
+    animation: rain-fall 2s linear infinite;
+    animation-delay: 4.6s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(48) {
+    left: 82%;
+    top: -22%;
+    animation: rain-fall 2.2s linear infinite;
+    animation-delay: 4.7s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(49) {
+    left: 88%;
+    top: -30%;
+    animation: rain-fall 1.8s linear infinite;
+    animation-delay: 4.8s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(50) {
+    left: 92%;
+    top: -12%;
+    animation: rain-fall 2.4s linear infinite;
+    animation-delay: 4.9s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(51) {
+    left: 98%;
+    top: -28%;
+    animation: rain-fall 2.1s linear infinite;
+    animation-delay: 5s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(52) {
+    left: 102%;
+    top: -16%;
+    animation: rain-fall 1.9s linear infinite;
+    animation-delay: 5.1s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(53) {
+    left: 108%;
+    top: -36%;
+    animation: rain-fall 2.3s linear infinite;
+    animation-delay: 5.2s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(54) {
+    left: 112%;
+    top: -10%;
+    animation: rain-fall 2s linear infinite;
+    animation-delay: 5.3s;
+}
+
+.rain-drop:not(.rain-from-left):not(.rain-from-right):nth-child(55) {
+    left: 118%;
+    top: -24%;
+    animation: rain-fall 2.2s linear infinite;
+    animation-delay: 5.4s;
+}
+
+/* Gotas desde la izquierda - entran desde fuera del lado izquierdo */
+/* IMPORTANTE: Estas gotas deben ir hacia abajo-derecha, igual que las de arriba */
+@keyframes rain-from-left {
+    0% {
+        /* Empezar desde la izquierda, arriba */
+        transform: translateX(calc(-100vw - 100px)) translateY(calc(-50vh)) rotate(-55deg);
+        opacity: 0;
+    }
+    5% {
+        opacity: 1.0;
+    }
+    95% {
+        opacity: 1.0;
+    }
+    100% {
+        /* Mover diagonalmente hacia abajo-derecha (misma dirección que las de arriba) */
+        /* Calcular movimiento: baja 150vh, se mueve 150vh * 1.43 horizontalmente hacia la derecha */
+        transform: translateX(calc(100vw + 100px + 150vh * 1.43)) translateY(calc(150vh)) rotate(-55deg);
+        opacity: 0;
+    }
+}
+
+/* Gotas desde la izquierda - deben usar su propia animación */
+.rain-container .rain-from-left {
+    left: -10%;
+    top: 0%;
+    animation: rain-from-left 2.5s linear infinite;
+}
+
+/* Las gotas desde la izquierda - usar nth-child contando desde el inicio */
+/* Ahora son 8 gotas (56-63 en el DOM, después de las 55 desde arriba) */
+.rain-container > .rain-from-left:nth-child(56) {
+    animation-delay: 0s;
+    top: 5%;
+}
+
+.rain-container > .rain-from-left:nth-child(57) {
+    animation-delay: 0.4s;
+    top: 20%;
+}
+
+.rain-container > .rain-from-left:nth-child(58) {
+    animation-delay: 0.8s;
+    top: 35%;
+}
+
+.rain-container > .rain-from-left:nth-child(59) {
+    animation-delay: 1.2s;
+    top: 50%;
+}
+
+.rain-container > .rain-from-left:nth-child(60) {
+    animation-delay: 1.6s;
+    top: 65%;
+}
+
+.rain-container > .rain-from-left:nth-child(61) {
+    animation-delay: 2s;
+    top: 80%;
+}
+
+.rain-container > .rain-from-left:nth-child(62) {
+    animation-delay: 2.4s;
+    top: 15%;
+}
+
+.rain-container > .rain-from-left:nth-child(63) {
+    animation-delay: 2.8s;
+    top: 90%;
+}
+
+/* Gotas desde la derecha - entran desde fuera del lado derecho */
+/* IMPORTANTE: Estas gotas también deben ir hacia abajo-derecha (misma dirección que todas) */
+/* Solo cambia el punto de inicio, pero la dirección de caída es la misma */
+@keyframes rain-from-right {
+    0% {
+        /* Empezar desde la derecha, arriba */
+        transform: translateX(calc(100vw + 100px)) translateY(calc(-50vh)) rotate(-55deg);
+        opacity: 0;
+    }
+    5% {
+        opacity: 1.0;
+    }
+    95% {
+        opacity: 1.0;
+    }
+    100% {
+        /* Mover diagonalmente hacia abajo-derecha (misma dirección que todas las demás) */
+        /* Calcular movimiento: baja 150vh, se mueve 150vh * 1.43 horizontalmente hacia la derecha */
+        transform: translateX(calc(200vw + 200px + 150vh * 1.43)) translateY(calc(150vh)) rotate(-55deg);
+        opacity: 0;
+    }
+}
+
+/* Gotas desde la derecha - deben usar su propia animación */
+.rain-container .rain-from-right {
+    left: 110%;
+    top: 0%;
+    animation: rain-from-right 2.5s linear infinite;
+}
+
+/* Las gotas desde la derecha - usar nth-child contando desde el inicio */
+/* Ahora son 8 gotas (64-71 en el DOM, después de las 55 desde arriba + 8 desde la izquierda) */
+.rain-container > .rain-from-right:nth-child(64) {
+    animation-delay: 0.2s;
+    top: 10%;
+}
+
+.rain-container > .rain-from-right:nth-child(65) {
+    animation-delay: 0.6s;
+    top: 25%;
+}
+
+.rain-container > .rain-from-right:nth-child(66) {
+    animation-delay: 1s;
+    top: 40%;
+}
+
+.rain-container > .rain-from-right:nth-child(67) {
+    animation-delay: 1.4s;
+    top: 55%;
+}
+
+.rain-container > .rain-from-right:nth-child(68) {
+    animation-delay: 1.8s;
+    top: 70%;
+}
+
+.rain-container > .rain-from-right:nth-child(69) {
+    animation-delay: 2.2s;
+    top: 85%;
+}
+
+.rain-container > .rain-from-right:nth-child(70) {
+    animation-delay: 2.6s;
+    top: 20%;
+}
+
+.rain-container > .rain-from-right:nth-child(71) {
+    animation-delay: 3s;
+    top: 95%;
 }
 
 /* ===== MISSION BRIEFING - SISTEMA DE DISEÑO ===== */
@@ -1672,8 +2370,8 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 .available-panel {
     display: flex;
     flex-direction: column;
-    background: transparent; /* 🎯 Sin fondo azulado */
-    border: 2px solid rgba(76, 175, 80, 0.4);
+    background: rgba(0, 0, 0, 0.85); /* Fondo negro placeholder (se sustituirá con UIFrame) - alpha aumentado */
+    border: 2px solid rgba(76, 175, 80, 0.6); /* Verde más visible */
     border-radius: 12px;
     padding: 20px 20px 20px 20px; /* Padding uniforme */
     overflow: hidden;
@@ -1689,7 +2387,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     color: #66bb6a;
     margin: 0 0 16px 0;
     padding-bottom: 8px;
-    border-bottom: 2px solid rgba(76, 175, 80, 0.3);
+    border-bottom: 2px solid rgba(76, 175, 80, 0.6); /* Verde más visible - alpha aumentado */
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -1723,9 +2421,36 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 .arsenal-help-text {
     padding: 8px 0;
     text-align: center;
-    font-size: 13px;
+    font-size: 14.3px; /* Aumentado un 10% desde 13px */
     color: rgba(102, 187, 106, 0.8);
     font-family: 'Courier New', monospace;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.help-text-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.help-text-separator {
+    margin: 0 4px;
+}
+
+.help-icon {
+    width: 17.6px; /* Aumentado un 10% desde 16px */
+    height: 17.6px; /* Aumentado un 10% desde 16px */
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    display: inline-block;
+}
+
+.help-icon-mirror {
+    transform: scaleX(-1); /* Espejo horizontal */
 }
 
 /* Grid de cartas disponibles - 2x4 o similar */
@@ -1846,7 +2571,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     position: absolute;
     top: 12px;
     right: 12px;
-    background: rgba(76, 175, 80, 0.9);
+    background: rgba(76, 175, 80, 1.0); /* Verde más visible - alpha aumentado */
     color: #000;
     width: 28px;
     height: 28px;
@@ -1910,8 +2635,8 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 .deck-panel {
     display: flex;
     flex-direction: column;
-    background: transparent; /* 🎯 Sin fondo azulado */
-    border: 2px solid rgba(76, 175, 80, 0.4); /* 🎯 Verde en vez de azul */
+    background: rgba(0, 0, 0, 0.85); /* Fondo negro placeholder (se sustituirá con UIFrame) - alpha aumentado */
+    border: 2px solid rgba(76, 175, 80, 0.6); /* Verde más visible */
     border-radius: 12px;
     padding: 20px;
     overflow: hidden;
@@ -1923,7 +2648,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     color: #66bb6a; /* 🎯 Verde en vez de azul */
     margin: 0;
     padding-bottom: 8px;
-    border-bottom: 2px solid rgba(76, 175, 80, 0.3); /* 🎯 Verde en vez de azul */
+    border-bottom: 2px solid rgba(76, 175, 80, 0.6); /* Verde más visible - alpha aumentado */
     text-transform: uppercase;
     letter-spacing: 0.5px;
     display: flex;
@@ -2013,7 +2738,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 
 /* Items del mazo - lista horizontal con botón X */
 .deck-item {
-    background-color: rgba(76, 175, 80, 0.1); /* 🎯 Verde en vez de azul */
+    background-color: rgba(76, 175, 80, 0.2); /* Verde más visible - alpha aumentado */
     background-image: url('assets/sprites/ui/UIFrames/medium_bton.png');
     background-size: 100% 100%;
     background-repeat: no-repeat;
@@ -2021,7 +2746,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     padding: 12px 16px;
     margin-bottom: 10px;
     border-radius: 8px;
-    border: 2px solid rgba(76, 175, 80, 0.3); /* 🎯 Verde en vez de azul */
+    border: 2px solid rgba(76, 175, 80, 0.5); /* Verde más visible - alpha aumentado */
     display: flex;
     align-items: center;
     gap: 12px;
@@ -2032,7 +2757,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 
 .deck-item:hover {
     filter: brightness(1.15);
-    border-color: rgba(76, 175, 80, 0.5); /* 🎯 Verde en vez de azul */
+    border-color: rgba(76, 175, 80, 0.7); /* Verde más visible en hover - alpha aumentado */
 }
 
 .deck-item-icon {
@@ -2121,7 +2846,13 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     flex: 1;
     padding: 12px 16px;
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 700; /* Ya está en bold */
+}
+
+/* Asegurar que los botones Limpiar y Guardar estén en negrita */
+#deck-clear-btn,
+#deck-save-btn {
+    font-weight: bold;
 }
 
 /* ===== 🆕 NUEVO: PANEL DE BANQUILLO ===== */

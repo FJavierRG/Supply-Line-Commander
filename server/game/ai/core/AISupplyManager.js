@@ -1,9 +1,8 @@
 // ===== MANAGER DE ABASTECIMIENTO DE IA =====
 // Gestiona el reabastecimiento de FOBs, frentes y helicópteros
 
-import AIConfig from '../config/AIConfig.js';
+import AIConfig, { getAdjustedThreshold } from '../config/AIConfig.js';
 import { GAME_CONFIG } from '../../../config/gameConfig.js';
-import { getAdjustedThreshold, getDifficultyMultipliers } from '../config/RaceAIConfig.js';
 
 export class AISupplyManager {
     constructor(gameState, io, roomId, raceId, difficulty) {
@@ -51,8 +50,8 @@ export class AISupplyManager {
             // Verificar si el FOB necesita suministros
             const supplyPercentage = (fob.supplies / fob.maxSupplies) * 100;
             
-            // 🎯 ENCAPSULACIÓN: Usar umbral ajustado por raza y dificultad
-            const threshold = getAdjustedThreshold('fobSupply', this.raceId, this.difficulty) || 55;
+            // 🎯 Usar umbral ajustado por dificultad
+            const threshold = getAdjustedThreshold('fobSupply', this.difficulty) || 55;
             
             if (supplyPercentage <= threshold) {
                 // 🎯 EN FÁCIL: A veces "duda" y no envía el convoy incluso si lo necesita
@@ -107,8 +106,8 @@ export class AISupplyManager {
             // Verificar si el frente necesita suministros
             const supplyPercentage = (front.supplies / front.maxSupplies) * 100;
             
-            // 🎯 ENCAPSULACIÓN: Usar umbral ajustado por raza y dificultad
-            const threshold = getAdjustedThreshold('frontSupply', this.raceId, this.difficulty) || 75;
+            // 🎯 Usar umbral ajustado por dificultad
+            const threshold = getAdjustedThreshold('frontSupply', this.difficulty) || 75;
             
             if (supplyPercentage < threshold) {
                 // Buscar el FOB más cercano con recursos y vehículos disponibles

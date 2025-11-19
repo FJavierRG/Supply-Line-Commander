@@ -1947,8 +1947,12 @@ export class Game {
      */
     initializeLocalBuildingConfig() {
         // Importar la configuración del servidor directamente
-        import('../server/config/serverNodes.js').then(module => {
-            const { SERVER_NODE_CONFIG } = module;
+        Promise.all([
+            import('../server/config/serverNodes.js'),
+            import('../server/config/gameConfig.js')
+        ]).then(([serverNodesModule, gameConfigModule]) => {
+            const { SERVER_NODE_CONFIG } = serverNodesModule;
+            const { GAME_CONFIG } = gameConfigModule;
             
             // Usar la configuración real del servidor
             this.serverBuildingConfig = {
@@ -1965,6 +1969,7 @@ export class Game {
                 vehicleTypes: SERVER_NODE_CONFIG.vehicleTypes || {}, // 🆕 NUEVO: Tipos de vehículos
                 vehicleSystems: SERVER_NODE_CONFIG.vehicleSystems || {}, // 🆕 NUEVO: Sistemas de vehículos por tipo de nodo
                 security: SERVER_NODE_CONFIG.security,
+                abandonment: GAME_CONFIG.abandonment, // 🆕 NUEVO: Configuración de abandono (tiempos de fases)
                 behavior: {
                     enabled: SERVER_NODE_CONFIG.gameplay.enabled,
                     behavior: SERVER_NODE_CONFIG.gameplay.behavior

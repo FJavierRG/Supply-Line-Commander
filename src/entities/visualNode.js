@@ -124,11 +124,22 @@ export class VisualNode {
         this.effects = [];
         
         // ✅ SEGURO: Sistema de abandono (solo para display)
+        // Los tiempos vienen del servidor (sincronizados en NetworkManager)
+        // Valores por defecto solo si no hay configuración del servidor disponible
         this.isAbandoning = false;
         this.abandonStartTime = 0;
         this.abandonPhase = 0;
-        this.abandonPhase1Duration = this.type === 'intelRadio' ? 500 : 2000;
-        this.abandonPhase2Duration = this.type === 'intelRadio' ? 500 : 3000;
+        // Obtener tiempos desde configuración del servidor si está disponible
+        const serverConfig = window.game?.serverBuildingConfig;
+        if (serverConfig?.abandonment) {
+            const typeConfig = serverConfig.abandonment[this.type] || serverConfig.abandonment.default;
+            this.abandonPhase1Duration = typeConfig?.phase1Duration || 2000;
+            this.abandonPhase2Duration = typeConfig?.phase2Duration || 3000;
+        } else {
+            // Fallback: valores por defecto (se actualizarán cuando llegue la configuración del servidor)
+            this.abandonPhase1Duration = 2000;
+            this.abandonPhase2Duration = 3000;
+        }
         
         // ✅ SEGURO: Estados visuales (solo para renderizado)
         this.hover = false;

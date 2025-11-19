@@ -689,8 +689,15 @@ export class GameStateManager {
         // === SISTEMA DE INVERSIÓN (intelRadio) ===
         this.investmentManager.update(dt);
         
+        // === SISTEMA DE TERRITORIO (debe ejecutarse ANTES del sistema de abandono) ===
+        // Actualizar timers de gracia para edificios fuera de territorio
+        this.territory.update(dt);
+        this.territory.updateAbandonmentProgress(dt);
+        
         // === SISTEMA DE ABANDONO (centralizado) ===
+        // Verificar condiciones de abandono (después de actualizar timers de territorio)
         this.abandonmentSystem.checkAbandonmentConditions();
+        // Actualizar fases de abandono (solo UNA vez por frame)
         this.abandonmentSystem.update(dt);
         
         // === SISTEMA DE COMANDOS ESPECIALES OPERATIVOS ===
@@ -735,14 +742,6 @@ export class GameStateManager {
             // Retornar estado final
             return this.getGameState();
         }
-        
-        // Sistema de territorio (abandono de FOBs)
-        this.territory.update(dt);
-        this.territory.updateAbandonmentProgress(dt);
-        
-        // 🆕 FIX: Removido checkAbandonmentConditions() duplicado - ya se llama arriba
-        // Solo actualizar fases de abandono (el update ya maneja las fases)
-        this.abandonmentSystem.update(dt);
         
         // === ACTUALIZAR DRONES (MOVIMIENTO + IMPACTOS + INTERCEPCIONES + ALERTAS) ===
         const droneResult = this.droneSystem.update(dt);

@@ -164,6 +164,11 @@ export class OptionsManager {
             if (this.audioManager.updateActiveDroneVolumes) {
                 this.audioManager.updateActiveDroneVolumes();
             }
+            
+            // Actualizar volumen de todas las instancias de sonido dinámicas activas
+            if (this.audioManager.updateActiveSoundInstances) {
+                this.audioManager.updateActiveSoundInstances();
+            }
         } else {
             console.warn('⚠️ AudioManager no disponible');
         }

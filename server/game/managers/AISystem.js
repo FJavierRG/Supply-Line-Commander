@@ -7,18 +7,15 @@ import { DefaultDeckProfile } from '../ai/profiles/DefaultDeckProfile.js';
 import { AIGameStateAnalyzer } from '../ai/core/AIGameStateAnalyzer.js';
 import { AIActionSelector } from '../ai/core/AIActionSelector.js';
 import { AICardEvaluator } from '../ai/core/AICardEvaluator.js';
-import AIConfig from '../ai/config/AIConfig.js';
+import AIConfig, { 
+    getDifficultyMultipliers,
+    getAdjustedInterval,
+    getAdjustedThreshold
+} from '../ai/config/AIConfig.js';
 import { GAME_CONFIG } from '../../config/gameConfig.js';
 import { DEFAULT_DECK } from '../../config/defaultDeck.js';
 import { getDefaultAIDeck } from '../ai/config/AIDecks.js';
 import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
-import { 
-    getRaceAIConfig, 
-    getDifficultyMultipliers,
-    getAdjustedInterval,
-    getAdjustedScore,
-    getAdjustedThreshold
-} from '../ai/config/RaceAIConfig.js';
 
 export class AISystem {
     constructor(gameState, io, roomId) {
@@ -86,8 +83,7 @@ export class AISystem {
         // Sistema de dificultad (ya establecido arriba)
         this.difficultyMultipliers = getDifficultyMultipliers(this.difficulty);
         
-        // 🎯 ENCAPSULACIÓN: Obtener raza actual y configuración
-        this.raceConfig = getRaceAIConfig(this.raceId);
+        // 🎯 NOTA: Sistema de razas obsoleto, solo se usa dificultad ahora
         
         // 🎯 OPTIMIZACIÓN: Validar edificios disponibles UNA VEZ al inicio
         this.availableBuildings = this.calculateAvailableBuildings();
@@ -99,6 +95,9 @@ export class AISystem {
         
         // 🎯 Tracking de últimas construcciones (para evitar spam de mismo edificio)
         this.lastBuildings = []; // Array de los últimos buildingIds construidos (máx 5)
+        
+        // 🎯 Tracking de últimos objetivos atacados con drones (máx 2)
+        this.lastDroneTargets = []; // Array de los últimos targetIds atacados (máx 2)
         
         // 🎯 Sistema de reacciones defensivas programadas (con delay para que el cliente vea la amenaza)
         this.pendingReactions = []; // Array de { executeAt, reaction, threatType, threatData, targetBuilding }
@@ -126,9 +125,8 @@ export class AISystem {
         this.availableBuildings = this.calculateAvailableBuildings();
         this.availableConsumables = this.calculateAvailableConsumables();
         
-        // 🎯 ENCAPSULACIÓN: Recalcular raza y configuración
-        this.raceId = this.getCurrentRace();
-        this.raceConfig = getRaceAIConfig(this.raceId);
+        // 🎯 NOTA: Sistema de razas obsoleto, solo se usa dificultad ahora
+        this.raceId = this.getCurrentRace(); // Se mantiene por compatibilidad pero no se usa
         this.difficultyMultipliers = getDifficultyMultipliers(this.difficulty);
         
         // 🎯 NUEVO: Actualizar coreSystem con raza y dificultad actualizadas
@@ -136,17 +134,17 @@ export class AISystem {
         // Por ahora el coreSystem se crea con los valores correctos, pero si cambian, habría que recrearlo
         // Por simplicidad, asumimos que no cambian después de la creación
         
-        // 🎯 ENCAPSULACIÓN: Recalcular intervalos ajustados por raza y dificultad
+        // 🎯 Recalcular intervalos ajustados por dificultad
         // Nota: Los intervalos de abastecimiento, emergencias y reparaciones están en AICoreSystem
-        const base = getAdjustedInterval('offensive', this.raceId, this.difficulty);
+        const base = getAdjustedInterval('offensive', this.difficulty);
         const variance = AIConfig.intervals.offensiveVariance;
         const randomOffensive = base + (Math.random() * variance * 2) - variance;
         
         this.intervals = {
-            strategic: Math.min(4.0 * this.difficultyMultipliers.buildingMultiplier, getAdjustedInterval('strategic', this.raceId, this.difficulty)), // Primera decisión más rápida (ajustada por dificultad)
+            strategic: Math.min(4.0 * this.difficultyMultipliers.buildingMultiplier, getAdjustedInterval('strategic', this.difficulty)), // Primera decisión más rápida (ajustada por dificultad)
             offensive: randomOffensive,
-            harass: getAdjustedInterval('harass', this.raceId, this.difficulty),
-            reaction: getAdjustedInterval('reaction', this.raceId, this.difficulty)
+            harass: getAdjustedInterval('harass', this.difficulty),
+            reaction: getAdjustedInterval('reaction', this.difficulty)
         };
         
         // Debug: Verificar nodos iniciales
@@ -295,7 +293,7 @@ export class AISystem {
         if (this.timers.offensive >= this.intervals.offensive) {
             this.timers.offensive = 0;
             // 🐛 FIX: Usar getAdjustedInterval para respetar multiplicador de dificultad
-            const base = getAdjustedInterval('offensive', this.raceId, this.difficulty);
+            const base = getAdjustedInterval('offensive', this.difficulty);
             const variance = AIConfig.intervals.offensiveVariance;
             this.intervals.offensive = base + (Math.random() * variance * 2) - variance;
             // 🎯 NOTA: handleOffensiveDecision ahora solo se usa para consumibles con cooldowns específicos
@@ -349,14 +347,12 @@ export class AISystem {
         // Después de la primera decisión, usar intervalo normal ajustado
         if (this.firstStrategicDecision) {
             this.firstStrategicDecision = false;
-            this.intervals.strategic = getAdjustedInterval('strategic', this.raceId, this.difficulty);
+            this.intervals.strategic = getAdjustedInterval('strategic', this.difficulty);
         }
-            
-            // 🎯 ENCAPSULACIÓN: Usar umbral ajustado por raza y dificultad
-        const threshold = getAdjustedThreshold('currencyStrategic', this.raceId, this.difficulty) || 50;
-        if (currency < threshold) {
-            return;
-        }
+        
+        // 🎯 NOTA: Ya no se usa currencyStrategic - el sistema de colchón dinámico maneja el ahorro
+        // Las acciones se evalúan con availableCurrency (currency - buffer), así que si no hay suficiente,
+        // simplemente no se ejecutarán (ver línea 389)
         
         // 🎯 NUEVO: Usar sistema de perfiles para evaluar TODAS las acciones
         const state = AIGameStateAnalyzer.analyzeState(team, this.gameState);
@@ -405,7 +401,27 @@ export class AISystem {
                 }
             }
         } else if (bestAction.type === 'attack') {
-            this.aiActionHandler.executeAttack(team, bestAction.cardId);
+            // 🎯 Si es un drone, pasar historial y función de actualización
+            if (bestAction.cardId === 'drone') {
+                // Función para actualizar el historial de objetivos atacados
+                const updateDroneTargets = (targetId) => {
+                    this.lastDroneTargets.push(targetId);
+                    // Mantener solo los últimos 2
+                    if (this.lastDroneTargets.length > 2) {
+                        this.lastDroneTargets.shift();
+                    }
+                };
+                
+                this.aiActionHandler.executeAttack(
+                    team, 
+                    bestAction.cardId, 
+                    this.lastDroneTargets, 
+                    updateDroneTargets
+                );
+            } else {
+                this.aiActionHandler.executeAttack(team, bestAction.cardId);
+            }
+            
             const now = this.gameState.gameTime || 0;
             this.lastConsumableUse[bestAction.cardId] = now;
         }
@@ -420,17 +436,12 @@ export class AISystem {
         // Después de la primera decisión, usar intervalo normal ajustado
         if (this.firstStrategicDecision) {
             this.firstStrategicDecision = false;
-            this.intervals.strategic = getAdjustedInterval('strategic', this.raceId, this.difficulty);
+            this.intervals.strategic = getAdjustedInterval('strategic', this.difficulty);
         }
         
-        // 🎯 ENCAPSULACIÓN: Usar umbral ajustado por raza y dificultad
-        // Nota: currencyThreshold ahora es 1.0 para todas las dificultades (solo velocidad cambia)
-        const threshold = getAdjustedThreshold('currencyStrategic', this.raceId, this.difficulty) || 50;
-        if (currency < threshold) {
-            if (AIConfig.debug.logActions) {
-            }
-            return;
-        }
+        // 🎯 NOTA: Ya no se usa currencyStrategic - el sistema de colchón dinámico maneja el ahorro
+        // Las acciones se evalúan con availableCurrency (currency - buffer), así que si no hay suficiente,
+        // simplemente no se ejecutarán
         
         // 🎯 NUEVO: Usar sistema de perfiles para evaluar acciones
         const state = AIGameStateAnalyzer.analyzeState(team, this.gameState);
@@ -491,15 +502,9 @@ export class AISystem {
      * 🎯 NUEVO: Usa sistema de perfiles
      */
     handleOffensiveDecision(team, currency) {
-        const buildHandler = this.gameState.buildHandler;
-        const costs = buildHandler.getBuildingCosts();
-        const minCost = Math.min(
-            costs['sniperStrike'] || 60,
-            costs['drone'] || 150
-        );
-        const threshold = minCost * this.difficultyMultipliers.currencyThreshold;
-        
-        if (currency < threshold) return;
+        // 🎯 NOTA: Ya no se usa currencyThreshold - el sistema de colchón dinámico maneja el ahorro
+        // Las acciones se evalúan con availableCurrency (currency - buffer), así que si no hay suficiente,
+        // simplemente no se ejecutarán
         
         // 🎯 NUEVO: Usar sistema de perfiles para evaluar consumibles
         const state = AIGameStateAnalyzer.analyzeState(team, this.gameState);
@@ -581,7 +586,26 @@ export class AISystem {
         
         // Ejecutar acción
         if (bestAction.type === 'attack') {
-            this.aiActionHandler.executeAttack(team, bestAction.cardId);
+            // 🎯 Si es un drone, pasar historial y función de actualización
+            if (bestAction.cardId === 'drone') {
+                // Función para actualizar el historial de objetivos atacados
+                const updateDroneTargets = (targetId) => {
+                    this.lastDroneTargets.push(targetId);
+                    // Mantener solo los últimos 2
+                    if (this.lastDroneTargets.length > 2) {
+                        this.lastDroneTargets.shift();
+                    }
+                };
+                
+                this.aiActionHandler.executeAttack(
+                    team, 
+                    bestAction.cardId, 
+                    this.lastDroneTargets, 
+                    updateDroneTargets
+                );
+            } else {
+                this.aiActionHandler.executeAttack(team, bestAction.cardId);
+            }
             // Registrar uso para cooldowns
             const now = this.gameState.gameTime || 0;
             this.lastConsumableUse[bestAction.cardId] = now;
@@ -597,7 +621,7 @@ export class AISystem {
     
     /**
      * Obtiene multiplicadores según dificultad
-     * 🎯 DEPRECATED: Ahora usa getDifficultyMultipliers de RaceAIConfig
+     * 🎯 DEPRECATED: Ahora usa getDifficultyMultipliers de AIConfig
      * Mantenido por compatibilidad, pero debería eliminarse
      */
     getDifficultyMultipliers() {
@@ -853,7 +877,6 @@ export class AISystem {
         const playerHasLauncher = playerNodes.some(n => n.type === 'droneLauncher');
         
         // Urgencia: Si jugador tiene más plantas que yo, debo construir una
-        // Nota: currencyThreshold ahora es 1.0, así que el umbral es el mismo para todas las dificultades
         const plantCost = this.gameState.buildHandler.getBuildingCosts()['nuclearPlant'] || 200;
         if (playerPlants.length > myPlants.length && currency >= plantCost) {
             this.stats.decisionsExecuted++;

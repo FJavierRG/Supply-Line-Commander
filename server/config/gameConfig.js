@@ -126,15 +126,15 @@ export const GAME_CONFIG = {
         vehicleSpeeds: {
             heavy_truck: 40,    // Camión pesado (HQ → FOB)
             truck: 50,          // Camión normal (FOB → Front)
-            ambulance: 70,      // Ambulancia (+40% más rápida que heavy_truck)
-            repair_truck: 60,   // Camión de reparación (HQ → edificios rotos) (+50% más rápido que heavy_truck)
+            ambulance: 70,      // Ambulancia 
+            repair_truck: 40,   // Camión de reparación (HQ → edificios rotos) 
             helicopter: 80      // Helicóptero (más rápido)
         },
 
         // Penalizaciones y efectos
         penalties: {
-            sabotage: 0.5,      // 50% de penalización por sabotaje FOB
-            harassment: 0.7     // 30% de penalización por acoso
+            sabotage: 0.4,      // penalización por sabotaje FOB. Se aplica a los camiones que salen de la FOB sabotada.
+            harassment: 0.5     //penalización por acoso. Se aplica a los camiones que pasan por el área de efecto del acoso.
         },
 
         // Bonuses de edificios
@@ -170,6 +170,15 @@ export const GAME_CONFIG = {
             phase1Duration: 500,       // 0.5 segundos en gris claro
             phase2Duration: 500        // 0.5 segundos en gris oscuro (total 1s)
         }
+    },
+    
+    // ═══════════════════════════════════════════════════════════════
+    // CONFIGURACIÓN DE TERRITORIO
+    // ═══════════════════════════════════════════════════════════════
+    territory: {
+        frontierGapPx: 25,                    // Gap entre frontera y edificios
+        checkAbandonmentInterval: 1.0,       // Verificar cada 1 segundo
+        graceTime: 3.0                       // 3 segundos de gracia antes de iniciar abandono
     }
 };
 
