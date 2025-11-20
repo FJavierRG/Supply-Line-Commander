@@ -25,83 +25,128 @@ export class ArsenalManager {
         this.swapMode = null; // Modo de permutación: null, { benchUnitId: 'xxx' } cuando se selecciona una carta del bench
         this.destination = 'deck'; // 🆕 NUEVO: Destino por defecto: 'deck' o 'bench'
         
+        // Inicializar handlers para limpieza de eventos
+        this.initHandlers();
+        
         this.setupEventListeners();
     }
     
-    setupEventListeners() {
-        const arsenalBtn = document.getElementById('arsenal-btn');
-        if (arsenalBtn) {
-            arsenalBtn.addEventListener('click', () => {
+    initHandlers() {
+        this.handlers = {
+            arsenalBtnClick: () => {
                 this.openedFromMenu = this.game.overlayManager.isOverlayVisible('main-menu-overlay');
                 this.show();
-            });
-        }
-        
-        const backBtn = document.getElementById('arsenal-back-btn');
-        if (backBtn) {
-            backBtn.addEventListener('click', () => this.hide());
-        }
-        
-        // Botones de acción del mazo
-        const clearBtn = document.getElementById('deck-clear-btn');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', () => this.clearDeck());
-        }
-        
-        const saveBtn = document.getElementById('deck-save-btn');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', () => this.saveDeck());
-        }
-        
-        // Event listeners del modal de nombre del mazo
-        const deckNameModal = document.getElementById('deck-name-modal-overlay');
-        const deckNameInput = document.getElementById('deck-name-input');
-        const deckNameCancelBtn = document.getElementById('deck-name-cancel-btn');
-        const deckNameConfirmBtn = document.getElementById('deck-name-confirm-btn');
-        
-        if (deckNameCancelBtn) {
-            deckNameCancelBtn.addEventListener('click', () => this.hideDeckNameModal());
-        }
-        
-        if (deckNameConfirmBtn) {
-            deckNameConfirmBtn.addEventListener('click', () => {
+            },
+            backBtnClick: () => this.hide(),
+            clearBtnClick: () => this.clearDeck(),
+            saveBtnClick: () => this.saveDeck(),
+            deckNameCancelClick: () => this.hideDeckNameModal(),
+            deckNameConfirmClick: () => {
+                const deckNameInput = document.getElementById('deck-name-input');
                 const name = deckNameInput?.value?.trim();
                 if (name && this.deckNameCallback) {
                     this.deckNameCallback(name);
                 }
                 this.hideDeckNameModal();
-            });
-        }
-        
-        // Permitir Enter para confirmar
-        if (deckNameInput) {
-            deckNameInput.addEventListener('keydown', (e) => {
+            },
+            deckNameInputKeydown: (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    deckNameConfirmBtn?.click();
+                    const confirmBtn = document.getElementById('deck-name-confirm-btn');
+                    confirmBtn?.click();
                 } else if (e.key === 'Escape') {
                     e.preventDefault();
                     this.hideDeckNameModal();
                 }
-            });
+            },
+            newBtnClick: () => this.createNewDeck(),
+            loadBtnClick: () => this.showDeckSelector(),
+            selectorCloseBtnClick: () => this.hideDeckSelector(),
+            cardZoomCloseBtnClick: () => this.hideCardZoom(),
+            cardZoomOverlayClick: (e) => {
+                const overlay = document.getElementById('card-zoom-overlay');
+                if (e.target === overlay) {
+                    this.hideCardZoom();
+                }
+            },
+            documentKeydown: (e) => {
+                const overlay = document.getElementById('card-zoom-overlay');
+                if (e.key === 'Escape' && overlay && !overlay.classList.contains('hidden')) {
+                    this.hideCardZoom();
+                }
+            },
+            arsenalContentContextmenu: (e) => {
+                // Solo prevenir si el click no fue en una carta (las cartas tienen su propio handler)
+                const clickedCard = e.target.closest('.arsenal-item');
+                if (!clickedCard) {
+                    e.preventDefault();
+                }
+            },
+            deckDestBtnClick: () => {
+                this.setDestination('deck');
+            },
+            benchDestBtnClick: () => {
+                this.setDestination('bench');
+            }
+        };
+    }
+    
+    setupEventListeners() {
+        const arsenalBtn = document.getElementById('arsenal-btn');
+        if (arsenalBtn) {
+            arsenalBtn.addEventListener('click', this.handlers.arsenalBtnClick);
+        }
+        
+        const backBtn = document.getElementById('arsenal-back-btn');
+        if (backBtn) {
+            backBtn.addEventListener('click', this.handlers.backBtnClick);
+        }
+        
+        // Botones de acción del mazo
+        const clearBtn = document.getElementById('deck-clear-btn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', this.handlers.clearBtnClick);
+        }
+        
+        const saveBtn = document.getElementById('deck-save-btn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', this.handlers.saveBtnClick);
+        }
+        
+        // Event listeners del modal de nombre del mazo
+        const deckNameInput = document.getElementById('deck-name-input');
+        const deckNameCancelBtn = document.getElementById('deck-name-cancel-btn');
+        const deckNameConfirmBtn = document.getElementById('deck-name-confirm-btn');
+        
+        if (deckNameCancelBtn) {
+            deckNameCancelBtn.addEventListener('click', this.handlers.deckNameCancelClick);
+        }
+        
+        if (deckNameConfirmBtn) {
+            deckNameConfirmBtn.addEventListener('click', this.handlers.deckNameConfirmClick);
+        }
+        
+        // Permitir Enter para confirmar
+        if (deckNameInput) {
+            deckNameInput.addEventListener('keydown', this.handlers.deckNameInputKeydown);
         }
         
         // Botón de nuevo mazo
         const newBtn = document.getElementById('arsenal-new-btn');
         if (newBtn) {
-            newBtn.addEventListener('click', () => this.createNewDeck());
+            newBtn.addEventListener('click', this.handlers.newBtnClick);
         }
         
         // Botón de cargar mazo
         const loadBtn = document.getElementById('arsenal-load-btn');
         if (loadBtn) {
-            loadBtn.addEventListener('click', () => this.showDeckSelector());
+            loadBtn.addEventListener('click', this.handlers.loadBtnClick);
         }
         
         // Botón de cerrar selector de mazos
         const selectorCloseBtn = document.getElementById('deck-selector-close-btn');
         if (selectorCloseBtn) {
-            selectorCloseBtn.addEventListener('click', () => this.hideDeckSelector());
+            selectorCloseBtn.addEventListener('click', this.handlers.selectorCloseBtnClick);
         }
         
         // Event listeners del modal de vista ampliada de carta
@@ -109,35 +154,21 @@ export class ArsenalManager {
         const cardZoomCloseBtn = document.getElementById('card-zoom-close-btn');
         
         if (cardZoomCloseBtn) {
-            cardZoomCloseBtn.addEventListener('click', () => this.hideCardZoom());
+            cardZoomCloseBtn.addEventListener('click', this.handlers.cardZoomCloseBtnClick);
         }
         
         // Cerrar modal al hacer click fuera del contenedor
         if (cardZoomOverlay) {
-            cardZoomOverlay.addEventListener('click', (e) => {
-                if (e.target === cardZoomOverlay) {
-                    this.hideCardZoom();
-                }
-            });
+            cardZoomOverlay.addEventListener('click', this.handlers.cardZoomOverlayClick);
         }
         
         // Cerrar modal con tecla ESC
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && cardZoomOverlay && !cardZoomOverlay.classList.contains('hidden')) {
-                this.hideCardZoom();
-            }
-        });
+        document.addEventListener('keydown', this.handlers.documentKeydown);
         
         // Prevenir menú contextual del navegador en la zona de unidades disponibles
         const arsenalContent = document.getElementById('arsenal-content');
         if (arsenalContent) {
-            arsenalContent.addEventListener('contextmenu', (e) => {
-                // Solo prevenir si el click no fue en una carta (las cartas tienen su propio handler)
-                const clickedCard = e.target.closest('.arsenal-item');
-                if (!clickedCard) {
-                    e.preventDefault();
-                }
-            });
+            arsenalContent.addEventListener('contextmenu', this.handlers.arsenalContentContextmenu);
         }
         
         // 🆕 NUEVO: Selector de destino (Mazo/Banquillo)
@@ -145,16 +176,68 @@ export class ArsenalManager {
         const benchDestBtn = document.getElementById('destination-bench-btn');
         
         if (deckDestBtn) {
-            deckDestBtn.addEventListener('click', () => {
-                this.setDestination('deck');
-            });
+            deckDestBtn.addEventListener('click', this.handlers.deckDestBtnClick);
         }
         
         if (benchDestBtn) {
-            benchDestBtn.addEventListener('click', () => {
-                this.setDestination('bench');
-            });
+            benchDestBtn.addEventListener('click', this.handlers.benchDestBtnClick);
         }
+    }
+
+    /**
+     * 🆕 NUEVO: Limpia los event listeners para evitar fugas de memoria
+     */
+    destroy() {
+        // Limpiar listeners DOM
+        const arsenalBtn = document.getElementById('arsenal-btn');
+        if (arsenalBtn) arsenalBtn.removeEventListener('click', this.handlers.arsenalBtnClick);
+        
+        const backBtn = document.getElementById('arsenal-back-btn');
+        if (backBtn) backBtn.removeEventListener('click', this.handlers.backBtnClick);
+        
+        const clearBtn = document.getElementById('deck-clear-btn');
+        if (clearBtn) clearBtn.removeEventListener('click', this.handlers.clearBtnClick);
+        
+        const saveBtn = document.getElementById('deck-save-btn');
+        if (saveBtn) saveBtn.removeEventListener('click', this.handlers.saveBtnClick);
+        
+        const deckNameCancelBtn = document.getElementById('deck-name-cancel-btn');
+        if (deckNameCancelBtn) deckNameCancelBtn.removeEventListener('click', this.handlers.deckNameCancelClick);
+        
+        const deckNameConfirmBtn = document.getElementById('deck-name-confirm-btn');
+        if (deckNameConfirmBtn) deckNameConfirmBtn.removeEventListener('click', this.handlers.deckNameConfirmClick);
+        
+        const deckNameInput = document.getElementById('deck-name-input');
+        if (deckNameInput) deckNameInput.removeEventListener('keydown', this.handlers.deckNameInputKeydown);
+        
+        const newBtn = document.getElementById('arsenal-new-btn');
+        if (newBtn) newBtn.removeEventListener('click', this.handlers.newBtnClick);
+        
+        const loadBtn = document.getElementById('arsenal-load-btn');
+        if (loadBtn) loadBtn.removeEventListener('click', this.handlers.loadBtnClick);
+        
+        const selectorCloseBtn = document.getElementById('deck-selector-close-btn');
+        if (selectorCloseBtn) selectorCloseBtn.removeEventListener('click', this.handlers.selectorCloseBtnClick);
+        
+        const cardZoomCloseBtn = document.getElementById('card-zoom-close-btn');
+        if (cardZoomCloseBtn) cardZoomCloseBtn.removeEventListener('click', this.handlers.cardZoomCloseBtnClick);
+        
+        const cardZoomOverlay = document.getElementById('card-zoom-overlay');
+        if (cardZoomOverlay) cardZoomOverlay.removeEventListener('click', this.handlers.cardZoomOverlayClick);
+        
+        document.removeEventListener('keydown', this.handlers.documentKeydown);
+        
+        const arsenalContent = document.getElementById('arsenal-content');
+        if (arsenalContent) arsenalContent.removeEventListener('contextmenu', this.handlers.arsenalContentContextmenu);
+        
+        const deckDestBtn = document.getElementById('destination-deck-btn');
+        if (deckDestBtn) deckDestBtn.removeEventListener('click', this.handlers.deckDestBtnClick);
+        
+        const benchDestBtn = document.getElementById('destination-bench-btn');
+        if (benchDestBtn) benchDestBtn.removeEventListener('click', this.handlers.benchDestBtnClick);
+        
+        // Limpiar suscripción al DeckManager
+        /* this.deckManager se destruye con el juego, pero es buena práctica desuscribirse si existe el método */
     }
 
     handleDefaultDeckUpdated(defaultDeck) {

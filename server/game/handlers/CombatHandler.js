@@ -253,16 +253,18 @@ export class CombatHandler {
             return { success: false, reason: 'No puedes atacar edificios en construcción' };
         }
         
-        // Verificar que el jugador tenga una lanzadera construida
+        // Verificar que el jugador tenga una lanzadera construida y operativa
         const launcher = this.gameState.nodes.find(n => 
             n.type === 'droneLauncher' && 
             n.team === playerTeam && 
             n.constructed && 
-            !n.isAbandoning
+            n.active &&
+            !n.isAbandoning &&
+            !n.disabled // 🆕 FIX: No permitir si está deshabilitado/roto
         );
         
         if (!launcher) {
-            return { success: false, reason: 'Necesitas construir una Lanzadera de Drones' };
+            return { success: false, reason: 'Necesitas construir una Lanzadera de Drones operativa' };
         }
         
         // ✅ Costo del dron (centralizado en DroneWorkshopSystem)
@@ -430,6 +432,20 @@ export class CombatHandler {
             return { success: false, reason: 'Currency insuficiente' };
         }
         
+        // 🆕 FIX: Validar requisito de Centro de Inteligencia (antes faltaba esta validación)
+        const hasIntelCenter = this.gameState.nodes.some(n => 
+            n.type === 'intelCenter' && 
+            n.team === playerTeam && 
+            n.active && 
+            n.constructed &&
+            !n.isAbandoning &&
+            !n.disabled // 🆕 FIX: No permitir si está deshabilitado/roto
+        );
+        
+        if (!hasIntelCenter) {
+            return { success: false, reason: 'Necesitas construir un Centro de Inteligencia operativo' };
+        }
+        
         // 🆕 Validar que esté en territorio enemigo (NO en territorio propio)
         const inOwnTerritory = this.gameState.territoryCalculator.isInTeamTerritory(x, playerTeam);
         if (inOwnTerritory) {
@@ -511,11 +527,12 @@ export class CombatHandler {
             n.team === playerTeam && 
             n.active && 
             n.constructed &&
-            !n.isAbandoning
+            !n.isAbandoning &&
+            !n.disabled // 🆕 FIX: No permitir si está deshabilitado/roto
         );
         
         if (!hasIntelCenter) {
-            return { success: false, reason: 'Necesitas construir un Centro de Inteligencia primero' };
+            return { success: false, reason: 'Necesitas construir un Centro de Inteligencia operativo' };
         }
         
         // 🆕 Validar que esté en territorio enemigo (NO en territorio propio)
@@ -581,11 +598,12 @@ export class CombatHandler {
             n.team === playerTeam && 
             n.active && 
             n.constructed &&
-            !n.isAbandoning
+            !n.isAbandoning &&
+            !n.disabled // 🆕 FIX: No permitir si está deshabilitado/roto
         );
         
         if (!hasDroneLauncher) {
-            return { success: false, reason: 'Necesitas construir una Lanzadera de Drones primero' };
+            return { success: false, reason: 'Necesitas construir una Lanzadera de Drones operativa' };
         }
         
         // 🆕 Validar que esté en territorio enemigo (NO en territorio propio)
@@ -721,11 +739,12 @@ export class CombatHandler {
             n.team === playerTeam && 
             n.constructed && 
             !n.isAbandoning &&
-            n.active
+            n.active &&
+            !n.disabled // 🆕 FIX: No permitir si está deshabilitado/roto
         );
         
         if (!hasDeadlyBuild) {
-            return { success: false, reason: 'Requiere tener una Construcción Prohibida construida' };
+            return { success: false, reason: 'Requiere tener una Construcción Prohibida operativa' };
         }
         
         // Verificar si ya hay un destructor activo

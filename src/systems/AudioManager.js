@@ -14,7 +14,17 @@ export class AudioManager {
         // Pool de sonidos activos para permitir múltiples simultáneos
         this.activeDroneSounds = new Map(); // droneId -> Audio instance
         this.soundInstances = []; // Array de todas las instancias de audio activas
-        this.soundInstanceMap = new Map(); // Audio instance -> { soundType, baseVolume }
+        this.soundInstanceMap = new Map(); // Audio instance -> { soundType, baseVolume, createdAt }
+        
+        // 🆕 NUEVO: Límites de seguridad para prevenir memory leaks
+        this.MAX_SOUND_INSTANCES = 100; // Máximo de instancias simultáneas
+        this.MAX_DRONE_SOUNDS = 20; // Máximo de drones activos
+        this.SOUND_TIMEOUT = 300000; // 5 minutos máximo por sonido (300000ms)
+        this.DRONE_TIMEOUT = 120000; // 2 minutos máximo por dron (120000ms)
+        
+        // 🆕 NUEVO: Timer para limpieza periódica
+        this.lastCleanupTime = 0;
+        this.cleanupInterval = 30000; // Limpiar cada 30 segundos
         
         // Timers para sonidos ambientales
         this.clearShootsTimer = 0;
@@ -234,6 +244,12 @@ export class AudioManager {
      * @returns {Audio} Instancia de audio creada
      */
     playSoundInstance(src, volume, soundType = null) {
+        // 🆕 SEGURIDAD: Verificar límite de instancias
+        if (this.soundInstances.length >= this.MAX_SOUND_INSTANCES) {
+            console.warn('⚠️ AudioManager: Límite de instancias alcanzado, limpiando...');
+            this.cleanupOrphanedSounds();
+        }
+        
         // Detectar el tipo de sonido si no se proporciona
         if (!soundType) {
             // Intentar detectar el tipo basándose en la ruta del archivo
@@ -277,21 +293,65 @@ export class AudioManager {
         // Usar el volumen directamente - si viene del objeto original ya tiene el volumen maestro aplicado
         const audio = this.createAudio(src, volume, false);
         
+        // 🆕 SEGURIDAD: Guardar timestamp de creación
+        const createdAt = Date.now();
+        
         // Guardar información de la instancia para poder actualizar su volumen después
         if (soundType) {
-            this.soundInstanceMap.set(audio, { soundType, baseVolume });
+            this.soundInstanceMap.set(audio, { soundType, baseVolume, createdAt });
         }
         
-        // Limpiar cuando termine
-        audio.addEventListener('ended', () => {
+        // 🆕 SEGURIDAD: Función de limpieza centralizada
+        const cleanup = () => {
             const index = this.soundInstances.indexOf(audio);
             if (index > -1) {
                 this.soundInstances.splice(index, 1);
             }
             this.soundInstanceMap.delete(audio);
+        };
+        
+        // 🆕 SEGURIDAD: Múltiples listeners para asegurar limpieza
+        audio.addEventListener('ended', cleanup);
+        audio.addEventListener('error', cleanup);
+        
+        // 🆕 SEGURIDAD: Limpiar si se pausa y no vuelve a reproducirse
+        audio.addEventListener('pause', () => {
+            setTimeout(() => {
+                if (audio.paused && audio.currentTime === 0) {
+                    cleanup();
+                }
+            }, 100);
         });
         
-        audio.play().catch(e => {});
+        // 🆕 SEGURIDAD: Timeout de seguridad (5 minutos máximo)
+        const safetyTimeout = setTimeout(() => {
+            if (this.soundInstances.includes(audio)) {
+                console.warn('⚠️ AudioManager: Limpiando sonido antiguo (timeout 5min)');
+                audio.pause();
+                audio.currentTime = 0;
+                cleanup();
+            }
+        }, this.SOUND_TIMEOUT);
+        
+        // Limpiar timeout cuando el audio se limpie
+        const originalCleanup = cleanup;
+        const cleanupWithTimeout = () => {
+            clearTimeout(safetyTimeout);
+            originalCleanup();
+        };
+        
+        // Reemplazar listeners con versión que limpia timeout
+        audio.removeEventListener('ended', cleanup);
+        audio.removeEventListener('error', cleanup);
+        audio.addEventListener('ended', cleanupWithTimeout);
+        audio.addEventListener('error', cleanupWithTimeout);
+        
+        // Intentar reproducir
+        audio.play().catch(e => {
+            console.warn('⚠️ AudioManager: Error reproduciendo sonido, limpiando:', e);
+            cleanupWithTimeout(); // 🆕 SEGURIDAD: Limpiar inmediatamente si falla
+        });
+        
         this.soundInstances.push(audio);
         
         return audio;
@@ -404,6 +464,17 @@ export class AudioManager {
      * @param {string} droneId - ID único del dron
      */
     playDroneSound(droneId) {
+        // 🆕 SEGURIDAD: Verificar límite de drones
+        if (this.activeDroneSounds.size >= this.MAX_DRONE_SOUNDS) {
+            console.warn('⚠️ AudioManager: Límite de drones alcanzado, limpiando más antiguos...');
+            this.cleanupOldDroneSounds();
+        }
+        
+        // 🆕 SEGURIDAD: Si ya existe este dron, detener el anterior primero
+        if (this.activeDroneSounds.has(droneId)) {
+            this.stopDroneSound(droneId);
+        }
+        
         // Obtener volumen actualizado con volumen maestro aplicado
         let finalVolume = this.volumes.drone;
         if (this.optionsManager) {
@@ -414,7 +485,26 @@ export class AudioManager {
         
         // Crear una nueva instancia de Audio para este dron específico
         const droneAudio = this.createAudio('assets/sounds/normalized/droneflying_normalized.wav', finalVolume, true);
-        droneAudio.play().catch(e => {});
+        
+        // 🆕 SEGURIDAD: Guardar timestamp de creación
+        droneAudio._createdAt = Date.now();
+        droneAudio._droneId = droneId;
+        
+        // 🆕 SEGURIDAD: Timeout de seguridad (2 minutos máximo)
+        const safetyTimeout = setTimeout(() => {
+            if (this.activeDroneSounds.has(droneId)) {
+                console.warn(`⚠️ AudioManager: Limpiando dron antiguo ${droneId} (timeout 2min)`);
+                this.stopDroneSound(droneId);
+            }
+        }, this.DRONE_TIMEOUT);
+        
+        // 🆕 SEGURIDAD: Guardar timeout para poder limpiarlo después
+        droneAudio._safetyTimeout = safetyTimeout;
+        
+        droneAudio.play().catch(e => {
+            console.warn('⚠️ AudioManager: Error reproduciendo dron, limpiando:', e);
+            clearTimeout(safetyTimeout);
+        });
         
         // Guardar referencia para poder detenerla después
         this.activeDroneSounds.set(droneId, droneAudio);
@@ -429,6 +519,11 @@ export class AudioManager {
     stopDroneSound(droneId) {
         const droneSound = this.activeDroneSounds.get(droneId);
         if (droneSound) {
+            // 🆕 SEGURIDAD: Limpiar timeout de seguridad
+            if (droneSound._safetyTimeout) {
+                clearTimeout(droneSound._safetyTimeout);
+            }
+            
             droneSound.pause();
             droneSound.currentTime = 0;
             this.activeDroneSounds.delete(droneId);
@@ -684,6 +779,79 @@ export class AudioManager {
             this.playRandomRadioEffect();
             this.radioEffectTimer = 0;
         }
+        
+        // 🆕 SEGURIDAD: Limpieza periódica cada 30 segundos
+        const now = Date.now();
+        if (now - this.lastCleanupTime >= this.cleanupInterval) {
+            this.cleanupOrphanedSounds();
+            this.lastCleanupTime = now;
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Limpia sonidos huérfanos y antiguos
+     * Llamado automáticamente cada 30 segundos y cuando se alcanza el límite
+     */
+    cleanupOrphanedSounds() {
+        const now = Date.now();
+        let cleanedCount = 0;
+        
+        // Limpiar instancias antiguas o pausadas permanentemente
+        this.soundInstances = this.soundInstances.filter(audio => {
+            const instanceInfo = this.soundInstanceMap.get(audio);
+            
+            // Si tiene más de 5 minutos, eliminar
+            if (instanceInfo && (now - instanceInfo.createdAt) > this.SOUND_TIMEOUT) {
+                audio.pause();
+                audio.currentTime = 0;
+                this.soundInstanceMap.delete(audio);
+                cleanedCount++;
+                return false;
+            }
+            
+            // Si está pausado en 0 (no se está usando), eliminar
+            if (audio.paused && audio.currentTime === 0) {
+                this.soundInstanceMap.delete(audio);
+                cleanedCount++;
+                return false;
+            }
+            
+            // Si hay error en el audio, eliminar
+            if (audio.error) {
+                this.soundInstanceMap.delete(audio);
+                cleanedCount++;
+                return false;
+            }
+            
+            return true; // Mantener
+        });
+        
+        if (cleanedCount > 0) {
+            console.log(`🧹 AudioManager: Limpiados ${cleanedCount} sonidos huérfanos`);
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Limpia drones más antiguos cuando se alcanza el límite
+     */
+    cleanupOldDroneSounds() {
+        // Convertir Map a array para ordenar por antigüedad
+        const drones = Array.from(this.activeDroneSounds.entries());
+        
+        // Ordenar por timestamp (más antiguos primero)
+        drones.sort((a, b) => {
+            const timeA = a[1]._createdAt || 0;
+            const timeB = b[1]._createdAt || 0;
+            return timeA - timeB;
+        });
+        
+        // Eliminar los 5 más antiguos
+        const toRemove = Math.min(5, drones.length);
+        for (let i = 0; i < toRemove; i++) {
+            const [droneId] = drones[i];
+            console.log(`🧹 AudioManager: Limpiando dron antiguo ${droneId}`);
+            this.stopDroneSound(droneId);
+        }
     }
     
     /**
@@ -894,11 +1062,15 @@ export class AudioManager {
                 audio.volume = this.sounds.chopper.volume;
             }
             
+            // 🆕 SEGURIDAD: Trackear este clone
+            this.soundInstances.push(audio);
+            
             // Aplicar fadeout al 50% final del clip
             audio.addEventListener('loadedmetadata', () => {
                 if (audio.duration) {
                     const fadeStartTime = audio.duration * 0.5; // 50% del clip
                     const fadeDuration = audio.duration * 0.5; // Los últimos 50%
+                    let rafId = null;
                     
                     const startFade = () => {
                         const currentTime = audio.currentTime;
@@ -911,24 +1083,43 @@ export class AudioManager {
                             const baseVolume = volume !== null ? volume : this.sounds.chopper.volume;
                             audio.volume = baseVolume;
                         }
+                        
+                        // 🆕 SEGURIDAD: Continuar fadeout solo si el audio sigue activo
+                        if (!audio.ended && !audio.paused) {
+                            rafId = requestAnimationFrame(startFade);
+                        }
                     };
                     
-                    // Aplicar fadeout durante la reproducción
-                    const fadeInterval = setInterval(() => {
-                        if (audio.ended || audio.paused) {
-                            clearInterval(fadeInterval);
-                        } else {
-                            startFade();
-                        }
-                    }, 50); // Verificar cada 50ms
+                    // 🆕 SEGURIDAD: Usar RAF en lugar de setInterval
+                    rafId = requestAnimationFrame(startFade);
                     
-                    // Limpiar intervalo cuando termine
-                    audio.addEventListener('ended', () => clearInterval(fadeInterval));
-                    audio.addEventListener('pause', () => clearInterval(fadeInterval));
+                    // 🆕 SEGURIDAD: Cleanup robusto
+                    const cleanup = () => {
+                        if (rafId !== null) {
+                            cancelAnimationFrame(rafId);
+                            rafId = null;
+                        }
+                        // Remover de soundInstances
+                        const index = this.soundInstances.indexOf(audio);
+                        if (index > -1) {
+                            this.soundInstances.splice(index, 1);
+                        }
+                    };
+                    
+                    audio.addEventListener('ended', cleanup);
+                    audio.addEventListener('pause', cleanup);
+                    audio.addEventListener('error', cleanup);
                 }
             });
             
-            audio.play().catch(e => console.log('Error reproduciendo chopper:', e));
+            audio.play().catch(e => {
+                console.log('Error reproduciendo chopper:', e);
+                // 🆕 SEGURIDAD: Limpiar si falla
+                const index = this.soundInstances.indexOf(audio);
+                if (index > -1) {
+                    this.soundInstances.splice(index, 1);
+                }
+            });
         }
     }
     
@@ -958,23 +1149,25 @@ export class AudioManager {
             return;
         }
         
-        // Usar el volumen del objeto original que ya tiene el volumen maestro aplicado
+        // 🆕 SEGURIDAD: Usar playSoundInstance para tracking automático
         const commandoVolume = this.sounds.commando1.volume;
         
-        // Reproducir commando1
-        const commando1 = this.sounds.commando1.cloneNode(true);
-        commando1.volume = commandoVolume;
-        commando1.currentTime = 0;
+        // Reproducir commando1 usando playSoundInstance
+        const commando1 = this.playSoundInstance(
+            'assets/sounds/normalized/commando1.wav',
+            commandoVolume,
+            'commando'
+        );
         
         // Cuando termine commando1, reproducir commando2
         commando1.addEventListener('ended', () => {
-            const commando2 = this.sounds.commando2.cloneNode(true);
-            commando2.volume = commandoVolume;
-            commando2.currentTime = 0;
-            commando2.play().catch(e => console.log('Error reproduciendo commando2:', e));
+            // También usar playSoundInstance para commando2
+            this.playSoundInstance(
+                'assets/sounds/normalized/commando2.wav',
+                commandoVolume,
+                'commando'
+            );
         });
-        
-        commando1.play().catch(e => console.log('Error reproduciendo commando1:', e));
     }
     
     /**

@@ -116,7 +116,8 @@ export class BuildingSystem {
             n.team === myTeam && 
             n.active && 
             n.constructed &&
-            !n.isAbandoning
+            !n.isAbandoning &&
+            !n.disabled // 🆕 FIX: Taller roto no da descuento
         );
         
         if (droneWorkshops.length === 0) {
@@ -386,6 +387,7 @@ export class BuildingSystem {
             n.type === 'droneLauncher' && 
             n.constructed && 
             !n.isAbandoning &&
+            !n.disabled && // 🆕 FIX: No permitir si está deshabilitado/roto
             n.team === myTeam
         );
     }
@@ -401,6 +403,7 @@ export class BuildingSystem {
             n.type === 'intelCenter' && 
             n.constructed && 
             !n.isAbandoning &&
+            !n.disabled && // 🆕 FIX: No permitir si está deshabilitado/roto
             n.team === myTeam
         );
     }
@@ -417,6 +420,7 @@ export class BuildingSystem {
             n.type === 'deadlyBuild' && 
             n.constructed && 
             !n.isAbandoning &&
+            !n.disabled && // 🆕 FIX: No permitir si está deshabilitado/roto
             n.team === myTeam
         );
     }

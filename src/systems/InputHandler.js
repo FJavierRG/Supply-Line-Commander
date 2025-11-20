@@ -20,9 +20,48 @@ export class InputHandler {
         this.hoverTargetCache = null; // Referencia al último objetivo bajo cursor
         this.hoverDelayMs = 1500; // 1.5s
         
+        // 🚀 OPTIMIZACIÓN: Cache de getBoundingClientRect() y throttling de mouse
+        this.cachedRect = null;
+        this.lastRectUpdateTime = 0;
+        this.rectUpdateInterval = 100; // Actualizar cache cada 100ms
+        this.pendingMouseRAF = null; // ID del requestAnimationFrame pendiente
+        this.pendingMouseCoords = null; // Últimas coordenadas del mouse pendientes de procesar
+        
         // ELIMINADO: selectedDifficulty - Ahora se configura en el lobby
         
         this.setupListeners();
+        
+        // 🚀 OPTIMIZACIÓN: Actualizar cache en resize
+        window.addEventListener('resize', () => {
+            this.updateRectCache();
+        });
+        
+        // 🚀 OPTIMIZACIÓN: Actualizar cache en scroll
+        window.addEventListener('scroll', () => {
+            this.updateRectCache();
+        });
+    }
+    
+    /**
+     * 🚀 OPTIMIZACIÓN: Actualiza el cache de getBoundingClientRect()
+     */
+    updateRectCache() {
+        this.cachedRect = this.game.canvas.getBoundingClientRect();
+        this.lastRectUpdateTime = Date.now();
+    }
+    
+    /**
+     * 🚀 OPTIMIZACIÓN: Obtiene el rect del canvas (cacheado)
+     */
+    getCachedRect() {
+        const now = Date.now();
+        
+        // Actualizar cache si es la primera vez o si ha pasado suficiente tiempo
+        if (!this.cachedRect || now - this.lastRectUpdateTime >= this.rectUpdateInterval) {
+            this.updateRectCache();
+        }
+        
+        return this.cachedRect;
     }
     
     /**
@@ -312,7 +351,8 @@ export class InputHandler {
             }
         }
         
-        const rect = this.game.canvas.getBoundingClientRect();
+        // 🚀 OPTIMIZACIÓN: Usar rect cacheado
+        const rect = this.getCachedRect();
         // Coordenadas del click relativas al canvas escalado
         const clickX = e.clientX - rect.left;
         const clickY = e.clientY - rect.top;
@@ -830,7 +870,8 @@ export class InputHandler {
             return;
         }
         
-        const rect = this.game.canvas.getBoundingClientRect();
+        // 🚀 OPTIMIZACIÓN: Usar rect cacheado
+        const rect = this.getCachedRect();
         const clickX = e.clientX - rect.left;
         const clickY = e.clientY - rect.top;
         
@@ -1007,16 +1048,41 @@ export class InputHandler {
     }
     
     /**
-     * Maneja movimiento del mouse en el canvas
+     * 🚀 OPTIMIZACIÓN: Maneja movimiento del mouse en el canvas (con RAF throttling)
      */
     handleCanvasMouseMove(e) {
+        // 🚀 PASO 1: Extraer coordenadas INMEDIATAMENTE (antes de que el evento se recicle)
+        const clientX = e.clientX;
+        const clientY = e.clientY;
+        
+        // 🚀 PASO 2: Cancelar RAF pendiente si existe (solo procesamos el mouse más reciente)
+        if (this.pendingMouseRAF !== null) {
+            cancelAnimationFrame(this.pendingMouseRAF);
+        }
+        
+        // 🚀 PASO 3: Guardar coordenadas para procesarlas en el siguiente frame
+        this.pendingMouseCoords = { clientX, clientY };
+        
+        // 🚀 PASO 4: Programar procesamiento en el siguiente frame
+        this.pendingMouseRAF = requestAnimationFrame(() => {
+            this.processMouseMovement(this.pendingMouseCoords);
+            this.pendingMouseRAF = null;
+        });
+    }
+    
+    /**
+     * 🚀 OPTIMIZACIÓN: Procesa el movimiento del mouse (llamado por RAF)
+     * @param {{clientX: number, clientY: number}} coords - Coordenadas del mouse
+     */
+    processMouseMovement(coords) {
         // Bloquear input si el menú de pausa u otros overlays están visibles
         // PERO permitir movimiento del mouse para hover (solo bloquear acciones)
         // Por ahora permitimos el movimiento para mantener la UI responsive
         
-        const rect = this.game.canvas.getBoundingClientRect();
-        const moveX = e.clientX - rect.left;
-        const moveY = e.clientY - rect.top;
+        // 🚀 OPTIMIZACIÓN: Usar rect cacheado en vez de llamar getBoundingClientRect() cada vez
+        const rect = this.getCachedRect();
+        const moveX = coords.clientX - rect.left;
+        const moveY = coords.clientY - rect.top;
         
         // Convertir de coordenadas CSS escaladas a coordenadas del juego
         const scaleX = this.game.canvas.width / rect.width;
