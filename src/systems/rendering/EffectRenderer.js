@@ -41,7 +41,7 @@ export class EffectRenderer {
         this.worldDestroyerExecuted = false;
         this.worldDestroyerExecutionTime = null;
         
-        // Guardar tiempo local para fallback
+        // Guardar tiempo local para fallback (en milisegundos)
         this._localStartTime = Date.now();
         
         console.log(`☠️ Iniciando efectos visuales del Destructor de mundos - countdown: ${this.worldDestroyerCountdownDuration}s, startTime: ${startTime}`);
@@ -82,6 +82,7 @@ export class EffectRenderer {
             x: data.x,
             y: data.y,
             startTime: data.startTime || (this.game?.network?.lastGameState?.gameTime || 0),
+            localStartTime: Date.now(), // Tiempo local para fallback
             active: true
         });
         
@@ -95,16 +96,11 @@ export class EffectRenderer {
     renderArtilleryEffects() {
         if (!this.game) return;
         
-        // Obtener tiempo del servidor si está disponible
-        let currentTime = 0;
-        if (this.game.network && this.game.network.lastGameState && this.game.network.lastGameState.gameTime !== undefined) {
-            currentTime = this.game.network.lastGameState.gameTime;
-        } else if (this.game.gameTime !== undefined) {
-            currentTime = this.game.gameTime;
-        }
-        
         const sprite = this.assetManager?.getSprite('end-of-worlds');
-        if (!sprite) return;
+        if (!sprite) {
+            console.warn('⚠️ Sprite end-of-worlds no encontrado');
+            return;
+        }
         
         const countdownDuration = 3; // 3 segundos según configuración
         
@@ -117,7 +113,31 @@ export class EffectRenderer {
                 continue;
             }
             
-            const elapsed = currentTime - artillery.startTime;
+            // Calcular elapsed usando tiempo del servidor si está disponible, o tiempo local como fallback
+            let elapsed;
+            const serverGameTime = this.game?.network?.gameStateSync?.lastGameState?.gameTime;
+            
+            // 🔍 DEBUG: Log de acceso al gameTime del servidor
+            if (!this._gameTimeAccessLogged) {
+                console.log(`🔍 EffectRenderer acceso a gameTime:`, {
+                    hasNetwork: !!this.game?.network,
+                    hasGameStateSync: !!this.game?.network?.gameStateSync,
+                    hasLastGameState: !!this.game?.network?.gameStateSync?.lastGameState,
+                    serverGameTime: serverGameTime
+                });
+                this._gameTimeAccessLogged = true;
+            }
+            
+            if (serverGameTime && serverGameTime > 0) {
+                // Usar tiempo del servidor
+                elapsed = serverGameTime - artillery.startTime;
+            } else if (this.game.gameTime > 0) {
+                // Usar tiempo del juego local
+                elapsed = this.game.gameTime - artillery.startTime;
+            } else {
+                // Fallback: usar tiempo local relativo (en segundos)
+                elapsed = (Date.now() - artillery.localStartTime) / 1000;
+            }
             
             if (elapsed >= 0 && elapsed < countdownDuration) {
                 // Renderizar countdown con sprite EndOfWorlds pequeño
@@ -160,24 +180,22 @@ export class EffectRenderer {
     renderWorldDestroyerEffects() {
         if (!this.game) return;
         
-        // Obtener tiempo del servidor si está disponible, o usar tiempo local
-        let currentTime = 0;
-        if (this.game.network && this.game.network.lastGameState && this.game.network.lastGameState.gameTime !== undefined) {
-            currentTime = this.game.network.lastGameState.gameTime;
-        } else if (this.game.gameTime !== undefined) {
-            currentTime = this.game.gameTime;
-        } else {
-            // Fallback: usar tiempo relativo local desde activación
-            if (this.worldDestroyerActive && this._localStartTime) {
-                currentTime = (Date.now() - this._localStartTime) / 1000;
-            } else if (this.worldDestroyerExecuted && this._localExecutionTime) {
-                currentTime = (Date.now() - this._localExecutionTime) / 1000 + this.worldDestroyerCountdownDuration;
-            }
-        }
-        
         // === FASE 1: Countdown con sprite EndOfWorlds (7 segundos) ===
         if (this.worldDestroyerActive && this.worldDestroyerStartTime !== null) {
-            const elapsed = currentTime - this.worldDestroyerStartTime;
+            // Calcular elapsed usando tiempo del servidor si está disponible, o tiempo local como fallback
+            let elapsed;
+            const serverGameTime = this.game?.network?.gameStateSync?.lastGameState?.gameTime;
+            
+            if (serverGameTime && serverGameTime > 0) {
+                // Usar tiempo del servidor
+                elapsed = serverGameTime - this.worldDestroyerStartTime;
+            } else if (this.game.gameTime > 0) {
+                // Usar tiempo del juego local
+                elapsed = this.game.gameTime - this.worldDestroyerStartTime;
+            } else {
+                // Fallback: usar tiempo local relativo (en segundos)
+                elapsed = (Date.now() - this._localStartTime) / 1000;
+            }
             const countdownDuration = this.worldDestroyerCountdownDuration || 7;
             
             if (elapsed >= 0 && elapsed < countdownDuration) {

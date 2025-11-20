@@ -21,6 +21,12 @@ export class GameStateSync {
     applyGameState(gameState) {
         if (!gameState) return;
         
+        // 🔍 DEBUG: Verificar gameTime
+        if (!this._gameTimeLogged) {
+            console.log(`🕐 GameStateSync recibió gameTime: ${gameState.gameTime}`);
+            this._gameTimeLogged = true;
+        }
+        
         // Guardar el último estado recibido (para reloj, etc.)
         this.lastGameState = gameState;
         

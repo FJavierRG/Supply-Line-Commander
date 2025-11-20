@@ -1094,18 +1094,20 @@ export class Game {
             this.renderer.renderEffectTooltip(this.hoveredEffect);
         }
         
-        // Restaurar Mirror View ANTES de UI del juego (para que porcentajes estén en posición correcta)
-        this.renderer.restoreMirrorView();
-        
         // 🆕 NUEVO: Renderizar efectos del Destructor de mundos durante countdown (sobre todo excepto UI)
+        // IMPORTANTE: Debe estar ANTES de restoreMirrorView() para que las coordenadas del mundo funcionen correctamente
         if (this.renderer.worldDestroyerActive) {
             this.renderer.renderWorldDestroyerEffects();
         }
         
         // 🆕 NUEVO: Renderizar efectos de artillería (countdown con sombra bomba nuclear pequeño)
+        // IMPORTANTE: Debe estar ANTES de restoreMirrorView() para que las coordenadas del mundo funcionen correctamente
         if (this.renderer.artilleryStrikes && this.renderer.artilleryStrikes.length > 0) {
             this.renderer.renderArtilleryEffects();
         }
+        
+        // Restaurar Mirror View ANTES de UI del juego (para que porcentajes estén en posición correcta)
+        this.renderer.restoreMirrorView();
         
         // Renderizar elementos de UI del juego (porcentajes de territorio, etc.)
         // DESPUÉS de restaurar mirror view para que estén en coordenadas correctas
