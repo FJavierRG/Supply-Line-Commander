@@ -16,10 +16,17 @@ export class HelicopterManager {
         // Generar ID simple sin uuid (para evitar async)
         const helicopterId = `heli_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         
-        // 🆕 NUEVO: Verificar si el nodo es HQ para cargar inicialmente
+        // 🆕 REWORK: Verificar si el nodo es HQ para cargar inicialmente (consume suministros)
         const node = this.gameState.nodes.find(n => n.id === nodeId);
         const heliConfig = GAME_CONFIG.vehicles.helicopter;
-        const initialCargo = (node && node.type === 'hq') ? heliConfig.baseCapacity : 0;
+        let initialCargo = 0;
+        if (node && node.type === 'hq' && node.hasSupplies) {
+            // HQ: cargar desde suministros disponibles
+            initialCargo = Math.min(heliConfig.baseCapacity, node.supplies || 0);
+            if (initialCargo > 0) {
+                node.supplies -= initialCargo;
+            }
+        }
         
         const helicopter = {
             id: helicopterId,
@@ -103,9 +110,17 @@ export class HelicopterManager {
                 console.log(`🚁 Helicóptero ${heli.id} llegó a Front ${toNode.id} sin suficientes suministros (tiene ${heli.cargo}, necesita ${heliConfig.deliveryAmount})`);
             }
         } else if (toNode.type === 'hq') {
-            // Recargar cargo al llegar al HQ (infinitos)
-            heli.cargo = heliConfig.baseCapacity;
-            console.log(`🚁 Helicóptero ${heli.id} llegó al HQ ${toNode.id} - cargo recargado a ${heli.cargo}`);
+            // 🆕 REWORK: Recargar cargo al llegar al HQ (consume suministros finitos)
+            const neededCargo = heliConfig.baseCapacity - heli.cargo;
+            if (toNode.hasSupplies && neededCargo > 0) {
+                const availableCargo = toNode.supplies || 0;
+                const rechargeAmount = Math.min(neededCargo, availableCargo);
+                heli.cargo += rechargeAmount;
+                toNode.supplies -= rechargeAmount;
+                console.log(`🚁 Helicóptero ${heli.id} llegó al HQ ${toNode.id} - cargo recargado ${heli.cargo - rechargeAmount} → ${heli.cargo} (HQ: ${toNode.supplies + rechargeAmount} → ${toNode.supplies}/${toNode.maxSupplies})`);
+            } else {
+                console.log(`🚁 Helicóptero ${heli.id} llegó al HQ ${toNode.id} - sin suministros disponibles para recargar (cargo actual: ${heli.cargo})`);
+            }
         } else if (toNode.type === 'aerialBase' || toNode.isAerialBase) {
             // Recargar en Base Aérea (suministros limitados)
             const neededCargo = heliConfig.baseCapacity - heli.cargo;

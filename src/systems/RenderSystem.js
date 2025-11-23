@@ -202,14 +202,6 @@ export class RenderSystem {
         return this.backgroundRenderer.renderBackground();
     }
     
-    /**
-     * 🆕 REFACTOR: Delegado a BackgroundRenderer
-     * Renderiza la cuadrícula de debug
-     */
-    renderGrid() {
-        return this.backgroundRenderer.renderGrid();
-    }
-    
     // ========== RENDERIZADO DE NODOS ==========
     /**
      * 🆕 REFACTOR: Delegado a NodeRenderer
@@ -666,14 +658,6 @@ export class RenderSystem {
     }
     
     /**
-     * 🆕 REFACTOR: Delegado a BackgroundRenderer
-     * Renderiza cuadrícula de desarrollo con coordenadas cartesianas
-     */
-    renderDevGrid() {
-        return this.backgroundRenderer.renderDevGrid();
-    }
-    
-    /**
      * 🆕 REFACTOR: Delegado a NodeRenderer
      * Renderiza SOLO la UI de vehículos e iconos del HQ
      */
@@ -746,6 +730,22 @@ export class RenderSystem {
      */
     renderWorldDestroyerEffects() {
         return this.effectRenderer.renderWorldDestroyerEffects();
+    }
+    
+    /**
+     * 🆕 NUEVO: Delegado a EffectRenderer
+     * Renderiza las conexiones visuales entre fábricas y HQs (líneas rojas)
+     */
+    renderFactoryConnections() {
+        return this.effectRenderer.renderFactoryConnections();
+    }
+    
+    /**
+     * 🆕 NUEVO: Delegado a EffectRenderer
+     * Renderiza los iconos de suministros viajando desde fábricas a HQs
+     */
+    renderFactorySupplyIcons() {
+        return this.effectRenderer.renderFactorySupplyIcons();
     }
     
 }

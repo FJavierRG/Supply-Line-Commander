@@ -13,6 +13,7 @@ export class SupplyManager {
      * @param {number} dt - Delta time en segundos
      */
     update(dt) {
+        // === CONSUMO DE SUPPLIES EN FRENTES ===
         for (const node of this.gameState.nodes) {
             if (node.type === 'front' && node.hasSupplies) {
                 // 🆕 FIX: Usar consumeRate del nodo (puede estar modificado por efectos como wounded)
@@ -21,13 +22,24 @@ export class SupplyManager {
                 const beforeSupplies = node.supplies;
                 node.supplies = Math.max(0, node.supplies - consumeRate * dt);
                 
-                // DEBUG: Log consumo cada 3 segundos (comentado para limpiar consola)
-                // if (!this.lastSupplyLog[node.id] || Date.now() - this.lastSupplyLog[node.id] > 3000) {
-                //     const consumed = beforeSupplies - node.supplies;
-                //     console.log(`⛽ ${node.team} frente: ${node.supplies.toFixed(1)} supplies (consumió ${consumed.toFixed(2)} en ${dt.toFixed(2)}s @ ${consumeRate}x/s)`);
-                //     this.lastSupplyLog[node.id] = Date.now();
-                // }
             }
         }
+        
+        // === REGENERACIÓN PASIVA DE SUPPLIES EN HQ ===
+        // 🆕 REWORK: El HQ regenera suministros de forma pasiva
+        for (const node of this.gameState.nodes) {
+            if (node.type === 'hq' && node.hasSupplies && node.supplyRegenerationRate) {
+                // El HQ es inmune a estados alterados, no necesita verificar disabled/broken
+                // Solo verificar que esté activo
+                if (node.active) {
+                    const regenAmount = node.supplyRegenerationRate * dt;
+                    node.supplies = Math.min(node.maxSupplies, node.supplies + regenAmount);
+                }
+            }
+        }
+        
+        // === GENERACIÓN DE SUMINISTROS POR FÁBRICAS ===
+        // ✅ REMOVIDO: La generación de suministros ahora se maneja en FactorySupplySystem
+        // Las fábricas crean envíos reales que viajan al HQ (similar a trenes)
     }
 }

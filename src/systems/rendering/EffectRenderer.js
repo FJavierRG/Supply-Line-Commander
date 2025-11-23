@@ -1,6 +1,8 @@
 // ===== RENDERIZADO DE EFECTOS ESPECIALES =====
 // Maneja efectos visuales especiales como artillería y el destructor de mundos
 
+import { interpolateProgress } from '../../utils/InterpolationUtils.js';
+
 /**
  * EffectRenderer - Renderiza efectos visuales especiales
  * Responsabilidades:
@@ -27,6 +29,10 @@ export class EffectRenderer {
         
         // Estado de artillería (efectos visuales)
         this.artilleryStrikes = []; // Array de bombardeos de artillería activos
+        
+        // 🆕 NUEVO: Sistema de visualización de fábricas
+        this.factorySupplyIcons = []; // Array de iconos de suministros viajando desde fábricas a HQs
+        this.factoryTimers = new Map(); // Map: factoryId -> { lastGeneration, interval }
     }
     
     /**
@@ -55,8 +61,10 @@ export class EffectRenderer {
         this.worldDestroyerExecuted = true;
         
         // Usar tiempo del servidor si está disponible, o tiempo local como fallback
-        if (this.game?.network?.lastGameState?.gameTime !== undefined) {
-            this.worldDestroyerExecutionTime = this.game.network.lastGameState.gameTime;
+        // 🔧 FIX: Acceder a lastGameState a través de gameStateSync
+        const serverGameTime = this.game?.network?.gameStateSync?.lastGameState?.gameTime;
+        if (serverGameTime !== undefined) {
+            this.worldDestroyerExecutionTime = serverGameTime;
         } else if (this.game?.gameTime !== undefined) {
             this.worldDestroyerExecutionTime = this.game.gameTime;
         } else {
@@ -209,9 +217,11 @@ export class EffectRenderer {
         // === FASE 2: Pantallazo blanco (2 segundos + 2 segundos de fade out = 4 segundos total) ===
         if (this.worldDestroyerExecuted && this.worldDestroyerExecutionTime !== null) {
             // Usar tiempo relativo desde la ejecución
+            // 🔧 FIX: Acceder a lastGameState a través de gameStateSync
             let elapsedSinceExecution;
-            if (this.game.network && this.game.network.lastGameState && this.game.network.lastGameState.gameTime !== undefined) {
-                elapsedSinceExecution = this.game.network.lastGameState.gameTime - this.worldDestroyerExecutionTime;
+            const serverGameTime = this.game?.network?.gameStateSync?.lastGameState?.gameTime;
+            if (serverGameTime !== undefined) {
+                elapsedSinceExecution = serverGameTime - this.worldDestroyerExecutionTime;
             } else {
                 elapsedSinceExecution = this._localElapsedSinceExecution || 0;
             }
@@ -225,7 +235,8 @@ export class EffectRenderer {
                 if (!this._localExecutionStartTime) {
                     this._localExecutionStartTime = Date.now();
                 }
-                if (!this.game.network || !this.game.network.lastGameState) {
+                // 🔧 FIX: Verificar gameStateSync en lugar de lastGameState directo
+                if (!this.game?.network?.gameStateSync?.lastGameState) {
                     elapsedSinceExecution = (Date.now() - this._localExecutionStartTime) / 1000;
                     this._localElapsedSinceExecution = elapsedSinceExecution;
                 }
@@ -311,6 +322,131 @@ export class EffectRenderer {
         this.ctx.fillStyle = '#ffffff';
         this.ctx.fillRect(0, 0, width, height);
         this.ctx.restore();
+    }
+    
+    /**
+     * 🆕 NUEVO: Actualiza el sistema de visualización de fábricas con interpolación suave
+     * @param {number} dt - Delta time en segundos
+     */
+    updateFactoryVisuals(dt) {
+        // ✅ INTERPOLACIÓN: Los iconos ahora usan interpolación suave hacia el progress del servidor
+        // Similar a cómo funcionan convoyes y trenes
+        
+        if (!this.game || !this.game.nodes) return;
+        
+        // Actualizar posiciones de iconos existentes con interpolación suave
+        for (let i = this.factorySupplyIcons.length - 1; i >= 0; i--) {
+            const icon = this.factorySupplyIcons[i];
+            
+            // ✅ FIX: NO eliminar el icono hasta que el progress local también haya llegado a 1.0
+            // Esto evita que desaparezca antes de completar el movimiento visual, especialmente
+            // para jugadores con latencia que reciben actualizaciones menos frecuentes
+            if (!icon.active) {
+                this.factorySupplyIcons.splice(i, 1);
+                continue;
+            }
+            
+            // Solo eliminar si tanto serverProgress como progress local han llegado al destino
+            // Esto asegura que el movimiento visual se complete antes de eliminar el icono
+            if (icon.serverProgress !== undefined && icon.serverProgress >= 1.0 && 
+                icon.progress !== undefined && icon.progress >= 0.99) {
+                this.factorySupplyIcons.splice(i, 1);
+                continue;
+            }
+            
+            // ✅ INTERPOLACIÓN: Interpolar progress local hacia serverProgress
+            if (icon.serverProgress !== undefined) {
+                // Usar interpolateProgress para suavizar el movimiento
+                interpolateProgress(icon, dt, {
+                    speed: 8.0, // Velocidad base de interpolación
+                    adaptiveSpeeds: {
+                        large: 15.0,  // >0.1 diferencia
+                        medium: 8.0,  // >0.05 diferencia
+                        small: 5.0    // <=0.05 diferencia
+                    },
+                    threshold: 0.001
+                });
+                
+                // Asegurar que progress no exceda 1.0
+                if (icon.progress > 1.0) {
+                    icon.progress = 1.0;
+                }
+            }
+            
+            // Actualizar posición visual basada en progress interpolado
+            if (icon.progress !== undefined && icon.startX !== undefined && icon.targetX !== undefined) {
+                const dx = icon.targetX - icon.startX;
+                const dy = icon.targetY - icon.startY;
+                
+                icon.currentX = icon.startX + dx * icon.progress;
+                icon.currentY = icon.startY + dy * icon.progress;
+            }
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Renderiza las conexiones visuales entre fábricas y HQs
+     */
+    renderFactoryConnections() {
+        if (!this.game || !this.game.nodes) return;
+        
+        // Buscar todas las fábricas construidas y activas
+        const factories = this.game.nodes.filter(n => 
+            n.type === 'factory' && 
+            n.constructed && 
+            n.active && 
+            !n.disabled
+        );
+        
+        // Renderizar línea roja desde cada fábrica a su HQ
+        for (const factory of factories) {
+            const hq = this.game.nodes.find(n => 
+                n.type === 'hq' && 
+                n.team === factory.team &&
+                n.active
+            );
+            
+            if (!hq) continue;
+            
+            // Dibujar línea roja
+            this.ctx.save();
+            this.ctx.strokeStyle = '#ff0000'; // Rojo
+            this.ctx.lineWidth = 2;
+            this.ctx.globalAlpha = 0.3; // Más transparente
+            this.ctx.beginPath();
+            this.ctx.moveTo(factory.x, factory.y);
+            this.ctx.lineTo(hq.x, hq.y);
+            this.ctx.stroke();
+            this.ctx.restore();
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Renderiza los iconos de suministros viajando
+     */
+    renderFactorySupplyIcons() {
+        if (!this.assetManager || this.factorySupplyIcons.length === 0) return;
+        
+        const sprite = this.assetManager.getSprite('ui-supply-icon');
+        if (!sprite) return;
+        
+        const iconSize = 32; // Tamaño del icono
+        
+        // Renderizar cada icono
+        for (const icon of this.factorySupplyIcons) {
+            if (!icon.active) continue;
+            
+            this.ctx.save();
+            this.ctx.globalAlpha = 0.7; // Más transparente
+            this.ctx.drawImage(
+                sprite,
+                icon.currentX - iconSize / 2,
+                icon.currentY - iconSize / 2,
+                iconSize,
+                iconSize
+            );
+            this.ctx.restore();
+        }
     }
 }
 

@@ -611,14 +611,12 @@ export class NodeRenderer {
         }
         
         // Barra de suministros (sin contadores de vehículos, esos se renderizan en renderVehicleUI)
-        if (node.type === 'hq') {
-            // HQ no muestra barra de suministros, solo vehículos (que se renderizan en renderVehicleUI)
-            // No renderizar nada aquí
-        } else if (node.type === 'campaignHospital' && node.constructed && !node.isConstructing) {
+        // 🆕 REWORK: HQ ahora muestra barra de suministros (tiene suministros finitos)
+        if (node.type === 'campaignHospital' && node.constructed && !node.isConstructing) {
             // Hospital de campaña: solo vehículos (que se renderizan en renderVehicleUI)
             // No renderizar nada aquí
         } else if (node.hasSupplies !== false || node.hasVehicles) {
-            // Resto de nodos: barra de suministros (sin contadores de vehículos)
+            // Todos los nodos con suministros (incluyendo HQ) o vehículos: mostrar barra de suministros
             this.renderSupplyBar(node);
         }
     }
@@ -1028,11 +1026,8 @@ export class NodeRenderer {
         const barX = base.x - barWidth / 2;
         const barY = base.y + base.radius + 20;  // Bajado 25% más (16 * 1.25 = 20)
         
-        // HQ ALIADO no muestra barra de recursos
+        // 🆕 REWORK: HQ ahora muestra barra de suministros (tiene suministros finitos)
         // Los vehículos se renderizan en renderVehicleUI() para evitar duplicación
-        if (base.type === 'hq' && !base.type.startsWith('enemy_')) {
-            return;
-        }
         
         // Calcular offset de shake si está activo
         let shakeX = 0;
@@ -1072,7 +1067,55 @@ export class NodeRenderer {
         this.ctx.fillRect(barX, barY, barWidth, barHeight);
         
         const fillWidth = (base.supplies / base.maxSupplies) * barWidth;
-        this.ctx.fillStyle = base.supplies < 20 ? '#e74c3c' : '#4ecca3';
+        
+        // 🆕 NUEVO: Calcular color basado en cuántos vehículos se pueden enviar
+        // Solo aplica para HQ y FOB (otros nodos usan lógica anterior)
+        let barColor;
+        
+        if (base.type === 'hq' || base.type === 'fob') {
+            // Obtener capacidad dinámica del vehículo considerando bonos de edificios
+            // Esta capacidad se recalcula en cada render, por lo que se actualiza automáticamente
+            // cuando se construye, destruye, habilita o deshabilita un edificio que modifica la capacidad
+            let vehicleCapacity = 0;
+            if (this.game) {
+                const vehicleType = base.type === 'hq' ? 'heavy_truck' : 'truck';
+                // Normalizar team del nodo (puede ser 'ally'/'enemy' o 'player1'/'player2')
+                let nodeTeam = base.team || this.game.myTeam || 'player1';
+                if (nodeTeam === 'ally') {
+                    nodeTeam = this.game.myTeam || 'player1';
+                } else if (nodeTeam === 'enemy') {
+                    const myTeam = this.game.myTeam || 'player1';
+                    nodeTeam = myTeam === 'player1' ? 'player2' : 'player1';
+                }
+                vehicleCapacity = this.game.getVehicleCapacityWithBonuses(vehicleType, nodeTeam);
+            } else {
+                // Fallback: usar valores por defecto de la configuración
+                vehicleCapacity = base.type === 'hq' ? 15 : 20;
+            }
+            
+            // Calcular cuántos vehículos se pueden enviar
+            const vehiclesCanSend = vehicleCapacity > 0 ? Math.floor((base.supplies || 0) / vehicleCapacity) : 0;
+            
+            // Aplicar color según la cantidad de vehículos que se pueden enviar
+            if (vehiclesCanSend === 0) {
+                // Rojo: no se puede enviar ni un vehículo
+                barColor = '#e74c3c';
+            } else if (vehiclesCanSend === 1) {
+                // Naranja: solo se puede enviar 1 vehículo
+                barColor = '#f39c12';
+            } else if (vehiclesCanSend === 2) {
+                // Amarillo: se pueden enviar 2 vehículos
+                barColor = '#f1c40f';
+            } else {
+                // Verde: se pueden enviar 3 o más vehículos
+                barColor = '#4ecca3';
+            }
+        } else {
+            // Para otros tipos de nodos (frentes, etc.), usar lógica anterior
+            barColor = (base.supplies || 0) < 20 ? '#e74c3c' : '#4ecca3';
+        }
+        
+        this.ctx.fillStyle = barColor;
         this.ctx.fillRect(barX, barY, fillWidth, barHeight);
         
         // Los contadores de vehículos se renderizan en renderVehicleUI() para evitar duplicación
@@ -1541,6 +1584,49 @@ export class NodeRenderer {
             // 🆕 NUEVO: Restaurar Mirror View usando método unificado
             this.restoreMirrorCompensation(wasCompensated3);
         }
+        
+        // 🆕 NUEVO: Renderizar contador de usos restantes para lanzadera de drones
+        if (node.type === 'droneLauncher' && node.constructed && !node.isConstructing) {
+            // 🆕 NUEVO: Compensar Mirror View usando método unificado
+            const wasCompensated4 = this.applyMirrorCompensation(node.x, node.y);
+            
+            // Obtener configuración del servidor para maxUses
+            const maxUses = this.game?.serverBuildingConfig?.effects?.droneLauncher?.maxUses || 3;
+            const currentUses = typeof node.uses === 'number' ? node.uses : 0;
+            const remainingUses = Math.max(0, maxUses - currentUses);
+            
+            // Solo mostrar si hay usos restantes
+            if (remainingUses > 0) {
+                // Renderizar texto "x N" donde N son los usos restantes
+                const usesText = `x ${remainingUses}`;
+                
+                // Color del texto: blanco normalmente, amarillo si quedan pocos usos, rojo si está en abandono
+                let textColor = '#fff';
+                if (node.isAbandoning) {
+                    textColor = '#e74c3c'; // Rojo si está abandonando
+                } else if (remainingUses === 1) {
+                    textColor = '#f39c12'; // Amarillo si queda 1 uso
+                }
+                
+                this.ctx.fillStyle = textColor;
+                this.ctx.font = 'bold 21px monospace';
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                
+                // 🔧 Ajustar posición: más cerca del sprite (reducir distancia desde node.y + node.radius)
+                const textX = node.x;
+                const textY = node.y + node.radius + 10; // Más cerca del sprite (antes era +55)
+                
+                // Borde negro para mejor legibilidad
+                this.ctx.strokeStyle = '#000000';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeText(usesText, textX, textY);
+                this.ctx.fillText(usesText, textX, textY);
+            }
+            
+            // 🆕 NUEVO: Restaurar Mirror View usando método unificado
+            this.restoreMirrorCompensation(wasCompensated4);
+        }
     }
     
     // ========== DEBUG INFO ==========
@@ -1634,8 +1720,8 @@ export class NodeRenderer {
      * 🆕 NUEVO: Renderiza el anillo de efecto residual alrededor de un edificio afectado por comando eliminado
      */
     renderCommandoResidualRing(node, game) {
-        // Obtener gameTime del servidor (a través de network.lastGameState)
-        const gameTime = game?.network?.lastGameState?.gameTime || 0;
+        // 🔧 FIX: Obtener gameTime del servidor (a través de network.gameStateSync.lastGameState)
+        const gameTime = game?.network?.gameStateSync?.lastGameState?.gameTime || 0;
         
         if (!gameTime) return;
         
@@ -1680,8 +1766,8 @@ export class NodeRenderer {
     renderCommandoDurationRing(node, game) {
         if (!node.isCommando || !node.expiresAt) return;
         
-        // Obtener gameTime del servidor (a través de network.lastGameState)
-        const gameTime = game?.network?.lastGameState?.gameTime || 0;
+        // 🔧 FIX: Obtener gameTime del servidor (a través de network.gameStateSync.lastGameState)
+        const gameTime = game?.network?.gameStateSync?.lastGameState?.gameTime || 0;
         if (!gameTime) return;
         
         // Calcular progreso del comando (0 a 1, donde 1 = recién creado, 0 = a punto de expirar)
@@ -1714,8 +1800,8 @@ export class NodeRenderer {
     renderTruckAssaultDurationRing(node, game) {
         if (!node.isTruckAssault || !node.expiresAt) return;
         
-        // Obtener gameTime del servidor (a través de network.lastGameState)
-        const gameTime = game?.network?.lastGameState?.gameTime || 0;
+        // 🔧 FIX: Obtener gameTime del servidor (a través de network.gameStateSync.lastGameState)
+        const gameTime = game?.network?.gameStateSync?.lastGameState?.gameTime || 0;
         if (!gameTime) return;
         
         // Calcular progreso del truck assault (0 a 1, donde 1 = recién creado, 0 = a punto de expirar)

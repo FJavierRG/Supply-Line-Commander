@@ -9,6 +9,7 @@ import { TankSystemServer } from '../systems/TankSystemServer.js';
 import { LightVehicleSystemServer } from '../systems/LightVehicleSystemServer.js'; // 🆕 NUEVO: Sistema de artillado ligero
 import { ArtillerySystemServer } from '../systems/ArtillerySystemServer.js'; // 🆕 NUEVO: Sistema de artillería
 import { TrainSystemServer } from '../systems/TrainSystemServer.js';
+import { FactorySupplySystem } from '../systems/FactorySupplySystem.js';
 import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
 import { BuildHandler } from './handlers/BuildHandler.js';
@@ -40,6 +41,7 @@ export class GameStateManager {
         this.convoys = [];
         this.trains = []; // 🆕 NUEVO: Array de trenes
         this.helicopters = []; // 🆕 NUEVO: Array de helicópteros persistentes
+        this.factorySupplyDeliveries = []; // 🆕 NUEVO: Array de envíos de suministros desde fábricas
         this.currency = {
             player1: GAME_CONFIG.currency.initial,
             player2: GAME_CONFIG.currency.initial
@@ -74,6 +76,7 @@ export class GameStateManager {
         this.lightVehicleSystem = new LightVehicleSystemServer(this); // 🆕 NUEVO: Sistema de artillado ligero
         this.artillerySystem = new ArtillerySystemServer(this); // 🆕 NUEVO: Sistema de artillería
         this.trainSystem = new TrainSystemServer(this); // 🆕 NUEVO: Sistema de trenes
+        this.factorySupplySystem = new FactorySupplySystem(this); // 🆕 NUEVO: Sistema de envíos de fábricas
         
         // Handlers de acciones
         this.buildHandler = new BuildHandler(this);
@@ -174,6 +177,9 @@ export class GameStateManager {
             console.log(`✅ [getInitialState] HQ player2 creado en (${hq2Pos.x}, ${hq2Pos.y})`);
             
             // 3. ✅ SIMPLIFICADO: FOBs siempre se crean (ya no hay sistema de naciones)
+            // ✅ CONFIGURACIÓN CENTRALIZADA: Leer suministros iniciales desde gameConfig
+            const initialFOBSupplies = GAME_CONFIG.initialNodes.fob?.initialSupplies ?? 40;
+            
             console.log(`🌍 [getInitialState] Creando FOBs player1 (${MAP_CONFIG.fobs.player1.length} FOBs)...`);
             MAP_CONFIG.fobs.player1.forEach((fobPos, index) => {
                 try {
@@ -183,8 +189,8 @@ export class GameStateManager {
                         baseWidth,
                         baseHeight
                     );
-                    this.nodes.push(this.createNode('fob', 'player1', absPos.x, absPos.y, 50));
-                    console.log(`✅ [getInitialState] FOB player1 #${index + 1} creado en (${absPos.x}, ${absPos.y})`);
+                    this.nodes.push(this.createNode('fob', 'player1', absPos.x, absPos.y, initialFOBSupplies));
+                    console.log(`✅ [getInitialState] FOB player1 #${index + 1} creado en (${absPos.x}, ${absPos.y}) con ${initialFOBSupplies} suministros`);
                 } catch (error) {
                     console.error(`❌ [getInitialState] Error creando FOB player1 #${index + 1}:`, error);
                     throw error;
@@ -200,8 +206,8 @@ export class GameStateManager {
                         baseWidth,
                         baseHeight
                     );
-                    this.nodes.push(this.createNode('fob', 'player2', absPos.x, absPos.y, 50));
-                    console.log(`✅ [getInitialState] FOB player2 #${index + 1} creado en (${absPos.x}, ${absPos.y})`);
+                    this.nodes.push(this.createNode('fob', 'player2', absPos.x, absPos.y, initialFOBSupplies));
+                    console.log(`✅ [getInitialState] FOB player2 #${index + 1} creado en (${absPos.x}, ${absPos.y}) con ${initialFOBSupplies} suministros`);
                 } catch (error) {
                     console.error(`❌ [getInitialState] Error creando FOB player2 #${index + 1}:`, error);
                     throw error;
@@ -266,12 +272,14 @@ export class GameStateManager {
                 gameplay: this.buildHandler.getGameplayProperties(),
                 buildRadii: this.buildHandler.getBuildRadii(), // 🆕 Radio de construcción (proximidad)
                 detectionRadii: this.buildHandler.getDetectionRadii(),
+                ranges: this.buildHandler.getRanges(), // 🆕 NUEVO: Rangos de acción de edificios
                 temporaryEffects: this.buildHandler.getTemporaryEffects(), // 🆕 NUEVO: Efectos temporales (trained, wounded)
                 security: this.buildHandler.getSecurityProperties(),
                 behavior: this.buildHandler.getBehaviorProperties(),
                 specialNodes: this.buildHandler.getSpecialNodes(), // 🆕 Configuración de nodos especiales (comando, truck assault)
                 vehicleTypes: this.buildHandler.getVehicleTypes(), // 🆕 NUEVO: Tipos de vehículos
-                vehicleSystems: this.buildHandler.getVehicleSystems() // 🆕 NUEVO: Sistemas de vehículos por tipo de nodo
+                vehicleSystems: this.buildHandler.getVehicleSystems(), // 🆕 NUEVO: Sistemas de vehículos por tipo de nodo
+                currency: { ...GAME_CONFIG.currency } // 🆕 NUEVO: Configuración de currency (passiveRate, etc.)
             };
             console.log(`✅ [getInitialState] Configuración de edificios obtenida`);
             
@@ -326,11 +334,15 @@ export class GameStateManager {
         
         // Propiedades según tipo
         if (type === 'hq') {
-            node.hasSupplies = false;
-            node.supplies = null; // Infinitos
-            
             // ✅ CONFIGURACIÓN INICIAL: Leer valores iniciales desde GAME_CONFIG.initialNodes.hq
             const initialConfig = GAME_CONFIG.initialNodes.hq || {};
+            
+            // 🆕 REWORK: Sistema de suministros del HQ (ahora tiene suministros finitos)
+            // ✅ CONFIGURACIÓN CENTRALIZADA: Todos los valores vienen de GAME_CONFIG.initialNodes.hq
+            node.hasSupplies = capacityConfig.hasSupplies ?? true;
+            node.maxSupplies = initialConfig.maxSupplies; // ✅ Fuente única de verdad: gameConfig
+            node.supplies = initialConfig.supplies ?? initialConfig.maxSupplies; // ✅ Fuente única de verdad: gameConfig
+            node.supplyRegenerationRate = initialConfig.supplyRegenerationRate ?? 2; // Suministros por segundo
             
             // ✅ CONSOLIDADO: Usar configuración de vehículos desde vehicleConfig (lee de SERVER_NODE_CONFIG.capacities)
             node.hasVehicles = vehicleConfig.hasVehicles;
@@ -356,9 +368,12 @@ export class GameStateManager {
             const defaultType = this.raceManager.getDefaultVehicleType('hq');
             node.selectedResourceType = defaultType || 'ammo';
         } else if (type === 'fob') {
+            // ✅ CONFIGURACIÓN CENTRALIZADA: Leer valores desde gameConfig
+            const fobConfig = GAME_CONFIG.initialNodes.fob || {};
             node.hasSupplies = true;
-            node.maxSupplies = 100;
-            node.supplies = supplies !== null ? supplies : 30;
+            node.maxSupplies = fobConfig.maxSupplies ?? 100;
+            // Si supplies se pasa explícitamente (FOBs iniciales), usarlo; si no, usar builtSupplies (FOBs construidos)
+            node.supplies = supplies !== null ? supplies : (fobConfig.builtSupplies ?? 30);
             // ✅ CONSOLIDADO: Usar configuración de vehículos desde vehicleConfig (lee de SERVER_NODE_CONFIG.capacities)
             node.hasVehicles = vehicleConfig.hasVehicles;
             node.maxVehicles = vehicleConfig.hasVehicles ? vehicleConfig.availableVehicles : 0;
@@ -379,6 +394,11 @@ export class GameStateManager {
             node.hasHelicopters = vehicleConfig.hasHelicopters;
             node.maxHelicopters = vehicleConfig.hasHelicopters ? vehicleConfig.availableHelicopters : 0;
             node.availableHelicopters = vehicleConfig.availableHelicopters;
+        }
+        
+        // 🆕 NUEVO: Inicializar contador de usos para lanzadera de drones
+        if (type === 'droneLauncher') {
+            node.uses = 0; // Contador de usos (se incrementa cada vez que se lanza un dron)
         }
         
         // 🆕 CENTRALIZADO: Configurar nodo según la raza
@@ -408,7 +428,8 @@ export class GameStateManager {
      * @param {Object} data - Datos del evento
      */
     addVisualEvent(type, data = {}) {
-        this.visualEvents.push({ type, ...data, timestamp: this.gameTime });
+        const event = { type, ...data, timestamp: this.gameTime };
+        this.visualEvents.push(event);
     }
     
     /**
@@ -683,6 +704,9 @@ export class GameStateManager {
         // === ACTUALIZAR TRENES (MOVIMIENTO + LLEGADAS) ===
         this.trainSystem.update(dt);
         
+        // === ACTUALIZAR ENVÍOS DE FÁBRICAS (MOVIMIENTO + LLEGADAS) ===
+        this.factorySupplySystem.update(dt);
+        
         // === CONSUMO DE SUPPLIES EN FRENTES ===
         this.supplyManager.update(dt);
         
@@ -879,6 +903,7 @@ export class GameStateManager {
             nodes: this.stateSerializer.serializeAllNodes(),
             convoys: this.stateSerializer.serializeAllConvoys(), // También todos los convoyes
             trains: this.stateSerializer.serializeAllTrains(), // 🆕 NUEVO: Trenes
+            factorySupplyDeliveries: this.stateSerializer.serializeAllFactorySupplyDeliveries(), // 🆕 NUEVO: Envíos de fábricas
             helicopters: this.stateSerializer.serializeAllHelicopters(), // Helicópteros
             drones: this.droneSystem.getDrones(), // Drones activos con posiciones
             tanks: this.tankSystem.getTanks(), // Tanques activos con posiciones
@@ -943,6 +968,116 @@ export class GameStateManager {
         if (this.updateInterval) {
             clearInterval(this.updateInterval);
             this.updateInterval = null;
+        }
+    }
+    
+    /**
+     * 🆕 Limpia TODOS los recursos de la partida para liberar memoria
+     * Debe llamarse cuando se elimina una sala (por desconexión, victoria, etc.)
+     */
+    cleanup() {
+        console.log(`🧹 [cleanup] Iniciando limpieza de GameState...`);
+        
+        try {
+            // 1. Detener game loop primero (crítico)
+            this.stopGameLoop();
+            console.log(`✅ [cleanup] Game loop detenido`);
+            
+            // 2. Limpiar callbacks para evitar memory leaks
+            this.updateCallback = null;
+            this.victoryCallback = null;
+            console.log(`✅ [cleanup] Callbacks limpiados`);
+            
+            // 3. Limpiar arrays de estado del juego
+            if (this.nodes) this.nodes.length = 0;
+            if (this.convoys) this.convoys.length = 0;
+            if (this.trains) this.trains.length = 0;
+            if (this.helicopters) this.helicopters.length = 0;
+            console.log(`✅ [cleanup] Arrays de estado limpiados`);
+            
+            // 4. Limpiar colas de eventos
+            if (this.soundEvents) this.soundEvents.length = 0;
+            if (this.visualEvents) this.visualEvents.length = 0;
+            if (this.droneImpacts) this.droneImpacts.length = 0;
+            if (this.tankImpacts) this.tankImpacts.length = 0;
+            if (this.lightVehicleImpacts) this.lightVehicleImpacts.length = 0;
+            if (this.droneInterceptions) this.droneInterceptions.length = 0;
+            if (this.droneAlerts) this.droneAlerts.length = 0;
+            console.log(`✅ [cleanup] Colas de eventos limpiadas`);
+            
+            // 5. Limpiar Maps de tracking
+            if (this.lastNodeStates) this.lastNodeStates.clear();
+            if (this.lastConvoyStates) this.lastConvoyStates.clear();
+            console.log(`✅ [cleanup] Maps de tracking limpiados`);
+            
+            // 6. Limpiar referencias a estados grandes
+            this.lastSentState = null;
+            this.worldDestroyerEvent = null;
+            this.artilleryEvent = null;
+            this.victoryResult = null;
+            console.log(`✅ [cleanup] Referencias a estados grandes limpiadas`);
+            
+            // 7. Limpiar sistemas con posibles recursos internos
+            // Nota: La mayoría de sistemas no tienen recursos propios,
+            // pero limpiamos referencias para ayudar al GC
+            this.medicalSystem = null;
+            this.frontMovement = null;
+            this.territory = null;
+            this.droneSystem = null;
+            this.droneWorkshopSystem = null;
+            this.tankSystem = null;
+            this.lightVehicleSystem = null;
+            this.artillerySystem = null;
+            this.trainSystem = null;
+            console.log(`✅ [cleanup] Sistemas de simulación limpiados`);
+            
+            // 8. Limpiar handlers
+            this.buildHandler = null;
+            this.convoyHandler = null;
+            this.combatHandler = null;
+            console.log(`✅ [cleanup] Handlers limpiados`);
+            
+            // 9. Limpiar managers
+            this.helicopterManager = null;
+            this.stateSerializer = null;
+            this.optimizationTracker = null;
+            this.territoryCalculator = null;
+            this.raceManager = null;
+            this.convoyMovementManager = null;
+            this.supplyManager = null;
+            this.investmentManager = null;
+            this.aiSystem = null;
+            console.log(`✅ [cleanup] Managers limpiados`);
+            
+            // 10. Limpiar sistemas de actualización
+            this.currencySystem = null;
+            this.constructionSystem = null;
+            this.effectsSystem = null;
+            this.abandonmentSystem = null;
+            this.commandoSystem = null;
+            this.truckAssaultSystem = null;
+            this.vehicleWorkshopSystem = null;
+            this.cameraDroneSystem = null;
+            console.log(`✅ [cleanup] Sistemas de actualización limpiados`);
+            
+            // 11. Limpiar referencia circular a room (importante)
+            this.room = null;
+            console.log(`✅ [cleanup] Referencia a room limpiada`);
+            
+            // 12. Limpiar objetos de configuración
+            this.currency = null;
+            this.currencyGenerated = null;
+            this.playerRaces = null;
+            this.benchCooldowns = null;
+            this.lastCurrencySnapshot = null;
+            console.log(`✅ [cleanup] Objetos de configuración limpiados`);
+            
+            console.log(`🎉 [cleanup] Limpieza completada exitosamente`);
+            
+        } catch (error) {
+            console.error(`❌ [cleanup] Error durante limpieza:`, error);
+            console.error(`❌ [cleanup] Stack trace:`, error.stack);
+            // No lanzar error - queremos completar la limpieza aunque falle algo
         }
     }
     

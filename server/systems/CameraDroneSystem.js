@@ -62,15 +62,16 @@ export class CameraDroneSystem {
             
             // ✅ FIX: Filtrar solo camera drones enemigos y ordenarlos por distancia al convoy
             // Esto asegura que el camera drone más cercano detecte primero
-            const enemyCameraDrones = cameraDrones
+            const enemyCameraDronesWithDist = cameraDrones
                 .filter(cd => cd.team !== convoy.team)
                 .map(cd => {
                     const dist = Math.hypot(cd.x - currentX, cd.y - currentY);
                     const isInside = dist <= detectionRadius;
                     return { cameraDrone: cd, distance: dist, isInside };
                 })
-                .sort((a, b) => a.distance - b.distance) // Ordenar por distancia (más cercano primero)
-                .map(item => item.cameraDrone);
+                .sort((a, b) => a.distance - b.distance); // Ordenar por distancia (más cercano primero)
+            
+            const enemyCameraDrones = enemyCameraDronesWithDist.map(item => item.cameraDrone);
             
             // ✅ FIX: Rastrear si el convoy ya fue detectado en este tick por algún camera drone
             let detectedInThisTick = false;
@@ -179,7 +180,6 @@ export class CameraDroneSystem {
                             });
                         }
                         
-                        console.log(`📹 Camera Drone ${cameraDrone.id.substring(0, 8)} detectó camión ligero ${convoy.id.substring(0, 8)} (${convoy.returning ? 'vuelta' : 'ida'}) → +${currencyReward}$ para ${cameraDrone.team} [detectedSet size: ${detectedSet.size}]`);
                     }
                 }
                 

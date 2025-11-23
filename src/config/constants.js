@@ -2,8 +2,6 @@
 
 export const GAME_CONFIG = {
     CANVAS_BG_COLOR: '#0a0e27',
-    GRID_SIZE: 50,
-    GRID_COLOR: 'rgba(78, 204, 163, 0.1)',
     // TAMAÑO BASE DEL JUEGO (nunca cambia, independiente del zoom/ventana)
     BASE_WIDTH: 1920,
     BASE_HEIGHT: 1080,

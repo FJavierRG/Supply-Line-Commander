@@ -267,6 +267,17 @@ export class CombatHandler {
             return { success: false, reason: 'Necesitas construir una Lanzadera de Drones operativa' };
         }
         
+        // 🆕 NUEVO: Inicializar contador de usos si no existe (compatibilidad con lanzaderas ya construidas)
+        if (typeof launcher.uses !== 'number') {
+            launcher.uses = 0;
+        }
+        
+        // 🆕 NUEVO: Verificar límite de usos de la lanzadera
+        const maxUses = SERVER_NODE_CONFIG.effects?.droneLauncher?.maxUses || 3;
+        if (launcher.uses >= maxUses) {
+            return { success: false, reason: 'La lanzadera ha alcanzado su límite de usos' };
+        }
+        
         // ✅ Costo del dron (centralizado en DroneWorkshopSystem)
         const droneCostResult = this.gameState.droneWorkshopSystem.getDroneCost('drone', playerTeam);
         const droneCost = droneCostResult.cost;
@@ -279,6 +290,16 @@ export class CombatHandler {
         // Descontar currency
         this.gameState.currency[playerTeam] -= droneCost;
         
+        // 🆕 NUEVO: Incrementar contador de usos de la lanzadera
+        launcher.uses++;
+        console.log(`💣 Lanzadera ${launcher.id} - uso ${launcher.uses}/${maxUses}`);
+        
+        // 🆕 NUEVO: Si alcanzó el límite, iniciar abandono irremediable
+        if (launcher.uses >= maxUses) {
+            console.log(`💥 Lanzadera ${launcher.id} alcanzó el límite de usos (${maxUses}) - iniciando abandono`);
+            this.gameState.abandonmentSystem.startAbandonment(launcher);
+        }
+        
         // Lanzar dron desde la lanzadera
         const drone = this.gameState.droneSystem.launchDrone(playerTeam, launcher, targetNode);
         
@@ -289,7 +310,7 @@ export class CombatHandler {
             this.gameState.aiSystem.onThreatDetected('drone', drone, true, targetNode);
         }
         
-        return { success: true, drone, launcherId: launcher.id, targetId };
+        return { success: true, drone, launcherId: launcher.id, targetId, launcherUses: launcher.uses, launcherMaxUses: maxUses };
     }
     
     /**
@@ -593,7 +614,7 @@ export class CombatHandler {
         }
         
         // 🆕 Validar requisito de Lanzadera de Drones
-        const hasDroneLauncher = this.gameState.nodes.some(n => 
+        const launcher = this.gameState.nodes.find(n => 
             n.type === 'droneLauncher' && 
             n.team === playerTeam && 
             n.active && 
@@ -602,8 +623,19 @@ export class CombatHandler {
             !n.disabled // 🆕 FIX: No permitir si está deshabilitado/roto
         );
         
-        if (!hasDroneLauncher) {
+        if (!launcher) {
             return { success: false, reason: 'Necesitas construir una Lanzadera de Drones operativa' };
+        }
+        
+        // 🆕 NUEVO: Inicializar contador de usos si no existe (compatibilidad con lanzaderas ya construidas)
+        if (typeof launcher.uses !== 'number') {
+            launcher.uses = 0;
+        }
+        
+        // 🆕 NUEVO: Verificar límite de usos de la lanzadera
+        const maxUses = SERVER_NODE_CONFIG.effects?.droneLauncher?.maxUses || 3;
+        if (launcher.uses >= maxUses) {
+            return { success: false, reason: 'La lanzadera ha alcanzado su límite de usos' };
         }
         
         // 🆕 Validar que esté en territorio enemigo (NO en territorio propio)
@@ -622,6 +654,16 @@ export class CombatHandler {
         
         // Descontar currency
         this.gameState.currency[playerTeam] -= cameraDroneCost;
+        
+        // 🆕 NUEVO: Incrementar contador de usos de la lanzadera
+        launcher.uses++;
+        console.log(`📹 Lanzadera ${launcher.id} - uso ${launcher.uses}/${maxUses} (camera drone)`);
+        
+        // 🆕 NUEVO: Si alcanzó el límite, iniciar abandono irremediable
+        if (launcher.uses >= maxUses) {
+            console.log(`💥 Lanzadera ${launcher.id} alcanzó el límite de usos (${maxUses}) - iniciando abandono`);
+            this.gameState.abandonmentSystem.startAbandonment(launcher);
+        }
         
         // 🆕 CRÍTICO: Camera drone sale desde el EXTREMO del mapa del jugador (igual que drones bomba)
         // Player1 (izquierda) → x=0

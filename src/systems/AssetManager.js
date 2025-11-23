@@ -25,6 +25,7 @@ export class AssetManager {
             'building-drone-workshop': 'assets/sprites/buildings/tallerDrones.png',
             'building-razor-net': 'assets/sprites/buildings/razor_net.png',
             'building-truck-factory': 'assets/sprites/buildings/truck_factory.png',
+            'building-factory': 'assets/sprites/buildings/factory.png',
             'building-nuclear-plant': 'assets/sprites/buildings/nuclear_plant.png',
             'building-machine-nest': 'assets/sprites/buildings/machine_nest.png',
             'building-campaign-hospital': 'assets/sprites/buildings/campaign_hospital.png',

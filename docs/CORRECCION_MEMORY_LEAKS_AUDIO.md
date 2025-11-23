@@ -409,3 +409,4 @@ El sistema ahora es **robusto**, **eficiente** y **autodebugeable**.
 
 **¿Dudas? ¿Necesitas ajustar algún timeout o límite?** Todos los valores son configurables al inicio del constructor.
 
+

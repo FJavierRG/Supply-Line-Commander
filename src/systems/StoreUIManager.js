@@ -1037,12 +1037,13 @@ export class StoreUIManager {
         
         // Renderizar contador de puntos
         const benchCost = this.calculateBenchCost();
-        // ✅ FIX: Siempre usar el límite del servidor (si no hay deckManager, usar 300 como fallback)
-        const benchLimit = this.game?.deckManager?.getBenchPointLimit() || 300;
-        ctx.fillStyle = benchCost >= benchLimit ? '#e74c3c' : '#ffffff';
+        // ✅ FIX: Siempre usar el límite del servidor (gameConfig.js) - NO hardcodear valores
+        const benchLimit = this.game?.deckManager?.getBenchPointLimit();
+        ctx.fillStyle = (benchLimit !== null && benchLimit !== undefined && benchCost >= benchLimit) ? '#e74c3c' : '#ffffff';
         ctx.font = '14px Arial';
         ctx.textAlign = 'right';
-        ctx.fillText(`${benchCost}/${benchLimit}`, benchPanel.x + benchPanel.w - 50, benchPanel.y + 20);
+        const limitText = benchLimit !== null && benchLimit !== undefined ? benchLimit : '-';
+        ctx.fillText(`${benchCost}/${limitText}`, benchPanel.x + benchPanel.w - 50, benchPanel.y + 20);
         
         // Renderizar botón toggle
         const toggleBtn = {
@@ -1217,8 +1218,9 @@ export class StoreUIManager {
      */
     getCurrentGameTime() {
         // Intentar obtener del servidor primero
-        if (this.game && this.game.network && this.game.network.lastGameState) {
-            return this.game.network.lastGameState.gameTime || 0;
+        // 🔧 FIX: Acceder a lastGameState a través de gameStateSync
+        if (this.game && this.game.network && this.game.network.gameStateSync && this.game.network.gameStateSync.lastGameState) {
+            return this.game.network.gameStateSync.lastGameState.gameTime || 0;
         }
         
         // Fallback: calcular desde el inicio de la partida local
@@ -1242,8 +1244,9 @@ export class StoreUIManager {
         const gameTime = this.getCurrentGameTime();
         
         // Intentar obtener cooldowns del servidor primero
-        if (this.game && this.game.network && this.game.network.lastGameState) {
-            const gameState = this.game.network.lastGameState;
+        // 🔧 FIX: Acceder a lastGameState a través de gameStateSync
+        if (this.game && this.game.network && this.game.network.gameStateSync && this.game.network.gameStateSync.lastGameState) {
+            const gameState = this.game.network.gameStateSync.lastGameState;
             const benchCooldowns = gameState.benchCooldowns || {};
             const myTeam = this.game.network.myTeam || 'player1';
             const teamCooldowns = benchCooldowns[myTeam] || {};

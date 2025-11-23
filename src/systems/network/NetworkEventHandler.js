@@ -77,18 +77,51 @@ export class NetworkEventHandler {
      * Maneja eventos visuales del servidor
      */
     handleVisualEvent(event) {
+        // 🐛 DEBUG: Log todos los eventos visuales recibidos
+        console.log(`📺 [CLIENT DEBUG] Evento visual recibido:`, {
+            type: event.type,
+            team: event.team,
+            myTeam: this.networkManager.myTeam,
+            hasParticleSystem: !!this.game.particleSystem,
+            amount: event.amount,
+            cameraDroneId: event.cameraDroneId?.substring(0, 8),
+            x: event.x,
+            y: event.y
+        });
+        
         switch(event.type) {
             case 'camera_drone_currency':
+                // 🐛 DEBUG: Verificar condiciones antes de mostrar
+                console.log(`🔍 [CLIENT DEBUG] Procesando camera_drone_currency:`, {
+                    eventTeam: event.team,
+                    myTeam: this.networkManager.myTeam,
+                    teamsMatch: event.team === this.networkManager.myTeam,
+                    hasParticleSystem: !!this.game.particleSystem,
+                    particleSystemType: this.game.particleSystem ? typeof this.game.particleSystem : 'undefined',
+                    hasCreateFloatingText: !!(this.game.particleSystem && this.game.particleSystem.createFloatingText)
+                });
+                
                 // Solo mostrar si es del equipo del jugador
-                if (event.team === this.networkManager.myTeam && this.game.particleSystem) {
-                    this.game.particleSystem.createFloatingText(
-                        event.x,
-                        event.y - 30,
-                        `+${event.amount}`,
-                        '#4ecca3',
-                        null
-                    );
-                    console.log(`💰 Camera Drone ${event.cameraDroneId?.substring(0, 8)} otorgó +${event.amount}$`);
+                if (event.team === this.networkManager.myTeam) {
+                    if (this.game.particleSystem) {
+                        if (this.game.particleSystem.createFloatingText) {
+                            console.log(`✅ [CLIENT DEBUG] Creando texto flotante: +${event.amount}$ en (${event.x}, ${event.y - 30})`);
+                            this.game.particleSystem.createFloatingText(
+                                event.x,
+                                event.y - 30,
+                                `+${event.amount}`,
+                                '#4ecca3',
+                                null
+                            );
+                            console.log(`💰 Camera Drone ${event.cameraDroneId?.substring(0, 8)} otorgó +${event.amount}$`);
+                        } else {
+                            console.error(`❌ [CLIENT DEBUG] particleSystem.createFloatingText no existe`);
+                        }
+                    } else {
+                        console.error(`❌ [CLIENT DEBUG] game.particleSystem no está disponible`);
+                    }
+                } else {
+                    console.log(`⏭️ [CLIENT DEBUG] Ignorando evento: equipo del evento (${event.team}) no coincide con mi equipo (${this.networkManager.myTeam})`);
                 }
                 break;
                 

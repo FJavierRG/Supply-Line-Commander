@@ -519,7 +519,7 @@ export class VehicleRenderer {
         if (hoveredBase && hoveredBase.team !== this.game?.myTeam) {
             // Obtener validTargets desde la configuración del servidor
             const validTargets = this.game?.serverBuildingConfig?.actions?.[actionName]?.validTargets || 
-                                 ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
+                                 ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
             
             validTarget = validTargets.includes(hoveredBase.type) && 
                          hoveredBase.constructed && 

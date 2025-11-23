@@ -19,7 +19,7 @@ export const GAME_CONFIG = {
     // MAZOS (DECKS)
     // ═══════════════════════════════════════════════════════════════
     deck: {
-        pointLimit: 815,        // 🎯 Límite de puntos por mazo (ANTI-HACK: validado en servidor)
+        pointLimit: 825,        // 🎯 Límite de puntos por mazo (ANTI-HACK: validado en servidor)
         benchPointLimit: 300    // 🆕 NUEVO: Límite de puntos para el banquillo (ANTI-HACK: validado en servidor)
     },
 
@@ -28,8 +28,8 @@ export const GAME_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
     currency: {
         initial: 0,          // Currency inicial de cada jugador
-        passiveRate: 2,       // Generación pasiva base ($/s)
-        pixelsPerCurrency: 2,  // Cada 2 pixels de avance del frente = 1 currency
+        passiveRate: 0.5,       // Generación pasiva base ($/s)
+        pixelsPerCurrency: 2,  // Nº de pixeles necesarios para generar 1 currency
         currencyName: 'Terreno Ganado' // Nombre de la currency
     },
 
@@ -92,8 +92,10 @@ export const GAME_CONFIG = {
         hq: {
             player1: { x: 100, y: 540 },
             player2: { x: 1820, y: 540 },
-            supplies: 100,
-            maxSupplies: 100,
+            // 🆕 REWORK: Sistema de suministros del HQ
+            supplies: 100,                  // Suministros iniciales
+            maxSupplies: 100,               // Capacidad máxima
+            supplyRegenerationRate: 1,      // Suministros por segundo (regeneración pasiva)
             availableVehicles: 4,
             maxVehicles: 4, //heavy trucks de suministro
             // Sistema médico (ambulancias)
@@ -113,9 +115,16 @@ export const GAME_CONFIG = {
         
         // FOBs iniciales
         fobs: [
-            { id: 'fob_1', x: 400, y: 200, supplies: 40, vehicles: 2 },
-            { id: 'fob_2', x: 400, y: 880, supplies: 40, vehicles: 2 }
-        ]
+            { id: 'fob_1', x: 400, y: 200, vehicles: 2 },
+            { id: 'fob_2', x: 400, y: 880, vehicles: 2 }
+        ],
+        
+        // 🆕 Configuración de FOBs (centralizada)
+        fob: {
+            initialSupplies: 20,    // Suministros iniciales para FOBs del mapa al empezar partida
+            builtSupplies: 30,      // Suministros iniciales para FOBs construidos manualmente
+            maxSupplies: 100        // Capacidad máxima de suministros
+        }
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -177,7 +186,7 @@ export const GAME_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
     territory: {
         frontierGapPx: 25,                    // Gap entre frontera y edificios
-        checkAbandonmentInterval: 1.0,       // Verificar cada 1 segundo
+        checkAbandonmentInterval: 0.2,        // Verificar cada 0.2 segundos (5 veces por segundo) - FIX: reducido para consistencia
         graceTime: 3.0                       // 3 segundos de gracia antes de iniciar abandono
     }
 };

@@ -282,7 +282,7 @@ export class ArsenalManager {
                 if (panelTitle) panelTitle.textContent = 'Tu Mazo';
                 if (deckLimit) {
                     const limit = this.deckManager.getDeckPointLimit();
-                    deckLimit.textContent = limit;
+                    deckLimit.textContent = limit !== null && limit !== undefined ? limit : '-';
                 }
             } else {
                 deckBtn.classList.remove('active');
@@ -290,7 +290,7 @@ export class ArsenalManager {
                 if (panelTitle) panelTitle.textContent = 'Banquillo';
                 if (deckLimit) {
                     const limit = this.deckManager.getBenchPointLimit();
-                    deckLimit.textContent = limit;
+                    deckLimit.textContent = limit !== null && limit !== undefined ? limit : '-';
                 }
             }
         }
@@ -411,12 +411,11 @@ export class ArsenalManager {
     initializePointLimits() {
         const deckLimitEl = document.getElementById('deck-limit');
         if (deckLimitEl && this.deckManager) {
-            // Establecer límite inicial según el destino
-            if (this.destination === 'bench') {
-                deckLimitEl.textContent = this.deckManager.getBenchPointLimit();
-            } else {
-                deckLimitEl.textContent = this.deckManager.getDeckPointLimit();
-            }
+            // Establecer límite según el destino (viene SOLO del servidor - gameConfig.js)
+            const limit = this.destination === 'bench' 
+                ? this.deckManager.getBenchPointLimit() 
+                : this.deckManager.getDeckPointLimit();
+            deckLimitEl.textContent = limit !== null && limit !== undefined ? limit : '-';
         }
     }
     
@@ -561,8 +560,14 @@ export class ArsenalManager {
         const currentCost = this.getDeckCost();
         const newCost = currentCost + unitCost;
         
-        // Verificar límite de puntos (obtener dinámicamente desde DeckManager)
+        // Verificar límite de puntos (obtener dinámicamente desde DeckManager - gameConfig.js)
         const pointLimit = this.deckManager.getDeckPointLimit();
+        if (pointLimit === null || pointLimit === undefined) {
+            return { 
+                canAdd: false, 
+                reason: 'Esperando configuración del servidor...' 
+            };
+        }
         if (newCost > pointLimit) {
             return { 
                 canAdd: false, 
@@ -599,8 +604,14 @@ export class ArsenalManager {
         const currentCost = this.getBenchCost();
         const newCost = currentCost + unitCost;
         
-        // Verificar límite de puntos del banquillo (obtener dinámicamente desde DeckManager)
+        // Verificar límite de puntos del banquillo (obtener dinámicamente desde DeckManager - gameConfig.js)
         const benchPointLimit = this.deckManager.getBenchPointLimit();
+        if (benchPointLimit === null || benchPointLimit === undefined) {
+            return { 
+                canAdd: false, 
+                reason: 'Esperando configuración del servidor...' 
+            };
+        }
         if (newCost > benchPointLimit) {
             return { 
                 canAdd: false, 
@@ -716,66 +727,102 @@ export class ArsenalManager {
      * Guarda el mazo actual usando DeckManager
      */
     saveDeck() {
-        if (this.deck.length === 0) {
-            this.showNotification('El mazo está vacío', 'error');
-            return;
-        }
-        
-        // 🆕 NUEVO: Validar límite de puntos antes de guardar (obtener dinámicamente desde DeckManager)
-        const deckCost = this.getDeckCost();
-        const pointLimit = this.deckManager.getDeckPointLimit();
-        if (deckCost > pointLimit) {
-            this.showNotification(`El mazo excede el límite de puntos (${deckCost}/${pointLimit}). Elimina algunas unidades antes de guardar.`, 'error');
-            return;
-        }
-        
-        // 🆕 NUEVO: Validar también el banquillo
-        const benchCost = this.getBenchCost();
-        const benchPointLimit = this.deckManager.getBenchPointLimit();
-        if (benchCost > benchPointLimit) {
-            this.showNotification(`El banquillo excede el límite de puntos (${benchCost}/${benchPointLimit}). Elimina algunas unidades antes de guardar.`, 'error');
-            return;
-        }
-        
-        // 🆕 NUEVO: Si estamos editando el mazo default, siempre crear uno nuevo (nunca sobreescribir)
-        const currentDeck = this.currentDeckId ? this.deckManager.getDeck(this.currentDeckId) : null;
-        const isDefaultDeck = currentDeck && currentDeck.isDefault;
-        
-        // Si estamos editando un mazo existente Y no es el default, actualizarlo
-        if (this.currentDeckId && !isDefaultDeck) {
-            const updated = this.deckManager.updateDeck(this.currentDeckId, {
-                units: [...this.deck],
-                bench: [...this.bench] // 🆕 NUEVO: Guardar banquillo
+        console.log('🔍 saveDeck() llamado');
+        try {
+            if (this.deck.length === 0) {
+                console.log('🔍 Mazo vacío');
+                this.showNotification('El mazo está vacío', 'error');
+                return;
+            }
+            console.log('🔍 Mazo no vacío, continuando...');
+            
+            // 🆕 NUEVO: Validar límite de puntos antes de guardar (obtener dinámicamente desde DeckManager - gameConfig.js)
+            console.log('🔍 Calculando coste del mazo...');
+            const deckCost = this.getDeckCost();
+            console.log('🔍 Coste del mazo:', deckCost);
+            const pointLimit = this.deckManager.getDeckPointLimit();
+            console.log('🔍 Límite de puntos:', pointLimit);
+            if (pointLimit === null || pointLimit === undefined) {
+                console.log('🔍 Límite no disponible');
+                this.showNotification('Esperando configuración del servidor...', 'error');
+                return;
+            }
+            if (deckCost > pointLimit) {
+                console.log('🔍 Mazo excede límite');
+                this.showNotification(`El mazo excede el límite de puntos (${deckCost}/${pointLimit}). Elimina algunas unidades antes de guardar.`, 'error');
+                return;
+            }
+            console.log('🔍 Validación de límite del mazo OK');
+            
+            // 🆕 NUEVO: Validar también el banquillo (límite viene SOLO del servidor - gameConfig.js)
+            console.log('🔍 Validando banquillo...');
+            const benchCost = this.getBenchCost();
+            const benchPointLimit = this.deckManager.getBenchPointLimit();
+            console.log('🔍 Coste del banquillo:', benchCost);
+            console.log('🔍 Límite del banquillo:', benchPointLimit);
+            console.log('🔍 Comparación:', { benchCost, benchPointLimit, condition: benchCost > benchPointLimit });
+            if (benchPointLimit !== null && benchPointLimit !== undefined && benchCost > benchPointLimit) {
+                console.log('🔍 Banquillo excede límite');
+                this.showNotification(`El banquillo excede el límite de puntos (${benchCost}/${benchPointLimit}). Elimina algunas unidades antes de guardar.`, 'error');
+                return;
+            }
+            console.log('🔍 Validación de banquillo OK');
+            
+            // 🆕 NUEVO: Si estamos editando el mazo default, siempre crear uno nuevo (nunca sobreescribir)
+            console.log('🔍 Obteniendo mazo actual...');
+            const currentDeck = this.currentDeckId ? this.deckManager.getDeck(this.currentDeckId) : null;
+            const isDefaultDeck = currentDeck && currentDeck.isDefault;
+            
+            console.log('🔍 Estado del guardado:', {
+                currentDeckId: this.currentDeckId,
+                currentDeck: currentDeck,
+                isDefaultDeck: isDefaultDeck,
+                deckLength: this.deck.length
             });
             
-            if (updated) {
-                console.log('Mazo actualizado:', updated.name);
-                this.showNotification(`Mazo "${updated.name}" guardado correctamente`, 'success');
-            } else {
-                this.showNotification('Error al guardar el mazo', 'error');
-            }
-        } else {
-            // Crear nuevo mazo - pedir nombre con modal
-            // Esto incluye: mazo nuevo (currentDeckId === null) o mazo default (isDefaultDeck === true)
-            const promptMessage = isDefaultDeck 
-                ? 'El mazo predeterminado no se puede modificar. Introduce un nombre para crear un nuevo mazo basado en él:'
-                : 'Introduce un nombre para el nuevo mazo:';
-            
-            this.showDeckNameModal((name) => {
-                if (!name || name.trim() === '') {
-                    return;
-                }
+            // Si estamos editando un mazo existente Y no es el default, actualizarlo
+            if (this.currentDeckId && !isDefaultDeck) {
+                console.log('🔍 Actualizando mazo existente:', this.currentDeckId);
+                const updated = this.deckManager.updateDeck(this.currentDeckId, {
+                    units: [...this.deck],
+                    bench: [...this.bench] // 🆕 NUEVO: Guardar banquillo
+                });
                 
-                const newDeck = this.deckManager.createDeck(name.trim(), [...this.deck], [...this.bench]); // 🆕 NUEVO: Incluir banquillo
-                if (newDeck) {
-                    this.currentDeckId = newDeck.id; // 🆕 NUEVO: Actualizar currentDeckId al nuevo mazo
-                    this.deckManager.selectDeck(newDeck.id);
-                    console.log('Nuevo mazo creado:', newDeck.name, isDefaultDeck ? '(basado en default)' : '');
-                    this.showNotification(`Mazo "${newDeck.name}" creado y guardado`, 'success');
+                if (updated) {
+                    console.log('Mazo actualizado:', updated.name);
+                    this.showNotification(`Mazo "${updated.name}" guardado correctamente`, 'success');
                 } else {
-                    this.showNotification('Error al crear el mazo', 'error');
+                    this.showNotification('Error al guardar el mazo', 'error');
                 }
-            }, promptMessage);
+            } else {
+                // Crear nuevo mazo - pedir nombre con modal
+                // Esto incluye: mazo nuevo (currentDeckId === null) o mazo default (isDefaultDeck === true)
+                console.log('🔍 Creando nuevo mazo - mostrando modal');
+                const promptMessage = isDefaultDeck 
+                    ? 'El mazo predeterminado no se puede modificar. Introduce un nombre para crear un nuevo mazo basado en él:'
+                    : 'Introduce un nombre para el nuevo mazo:';
+                
+                console.log('🔍 Llamando showDeckNameModal con mensaje:', promptMessage);
+                this.showDeckNameModal((name) => {
+                    console.log('🔍 Callback del modal llamado con nombre:', name);
+                    if (!name || name.trim() === '') {
+                        return;
+                    }
+                    
+                    const newDeck = this.deckManager.createDeck(name.trim(), [...this.deck], [...this.bench]); // 🆕 NUEVO: Incluir banquillo
+                    if (newDeck) {
+                        this.currentDeckId = newDeck.id; // 🆕 NUEVO: Actualizar currentDeckId al nuevo mazo
+                        this.deckManager.selectDeck(newDeck.id);
+                        console.log('Nuevo mazo creado:', newDeck.name, isDefaultDeck ? '(basado en default)' : '');
+                        this.showNotification(`Mazo "${newDeck.name}" creado y guardado`, 'success');
+                    } else {
+                        this.showNotification('Error al crear el mazo', 'error');
+                    }
+                }, promptMessage);
+            }
+        } catch (error) {
+            console.error('❌ Error en saveDeck():', error);
+            this.showNotification('Error al guardar el mazo: ' + error.message, 'error');
         }
     }
     
@@ -810,18 +857,22 @@ export class ArsenalManager {
             return;
         }
         
-        // 🆕 NUEVO: Validar límite de puntos antes de confirmar (obtener dinámicamente desde DeckManager)
+        // 🆕 NUEVO: Validar límite de puntos antes de confirmar (obtener dinámicamente desde DeckManager - gameConfig.js)
         const deckCost = this.getDeckCost();
         const pointLimit = this.deckManager.getDeckPointLimit();
+        if (pointLimit === null || pointLimit === undefined) {
+            this.showNotification('Esperando configuración del servidor...', 'error');
+            return;
+        }
         if (deckCost > pointLimit) {
             this.showNotification(`El mazo excede el límite de puntos (${deckCost}/${pointLimit}). Elimina algunas unidades antes de confirmar.`, 'error');
             return;
         }
         
-        // 🆕 NUEVO: Validar también el banquillo
+        // 🆕 NUEVO: Validar también el banquillo (límite viene SOLO del servidor - gameConfig.js)
         const benchCost = this.getBenchCost();
         const benchPointLimit = this.deckManager.getBenchPointLimit();
-        if (benchCost > benchPointLimit) {
+        if (benchPointLimit !== null && benchPointLimit !== undefined && benchCost > benchPointLimit) {
             this.showNotification(`El banquillo excede el límite de puntos (${benchCost}/${benchPointLimit}). Elimina algunas unidades antes de confirmar.`, 'error');
             return;
         }
@@ -885,19 +936,23 @@ export class ArsenalManager {
             // Actualizar contador de puntos
             if (deckCountEl) {
                 deckCountEl.textContent = benchCost;
-                // Cambiar color si está cerca o excede el límite
-                if (benchCost >= benchPointLimit) {
-                    deckCountEl.style.color = '#e74c3c'; // Rojo si excede
-                } else if (benchCost >= benchPointLimit * 0.9) {
-                    deckCountEl.style.color = '#f39c12'; // Naranja si está cerca (90%+)
+                // Cambiar color si está cerca o excede el límite (solo si el límite ya llegó del servidor)
+                if (benchPointLimit !== null && benchPointLimit !== undefined) {
+                    if (benchCost >= benchPointLimit) {
+                        deckCountEl.style.color = '#e74c3c'; // Rojo si excede
+                    } else if (benchCost >= benchPointLimit * 0.9) {
+                        deckCountEl.style.color = '#f39c12'; // Naranja si está cerca (90%+)
+                    } else {
+                        deckCountEl.style.color = '#ffffff'; // Blanco normal
+                    }
                 } else {
-                    deckCountEl.style.color = '#ffffff'; // Blanco normal
+                    deckCountEl.style.color = '#ffffff'; // Blanco normal mientras espera
                 }
             }
             
-            // Actualizar límite mostrado
+            // Actualizar límite mostrado (viene SOLO del servidor - gameConfig.js)
             if (deckLimitEl) {
-                deckLimitEl.textContent = benchPointLimit;
+                deckLimitEl.textContent = benchPointLimit !== null && benchPointLimit !== undefined ? benchPointLimit : '-';
             }
             
             // Limpiar lista
@@ -926,19 +981,23 @@ export class ArsenalManager {
             // Actualizar contador de puntos
             if (deckCountEl) {
                 deckCountEl.textContent = deckCost;
-                // Cambiar color si está cerca o excede el límite
-                if (deckCost >= pointLimit) {
-                    deckCountEl.style.color = '#e74c3c'; // Rojo si excede
-                } else if (deckCost >= pointLimit * 0.9) {
-                    deckCountEl.style.color = '#f39c12'; // Naranja si está cerca (90%+)
+                // Cambiar color si está cerca o excede el límite (solo si el límite ya llegó del servidor)
+                if (pointLimit !== null && pointLimit !== undefined) {
+                    if (deckCost >= pointLimit) {
+                        deckCountEl.style.color = '#e74c3c'; // Rojo si excede
+                    } else if (deckCost >= pointLimit * 0.9) {
+                        deckCountEl.style.color = '#f39c12'; // Naranja si está cerca (90%+)
+                    } else {
+                        deckCountEl.style.color = '#ffffff'; // Blanco normal
+                    }
                 } else {
-                    deckCountEl.style.color = '#ffffff'; // Blanco normal
+                    deckCountEl.style.color = '#ffffff'; // Blanco normal mientras espera
                 }
             }
             
-            // Actualizar límite mostrado
+            // Actualizar límite mostrado (viene SOLO del servidor - gameConfig.js)
             if (deckLimitEl) {
-                deckLimitEl.textContent = pointLimit;
+                deckLimitEl.textContent = pointLimit !== null && pointLimit !== undefined ? pointLimit : '-';
             }
             
             // Limpiar lista
@@ -1933,12 +1992,20 @@ export class ArsenalManager {
      * @param {string} message - Mensaje opcional a mostrar en el modal
      */
     showDeckNameModal(callback, message = null) {
+        console.log('🔍 showDeckNameModal() llamado', { callback: !!callback, message });
         this.deckNameCallback = callback;
         const modal = document.getElementById('deck-name-modal-overlay');
         const input = document.getElementById('deck-name-input');
         const messageEl = document.getElementById('deck-name-message');
         
+        console.log('🔍 Elementos del modal:', { 
+            modal: !!modal, 
+            input: !!input, 
+            messageEl: !!messageEl 
+        });
+        
         if (modal && input) {
+            console.log('🔍 Mostrando modal - removiendo clase hidden');
             input.value = '';
             
             // 🆕 NUEVO: Mostrar mensaje personalizado si se proporciona

@@ -60,11 +60,13 @@ export class LoadingScreenManager {
         }
         
         if (this.percentage) {
-            this.percentage.textContent = `${progress}%`;
+            this.percentage.textContent = `${Math.round(progress)}%`;
         }
         
         if (this.loadingText) {
-            if (progress < 30) {
+            if (progress < 10) {
+                this.loadingText.textContent = 'Conectando al servidor...';
+            } else if (progress < 30) {
                 this.loadingText.textContent = 'Cargando sprites...';
             } else if (progress < 60) {
                 this.loadingText.textContent = 'Cargando vehículos...';

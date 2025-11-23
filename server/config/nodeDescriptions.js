@@ -41,6 +41,11 @@ export const NODE_DESCRIPTIONS = {
         description: 'Aumenta la capacidad de carga de los camiones pesados y añade un vehículo adicional al HQ.',
         details: 'Añade {vehicleBonus} vehículo adicional al HQ y aumenta la capacidad de carga de los camiones pesados en {capacityBonus} unidades.'
     },
+    factory: {
+        name: 'Fábrica',
+        description: 'Genera suministros automáticamente cada 3 segundos y los envía al HQ.',
+        details: 'Fábrica industrial que genera {amount} suministros cada {interval} segundos y los envía automáticamente al HQ.'
+    },
     engineerCenter: {
         name: 'Centro de Ingenieros',
         description: 'Pavimenta el camino del HQ a los FOBs, aumentando la velocidad de los convoyes pesados.',
@@ -83,8 +88,8 @@ export const NODE_DESCRIPTIONS = {
     },
     trainStation: {
         name: 'Estación de Tren',
-        description: 'Envía trenes automáticamente con suministros a los FOBs de forma periódica.',
-        details: 'Envía automáticamente trenes cada {trainInterval} segundos hacia los FOBs aliados, entregando {trainCargo} suministros por tren.'
+        description: 'Envía automáticamente suministros extra a los FOBs de forma periódica.',
+        details: 'Cada {trainInterval} segundos llegan trenes del extranjero con recursos adicionales hacia los FOBs aliados, entregando {trainCargo} suministros por tren.'
     },
     droneWorkshop: {
         name: 'Taller de Drones',

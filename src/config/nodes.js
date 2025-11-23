@@ -83,6 +83,16 @@ export const NODE_CONFIG = {
        
     },
     
+    factory: {
+        id: 'factory',
+        spriteKey: 'building-factory',
+        category: 'buildable',
+        
+        
+        radius: 40, // Tamaño visual del sprite
+        
+    },
+    
     engineerCenter: {
         id: 'engineerCenter',
         spriteKey: 'building-engineer-center',

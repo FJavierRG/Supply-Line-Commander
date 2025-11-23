@@ -1384,7 +1384,7 @@ export class InputHandler {
             
             // Modo tanque: puede atacar edificios pero NO FOBs ni HQs
             if (buildSystem.tankMode) {
-                const validTargetTypes = ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
+                const validTargetTypes = ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
                 if (validTargetTypes.includes(node.type)) {
                     // Puede atacar este tipo, pero no FOBs ni Fronts
                     return 100;
@@ -1399,7 +1399,7 @@ export class InputHandler {
             if (buildSystem.lightVehicleMode) {
                 // Obtener validTargets desde la configuración del servidor
                 const validTargets = this.game?.serverBuildingConfig?.actions?.lightVehicleLaunch?.validTargets || 
-                                     ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
+                                     ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
                 if (validTargets.includes(node.type)) {
                     // Puede atacar este tipo, pero no FOBs ni Fronts
                     return 100;

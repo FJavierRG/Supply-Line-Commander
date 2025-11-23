@@ -137,14 +137,6 @@ export class ConvoyHandler {
             return { success: false, reason: 'No hay vehículos disponibles' };
         }
         
-        // Validar suministros (sistema tradicional: requiere suministros si el nodo los tiene)
-        if (fromNode.hasSupplies && fromNode.supplies < 10) {
-            return { success: false, reason: 'Suministros insuficientes' };
-        }
-        
-        // Tomar vehículo
-        fromNode.availableVehicles--;
-        
         // Sistema tradicional: Carga normal
         let capacity = GAME_CONFIG.vehicles[vehicleType].capacity;
         
@@ -163,19 +155,27 @@ export class ConvoyHandler {
             }
         }
         
-        // 🆕 CRÍTICO: HQ no tiene suministros variables - los heavy_trucks salen "llenos por defecto"
-        let suppliesToTransport = 0;
-        if (fromNode.type === 'hq') {
-            // HQ: cargo = capacity (sin quitar suministros del HQ)
-            suppliesToTransport = capacity;
-        } else {
-            // Otros nodos (FOB): cargar normalmente desde supplies
-            suppliesToTransport = Math.min(capacity, fromNode.supplies);
-            
-            // Quitar suministros del nodo origen
-            if (fromNode.hasSupplies) {
-                fromNode.supplies -= suppliesToTransport;
+        // 🆕 REWORK: Validar que el nodo tenga suficientes suministros para la capacidad completa
+        // Los camiones deben cargar su capacidad completa, no pueden llevar menos
+        if (fromNode.hasSupplies) {
+            if (fromNode.supplies < capacity) {
+                return { success: false, reason: `Suministros insuficientes. Necesitas ${capacity} suministros (tienes ${fromNode.supplies})` };
             }
+        } else {
+            // Nodos sin suministros: validación mínima (comportamiento legacy)
+            if (fromNode.supplies !== null && fromNode.supplies < 10) {
+                return { success: false, reason: 'Suministros insuficientes' };
+            }
+        }
+        
+        // Tomar vehículo
+        fromNode.availableVehicles--;
+        
+        // 🆕 REWORK: Los camiones cargan exactamente su capacidad completa (valor plano)
+        // Si el nodo tiene suministros, consumir exactamente la capacidad
+        let suppliesToTransport = capacity;
+        if (fromNode.hasSupplies) {
+            fromNode.supplies -= suppliesToTransport;
         }
         
         // Calcular distancia inicial (fija) para velocidad consistente

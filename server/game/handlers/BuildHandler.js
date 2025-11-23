@@ -1,6 +1,7 @@
 // ===== HANDLER DE CONSTRUCCIÓN =====
 import { v4 as uuidv4 } from 'uuid';
 import { SERVER_NODE_CONFIG, getBuildRadius } from '../../config/serverNodes.js';
+import { GAME_CONFIG } from '../../config/gameConfig.js';
 
 export class BuildHandler {
     constructor(gameState) {
@@ -92,6 +93,13 @@ export class BuildHandler {
     }
     
     /**
+     * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene rangos de acción de edificios
+     */
+    getRanges() {
+        return { ...SERVER_NODE_CONFIG.ranges };
+    }
+    
+    /**
      * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene propiedades de seguridad (ANTI-HACK)
      */
     getSecurityProperties() {
@@ -140,6 +148,24 @@ export class BuildHandler {
         // 🎯 NUEVO: Validar construcción según mazo del jugador
         if (!this.canBuildBuilding(playerTeam, buildingType)) {
             return { success: false, reason: 'Tu mazo no incluye este edificio' };
+        }
+        
+        // 🆕 NUEVO: Validar límites de construcción por equipo (maxPerGame por bando)
+        const buildLimit = SERVER_NODE_CONFIG.buildLimits?.[buildingType];
+        if (buildLimit && buildLimit.maxPerGame) {
+            // Contar cuántas instancias de este edificio ya tiene este equipo (construidas o en construcción)
+            const existingCount = this.gameState.nodes.filter(n => 
+                n.type === buildingType && 
+                n.team === playerTeam &&
+                n.active && 
+                !n.isAbandoning
+            ).length;
+            
+            if (existingCount >= buildLimit.maxPerGame) {
+                const buildingName = SERVER_NODE_CONFIG.descriptions[buildingType]?.name || buildingType;
+                console.log(`❌ Construcción rechazada: ${playerTeam} ya tiene ${buildLimit.maxPerGame} ${buildingName} construida(s)`);
+                return { success: false, reason: `Solo puedes tener ${buildLimit.maxPerGame} ${buildingName} construida` };
+            }
         }
         
         // 🆕 NUEVO: Validar requisitos de construcción (edificios requeridos)
@@ -359,8 +385,10 @@ export class BuildHandler {
             // Valores por defecto según tipo
             const capacity = SERVER_NODE_CONFIG.capacities[type];
             if (type === 'fob') {
-                initialSupplies = 30;
-                maxSupplies = capacity?.maxSupplies ?? 100;
+                // ✅ CONFIGURACIÓN CENTRALIZADA: Leer desde gameConfig (FOBs construidos manualmente)
+                const fobConfig = GAME_CONFIG.initialNodes.fob || {};
+                initialSupplies = fobConfig.builtSupplies ?? 30;
+                maxSupplies = fobConfig.maxSupplies ?? (capacity?.maxSupplies ?? 100);
             } else if (type === 'front') {
                 initialSupplies = capacity?.maxSupplies ?? 100;
                 maxSupplies = capacity?.maxSupplies ?? 100;

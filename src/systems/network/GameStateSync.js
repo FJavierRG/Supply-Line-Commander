@@ -36,10 +36,32 @@ export class GameStateSync {
         this.syncNodes(gameState);
         this.syncConvoys(gameState);
         this.syncTrains(gameState);
+        this.syncFactorySupplyDeliveries(gameState); // 🆕 NUEVO: Envíos de fábricas
         this.syncDrones(gameState);
         this.syncTanks(gameState);
         this.syncLightVehicles(gameState);
         this.syncMedicalEmergencies(gameState);
+        
+        // 🆕 PROCESAR EVENTOS DE SONIDO ===
+        if (gameState.soundEvents && gameState.soundEvents.length > 0) {
+            gameState.soundEvents.forEach(event => {
+                if (this.networkManager.eventHandler) {
+                    this.networkManager.eventHandler.handleSoundEvent(event);
+                }
+            });
+        }
+        
+        // 🆕 PROCESAR EVENTOS VISUALES ===
+        // 🔧 FIX: Los eventos visuales deben procesarse aquí para que funcionen correctamente
+        if (gameState.visualEvents) {
+            if (gameState.visualEvents.length > 0) {
+                gameState.visualEvents.forEach(event => {
+                    if (this.networkManager.eventHandler) {
+                        this.networkManager.eventHandler.handleVisualEvent(event);
+                    }
+                });
+            }
+        }
     }
 
     // ========== SINCRONIZACIÓN DE HELICÓPTEROS ==========
@@ -190,6 +212,11 @@ export class GameStateSync {
                 }
                 if (nodeData.maxRepairVehicles !== undefined) {
                     node.maxRepairVehicles = nodeData.maxRepairVehicles;
+                }
+                
+                // 🆕 NUEVO: Sincronizar contador de usos para lanzadera de drones
+                if (node.type === 'droneLauncher' && nodeData.uses !== undefined) {
+                    node.uses = nodeData.uses;
                 }
                 
                 // 🆕 NUEVO: Actualizar tipo de recurso seleccionado desde el servidor (autoritativo)
@@ -462,6 +489,88 @@ export class GameStateSync {
                 this.game.trainSystem.clear();
             }
         }
+    }
+
+    // ========== SINCRONIZACIÓN DE ENVÍOS DE FÁBRICAS ==========
+
+    /**
+     * 🆕 NUEVO: Sincronizar envíos de fábricas desde el servidor
+     */
+    syncFactorySupplyDeliveries(gameState) {
+        if (!gameState.factorySupplyDeliveries) {
+            // Si no hay envíos en el servidor, limpiar todos los iconos locales
+            if (this.game.renderer?.effectRenderer) {
+                this.game.renderer.effectRenderer.factorySupplyIcons = [];
+            }
+            return;
+        }
+
+        // Obtener el sistema de visualización
+        if (!this.game.renderer?.effectRenderer) return;
+        
+        const effectRenderer = this.game.renderer.effectRenderer;
+        
+        // Sincronizar envíos: actualizar o crear iconos según el estado del servidor
+        gameState.factorySupplyDeliveries.forEach(deliveryData => {
+            // Buscar si ya existe un icono para este envío
+            let icon = effectRenderer.factorySupplyIcons.find(i => i.deliveryId === deliveryData.id);
+            
+            if (icon) {
+                // ✅ INTERPOLACIÓN: Actualizar serverProgress (objetivo del servidor)
+                // El progress local se interpolará suavemente en updateFactoryVisuals()
+                const factory = this.game.nodes.find(n => n.id === deliveryData.factoryId);
+                const hq = this.game.nodes.find(n => n.id === deliveryData.hqId);
+                
+                if (factory && hq) {
+                    // Actualizar coordenadas de inicio/destino por si los nodos se movieron
+                    icon.startX = factory.x;
+                    icon.startY = factory.y;
+                    icon.targetX = hq.x;
+                    icon.targetY = hq.y;
+                    
+                    // Guardar el progress del servidor como objetivo para interpolación
+                    icon.serverProgress = deliveryData.progress;
+                    icon.active = deliveryData.progress < 1.0;
+                }
+            } else {
+                // Crear nuevo icono basado en el envío del servidor
+                const factory = this.game.nodes.find(n => n.id === deliveryData.factoryId);
+                const hq = this.game.nodes.find(n => n.id === deliveryData.hqId);
+                
+                if (factory && hq) {
+                    const dx = hq.x - factory.x;
+                    const dy = hq.y - factory.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    effectRenderer.factorySupplyIcons.push({
+                        deliveryId: deliveryData.id,
+                        factoryId: deliveryData.factoryId,
+                        hqId: deliveryData.hqId,
+                        startX: factory.x,
+                        startY: factory.y,
+                        targetX: hq.x,
+                        targetY: hq.y,
+                        currentX: factory.x,
+                        currentY: factory.y,
+                        distance: distance,
+                        progress: deliveryData.progress, // Progress local (se interpolará)
+                        serverProgress: deliveryData.progress, // Progress objetivo del servidor
+                        speed: deliveryData.speed, // Velocidad viene del servidor (configurada en serverNodes.js)
+                        active: deliveryData.progress < 1.0
+                    });
+                }
+            }
+        });
+        
+        // Eliminar iconos de envíos que ya no existen en el servidor
+        const serverDeliveryIds = new Set(gameState.factorySupplyDeliveries.map(d => d.id));
+        effectRenderer.factorySupplyIcons = effectRenderer.factorySupplyIcons.filter(icon => {
+            if (icon.deliveryId && !serverDeliveryIds.has(icon.deliveryId)) {
+                return false; // Eliminar si el envío ya no existe en el servidor
+            }
+            // Mantener iconos sin deliveryId (legacy) o que aún existen
+            return true;
+        });
     }
 
     // ========== SINCRONIZACIÓN DE DRONES ==========

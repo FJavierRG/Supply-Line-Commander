@@ -4,7 +4,7 @@
 // NOTA: Este perfil usa el mazo definido en game/ai/config/AIDecks.js (AI_DEFAULT_DECK)
 // El mazo del jugador (DEFAULT_DECK en config/defaultDeck.js) es independiente
 //
-// MAZO DE IA: ['hq', 'fob', 'antiDrone', 'droneLauncher', 'truckFactory', 'engineerCenter', 'nuclearPlant', 'intelRadio', 'drone', 'sniperStrike']
+// MAZO DE IA: ['hq', 'fob', 'antiDrone', 'droneLauncher', 'truckFactory', 'engineerCenter', 'factory', 'nuclearPlant', 'intelRadio', 'drone', 'sniperStrike']
 //
 // LÓGICA DEL PERFIL:
 // ==================
@@ -21,6 +21,8 @@
 //      → Prioridad alta en early game. Mejora logística
 //    - engineerCenter (80$): Base 40. +10 si early. Máx: 50. Ratio: 0.625
 //      → Prioridad alta en early game. Mejora velocidad de convoyes
+//    - factory (80$): Base 50. +20 si early, +15 si mid. Máx: 85. Ratio: 1.06
+//      → Prioridad muy alta en early/mid game. Suministra al HQ (crítico)
 //    - intelRadio (90$): Base 35. Sin bonuses. Ratio: 0.39
 //      → Prioridad media en mid game. Mejora detección
 //
@@ -87,7 +89,8 @@ export class DefaultDeckProfile extends BaseProfile {
                     latePhase: 25,       // En late, aún más peso si vamos por detrás
                     hasExcessCurrency: 20, // +30 si tiene mucho dinero (flexibilidad para construir antes de late)
                     hasAdvantage: -50,   // 🎯 Penalización cuando tiene 2 plantas de ventaja (debe priorizar aggro)
-                    hasBigAdvantage: -100 // 🎯 NUEVO: Penalización mayor cuando tiene 3+ plantas de ventaja (bloquear construcción)
+                    hasBigAdvantage: -100, // 🎯 NUEVO: Penalización mayor cuando tiene 3+ plantas de ventaja (bloquear construcción)
+                    hasNuclearPlant: -1000 // 🎯 NUEVO: Penalización enorme si ya tiene una planta nuclear (limitado a 1 por bando)
                 }
             },
             'droneLauncher': {
@@ -103,15 +106,22 @@ export class DefaultDeckProfile extends BaseProfile {
                 }
             },
             'truckFactory': {
-                base: 45,
+                base: 35,
                 bonuses: {
-                    notLate: 15  // +15 si no está en fase late
+                    notEarly: 20  // +15 si no está en fase late
                 }
             },
             'engineerCenter': {
                 base: 40,
                 bonuses: {
                     earlyPhase: 10  // +10 si fase early
+                }
+            },
+            'factory': {
+                base: 50,
+                bonuses: {
+                    earlyPhase: 20,  // +20 si fase early (prioridad alta)
+                    midPhase: 15     // +15 si fase mid (mantener relevante)
                 }
             },
             'intelRadio': {
@@ -153,9 +163,9 @@ export class DefaultDeckProfile extends BaseProfile {
      */
     getPriorities() {
         return {
-            earlyGame: ['truckFactory', 'engineerCenter', 'sniperStrike', 'intelRadio'], // FOB removido, prioridad en talleres y pokeo
-            midGame: ['fob', 'droneLauncher', 'sniperStrike'], // FOBs para expansión, lanzadera, y pokeo continuo
-            lateGame: ['drone', 'nuclearPlant', 'intelRadio'] // Drones, economía (antiDrone solo reactivo)
+            earlyGame: ['factory', 'truckFactory', 'engineerCenter', 'sniperStrike', 'intelRadio'], // Factory primero (suministra HQ), luego talleres y pokeo
+            midGame: ['factory', 'fob', 'droneLauncher', 'sniperStrike'], // Factory primero, luego FOBs para expansión, lanzadera, y pokeo continuo
+            lateGame: ['drone', 'nuclearPlant', 'intelRadio'] // Drones, economía (antiDrone solo reactivo, factory ya construida)
         };
     }
     
@@ -333,6 +343,23 @@ export class DefaultDeckProfile extends BaseProfile {
                 }
                 
                 return hasBigPlantAdvantage;
+            case 'hasNuclearPlant':
+                // 🎯 NUEVO: Verificar si ya tiene una planta nuclear construida
+                // Las centrales nucleares están limitadas a 1 por bando
+                // Esta condición aplica una penalización enorme si ya existe una
+                const hasNuclearPlant = gameState.nodes.some(n => 
+                    n.team === team && 
+                    n.type === 'nuclearPlant' && 
+                    n.active &&
+                    n.constructed &&
+                    !n.isAbandoning
+                );
+                
+                if (hasNuclearPlant) {
+                    console.log(`🚫 IA PLANTA NUCLEAR: Ya tiene una planta nuclear construida. Aplicando penalización enorme (limitado a 1 por bando).`);
+                }
+                
+                return hasNuclearPlant;
             case 'forHelicopters':
                 // Verificar si necesita reabastecimiento con helicópteros
                 // Por ahora retornar false, se puede implementar después
@@ -356,6 +383,44 @@ export class DefaultDeckProfile extends BaseProfile {
         }
         
         let filteredActions = actions;
+        
+        // 🚨 EMERGENCIA CRÍTICA: si no hay fábrica, debe reconstruirse inmediatamente (el HQ necesita suministros)
+        const hasFactory = gameState.nodes.some(n => 
+            n.team === 'player2' && 
+            n.type === 'factory' && 
+            n.active &&
+            n.constructed &&
+            !n.isAbandoning
+        );
+        
+        if (!hasFactory) {
+            const factoryAction = filteredActions.find(action => action.cardId === 'factory');
+            if (factoryAction) {
+                const emergencyBoost = 1200; // Más alto que FOBs porque es crítico para el HQ
+                
+                if (AIConfig.debug?.logActions) {
+                    console.log(`🚨 IA EMERGENCIA FÁBRICA: No hay fábrica activa. Reconstrucción prioritaria (el HQ necesita suministros).`);
+                }
+                
+                filteredActions = filteredActions.map(action => {
+                    if (action.cardId === 'factory') {
+                        return {
+                            ...action,
+                            score: action.score + emergencyBoost,
+                            emergency: 'factory_rebuild'
+                        };
+                    }
+                    // Reducir el resto de acciones para favorecer el ahorro hasta construir la fábrica
+                    return {
+                        ...action,
+                        score: action.score * 0.15 // Reducir más que FOBs porque es más crítico
+                    };
+                });
+                
+                // No aplicar reglas adicionales: la IA debe enfocarse en reconstruir la fábrica
+                return filteredActions;
+            }
+        }
         
         // 🚨 EMERGENCIA: si tenemos menos de 2 FOBs, la IA debe priorizar reconstruirlos por encima de todo
         if (state?.myFOBs !== undefined && state.myFOBs < 2) {
@@ -482,6 +547,46 @@ export class DefaultDeckProfile extends BaseProfile {
             if (hasDroneLauncher) {
                 // Eliminar droneLauncher de las opciones si ya tiene una
                 filteredActions = filteredActions.filter(action => action.cardId !== 'droneLauncher');
+            }
+        }
+        
+        // 🎯 Factory: solo una es suficiente (suministra al HQ)
+        // NOTA: La lógica de emergencia (si no hay fábrica) ya se maneja arriba, antes de esta sección
+        const factoryAction = filteredActions.find(action => action.cardId === 'factory');
+        if (factoryAction) {
+            // Verificar si tiene una fábrica activa (la verificación de emergencia ya se hizo arriba)
+            const hasFactory = gameState.nodes.some(n => 
+                n.team === 'player2' && 
+                n.type === 'factory' && 
+                n.active &&
+                n.constructed &&
+                !n.isAbandoning
+            );
+            if (hasFactory) {
+                // Eliminar factory de las opciones si ya tiene una
+                filteredActions = filteredActions.filter(action => action.cardId !== 'factory');
+            }
+        }
+        
+        // 🎯 NUEVO: Nuclear Plant: solo una es suficiente (limitado a 1 por bando)
+        // Bloquear completamente la construcción si ya existe una planta nuclear
+        const nuclearPlantAction = filteredActions.find(action => action.cardId === 'nuclearPlant');
+        if (nuclearPlantAction) {
+            const hasNuclearPlant = gameState.nodes.some(n => 
+                n.team === 'player2' && 
+                n.type === 'nuclearPlant' && 
+                n.active &&
+                n.constructed &&
+                !n.isAbandoning
+            );
+            if (hasNuclearPlant) {
+                // Eliminar nuclearPlant de las opciones si ya tiene una
+                // Las centrales nucleares están limitadas a 1 por bando
+                filteredActions = filteredActions.filter(action => action.cardId !== 'nuclearPlant');
+                
+                if (AIConfig.debug?.logActions) {
+                    console.log(`🚫 IA BLOQUEO PLANTA NUCLEAR: Ya tiene una planta nuclear construida. Bloqueando construcción adicional (limitado a 1 por bando).`);
+                }
             }
         }
         

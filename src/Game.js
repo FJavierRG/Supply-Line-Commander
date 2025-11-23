@@ -264,9 +264,25 @@ export class Game {
         // Mostrar pantalla de carga
         this.loadingScreen.show();
         
+        // ✅ NUEVO: Conectar al servidor para recibir configuración (gameConfig.js)
+        // Esto debe hacerse ANTES de cargar assets para que el arsenal tenga los límites correctos
+        try {
+            this.loadingScreen.updateProgress(0);
+            if (this.loadingScreen.loadingText) {
+                this.loadingScreen.loadingText.textContent = 'Conectando al servidor...';
+            }
+            await this.network.connect();
+            console.log('✅ Conectado al servidor - esperando configuración del juego...');
+        } catch (error) {
+            console.warn('⚠️ No se pudo conectar al servidor (modo offline):', error);
+            // Continuar en modo offline si no hay servidor
+        }
+        
         // Cargar assets con callback de progreso
         await this.assetManager.loadAll((progress) => {
-            this.loadingScreen.updateProgress(progress);
+            // Ajustar progreso: 0-10% conexión, 10-100% assets
+            const adjustedProgress = 10 + (progress * 0.9);
+            this.loadingScreen.updateProgress(adjustedProgress);
         });
         
         // Ocultar elementos UI inicialmente
@@ -581,6 +597,11 @@ export class Game {
         // - Interpolación de posiciones
         
         this.particleSystem.update(dt);
+        
+        // 🆕 NUEVO: Actualizar visualizaciones de fábricas
+        if (this.renderer.effectRenderer) {
+            this.renderer.effectRenderer.updateFactoryVisuals(dt);
+        }
         this.ui.updateHUD(this.getGameState());
         this.inputHandler.updateHoverTooltip();
         
@@ -741,9 +762,10 @@ export class Game {
         // Obtener tiempo de juego (en segundos ENTEROS)
         let gameTime = 0;
         
-        if (this.network && this.network.lastGameState) {
+        // 🔧 FIX: Acceder a lastGameState a través de gameStateSync
+        if (this.network && this.network.gameStateSync && this.network.gameStateSync.lastGameState) {
             // Usar tiempo del servidor (redondear a segundos)
-            gameTime = Math.floor(this.network.lastGameState.gameTime || 0);
+            gameTime = Math.floor(this.network.gameStateSync.lastGameState.gameTime || 0);
         } else if (this.matchStats && this.matchStats.startTime) {
             // Fallback: calcular desde el inicio de la partida
             gameTime = Math.floor((Date.now() - this.matchStats.startTime) / 1000);
@@ -771,8 +793,8 @@ export class Game {
     renderCurrencyOnCanvas(ctx) {
         const currency = Math.floor(this.currency.get());
         
-        // Calcular rate: base (2$/s) + bonus de plantas nucleares (+2$/s cada una)
-        const baseRate = 2;
+        // Calcular rate: base desde configuración del servidor + bonus de plantas nucleares
+        const baseRate = this.serverBuildingConfig?.currency?.passiveRate || 1;
         const nuclearBonus = this.currency.getNuclearPlantBonus();
         const rate = baseRate + nuclearBonus;
         
@@ -896,7 +918,6 @@ export class Game {
         
         // Renderizar fondo del mundo expandido
         this.renderer.renderBackground();
-        this.renderer.renderGrid();
         
         // Carreteras debajo del territorio y de todo lo demás (solo por encima del fondo)
         this.roadSystem.render(this.renderer.ctx, this.assetManager);
@@ -1105,6 +1126,11 @@ export class Game {
         if (this.renderer.artilleryStrikes && this.renderer.artilleryStrikes.length > 0) {
             this.renderer.renderArtilleryEffects();
         }
+        
+        // 🆕 NUEVO: Renderizar conexiones de fábricas (líneas rojas) y iconos de suministros viajando
+        // IMPORTANTE: Debe estar ANTES de restoreMirrorView() para que las coordenadas del mundo funcionen correctamente
+        this.renderer.renderFactoryConnections();
+        this.renderer.renderFactorySupplyIcons();
         
         // Restaurar Mirror View ANTES de UI del juego (para que porcentajes estén en posición correcta)
         this.renderer.restoreMirrorView();
@@ -1426,7 +1452,7 @@ export class Game {
     
     getGameState() {
         // Calcular rate de currency (base + bonus de plantas nucleares)
-        const baseRate = this.serverBuildingConfig?.currency?.passiveRate || 3;
+        const baseRate = this.serverBuildingConfig?.currency?.passiveRate || 1;
         const nuclearBonus = this.currency.getNuclearPlantBonus();
         const totalRate = baseRate + nuclearBonus;
         
@@ -1506,7 +1532,7 @@ export class Game {
     handleDroneRequest(targetBase) {
         
         // Validar objetivo
-        const validTargetTypes = ['fob', 'nuclearPlant', 'intelRadio', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelCenter', 'aerialBase'];
+        const validTargetTypes = ['fob', 'nuclearPlant', 'intelRadio', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelCenter', 'aerialBase'];
         const isEnemyTarget = targetBase.team !== this.myTeam && validTargetTypes.includes(targetBase.type);
         
         
@@ -1543,7 +1569,7 @@ export class Game {
         // Solo mantener para compatibilidad si se llama desde algún lugar legacy
         
         // Validar objetivo (no puede atacar FOBs ni HQs)
-        const validTargetTypes = ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
+        const validTargetTypes = ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower'];
         const isEnemyTarget = targetBase.team !== this.myTeam && validTargetTypes.includes(targetBase.type);
         
         if (!isEnemyTarget) {
@@ -1966,6 +1992,7 @@ export class Game {
                 gameplay: SERVER_NODE_CONFIG.gameplay,
                 buildRadii: SERVER_NODE_CONFIG.buildRadius || {}, // 🆕 Radio de construcción
                 detectionRadii: SERVER_NODE_CONFIG.detectionRadius,
+                ranges: SERVER_NODE_CONFIG.ranges || {}, // 🆕 NUEVO: Rangos de acción de edificios
                 specialNodes: SERVER_NODE_CONFIG.specialNodes || {}, // 🆕 NUEVO: Nodos especiales (camera drone, commando, truck assault)
                 temporaryEffects: SERVER_NODE_CONFIG.temporaryEffects || {}, // 🆕 NUEVO: Efectos temporales (trained, wounded)
                 vehicleTypes: SERVER_NODE_CONFIG.vehicleTypes || {}, // 🆕 NUEVO: Tipos de vehículos
@@ -1986,8 +2013,8 @@ export class Game {
                     raceSpecial: {}
                 },
                 currency: {
-                    passiveRate: 3,
-                    pixelsPerCurrency: 2,
+                    passiveRate: 1,
+                    pixelsPerCurrency: 1,
                     currencyName: 'Terreno Ganado'
                 },
                 frontMovement: {
@@ -2026,8 +2053,8 @@ export class Game {
                     raceSpecial: {}
                 },
                 currency: {
-                    passiveRate: 3,
-                    pixelsPerCurrency: 2,
+                    passiveRate: 1,
+                    pixelsPerCurrency: 1,
                     currencyName: 'Terreno Ganado'
                 },
                 frontMovement: {
@@ -2159,5 +2186,95 @@ export class Game {
         }
         
         return false;
+    }
+    
+    /**
+     * 🆕 NUEVO: Verifica si un nodo está funcional (similar a isNodeFunctional del servidor)
+     * Un nodo está funcional si está construido, activo, no disabled, y no broken
+     * @param {Object} node - Nodo visual
+     * @returns {boolean} True si el nodo está funcional
+     */
+    isNodeFunctional(node) {
+        if (!node) return false;
+        
+        // Debe estar construido y activo
+        if (!node.constructed || !node.active) return false;
+        
+        // No debe estar deshabilitado ni roto
+        if (node.disabled || node.broken) return false;
+        
+        // No debe estar abandonando
+        if (node.isAbandoning) return false;
+        
+        return true;
+    }
+    
+    /**
+     * 🆕 NUEVO: Calcula la capacidad dinámica de un vehículo considerando edificios que la modifican
+     * Por ejemplo, truckFactory aumenta la capacidad de heavy_truck
+     * @param {string} vehicleType - Tipo de vehículo ('heavy_truck', 'truck', etc.)
+     * @param {string} team - Equipo del jugador ('player1' o 'player2')
+     * @returns {number} Capacidad del vehículo considerando bonos de edificios
+     */
+    getVehicleCapacityWithBonuses(vehicleType, team) {
+        if (!this.serverBuildingConfig || !this.serverBuildingConfig.vehicles) {
+            // Fallback: usar valores por defecto
+            return vehicleType === 'heavy_truck' ? 15 : 20;
+        }
+        
+        // Obtener capacidad base
+        let capacity = this.serverBuildingConfig.vehicles[vehicleType]?.capacity || 0;
+        if (capacity === 0) {
+            // Fallback: usar valores por defecto
+            capacity = vehicleType === 'heavy_truck' ? 15 : 20;
+        }
+        
+        // Aplicar bonos de edificios
+        if (vehicleType === 'heavy_truck') {
+            // Normalizar myTeam primero (puede ser 'ally'/'enemy' o 'player1'/'player2')
+            let myTeamNormalized = this.myTeam || 'player1';
+            // Si myTeam es 'ally' o 'enemy', necesitamos un fallback (no debería pasar en multijugador)
+            // pero por seguridad, si es 'ally' asumimos player1, si es 'enemy' asumimos player2
+            if (myTeamNormalized === 'ally') {
+                myTeamNormalized = 'player1'; // Fallback seguro
+            } else if (myTeamNormalized === 'enemy') {
+                myTeamNormalized = 'player2'; // Fallback seguro
+            }
+            
+            // Normalizar team del parámetro para comparación
+            let normalizedTeam = team;
+            if (team === 'ally') {
+                normalizedTeam = myTeamNormalized;
+            } else if (team === 'enemy') {
+                normalizedTeam = myTeamNormalized === 'player1' ? 'player2' : 'player1';
+            }
+            
+            // Contar truckFactories funcionales del mismo equipo
+            const truckFactories = this.nodes.filter(n => {
+                if (n.type !== 'truckFactory' || !this.isNodeFunctional(n)) {
+                    return false;
+                }
+                
+                // Normalizar team del nodo para comparación
+                let nodeTeam = n.team;
+                if (nodeTeam === 'ally') {
+                    nodeTeam = myTeamNormalized;
+                } else if (nodeTeam === 'enemy') {
+                    nodeTeam = myTeamNormalized === 'player1' ? 'player2' : 'player1';
+                }
+                
+                return nodeTeam === normalizedTeam;
+            }).length;
+            
+            if (truckFactories > 0 && this.serverBuildingConfig.effects?.truckFactory?.capacityBonus) {
+                const bonusPerFactory = this.serverBuildingConfig.effects.truckFactory.capacityBonus;
+                capacity += truckFactories * bonusPerFactory;
+            }
+        }
+        
+        // TODO: Aquí se pueden añadir otros bonos de edificios en el futuro
+        // Por ejemplo, si hay un edificio que afecta a 'truck', se añadiría aquí
+        
+        return capacity;
     }
 }

@@ -11,33 +11,34 @@ export const SERVER_NODE_CONFIG = {
     costs: {
         fob: 140,
         antiDrone: 135,
-        droneLauncher: 120,
-        nuclearPlant: 200,
-        truckFactory: 90,
+        droneLauncher: 150,
+        nuclearPlant: 125,
+        truckFactory: 80,
         engineerCenter: 80,
-        intelRadio: 50, 
+        factory: 80,
+        intelRadio: 75, 
         aerialBase: 170, 
         campaignHospital: 50,
-        intelCenter: 110, 
+        intelCenter: 150, 
         vigilanceTower: 140, 
-        trainStation: 170,
+        trainStation: 150,
         droneWorkshop: 125,
         vehicleWorkshop: 90,
         physicStudies: 80,
         secretLaboratory: 90,
-        trainingCamp: 90,
+        trainingCamp: 80,
         deadlyBuild: 140,
         // 🆕 CONSUMIBLES/PROYECTILES
         drone: 170,
-        sniperStrike: 40,
-        fobSabotage: 40,
+        sniperStrike: 120,
+        fobSabotage: 120,
         specopsCommando: 130,  
         tank: 170,
-        lightVehicle: 40, 
-        truckAssault: 50,
-        cameraDrone: 50,
-        artillery: 100, 
-        worldDestroyer: 220
+        lightVehicle: 100, 
+        truckAssault: 120,
+        cameraDrone: 80,
+        artillery: 120, 
+        worldDestroyer: 300
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -50,6 +51,7 @@ export const SERVER_NODE_CONFIG = {
         nuclearPlant: 6,
         truckFactory: 4,
         engineerCenter: 4,
+        factory: 5,
         campaignHospital: 3,
         intelRadio: 4, 
         aerialBase: 4, 
@@ -69,11 +71,12 @@ export const SERVER_NODE_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
     effects: {
         nuclearPlant: {
-            incomeBonus: 2 // +2$/s por planta
+            incomeBonus: 1, // +1$/s por planta
+            factorySpeedBonus: 1 // 🆕 -1 segundo en intervalo de producción de fábricas en rango
         },
         truckFactory: {
             vehicleBonus: 1,      // +1 vehículo al HQ
-            capacityBonus: 15     // +15 capacidad para heavy_trucks
+            capacityBonus: 5     // +5 capacidad para heavy_trucks
         },
         engineerCenter: {
             speedMultiplier: 1.5,        // +50% velocidad para heavy_truck
@@ -84,9 +87,12 @@ export const SERVER_NODE_CONFIG = {
             autoDestroy: true       // 🆕 Se autodestruye cuando se agota
         },
         trainStation: {
-            trainInterval: 12,      // 🆕 Segundos entre envíos de tren
+            trainInterval: 15,      // 🆕 Segundos entre envíos de tren
             trainSpeed: 60,        // 🆕 Velocidad del tren (píxeles por segundo)
             trainCargo: 35          // 🆕 Suministros que entrega cada tren
+        },
+        droneLauncher: {
+            maxUses: 3                   // 🆕 Número máximo de usos antes de entrar en abandono
         },
         droneWorkshop: {
             discountMultiplier: 0.7,     // Descuento del 30% (70% del costo base)
@@ -96,6 +102,13 @@ export const SERVER_NODE_CONFIG = {
         },
         vehicleWorkshop: {
             vehicleBonus: 1              // 🆕 +1 vehículo máximo y disponible a FOBs en su área
+        },
+        factory: {
+            supplyGeneration: {
+                amount: 5,              // Suministros generados por cada ciclo
+                interval: 5,            // Intervalo en segundos entre envíos
+                speed: 120              // Velocidad de movimiento en píxeles por segundo
+            }
         },
         physicStudies: {
             nuclearPlantBonus: 1         // 🆕 +1 currency/segundo a todas las plantas nucleares si hay al menos una universidad
@@ -132,13 +145,13 @@ export const SERVER_NODE_CONFIG = {
             ignoreDetectionLimits: true // No afectado por límites de detección de otros edificios
         },
         droneLaunch: {
-            validTargets: ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'trainStation','vigilanceTower','vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild']
+            validTargets: ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'trainStation','vigilanceTower','vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild']
         },
         tankLaunch: {
-            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation', 'vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild']
+            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation', 'vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild']
         },
         lightVehicleLaunch: { // 🆕 NUEVO: Artillado ligero (aplica broken en vez de destruir)
-            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation', 'vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild']
+            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation', 'vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild']
         },
         artilleryLaunch: { // 🆕 NUEVO: Artillería (efecto de área que rompe edificios)
             targetType: 'area' // Se selecciona un área en vez de un edificio específico
@@ -170,7 +183,8 @@ export const SERVER_NODE_CONFIG = {
     // RANGOS Y DETECCIÓN
     // ═══════════════════════════════════════════════════════════════
     ranges: {
-        campaignHospital: 240 // px - rango de acción del hospital
+        campaignHospital: 240, // px - rango de acción del hospital
+        nuclearPlant: 200 // 🆕 px - rango de efecto sobre fábricas
     },
     
     // ═══════════════════════════════════════════════════════════════
@@ -341,6 +355,8 @@ export const SERVER_NODE_CONFIG = {
     capacities: {
         // Capacidades base de nodos
         hq: {
+            // 🆕 REWORK: maxSupplies está en GAME_CONFIG.initialNodes.hq.maxSupplies (fuente única de verdad)
+            hasSupplies: true,          // 🆕 REWORK: HQ ahora tiene suministros
             maxVehicles: 4,
             maxAmbulances: 1,
             maxRepairVehicles: 1, // 🆕 NUEVO: Camión mecánico
@@ -469,6 +485,7 @@ export const SERVER_NODE_CONFIG = {
             razorNet: false,
             truckFactory: true,
             engineerCenter: true,
+            factory: true,
             nuclearPlant: true,
             machineNest: false,
             campaignHospital: false,
@@ -479,7 +496,7 @@ export const SERVER_NODE_CONFIG = {
             trainStation: true,
             droneWorkshop: true,
             vehicleWorkshop: true,
-            physicStudies: true,
+            physicStudies: false,
             secretLaboratory: true,
             trainingCamp: true,
             deadlyBuild: true,
@@ -542,6 +559,9 @@ export const SERVER_NODE_CONFIG = {
                 showRangePreview: true
                 // ✅ areaRadius está en gameplay.artillery.areaRadius (fuente única de verdad)
             },
+            nuclearPlant: {
+                showRangePreview: true // 🆕 Muestra rango de efecto sobre fábricas
+            },
             drone: {
                 targetType: ['building'], // Requiere un edificio enemigo como objetivo
                 cursorSprite: 'vehicle-drone'
@@ -550,12 +570,23 @@ export const SERVER_NODE_CONFIG = {
     },
 
     // ═══════════════════════════════════════════════════════════════
+    // LÍMITES DE CONSTRUCCIÓN
+    // ═══════════════════════════════════════════════════════════════
+    // Límites por equipo (cada bando puede tener hasta X de este edificio)
+    buildLimits: {
+        nuclearPlant: {
+            maxPerGame: 1  // Cada bando solo puede tener 1 central nuclear construida
+        }
+        // TODO: Añadir otros edificios con límites aquí si es necesario
+    },
+    
+    // ═══════════════════════════════════════════════════════════════
     // REQUISITOS DE CONSTRUCCIÓN
     // ═══════════════════════════════════════════════════════════════
     // Edificios que requieren otros edificios para construirse
     buildRequirements: {
         deadlyBuild: {
-            required: ['nuclearPlant', 'secretLaboratory', 'physicStudies'] // Requiere tener al menos uno de cada tipo en mesa
+            required: ['nuclearPlant', 'secretLaboratory'] // Requiere tener al menos uno de cada tipo en mesa
         }
     },
 

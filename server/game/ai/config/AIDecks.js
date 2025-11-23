@@ -8,7 +8,7 @@
  * Este es el mazo que la IA sabe usar correctamente con todas sus reglas de scoring
  * y prioridades configuradas en DefaultDeckProfile
  * 
- * MAZO: ['hq', 'fob', 'antiDrone', 'droneLauncher', 'truckFactory', 'engineerCenter', 'nuclearPlant', 'intelRadio', 'drone', 'sniperStrike']
+ * MAZO: ['hq', 'fob', 'antiDrone', 'droneLauncher', 'truckFactory', 'engineerCenter', 'factory', 'nuclearPlant', 'intelRadio', 'drone', 'sniperStrike']
  */
 export const AI_DEFAULT_DECK = {
     id: 'ai_default',
@@ -20,6 +20,7 @@ export const AI_DEFAULT_DECK = {
         'droneLauncher',   // Lanzador de drones
         'truckFactory',    // Fábrica de camiones
         'engineerCenter',  // Centro de ingenieros
+        'factory',         // Fábrica (suministra al HQ)
         'nuclearPlant',    // Planta nuclear (genera income pasivo)
         'intelRadio',      // Radio de inteligencia
         'drone',           // Dron consumible

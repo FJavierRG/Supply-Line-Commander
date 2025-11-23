@@ -9,12 +9,7 @@ import { getNodeConfig } from '../config/nodes.js';
 let DEFAULT_DECK_FROM_SERVER = null;
 
 const STORAGE_KEY = 'game_decks';
-// 🆕 FIX: Valor por defecto debe coincidir con server/config/gameConfig.js deck.pointLimit
-// Este valor solo se usa hasta que el servidor envíe el límite real
-const DEFAULT_DECK_POINT_LIMIT = 815; // Valor por defecto (será sobrescrito por el servidor)
-// 🆕 FIX: Valor por defecto debe coincidir con server/config/gameConfig.js deck.benchPointLimit
-// Este valor solo se usa hasta que el servidor envíe el límite real
-const DEFAULT_BENCH_POINT_LIMIT = 300; // Valor por defecto (será sobrescrito por el servidor)
+// ✅ Los límites vienen SOLO del servidor (server/config/gameConfig.js) - NO hardcodear valores aquí
 
 export class DeckManager {
     constructor(game) {
@@ -22,8 +17,8 @@ export class DeckManager {
         this.decks = [];
         this.defaultDeckId = null;
         this.lastSelectedDeckId = null;
-        this.deckPointLimit = DEFAULT_DECK_POINT_LIMIT; // 🎯 Límite dinámico (actualizado desde servidor)
-        this.benchPointLimit = DEFAULT_BENCH_POINT_LIMIT; // 🆕 NUEVO: Límite dinámico para banquillo (actualizado desde servidor)
+        this.deckPointLimit = null; // ✅ Solo se establece desde el servidor (gameConfig.js)
+        this.benchPointLimit = null; // ✅ Solo se establece desde el servidor (gameConfig.js)
         
         // 🆕 NUEVO: Gestión de disponibilidad del mazo por defecto
         this.defaultDeckReady = false;
@@ -258,7 +253,7 @@ export class DeckManager {
     
     /**
      * Obtiene el límite de puntos permitido para un mazo
-     * @returns {number} Límite de puntos
+     * @returns {number|null} Límite de puntos (null si aún no se ha recibido del servidor)
      */
     getDeckPointLimit() {
         return this.deckPointLimit;
@@ -266,7 +261,7 @@ export class DeckManager {
     
     /**
      * 🆕 NUEVO: Obtiene el límite de puntos permitido para el banquillo
-     * @returns {number} Límite de puntos del banquillo
+     * @returns {number|null} Límite de puntos del banquillo (null si aún no se ha recibido del servidor)
      */
     getBenchPointLimit() {
         return this.benchPointLimit;
@@ -280,9 +275,12 @@ export class DeckManager {
         if (typeof limit === 'number' && limit > 0) {
             this.deckPointLimit = limit;
             console.log(`🎯 Límite de puntos actualizado desde servidor: ${limit}`);
-            // 🆕 FIX: Refrescar arsenal si está visible para actualizar estado visual de los items
-            if (this.game && this.game.arsenalManager && this.game.arsenalManager.isVisible) {
-                this.game.arsenalManager.populateArsenal();
+            // Actualizar el HTML inmediatamente cuando se recibe el valor del servidor
+            if (this.game && this.game.arsenalManager) {
+                this.game.arsenalManager.initializePointLimits();
+                if (this.game.arsenalManager.isVisible) {
+                    this.game.arsenalManager.populateArsenal();
+                }
             }
         }
     }
@@ -295,9 +293,12 @@ export class DeckManager {
         if (typeof limit === 'number' && limit > 0) {
             this.benchPointLimit = limit;
             console.log(`🎯 Límite de puntos del banquillo actualizado desde servidor: ${limit}`);
-            // Refrescar arsenal si está visible
-            if (this.game && this.game.arsenalManager && this.game.arsenalManager.isVisible) {
-                this.game.arsenalManager.populateArsenal();
+            // Actualizar el HTML inmediatamente cuando se recibe el valor del servidor
+            if (this.game && this.game.arsenalManager) {
+                this.game.arsenalManager.initializePointLimits();
+                if (this.game.arsenalManager.isVisible) {
+                    this.game.arsenalManager.populateArsenal();
+                }
             }
         }
     }

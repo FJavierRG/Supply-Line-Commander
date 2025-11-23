@@ -260,8 +260,21 @@ export class PreviewRenderer {
         
         // Mostrar círculo de rango de acción si el edificio tiene rango (solo si es válido)
         if (config?.showRangePreview && isValid) {
+            // 🆕 Para plantas nucleares, mostrar rango de efecto sobre fábricas
+            if (buildingType === 'nuclearPlant') {
+                const nuclearPlantRange = this.game?.serverBuildingConfig?.ranges?.nuclearPlant || 0;
+                if (nuclearPlantRange > 0) {
+                    this.ctx.strokeStyle = 'rgba(0, 200, 255, 0.6)'; // Azul cian para efecto de planta nuclear
+                    this.ctx.lineWidth = 2;
+                    this.ctx.setLineDash([10, 5]);
+                    this.ctx.beginPath();
+                    this.ctx.arc(x, y, nuclearPlantRange, 0, Math.PI * 2);
+                    this.ctx.stroke();
+                    this.ctx.setLineDash([]);
+                }
+            }
             // Para anti-drones, mostrar rango de detección
-            if (config.detectionRange) {
+            else if (config.detectionRange) {
                 this.ctx.strokeStyle = 'rgba(255, 200, 0, 0.6)';
                 this.ctx.lineWidth = 2;
                 this.ctx.setLineDash([10, 5]);

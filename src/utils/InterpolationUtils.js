@@ -114,14 +114,21 @@ export function interpolateProgress(obj, dt, options = {}) {
         return false;
     }
     
-    return interpolateValue(
-        { current: currentProgress, target: targetProgress },
+    // Crear objeto temporal para interpolateValue
+    const tempObj = { current: currentProgress, target: targetProgress };
+    const moved = interpolateValue(
+        tempObj,
         dt,
         { 
             ...options, 
             threshold: options.threshold || 0.001 
         }
     );
+    
+    // Actualizar el progress del objeto original con el valor interpolado
+    obj.progress = tempObj.current;
+    
+    return moved;
 }
 
 /**

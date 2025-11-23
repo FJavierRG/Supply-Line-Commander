@@ -308,7 +308,9 @@ export class StateSerializer {
                     spawnTime: node.isCommando ? node.spawnTime : undefined,
                     expiresAt: node.isCommando ? node.expiresAt : undefined,
                     // 🆕 NUEVO: detectionRadius para comandos, truck assaults y camera drones
-                    detectionRadius: (node.isCommando || node.isTruckAssault || node.isCameraDrone) ? node.detectionRadius : undefined
+                    detectionRadius: (node.isCommando || node.isTruckAssault || node.isCameraDrone) ? node.detectionRadius : undefined,
+                    // 🆕 NUEVO: Contador de usos para lanzadera de drones
+                    uses: (node.type === 'droneLauncher' && typeof node.uses === 'number') ? node.uses : undefined
                 };
             });
     }
@@ -353,6 +355,28 @@ export class StateSerializer {
                 progress: train.progress,
                 returning: train.returning,
                 cargo: train.cargo
+            };
+        });
+    }
+    
+    /**
+     * 🆕 NUEVO: Serializa TODOS los envíos de fábricas para sincronización
+     */
+    serializeAllFactorySupplyDeliveries() {
+        if (!this.gameState.factorySupplyDeliveries) {
+            return [];
+        }
+        
+        return this.gameState.factorySupplyDeliveries.map(delivery => {
+            return {
+                id: delivery.id,
+                factoryId: delivery.factoryId,
+                hqId: delivery.hqId,
+                team: delivery.team,
+                progress: delivery.progress,
+                initialDistance: delivery.initialDistance,
+                speed: delivery.speed,
+                cargo: delivery.cargo
             };
         });
     }

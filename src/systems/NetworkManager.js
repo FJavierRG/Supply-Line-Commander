@@ -1709,6 +1709,9 @@ export class NetworkManager {
         // === ACTUALIZAR TRENES === (Delegado a GameStateSync)
         this.gameStateSync.syncTrains(gameState);
         
+        // === ACTUALIZAR ENVÍOS DE FÁBRICAS === (Delegado a GameStateSync)
+        this.gameStateSync.syncFactorySupplyDeliveries(gameState);
+        
         // === ACTUALIZAR DRONES === (Delegado a GameStateSync)
         this.gameStateSync.syncDrones(gameState);
         
@@ -1729,10 +1732,20 @@ export class NetworkManager {
         }
         
         // 🆕 NUEVO: PROCESAR EVENTOS VISUALES ===
-        if (gameState.visualEvents && gameState.visualEvents.length > 0) {
-            gameState.visualEvents.forEach(event => {
-                this.eventHandler.handleVisualEvent(event);
-            });
+        // 🐛 DEBUG: Log para ver si llegan eventos visuales
+        if (gameState.visualEvents) {
+            console.log(`📺 [CLIENT DEBUG] visualEvents recibidos: ${gameState.visualEvents.length} evento(s)`, gameState.visualEvents);
+            if (gameState.visualEvents.length > 0) {
+                gameState.visualEvents.forEach(event => {
+                    this.eventHandler.handleVisualEvent(event);
+                });
+            }
+        } else {
+            // Solo log periódico para no saturar
+            if (!this._lastVisualEventsCheck || Date.now() - this._lastVisualEventsCheck > 5000) {
+                console.log(`📺 [CLIENT DEBUG] gameState.visualEvents no existe o está vacío`);
+                this._lastVisualEventsCheck = Date.now();
+            }
         }
     }
     
