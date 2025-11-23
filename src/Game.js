@@ -949,14 +949,28 @@ export class Game {
         // Renderizar marcas de impacto permanentes (debajo de los nodos)
         this.particleSystem.getImpactMarks().forEach(mark => this.renderer.renderImpactMark(mark));
         
-        // Renderizar todos los nodos
+        // Renderizar todos los nodos EXCEPTO fronts (primero)
         this.nodes.forEach(node => {
-            this.renderer.renderNode(
-                node,
-                node === this.selectedNode,
-                node === this.hoveredNode,
-                this
-            );
+            if (node.type !== 'front') {
+                this.renderer.renderNode(
+                    node,
+                    node === this.selectedNode,
+                    node === this.hoveredNode,
+                    this
+                );
+            }
+        });
+        
+        // Renderizar fronts (por encima del resto de nodos)
+        this.nodes.forEach(node => {
+            if (node.type === 'front') {
+                this.renderer.renderNode(
+                    node,
+                    node === this.selectedNode,
+                    node === this.hoveredNode,
+                    this
+                );
+            }
         });
         
         // Renderizar UI de vehículos e iconos del HQ encima de todo
