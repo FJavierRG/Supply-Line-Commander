@@ -352,10 +352,20 @@ export class TerritorySystem {
 
     /**
      * Renderiza los porcentajes de territorio controlado en la parte superior del mapa
-     * SIN MIRROR: Azul siempre izquierda, Rojo siempre derecha
+     * 🔧 DEPRECATED: Ahora se renderiza en TopBarManager
+     * Mantenido para compatibilidad pero ya no se usa
      * @param {CanvasRenderingContext2D} ctx - Contexto de renderizado
      */
     renderTerritoryPercentages(ctx) {
+        // 🔧 DEPRECATED: Los porcentajes ahora se renderizan en TopBarManager
+        // Esta función se mantiene por compatibilidad pero no hace nada
+    }
+    
+    /**
+     * 🔧 DEPRECATED: Código legacy removido
+     * Mantenido por compatibilidad histórica
+     */
+    _legacyRenderTerritoryPercentages(ctx) {
         // Calcular porcentajes de territorio para ambos equipos
         const bases = this.getBases();
         const myTeam = this.game.myTeam || 'player1'; // Definir aquí para que esté disponible en todo el método

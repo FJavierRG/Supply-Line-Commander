@@ -142,6 +142,9 @@ export class ConvoyMovementManager {
             // Bonus de EngineerCenter: +50% velocidad
             vehicleSpeed = this.applyEngineerCenterBonus(convoy, vehicleSpeed);
             
+            // 🆕 NUEVO: Bonus de VehicleWorkshop: +20 px/s para camiones ligeros (truck)
+            vehicleSpeed = this.applyVehicleWorkshopBonus(convoy, vehicleSpeed);
+            
             // Progress por segundo = velocidad / distancia (usa distancia fija)
             const progressPerSecond = vehicleSpeed / distance;
             
@@ -234,6 +237,25 @@ export class ConvoyMovementManager {
             const bonusConfig = SERVER_NODE_CONFIG.effects.engineerCenter;
             if (bonusConfig.affectedVehicles.includes(convoy.vehicleType)) {
                 vehicleSpeed *= bonusConfig.speedMultiplier;
+            }
+        }
+        return vehicleSpeed;
+    }
+    
+    /**
+     * 🆕 NUEVO: Aplica bonus de VehicleWorkshop
+     * Aumenta la velocidad de los camiones ligeros (truck) en +20 px/s si el convoy tiene el bonus
+     * @param {Object} convoy - Convoy
+     * @param {number} vehicleSpeed - Velocidad actual
+     * @returns {number} Velocidad con bonus aplicado
+     */
+    applyVehicleWorkshopBonus(convoy, vehicleSpeed) {
+        // Solo aplicar si el convoy tiene el flag de vehicleWorkshopBonus
+        if (convoy.hasVehicleWorkshopBonus) {
+            // ✅ SERVIDOR COMO AUTORIDAD: Usar configuración de serverNodes (fuente única de verdad)
+            const bonusConfig = SERVER_NODE_CONFIG.effects.vehicleWorkshop;
+            if (bonusConfig.affectedVehicles.includes(convoy.vehicleType)) {
+                vehicleSpeed += bonusConfig.speedBonus;
             }
         }
         return vehicleSpeed;

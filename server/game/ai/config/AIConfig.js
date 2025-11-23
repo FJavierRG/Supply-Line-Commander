@@ -1,6 +1,15 @@
 // ===== CONFIGURACIÓN DE IA (SERVIDOR) =====
 
 /**
+ * Umbrales de la IA (anteriormente en RaceAIConfig, ahora centralizados)
+ */
+const AI_THRESHOLDS = {
+    fobSupply: 55,        // Reabastecer FOBs cuando <55%
+    frontSupply: 75       // Reabastecer frentes cuando <75%
+    // 🗑️ REMOVED: currencyStrategic - Era legacy, el sistema de colchón dinámico ya maneja esto
+};
+
+/**
  * Configuración de multiplicadores por dificultad
  * 🎯 SISTEMA MEJORADO: Multiplicadores específicos por tipo de acción
  * Permite control fino de cada aspecto de la IA
@@ -36,15 +45,7 @@ const DIFFICULTY_MULTIPLIERS = {
     }
 };
 
-/**
- * Umbrales de la IA (anteriormente en RaceAIConfig, ahora centralizados)
- */
-const AI_THRESHOLDS = {
-    fobSupply: 55,        // Reabastecer FOBs cuando <55%
-    frontSupply: 75       // Reabastecer frentes cuando <75%
-    // 🗑️ REMOVED: currencyStrategic - Era legacy, el sistema de colchón dinámico ya maneja esto
-};
-
+// 🔧 Crear el objeto AIConfig DESPUÉS de definir las constantes
 const AIConfig = {
     // === INTERVALOS DE ACTUALIZACIÓN ===
     intervals: {

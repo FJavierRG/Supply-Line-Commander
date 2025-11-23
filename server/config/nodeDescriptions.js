@@ -98,8 +98,8 @@ export const NODE_DESCRIPTIONS = {
     },
     vehicleWorkshop: {
         name: 'Taller de Vehículos',
-        description: 'Aumenta en +1 los vehículos máximos y disponibles en todos los FOBs cercanos.',
-        details: 'Aumenta en {vehicleBonus} los vehículos máximos y disponibles en todos los FOBs dentro de su área de efecto.'
+        description: 'Aumenta en +1 los vehículos máximos y disponibles en todos los FOBs cercanos. Mejora la velocidad de los camiones ligeros en +20 px/s.',
+        details: 'Aumenta en {vehicleBonus} los vehículos máximos y disponibles en todos los FOBs dentro de su área de efecto. Además, mejora los camiones ligeros (truck) de los FOBs cercanos, aumentando su velocidad en +{speedBonus} px/s y actualizando su apariencia.'
     },
     physicStudies: {
         name: 'Estudios de Física',
@@ -120,6 +120,11 @@ export const NODE_DESCRIPTIONS = {
         name: 'Construcción Prohibida',
         description: 'Requiere Planta Nuclear, Laboratorio Secreto y Estudios de Física en mesa. Desbloquea "Destructor de mundos".',
         details: 'Esta construcción altamente clasificada requiere tener al menos una Planta Nuclear, un Laboratorio Secreto y Estudios de Física en mesa para poder construirse. Una vez construida, desbloquea el consumible "Destructor de mundos" en la tienda.'
+    },
+    servers: {
+        name: 'Servidores',
+        description: 'Aumenta la generación pasiva de currency en +0.5 por segundo.',
+        details: 'Centro de cómputo que aumenta la generación pasiva de currency en +{incomeBonus}$ por segundo. Se suma a la generación base.'
     },
     
     // Consumibles/Proyectiles

@@ -363,7 +363,13 @@ export class InputHandler {
         let x = clickX * scaleX;
         let y = clickY * scaleY;
         
-        // Verificar si el click está en la Store UI ANTES de transformar coordenadas
+        // 🆕 NUEVO: Verificar si el click está en el TopBar (banner superior)
+        // DEBE verificarse PRIMERO porque está encima de todo
+        if (this.game.topBar && this.game.topBar.handleClick(x, y)) {
+            return; // Click manejado por el TopBar
+        }
+        
+        // Verificar si el click está en la Store UI (desplegables)
         // La UI está en coordenadas de pantalla, NO en coordenadas de mundo
         if (this.game.storeUI && this.game.storeUI.handleClick(x, y)) {
             return; // Click manejado por la Store UI

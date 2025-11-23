@@ -28,6 +28,7 @@ export const SERVER_NODE_CONFIG = {
         secretLaboratory: 90,
         trainingCamp: 80,
         deadlyBuild: 140,
+        servers: 40,
         // 🆕 CONSUMIBLES/PROYECTILES
         drone: 170,
         sniperStrike: 120,
@@ -63,7 +64,8 @@ export const SERVER_NODE_CONFIG = {
         physicStudies: 5,
         secretLaboratory: 5,
         trainingCamp: 6,
-        deadlyBuild: 7
+        deadlyBuild: 7,
+        servers: 3
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -101,7 +103,10 @@ export const SERVER_NODE_CONFIG = {
             discountedDroneTypes: ['drone', 'cameraDrone'] // Tipos de dron afectados
         },
         vehicleWorkshop: {
-            vehicleBonus: 1              // 🆕 +1 vehículo máximo y disponible a FOBs en su área
+            vehicleBonus: 1,             // 🆕 +1 vehículo máximo y disponible a FOBs en su área
+            speedBonus: 20,               // 🆕 +20 px/s de velocidad para camiones ligeros (truck) del FOB
+            affectedVehicles: ['truck'],  // 🆕 Vehículos afectados por el bonus de velocidad
+            enhancedSprite: 'truck_2'     // 🆕 Sprite mejorado para camiones con bonus
         },
         factory: {
             supplyGeneration: {
@@ -121,6 +126,9 @@ export const SERVER_NODE_CONFIG = {
         },
         deadlyBuild: {
             // Sin efectos directos - desbloquea consumible "Destructor de mundos"
+        },
+        servers: {
+            incomeBonus: 0.5         // 🆕 +0.5 currency/segundo pasivo
         }
     },
 
@@ -145,13 +153,13 @@ export const SERVER_NODE_CONFIG = {
             ignoreDetectionLimits: true // No afectado por límites de detección de otros edificios
         },
         droneLaunch: {
-            validTargets: ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'trainStation','vigilanceTower','vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild']
+            validTargets: ['fob', 'nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'trainStation','vigilanceTower','vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild', 'servers']
         },
         tankLaunch: {
-            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation', 'vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild']
+            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation', 'vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild', 'servers']
         },
         lightVehicleLaunch: { // 🆕 NUEVO: Artillado ligero (aplica broken en vez de destruir)
-            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation', 'vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild']
+            validTargets: ['nuclearPlant', 'antiDrone', 'campaignHospital', 'droneLauncher', 'truckFactory', 'factory', 'engineerCenter', 'intelRadio', 'intelCenter', 'aerialBase', 'vigilanceTower', 'trainStation', 'vehicleWorkshop', 'droneWorkshop', 'physicStudies', 'secretLaboratory', 'trainingCamp', 'deadlyBuild', 'servers']
         },
         artilleryLaunch: { // 🆕 NUEVO: Artillería (efecto de área que rompe edificios)
             targetType: 'area' // Se selecciona un área en vez de un edificio específico
@@ -211,7 +219,8 @@ export const SERVER_NODE_CONFIG = {
         physicStudies: 130,
         secretLaboratory: 130,
         trainingCamp: 130,
-        deadlyBuild: 140
+        deadlyBuild: 140,
+        servers: 120
     },
     
     // ═══════════════════════════════════════════════════════════════
@@ -246,7 +255,8 @@ export const SERVER_NODE_CONFIG = {
         physicStudies: 35,
         secretLaboratory: 35,
         trainingCamp: 35,
-        deadlyBuild: 40
+        deadlyBuild: 40,
+        servers: 30
     },
     
     // 🆕 NUEVO: Configuración de nodos especiales que se despliegan como unidades
@@ -500,6 +510,7 @@ export const SERVER_NODE_CONFIG = {
             secretLaboratory: true,
             trainingCamp: true,
             deadlyBuild: true,
+            servers: true,
             // 🆕 CONSUMIBLES/PROYECTILES
             drone: true,
             sniperStrike: true,

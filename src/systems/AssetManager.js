@@ -41,6 +41,7 @@ export class AssetManager {
             'building-secret-laboratory': 'assets/sprites/buildings/secret_laboratory.png', // 🆕 Laboratorio Secreto
             'building-training-camp': 'assets/sprites/buildings/training_camp.png', // 🆕 Campo de Entrenamiento
             'building-deadly-build': 'assets/sprites/buildings/deadlyBuild.png', // 🆕 Construcción Prohibida
+            'building-servers': 'assets/sprites/buildings/server.png', // 🆕 Servidores
             
             // 🆕 NUEVO: Sprites del Destructor de mundos
             'world-destroyer': 'assets/sprites/vehicles/worldDestroyer.png',
@@ -58,6 +59,7 @@ export class AssetManager {
             // Vehículos (solo los que se usan)
             'heavy_truck': 'assets/sprites/vehicles/heavy_truck.png',
             'truck': 'assets/sprites/vehicles/truck.png',
+            'truck_1': 'assets/sprites/vehicles/truck_1.png', // 🆕 NUEVO: Camión mejorado por vehicleWorkshop
             'tank': 'assets/sprites/vehicles/tank.png',
             'helicopter': 'assets/sprites/vehicles/chopper.png',
             'helicopter2': 'assets/sprites/vehicles/chopper2.png',  // 🆕 NUEVO: Segundo frame para animación
@@ -102,6 +104,18 @@ export class AssetManager {
             'ui-store-deployable': 'assets/sprites/ui/UIFrames/store_desplegable.png',
             'ui-button-background': 'assets/sprites/ui/UIFrames/bton_background.png',
             'ui-currency-background': 'assets/sprites/ui/UIFrames/currency_bton.png',
+            
+            // 🆕 NUEVO: UI del TopBar (banner superior ingame)
+            'ui-banner-bar': 'assets/sprites/ui/UIFrames/Ingame/banner_bar.png',
+            'ui-player1-flag': 'assets/sprites/ui/UIFrames/Ingame/player_1_flag.png',
+            'ui-player2-flag': 'assets/sprites/ui/UIFrames/Ingame/player_2_flag.png',
+            'ui-building-icon': 'assets/sprites/ui/UIFrames/Ingame/Building_icon.png',
+            'ui-attack-icon': 'assets/sprites/ui/UIFrames/Ingame/Attack_icon.png',
+            'ui-currency-icon': 'assets/sprites/ui/UIFrames/Ingame/currency_icon.png',
+            'ui-player1-territory': 'assets/sprites/ui/UIFrames/Ingame/Player1_territory.png',
+            'ui-player2-territory': 'assets/sprites/ui/UIFrames/Ingame/Player2_territory.png',
+            'ui-clock': 'assets/sprites/ui/UIFrames/Ingame/clock_UI.png',
+            'ui-bench-icon': 'assets/sprites/ui/UIFrames/Ingame/bench_icon.png',
             
             // UI de menús principales
             'ui-menu-button': 'assets/sprites/ui/UIFrames/medium_bton.png',

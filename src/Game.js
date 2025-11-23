@@ -21,6 +21,7 @@ import { CameraController } from './systems/CameraController.js';
 import { LoadingScreenManager } from './systems/LoadingScreenManager.js';
 import { CurrencyManager } from './systems/CurrencyManager.js';
 import { StoreUIManager } from './systems/StoreUIManager.js';
+import { TopBarManager } from './systems/TopBarManager.js'; // 🆕 NUEVO: Banner superior
 import { RoadSystem } from './utils/RoadSystem.js';
 import { RailSystem } from './utils/RailSystem.js';
 import { TrainSystem } from './systems/TrainSystem.js';
@@ -87,6 +88,13 @@ export class Game {
         this.railSystem = new RailSystem(this);
         this.buildSystem = new BuildingSystem(this);
         this.storeUI = new StoreUIManager(this.assetManager, this.buildSystem, this);
+        
+        // 🆕 NUEVO: Banner superior con toda la UI ingame
+        this.topBar = new TopBarManager(this.assetManager, this);
+        // Enlazar con otros managers
+        this.topBar.storeUI = this.storeUI;
+        this.topBar.territory = null; // Se asignará después de inicializar territory
+        
         this.options = new OptionsManager(this.audio);
         this.deckManager = new DeckManager(this);
         this.arsenal = new ArsenalManager(this.assetManager, this);
@@ -99,6 +107,10 @@ export class Game {
         this.antiDroneSystem = new AntiDroneSystem(this);
         this.frontMovement = new FrontMovementSystem(this);
         this.territory = new TerritorySystem(this);
+        
+        // 🆕 NUEVO: Enlazar territory con topBar
+        this.topBar.territory = this.territory;
+        
         this.camera = new CameraController(this);
         this.inputHandler = new InputHandler(this);
         
@@ -745,52 +757,31 @@ export class Game {
     
     /**
      * Renderiza elementos de UI del juego (porcentajes de territorio, etc.)
-     * Se llama al final del ciclo de renderizado (DENTRO del contexto de cámara)
+     * 🔧 DEPRECATED: Ahora se renderiza en TopBarManager
+     * Mantenido por compatibilidad pero ya no se usa
      */
     renderGameUI() {
-        // Renderizar porcentajes de territorio en la parte superior
-        this.territory.renderTerritoryPercentages(this.renderer.ctx);
-        
-        // Renderizar reloj del tiempo de juego (centro superior)
-        this.renderGameTimer(this.renderer.ctx);
+        // 🔧 DEPRECATED: Ya no hace nada, TopBarManager maneja toda la UI
+        return;
     }
     
     /**
      * Renderiza el reloj del tiempo de juego en la parte superior central
+     * 🔧 DEPRECATED: Ahora se renderiza en TopBarManager
+     * Mantenido por compatibilidad pero ya no se usa
      */
     renderGameTimer(ctx) {
-        // Obtener tiempo de juego (en segundos ENTEROS)
-        let gameTime = 0;
-        
-        // 🔧 FIX: Acceder a lastGameState a través de gameStateSync
-        if (this.network && this.network.gameStateSync && this.network.gameStateSync.lastGameState) {
-            // Usar tiempo del servidor (redondear a segundos)
-            gameTime = Math.floor(this.network.gameStateSync.lastGameState.gameTime || 0);
-        } else if (this.matchStats && this.matchStats.startTime) {
-            // Fallback: calcular desde el inicio de la partida
-            gameTime = Math.floor((Date.now() - this.matchStats.startTime) / 1000);
-        }
-        
-        // Convertir a formato MM:SS
-        const minutes = Math.floor(gameTime / 60);
-        const seconds = gameTime % 60;
-        const timeText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        
-        // Renderizar en el centro superior
-        ctx.save();
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 24px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(timeText, this.worldWidth / 2, 50);
-        ctx.restore();
+        // 🔧 DEPRECATED: Ya no hace nada, TopBarManager maneja el reloj
     }
     
     /**
      * Renderiza la currency directamente en el canvas (solo multijugador)
-     * Usa el UIFrame real (currency_bton.png) y se posiciona junto a la tienda
+     * 🔧 DEPRECATED: Ahora se renderiza en TopBarManager
+     * Mantenido por compatibilidad pero ya no se usa
      */
     renderCurrencyOnCanvas(ctx) {
+        // 🔧 DEPRECATED: Ya no hace nada, TopBarManager maneja currency
+        return;
         const currency = Math.floor(this.currency.get());
         
         // Calcular rate: base desde configuración del servidor + bonus de plantas nucleares
@@ -1146,12 +1137,8 @@ export class Game {
         this.renderer.renderFactoryConnections();
         this.renderer.renderFactorySupplyIcons();
         
-        // Restaurar Mirror View ANTES de UI del juego (para que porcentajes estén en posición correcta)
+        // Restaurar Mirror View ANTES de UI del juego
         this.renderer.restoreMirrorView();
-        
-        // Renderizar elementos de UI del juego (porcentajes de territorio, etc.)
-        // DESPUÉS de restaurar mirror view para que estén en coordenadas correctas
-        this.renderGameUI();
         
         // === UI FIJA EN PANTALLA (fuera del contexto de cámara) ===
         
@@ -1166,14 +1153,18 @@ export class Game {
             this.renderer.renderWorldDestroyerEffects();
         }
         
-        // Renderizar tienda (fija en pantalla)
-        this.storeUI.updateLayout(this.canvas.width, this.canvas.height);
-        this.storeUI.render(this.renderer.ctx);
+        // 🆕 NUEVO: Renderizar banner superior (contiene: bandera, tienda, currency, territorios, reloj, bench)
+        this.topBar.updateLayout(this.canvas.width, this.canvas.height);
+        this.topBar.render(this.renderer.ctx);
         
-        // Renderizar currency en canvas (multijugador)
-        if (this.isMultiplayer) {
-            this.renderCurrencyOnCanvas(this.renderer.ctx);
-        }
+        // Renderizar desplegables de la tienda (bajo el banner)
+        // Actualizar layout con la posición X del icono clickeado
+        const storeIconX = this.storeUI.selectedCategory === 'buildings' 
+            ? this.topBar.layout.buildingIcon.x 
+            : this.topBar.layout.attackIcon.x;
+        const benchIconX = this.topBar.layout.benchIcon.x;
+        this.storeUI.updateLayout(this.canvas.width, this.canvas.height, storeIconX);
+        this.storeUI.render(this.renderer.ctx, benchIconX);
         
         // Renderizar tooltip de hover prolongado
         if (this.hoverTooltip) {

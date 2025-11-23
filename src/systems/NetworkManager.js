@@ -585,6 +585,11 @@ export class NetworkManager {
             const convoy = new Convoy(fromNode, toNode, vehicle, data.vehicleType, cargo, this.game);
             convoy.id = data.convoyId; // CRÍTICO: Usar ID del servidor
             
+            // 🆕 NUEVO: Aplicar bonus de vehicleWorkshop si el servidor lo indica
+            if (data.hasVehicleWorkshopBonus) {
+                convoy.hasVehicleWorkshopBonus = true;
+            }
+            
             // CRÍTICO: Actualizar posición visual inicial
             convoy.updateVisualPosition();
             

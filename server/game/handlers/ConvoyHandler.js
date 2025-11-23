@@ -219,6 +219,14 @@ export class ConvoyHandler {
             sabotagePenaltyApplied: sabotagePenaltyApplied // ✅ Flag para aplicar penalización durante todo el viaje
         };
         
+        // 🆕 NUEVO: Verificar si el convoy sale de un FOB con vehicleWorkshop en su área
+        if (fromNode.type === 'fob' && vehicleType === 'truck') {
+            const workshopBonus = this.checkVehicleWorkshopBonus(fromNode, playerTeam);
+            if (workshopBonus) {
+                convoy.hasVehicleWorkshopBonus = true;
+            }
+        }
+        
         this.gameState.convoys.push(convoy);
         
         // SONIDOS: Truck sound (si es desde HQ) o dispatch sound
@@ -228,6 +236,45 @@ export class ConvoyHandler {
         this.gameState.addSoundEvent('truck_dispatch', { team: playerTeam }); // Truck sound con cooldown 2s
         
         return { success: true, convoy };
+    }
+    
+    /**
+     * 🆕 NUEVO: Verifica si un FOB tiene vehicleWorkshop en su área
+     * @param {Object} fobNode - Nodo FOB
+     * @param {string} team - Equipo del FOB
+     * @returns {boolean} true si tiene vehicleWorkshop en su área
+     */
+    checkVehicleWorkshopBonus(fobNode, team) {
+        // Obtener radio de construcción del FOB
+        const fobBuildRadius = this.getBuildRadius('fob');
+        
+        // Buscar vehicleWorkshops del mismo equipo en el área del FOB
+        const hasWorkshopInArea = this.gameState.nodes.some(n => 
+            n.type === 'vehicleWorkshop' && 
+            n.team === team && 
+            n.active &&
+            n.constructed &&
+            !n.isAbandoning &&
+            Math.hypot(fobNode.x - n.x, fobNode.y - n.y) <= fobBuildRadius
+        );
+        
+        return hasWorkshopInArea;
+    }
+    
+    /**
+     * Helper: Obtiene el radio de construcción de un edificio
+     * @param {string} buildingType - Tipo de edificio
+     * @returns {number} Radio de construcción en píxeles
+     */
+    getBuildRadius(buildingType) {
+        const buildRadii = SERVER_NODE_CONFIG.buildRadius || {};
+        if (buildRadii[buildingType]) {
+            return buildRadii[buildingType];
+        }
+        
+        // Fallback: radius * 2.5
+        const radius = SERVER_NODE_CONFIG.radius?.[buildingType] || 30;
+        return radius * 2.5;
     }
     
     /**

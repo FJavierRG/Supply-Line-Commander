@@ -50,6 +50,12 @@ export class VehicleRenderer {
         } else {
             vehicleSpriteKey = convoy.vehicleType;
         }
+        
+        // 🆕 NUEVO: Si el convoy tiene bonus de vehicleWorkshop, usar sprite mejorado
+        if (convoy.hasVehicleWorkshopBonus && vehicleSpriteKey === 'truck') {
+            vehicleSpriteKey = 'truck_1';
+        }
+        
         // No usar sprites "returning"; aplicamos estilos dinámicamente
         const sprite = this.assetManager?.getVehicleSprite(vehicleSpriteKey, false);
         const angle = convoy.getAngle();

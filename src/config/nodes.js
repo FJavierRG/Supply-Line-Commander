@@ -250,6 +250,16 @@ export const NODE_CONFIG = {
         isDeadlyBuild: true // Flag para identificación
     },
     
+    servers: {
+        id: 'servers',
+        spriteKey: 'building-servers',
+        category: 'buildable',
+        
+        radius: 30, // Tamaño visual del sprite
+        
+        isServers: true // Flag para identificación
+    },
+    
     // ========== PROYECTILES ==========
     drone: {
         id: 'drone',

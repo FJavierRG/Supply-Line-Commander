@@ -88,6 +88,22 @@ export class CurrencySystem {
             player2Income += player2Plants * secretLaboratoryBonus;
         }
         
+        // 🆕 Bonus de Servidores: +0.5 currency/segundo por cada servidor construido
+        const serversBonus = SERVER_NODE_CONFIG.effects.servers.incomeBonus;
+        const player1Servers = this.gameState.nodes.filter(n => 
+            n.type === 'servers' && 
+            n.team === 'player1' && 
+            this.raceManager.canNodeProvideBonus(n) // 🆕 Usar función helper
+        ).length;
+        const player2Servers = this.gameState.nodes.filter(n => 
+            n.type === 'servers' && 
+            n.team === 'player2' && 
+            this.raceManager.canNodeProvideBonus(n) // 🆕 Usar función helper
+        ).length;
+        
+        player1Income += player1Servers * serversBonus;
+        player2Income += player2Servers * serversBonus;
+        
         const p1Generated = player1Income * dt;
         const p2Generated = player2Income * dt;
         

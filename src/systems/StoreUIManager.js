@@ -25,19 +25,19 @@ export class StoreUIManager {
         this.hoverStartTime = 0;
         this.hoverDelay = 500; // 500ms antes de mostrar tooltip
         
-        // Layout de la UI - esquina superior izquierda, layout vertical
+        // Layout de la UI - SOLO ventanas desplegables
+        // 🔧 REFACTOR: mainWindow y categoryButtons ahora están en TopBarManager
         this.baseResolution = { width: 1920, height: 1080 };
         this.layout = {
-            mainWindow: { x: 40, y: 40, w: 292, h: 125 }, // Tamaño real del sprite: 292x125
-            deployableWindow: { x: 40, y: 0, w: 292, h: 0 }, // Debajo de main, mismo ancho
-            categoryButtons: {
-                // Hitboxes más precisas basadas en el sprite real
-                buildings: { x: 20, y: 20, w: 100, h: 80 }, // Botón izquierdo (martillo) - más pequeño y centrado
-                vehicles: { x: 172, y: 20, w: 100, h: 80 }  // Botón derecho (rueda) - más pequeño y centrado
-            },
+            // Altura del banner superior (desde TopBarManager)
+            topBarHeight: 80,
+            
+            // Ventana desplegable debajo del banner
+            deployableWindow: { x: 0, y: 0, w: 292, h: 0 },
             itemGrid: { cols: 2, itemSize: 85, padding: 15, gap: 10 }, // Botones más grandes
+            
             // 🆕 NUEVO: Layout del panel de banquillo ingame
-            benchPanel: { x: 40, y: 0, w: 292, h: 0 }, // Debajo de deployableWindow, mismo ancho
+            benchPanel: { x: 0, y: 0, w: 292, h: 0 },
             benchHeader: { x: 0, y: 0, w: 292, h: 40 }, // Header del banquillo
             benchToggleBtn: { x: 250, y: 5, w: 30, h: 30 }, // Botón toggle
             benchList: { x: 10, y: 45, w: 272, h: 0 } // Lista de cartas del banquillo
@@ -121,32 +121,27 @@ export class StoreUIManager {
     
     /**
      * Actualiza el layout según el tamaño del canvas
-     * 🆕 NUEVO: Calcula también la posición del panel de banquillo
+     * 🔧 REFACTOR: Ahora solo calcula posición de desplegables bajo el banner
      */
-    updateLayout(canvasWidth, canvasHeight) {
-        // Posiciones FIJAS en coordenadas del mundo (anclado al mundo, no a la pantalla)
-        // Se verá afectado por el zoom de la cámara como cualquier otro sprite
-        this.layout.mainWindow.x = 40;
-        this.layout.mainWindow.y = 40;
-        this.layout.mainWindow.w = 292; // Tamaño real del sprite
-        this.layout.mainWindow.h = 125; // Tamaño real del sprite
+    updateLayout(canvasWidth, canvasHeight, topBarIconX = 40) {
+        const topBarHeight = this.layout.topBarHeight;
         
-        // Ventana desplegable debajo de la principal
-        this.layout.deployableWindow.x = 40;
-        this.layout.deployableWindow.w = 292; // Mismo ancho que main window
+        // Ventana desplegable debajo del icono de la tienda en el banner
+        // topBarIconX es la posición X del icono clickeado (pasado desde TopBarManager)
+        this.layout.deployableWindow.x = topBarIconX;
+        this.layout.deployableWindow.w = 292;
         
         // Calcular altura dinámica de la ventana desplegable
         const deployableSize = this.calculateDeployableSize();
         this.layout.deployableWindow.h = deployableSize.h;
         
-        // Posición debajo de la ventana principal
-        this.layout.deployableWindow.y = this.layout.mainWindow.y + this.layout.mainWindow.h;
+        // Posición debajo del banner
+        this.layout.deployableWindow.y = topBarHeight;
         
-        // 🆕 NUEVO: Actualizar posición del panel de banquillo (esquina superior derecha)
+        // 🆕 NUEVO: Actualizar posición del panel de banquillo (bajo el icono de bench)
         this.layout.benchPanel.w = 292;
-        // Posición en esquina superior derecha (ajustar según ancho del canvas)
-        this.layout.benchPanel.x = canvasWidth - this.layout.benchPanel.w - 40;
-        this.layout.benchPanel.y = 40; // Misma altura que la tienda principal
+        // La posición X se calculará cuando se renderice (desde TopBarManager)
+        this.layout.benchPanel.y = topBarHeight; // Bajo el banner
     }
     
     /**
@@ -206,26 +201,12 @@ export class StoreUIManager {
     
     /**
      * Actualiza las hitboxes para la interacción
+     * 🔧 REFACTOR: Solo hitboxes de items en desplegable (categorías en TopBarManager)
      */
     updateHitRegions() {
         this.hitRegions = [];
         
         if (!this.isVisible) return;
-        
-        // Hitboxes de botones de categoría (en main window)
-        const mainWindow = this.layout.mainWindow;
-        
-        Object.keys(this.categories).forEach(categoryId => {
-            const buttonLayout = this.layout.categoryButtons[categoryId];
-            this.hitRegions.push({
-                id: `category_${categoryId}`,
-                x: mainWindow.x + buttonLayout.x,
-                y: mainWindow.y + buttonLayout.y,
-                w: buttonLayout.w,
-                h: buttonLayout.h,
-                type: 'category'
-            });
-        });
         
         // Hitboxes de items en ventana desplegable
         if (this.selectedCategory) {
@@ -358,10 +339,13 @@ export class StoreUIManager {
     
     /**
      * Maneja clicks en la UI
-     * 🆕 NUEVO: También maneja clicks en el banquillo y modo permutación
+     * 🔧 REFACTOR: Solo maneja clicks en desplegables y banquillo (no categorías)
      */
     handleClick(mouseX, mouseY) {
         if (!this.isVisible) return false;
+        
+        // Obtener la posición del icono del bench (guardada durante el render)
+        const benchIconX = this._lastBenchIconX || null;
         
         // 🆕 NUEVO: Si está en modo permutación, verificar click en cartas del deck
         if (this.swapMode) {
@@ -400,91 +384,70 @@ export class StoreUIManager {
             }
             
             // Verificar si el click fue en el banquillo (para permitir cambiar de carta del banquillo)
-            if (this.handleBenchClick(mouseX, mouseY)) {
+            if (this.handleBenchClick(mouseX, mouseY, benchIconX)) {
                 return true; // Click manejado por el banquillo (puede cambiar la carta seleccionada)
             }
             
             // Si se clickeó fuera del panel de cartas del mazo y del banquillo, salir del modo permutación
-            // Verificar si fue click en otra parte de la UI
-            const clickedRegion = this.hitRegions.find(region => 
-                mouseX >= region.x && mouseX <= region.x + region.w &&
-                mouseY >= region.y && mouseY <= region.y + region.h
-            );
-            // Solo salir si no fue click en categoría (para permitir cambiar de categoría sin salir)
-            if (!clickedRegion || clickedRegion.type !== 'category') {
-                this.exitSwapMode();
-            }
+            this.exitSwapMode();
             return false; // No consumir el click, dejar que se procese normalmente
         }
         
         // 🆕 NUEVO: Manejar clicks en el panel de banquillo (cuando NO está en modo permutación)
-        if (this.handleBenchClick(mouseX, mouseY)) {
+        if (this.handleBenchClick(mouseX, mouseY, benchIconX)) {
             return true;
         }
         
-        // Buscar hitbox clickeada
+        // Buscar hitbox clickeada en items del desplegable
         const clickedRegion = this.hitRegions.find(region => 
             mouseX >= region.x && mouseX <= region.x + region.w &&
             mouseY >= region.y && mouseY <= region.y + region.h
         );
         
-        if (clickedRegion) {
-            if (clickedRegion.type === 'category') {
-                const categoryId = clickedRegion.id.replace('category_', '');
-                this.selectCategory(categoryId);
-                this.updateHitRegions(); // Actualizar hitboxes
-                // 🆕 NUEVO: Salir del modo permutación si se cambia de categoría
-                if (this.swapMode) {
-                    this.exitSwapMode();
+        if (clickedRegion && clickedRegion.type === 'item') {
+            const itemId = clickedRegion.itemId;
+            
+            // 🆕 NUEVO: Si está en modo permutación, verificar si la carta está en el deck
+            if (this.swapMode) {
+                const currentDeck = this.getCurrentDeck();
+                if (currentDeck && currentDeck.units && currentDeck.units.includes(itemId)) {
+                    return this.handleDeckCardSwapClick(itemId);
                 }
-                return true;
             }
             
-            if (clickedRegion.type === 'item') {
-                const itemId = clickedRegion.itemId;
-                
-                // 🆕 NUEVO: Si está en modo permutación, verificar si la carta está en el deck
-                if (this.swapMode) {
-                    const currentDeck = this.getCurrentDeck();
-                    if (currentDeck && currentDeck.units && currentDeck.units.includes(itemId)) {
-                        return this.handleDeckCardSwapClick(itemId);
-                    }
-                }
-                
-                // Verificar si el dron está bloqueado
-                if (itemId === 'drone' && !this.buildSystem.hasDroneLauncher()) {
-                    return true; // Consumir el click pero no activar
-                }
-                
-                // Verificar si el comando está bloqueado
-                if (itemId === 'specopsCommando' && !this.buildSystem.hasIntelCenter()) {
-                    return true; // Consumir el click pero no activar
-                }
-                
-                // Verificar si el truck assault está bloqueado
-                if (itemId === 'truckAssault' && !this.buildSystem.hasIntelCenter()) {
-                    return true; // Consumir el click pero no activar
-                }
-                
-                // Verificar si el camera drone está bloqueado
-                if (itemId === 'cameraDrone' && !this.buildSystem.hasDroneLauncher()) {
-                    return true; // Consumir el click pero no activar
-                }
-                
-                // 🆕 NUEVO: Verificar si el destructor de mundos está bloqueado
-                if (itemId === 'worldDestroyer' && !this.buildSystem.hasDeadlyBuild()) {
-                    return true; // Consumir el click pero no activar
-                }
-                
-                this.buildSystem.activateBuildMode(itemId);
-                // Ocultar desplegable para no tapar el mapa
-                this.selectedCategory = null;
-                // 🆕 NUEVO: Salir del modo permutación
-                if (this.swapMode) {
-                    this.exitSwapMode();
-                }
-                return true;
+            // Verificar si el dron está bloqueado
+            if (itemId === 'drone' && !this.buildSystem.hasDroneLauncher()) {
+                return true; // Consumir el click pero no activar
             }
+            
+            // Verificar si el comando está bloqueado
+            if (itemId === 'specopsCommando' && !this.buildSystem.hasIntelCenter()) {
+                return true; // Consumir el click pero no activar
+            }
+            
+            // Verificar si el truck assault está bloqueado
+            if (itemId === 'truckAssault' && !this.buildSystem.hasIntelCenter()) {
+                return true; // Consumir el click pero no activar
+            }
+            
+            // Verificar si el camera drone está bloqueado
+            if (itemId === 'cameraDrone' && !this.buildSystem.hasDroneLauncher()) {
+                return true; // Consumir el click pero no activar
+            }
+            
+            // 🆕 NUEVO: Verificar si el destructor de mundos está bloqueado
+            if (itemId === 'worldDestroyer' && !this.buildSystem.hasDeadlyBuild()) {
+                return true; // Consumir el click pero no activar
+            }
+            
+            this.buildSystem.activateBuildMode(itemId);
+            // Ocultar desplegable para no tapar el mapa
+            this.selectedCategory = null;
+            // 🆕 NUEVO: Salir del modo permutación
+            if (this.swapMode) {
+                this.exitSwapMode();
+            }
+            return true;
         }
         
         // Si no se clickeó en ninguna región Y no hay nada en construcción, cerrar desplegable
@@ -518,23 +481,26 @@ export class StoreUIManager {
     }
     
     /**
-     * Renderiza la UI de la tienda
+     * Renderiza la UI de la tienda (solo desplegables y bench)
+     * 🔧 REFACTOR: mainWindow ahora se renderiza en TopBarManager
      */
-    render(ctx) {
+    render(ctx, benchIconX = null) {
         if (!this.isVisible) return;
         
-        this.updateHitRegions();
+        // Guardar benchIconX para uso en handleClick
+        this._lastBenchIconX = benchIconX;
         
-        // Renderizar ventana principal
-        this.renderMainWindow(ctx);
+        this.updateHitRegions();
         
         // Renderizar ventana desplegable si hay categoría seleccionada
         if (this.selectedCategory) {
             this.renderDeployableWindow(ctx);
         }
         
-        // 🆕 NUEVO: Renderizar panel de banquillo ingame
-        this.renderBenchPanel(ctx);
+        // 🔧 REFACTOR: Renderizar panel de banquillo SOLO si está expandido (igual que tienda)
+        if (this.benchExpanded) {
+            this.renderBenchPanel(ctx, benchIconX);
+        }
         
         // Renderizar tooltip si debe mostrarse
         if (this.shouldShowTooltip()) {
@@ -1001,23 +967,23 @@ export class StoreUIManager {
     }
     
     /**
-     * 🆕 NUEVO: Renderiza el panel de banquillo ingame (esquina superior derecha)
+     * 🆕 NUEVO: Renderiza el panel de banquillo bajo el icono del banner
+     * 🔧 REFACTOR: Solo se renderiza cuando está expandido (igual que la tienda)
      */
-    renderBenchPanel(ctx) {
+    renderBenchPanel(ctx, benchIconX = null) {
         const bench = this.getBench();
-        // ✅ FIX: Siempre renderizar el panel (al menos el header) si existe el game y deckManager
-        if (!this.game || !this.game.deckManager) return; // Solo no renderizar si no hay sistema de mazos
+        if (!this.game || !this.game.deckManager) return;
+        if (bench.length === 0) return; // No renderizar si no hay cartas
         
-        // Obtener dimensiones del canvas para posicionar en esquina superior derecha
-        const canvasWidth = ctx.canvas.width;
+        // Calcular posición del panel bajo el icono del bench en el banner
+        const topBarHeight = this.layout.topBarHeight;
+        const benchX = benchIconX || this.layout.benchPanel.x;
         
-        // Calcular posición del panel (esquina superior derecha)
-        // Usar layout si está actualizado, sino calcular desde canvas
         const benchPanel = {
-            x: this.layout.benchPanel.x || (canvasWidth - 292 - 40),
-            y: this.layout.benchPanel.y || 40,
-            w: this.layout.benchPanel.w || 292,
-            h: this.benchExpanded ? this.calculateBenchPanelHeight(bench) : 40 // Solo header si está colapsado
+            x: benchX,
+            y: topBarHeight,
+            w: 292,
+            h: this.calculateBenchPanelHeight(bench)
         };
         
         // Renderizar fondo del panel
@@ -1037,7 +1003,6 @@ export class StoreUIManager {
         
         // Renderizar contador de puntos
         const benchCost = this.calculateBenchCost();
-        // ✅ FIX: Siempre usar el límite del servidor (gameConfig.js) - NO hardcodear valores
         const benchLimit = this.game?.deckManager?.getBenchPointLimit();
         ctx.fillStyle = (benchLimit !== null && benchLimit !== undefined && benchCost >= benchLimit) ? '#e74c3c' : '#ffffff';
         ctx.font = '14px Arial';
@@ -1045,27 +1010,8 @@ export class StoreUIManager {
         const limitText = benchLimit !== null && benchLimit !== undefined ? benchLimit : '-';
         ctx.fillText(`${benchCost}/${limitText}`, benchPanel.x + benchPanel.w - 50, benchPanel.y + 20);
         
-        // Renderizar botón toggle
-        const toggleBtn = {
-            x: benchPanel.x + benchPanel.w - 35,
-            y: benchPanel.y + 5,
-            w: 30,
-            h: 30
-        };
-        
-        ctx.fillStyle = 'rgba(255, 152, 0, 0.3)';
-        ctx.fillRect(toggleBtn.x, toggleBtn.y, toggleBtn.w, toggleBtn.h);
-        ctx.strokeStyle = 'rgba(255, 152, 0, 0.6)';
-        ctx.strokeRect(toggleBtn.x, toggleBtn.y, toggleBtn.w, toggleBtn.h);
-        
-        ctx.fillStyle = '#ff9800';
-        ctx.font = '16px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(this.benchExpanded ? '▲' : '▼', toggleBtn.x + toggleBtn.w / 2, toggleBtn.y + toggleBtn.h / 2);
-        
-        // Renderizar lista de cartas si está expandido
-        if (this.benchExpanded && bench.length > 0) {
+        // Renderizar lista de cartas
+        if (bench.length > 0) {
             const itemSize = 60;
             const padding = 10;
             const gap = 8;
@@ -1390,49 +1336,28 @@ export class StoreUIManager {
     }
     
     /**
-     * 🆕 NUEVO: Maneja clicks en el panel de banquillo
+     * 🆕 NUEVO: Maneja clicks en el panel de banquillo (solo cartas)
+     * 🔧 REFACTOR: Solo maneja clicks en cartas para permutación (igual que la tienda)
      */
-    handleBenchClick(mouseX, mouseY) {
+    handleBenchClick(mouseX, mouseY, benchIconX = null) {
+        if (!this.benchExpanded) return false; // Solo procesar clicks si está expandido
+        
         const bench = this.getBench();
         if (bench.length === 0) return false;
         
-        // Obtener dimensiones del canvas para calcular posición
-        const canvasWidth = this.game?.canvas?.width || 1920;
+        // Calcular posición del panel bajo el icono del bench
+        const topBarHeight = this.layout.topBarHeight;
+        const benchX = benchIconX || this.layout.benchPanel.x;
         
-        // Calcular posición del panel (esquina superior derecha)
         const benchPanel = {
-            x: this.layout.benchPanel.x || (canvasWidth - 292 - 40),
-            y: this.layout.benchPanel.y || 40,
+            x: benchX,
+            y: topBarHeight,
             w: 292,
-            h: this.benchExpanded ? this.calculateBenchPanelHeight(bench) : 40
+            h: this.calculateBenchPanelHeight(bench)
         };
         
-        // Verificar click en el header (toggle)
-        const headerY = benchPanel.y;
-        const headerH = 40;
-        if (mouseX >= benchPanel.x && mouseX <= benchPanel.x + benchPanel.w &&
-            mouseY >= headerY && mouseY <= headerY + headerH) {
-            // Click en botón toggle
-            const toggleBtn = {
-                x: benchPanel.x + benchPanel.w - 35,
-                y: benchPanel.y + 5,
-                w: 30,
-                h: 30
-            };
-            
-            if (mouseX >= toggleBtn.x && mouseX <= toggleBtn.x + toggleBtn.w &&
-                mouseY >= toggleBtn.y && mouseY <= toggleBtn.y + toggleBtn.h) {
-                this.benchExpanded = !this.benchExpanded;
-                return true;
-            }
-            
-            // Click en el header (también toggle)
-            this.benchExpanded = !this.benchExpanded;
-            return true;
-        }
-        
-        // Verificar click en cartas si está expandido
-        if (this.benchExpanded) {
+        // Verificar click en cartas
+        if (true) {
             const itemSize = 60;
             const padding = 10;
             const gap = 8;
@@ -1496,15 +1421,16 @@ export class StoreUIManager {
         
         if (deckCardsToShow.length === 0) return false;
         
-        // Calcular posición del panel de cartas del mazo
-        const canvasWidth = this.game?.canvas?.width || 1920;
-        
+        // 🔧 FIX: Usar la misma lógica que handleBenchClick para calcular posición
         const bench = this.getBench();
+        const topBarHeight = this.layout.topBarHeight;
+        const benchX = this._lastBenchIconX || this.layout.benchPanel.x;
+        
         const benchPanel = {
-            x: this.layout.benchPanel.x || (canvasWidth - 292 - 40),
-            y: this.layout.benchPanel.y || 40,
+            x: benchX,
+            y: topBarHeight,
             w: 292,
-            h: this.benchExpanded ? this.calculateBenchPanelHeight(bench) : 40
+            h: this.calculateBenchPanelHeight(bench)
         };
         
         const itemSize = 60;

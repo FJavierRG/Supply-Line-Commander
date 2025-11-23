@@ -69,6 +69,17 @@ export class CurrencyManager {
             bonus += nuclearPlants.length * 1; // +1 por cada planta nuclear (acumulable con Estudios de Física)
         }
         
+        // 🆕 Bonus de Servidores: +0.5 currency/segundo por cada servidor
+        const servers = this.game.nodes.filter(n => 
+            n.type === 'servers' && 
+            n.team === myTeam &&
+            n.constructed && 
+            !n.isConstructing &&
+            !n.isAbandoning
+        );
+        
+        bonus += servers.length * 0.5;
+        
         return bonus;
     }
     
