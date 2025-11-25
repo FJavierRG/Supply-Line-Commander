@@ -6,25 +6,27 @@
  * Mazo predeterminado del juego
  * Incluye unidades básicas y equilibradas para empezar a jugar
  * 🆕 NUEVO: Incluye banquillo con unidades adicionales
+ * 🆕 NUEVO: Incluye disciplinas estratégicas
  */
 export const DEFAULT_DECK = {
     id: 'default',
     name: 'Mazo Predeterminado',
     units: [
-        'hq',              // Siempre incluido
-        'sniperStrike',    // Ataque de francotirador
-        'intelRadio',      // Radio de inteligencia
-        'engineerCenter',  // Centro de ingenieros
-        'truckFactory',    // Fábrica de camiones
-        'factory',         // Fábrica (genera suministros)
-        'fobSabotage',     // Sabotaje FOB
+        'hq',              // Siempre incluido    // Ataque de francotirador
+        'servers',      // Radio de inteligencia
+        'engineerCenter',  // Centro de ingenieros   // Fábrica de camiones
+        'factory',         // Fábrica (genera suministros)     // Sabotaje FOB
         'fob',             // Base de operaciones avanzada
-        'antiDrone',       // Torreta anti drones
-        'nuclearPlant'     // Planta nuclear (genera income pasivo)
+        'antiDrone',
+        'trainStation',
+        'droneLauncher'    // Planta nuclear (genera income pasivo)
     ],
     bench: [
-        'tank',            // Tanque
-        'artillery'        // Artillería
+        'drone'        // Artillería
+    ],
+    disciplines: [
+        'motorized_industry',       // Industria Motorizada
+        'improved_infrastructure'   // Infraestructuras Mejoradas
     ],
     createdAt: Date.now(),
     updatedAt: Date.now(),

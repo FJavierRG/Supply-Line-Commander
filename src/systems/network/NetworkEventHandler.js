@@ -77,17 +77,19 @@ export class NetworkEventHandler {
      * Maneja eventos visuales del servidor
      */
     handleVisualEvent(event) {
-        // 🐛 DEBUG: Log todos los eventos visuales recibidos
-        console.log(`📺 [CLIENT DEBUG] Evento visual recibido:`, {
-            type: event.type,
-            team: event.team,
-            myTeam: this.networkManager.myTeam,
-            hasParticleSystem: !!this.game.particleSystem,
-            amount: event.amount,
-            cameraDroneId: event.cameraDroneId?.substring(0, 8),
-            x: event.x,
-            y: event.y
-        });
+        // 🐛 DEBUG: Log todos los eventos visuales recibidos (solo camera drones)
+        if (event.type === 'camera_drone_currency') {
+            console.log(`📺 [CLIENT DEBUG] Evento visual recibido:`, {
+                type: event.type,
+                team: event.team,
+                myTeam: this.networkManager.myTeam,
+                hasParticleSystem: !!this.game.particleSystem,
+                amount: event.amount,
+                cameraDroneId: event.cameraDroneId?.substring(0, 8),
+                x: event.x,
+                y: event.y
+            });
+        }
         
         switch(event.type) {
             case 'camera_drone_currency':
@@ -122,6 +124,46 @@ export class NetworkEventHandler {
                     }
                 } else {
                     console.log(`⏭️ [CLIENT DEBUG] Ignorando evento: equipo del evento (${event.team}) no coincide con mi equipo (${this.networkManager.myTeam})`);
+                }
+                break;
+            
+            case 'factory_currency_bonus':
+                // 🏭 NUEVO: Bonus de currency de fábrica por disciplina
+                // Solo mostrar si es del equipo del jugador
+                if (event.team === this.networkManager.myTeam) {
+                    if (this.game.particleSystem && this.game.particleSystem.createFloatingText) {
+                        this.game.particleSystem.createFloatingText(
+                            event.x,
+                            event.y - 40, // Un poco más arriba que la fábrica
+                            `+${event.amount}`,
+                            '#FFD700', // Color dorado para currency de fábrica
+                            event.factoryId // BaseId para acumulación
+                        );
+                    }
+                }
+                break;
+            
+            case 'currency_spent':
+                // 💸 NUEVO: Gasto de currency - mostrar "-n" flotando hacia abajo
+                if (event.team === this.networkManager.myTeam) {
+                    if (this.game.particleSystem && this.game.particleSystem.createFloatingText && this.game.topBar) {
+                        const layout = this.game.topBar.layout;
+                        
+                        if (layout && layout.currencyIcon) {
+                            const currencyIcon = layout.currencyIcon;
+                            const textX = currencyIcon.x + currencyIcon.w + 5;
+                            const textY = currencyIcon.y + currencyIcon.h / 2;
+                            
+                            this.game.particleSystem.createFloatingText(
+                                textX,
+                                textY,
+                                `-${event.amount}`,
+                                '#ff4444', // Color rojo para gasto
+                                null, // Sin acumulación
+                                'down' // Dirección hacia abajo
+                            );
+                        }
+                    }
                 }
                 break;
                 

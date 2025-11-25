@@ -238,8 +238,8 @@ export class BuildHandler {
             return { success: false, reason: 'Muy cerca de otro edificio' };
         }
         
-        // Descontar currency
-        this.gameState.currency[playerTeam] -= cost;
+        // Descontar currency y emitir evento visual
+        this.gameState.spendCurrency(playerTeam, cost, `build_${buildingType}`);
         
         // Crear nodo
         const node = this.createNode(buildingType, playerTeam, x, y);

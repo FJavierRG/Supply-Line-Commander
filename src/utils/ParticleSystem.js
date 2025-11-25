@@ -57,13 +57,14 @@ export class ExplosionSprite {
 }
 
 export class ImpactMark {
-    constructor(x, y, spriteKey, scale = 1.0) {
+    constructor(x, y, spriteKey, scale = 1.0, team = null) {
         this.x = x;
         this.y = y;
         this.spriteKey = spriteKey; // 'impact-1' o 'impact-2'
         this.alpha = 0.55; // 55% de opacidad (+5% menos transparente)
         this.flipH = Math.random() < 0.5; // 50% de probabilidad de voltear horizontalmente
         this.scale = scale; // Escala del sprite (1.0 = tamaño normal)
+        this.team = team; // 🆕 FOG OF WAR: Equipo del nodo destruido
     }
 }
 
@@ -96,13 +97,20 @@ export class ParticleSystem {
         for (const [baseId, data] of this.floatingTextAccumulator.entries()) {
             if (currentTime - data.lastUpdate > this.accumulatorTimeout) {
                 // Tiempo expirado, crear el texto flotante acumulado
+                // Buscar primero en bases, luego en nodos (para fábricas, etc.)
                 const base = this.game.bases.find(b => b.id === baseId);
-                if (base) {
+                const node = !base && this.game.nodes ? this.game.nodes.find(n => n.id === baseId) : null;
+                const target = base || node;
+                
+                if (target) {
+                    const prefix = data.amount >= 0 ? '+' : '';
+                    const yOffset = data.direction === 'down' ? 30 : -30; // Offset según dirección
                     this.floatingTexts.push(new FloatingText(
-                        base.x,
-                        base.y - 30,
-                        `+${Math.floor(data.amount)}`,
-                        data.color
+                        target.x,
+                        target.y + yOffset,
+                        `${prefix}${Math.floor(data.amount)}`,
+                        data.color,
+                        data.direction || 'up'
                     ));
                 }
                 this.floatingTextAccumulator.delete(baseId);
@@ -175,10 +183,11 @@ export class ParticleSystem {
         return this.explosionSprites;
     }
     
-    createFloatingText(x, y, text, color = '#ffffff', baseId = null) {
+    createFloatingText(x, y, text, color = '#ffffff', baseId = null, direction = 'up') {
         // Si no hay baseId, crear inmediatamente (sin acumulación)
         if (!baseId) {
-            this.floatingTexts.push(new FloatingText(x, y, text, color));
+            const floatingText = new FloatingText(x, y, text, color, direction);
+            this.floatingTexts.push(floatingText);
             return;
         }
         
@@ -186,17 +195,20 @@ export class ParticleSystem {
         const currentTime = Date.now();
         if (this.floatingTextAccumulator.has(baseId)) {
             const existing = this.floatingTextAccumulator.get(baseId);
-            // Extraer el número del texto "+123"
-            const amount = parseInt(text.replace('+', ''), 10) || 0;
-            existing.amount += amount;
+            // Extraer el número del texto (con + o -)
+            const amount = parseInt(text.replace(/[+-]/g, ''), 10) || 0;
+            const sign = text.startsWith('-') ? -1 : 1;
+            existing.amount += (amount * sign);
             existing.lastUpdate = currentTime;
         } else {
             // Crear nuevo acumulador
-            const amount = parseInt(text.replace('+', ''), 10) || 0;
+            const amount = parseInt(text.replace(/[+-]/g, ''), 10) || 0;
+            const sign = text.startsWith('-') ? -1 : 1;
             this.floatingTextAccumulator.set(baseId, {
-                amount: amount,
+                amount: amount * sign,
                 lastUpdate: currentTime,
-                color: color
+                color: color,
+                direction: direction // 🆕 NUEVO: Guardar dirección
             });
         }
     }
@@ -234,12 +246,12 @@ export class ParticleSystem {
      * @param {string} spriteKey - Clave del sprite (opcional, se elige aleatoriamente si no se especifica)
      * @param {number} scale - Escala del sprite (opcional, 1.0 por defecto)
      */
-    createImpactMark(x, y, spriteKey = null, scale = 1.0) {
+    createImpactMark(x, y, spriteKey = null, scale = 1.0, team = null) {
         // Elegir aleatoriamente entre impact-1 o impact-2 si no se especifica
         if (!spriteKey) {
             spriteKey = Math.random() < 0.5 ? 'impact-1' : 'impact-2';
         }
-        const impactMark = new ImpactMark(x, y, spriteKey, scale);
+        const impactMark = new ImpactMark(x, y, spriteKey, scale, team);
         this.impactMarks.push(impactMark);
     }
     
@@ -384,22 +396,25 @@ export class FallingSprite {
 }
 
 export class FloatingText {
-    constructor(x, y, text, color) {
+    constructor(x, y, text, color, direction = 'up') {
         this.x = x;
         this.y = y;
         this.text = text;
         this.color = color;
-        this.life = 2; // 2 segundos
-        this.maxLife = 2;
+        this.life = 1.2; // 1.2 segundos (suficiente para verlo)
+        this.maxLife = 1.2;
         this.alpha = 1;
-        this.velocityY = -30; // Sube hacia arriba
+        this.direction = direction;
+        // 🆕 NUEVO: Dirección configurable ('up' o 'down')
+        // Velocidad ajustada: más lento al bajar para dar tiempo a leer
+        this.velocityY = direction === 'down' ? 25 : -30;
     }
     
     update(dt) {
         this.life -= dt;
         this.y += this.velocityY * dt;
         
-        // Fade out en la segunda mitad
+        // Fade out en la última mitad de vida
         if (this.life < this.maxLife / 2) {
             this.alpha = (this.life / (this.maxLife / 2));
         }

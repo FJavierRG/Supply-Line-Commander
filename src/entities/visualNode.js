@@ -44,6 +44,10 @@ export class VisualNode {
                 this.supplies = this.maxSupplies;
                 this.consumeRate = config.consumeRate || 10;
                 this.maxXReached = x;
+                
+                // 🆕 NUEVO: Sistema de modos de frente
+                this.frontMode = config.frontMode || 'advance'; // Modo por defecto
+                this.modeCooldownUntil = config.modeCooldownUntil || 0; // Sin cooldown inicial
             } else {
                 this.supplies = 0;
             }

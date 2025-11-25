@@ -8,6 +8,7 @@ import { ClientSender } from './network/ClientSender.js';
 import { LobbyHandler } from './network/LobbyHandler.js';
 import { NetworkEventHandler } from './network/NetworkEventHandler.js';
 import { GameStateSync } from './network/GameStateSync.js';
+import { DEFAULT_DECK_UUID } from '../config/deckConstants.js';
 
 export class NetworkManager {
     constructor(game) {
@@ -194,6 +195,12 @@ export class NetworkManager {
         // 🎯 NUEVO: Recibir configuración del juego del servidor (incluyendo límite de mazo y mazo por defecto)
         this.socket.on('game_config', (config) => {
             console.log('⚙️ Configuración del juego recibida:', config);
+            // 🐛 DEBUG: Verificar disciplinas recibidas
+            if (config.defaultDeck && config.defaultDeck.disciplines) {
+                console.log('📥 [GAME_CONFIG] Disciplinas recibidas del servidor:', config.defaultDeck.disciplines);
+            } else {
+                console.warn('⚠️ [GAME_CONFIG] NO se recibieron disciplinas del servidor!');
+            }
             if (this.game && this.game.deckManager) {
                 if (config.deckPointLimit) {
                     this.game.deckManager.setPointLimit(config.deckPointLimit);
@@ -349,6 +356,31 @@ export class NetworkManager {
             if (this.game && this.game.arsenalManager) {
                 this.game.arsenalManager.showNotification(data.message || 'Error al permutar carta', 'error');
             }
+        });
+        
+        // === EVENTOS DE DISCIPLINAS ===
+        
+        this.socket.on('discipline_activated', (data) => {
+            console.log(`⚡ Disciplina activada: ${data.disciplineId} por ${data.playerId}`);
+            // El estado ya se sincroniza con game_update, esto es solo notificación
+            // TODO: Mostrar notificación visual cuando se implemente UI in-game
+        });
+        
+        this.socket.on('discipline_event', (data) => {
+            console.log(`⚡ Evento de disciplina:`, data);
+            // Eventos: 'ended' o 'cooldown_ready'
+            // El estado ya se sincroniza con game_update
+            // TODO: Mostrar notificación visual cuando se implemente UI in-game
+        });
+        
+        this.socket.on('activate_discipline_success', (data) => {
+            console.log(`✅ Disciplina activada exitosamente: ${data.disciplineId}`);
+            // TODO: Feedback visual de éxito
+        });
+        
+        this.socket.on('activate_discipline_error', (data) => {
+            console.error('Error al activar disciplina:', data.message);
+            // TODO: Mostrar notificación de error al usuario
         });
         
         // === EVENTOS DE JUEGO ===
@@ -584,6 +616,7 @@ export class NetworkManager {
             // Crear convoy
             const convoy = new Convoy(fromNode, toNode, vehicle, data.vehicleType, cargo, this.game);
             convoy.id = data.convoyId; // CRÍTICO: Usar ID del servidor
+            convoy.team = data.team; // 🆕 FOG OF WAR: Asignar equipo para filtrado
             
             // 🆕 NUEVO: Aplicar bonus de vehicleWorkshop si el servidor lo indica
             if (data.hasVehicleWorkshopBonus) {
@@ -595,7 +628,7 @@ export class NetworkManager {
             
             this.game.convoyManager.convoys.push(convoy);
             
- // Reproducir sonido solo si NO es de mi equipo - usar volumen reducido para enemigos
+            // Reproducir sonido solo si NO es de mi equipo - usar volumen reducido para enemigos
             if (data.team !== this.myTeam) {
                 this.game.audio.playEnemyTruckSound(); // Sonido del enemigo con volumen reducido 44% (56% del original)
             }
@@ -651,12 +684,12 @@ export class NetworkManager {
             // Crear convoy médico
             const convoy = new Convoy(fromNode, toNode, vehicle, 'ambulance', 0, this.game);
             convoy.id = data.convoyId;
+            convoy.team = data.team; // 🆕 FOG OF WAR: Asignar equipo para filtrado
             convoy.isMedical = true;
             convoy.targetFrontId = data.targetFrontId;
             
             // Inicializar sistema de interpolación suave y Dead Reckoning
             this.game.convoyManager.convoys.push(convoy);
-            
             
             // Reproducir sonido solo si NO es de mi equipo - usar volumen reducido para enemigos
             if (data.team !== this.myTeam) {
@@ -1417,33 +1450,19 @@ export class NetworkManager {
     
     /**
      * Seleccionar raza en multiplayer
+     * ✅ REFACTORIZADO: Solo envía el deckId, el servidor obtiene el mazo de la BD
      */
-    selectRace(raceId) {
+    selectRace(deckId) {
         
         if (!this.isMultiplayer || !this.roomId) {
             console.log('❌ selectRace bloqueado - isMultiplayer:', this.isMultiplayer, 'roomId:', this.roomId);
             return;
         }
         
-        // 🆕 NUEVO: Obtener unidades del mazo y banquillo
-        let deckUnits = null;
-        let benchUnits = null;
+        console.log('📤 [SELECT_RACE] Enviando deckId al servidor:', deckId);
         
-        if (this.game && this.game.deckManager) {
-            const deck = this.game.deckManager.getDeck(raceId);
-            if (deck) {
-                deckUnits = deck.units;
-                benchUnits = deck.bench || [];
-            } else if (raceId === 'default') {
-                const defaultDeck = this.game.deckManager.getDefaultDeck();
-                if (defaultDeck) {
-                    deckUnits = defaultDeck.units;
-                    benchUnits = defaultDeck.bench || [];
-                }
-            }
-        }
-        
-        this.clientSender.selectRace(this.roomId, raceId, deckUnits, benchUnits);
+        // ✅ NUEVO: Solo enviar el ID del mazo, el servidor lo obtiene de la BD
+        this.clientSender.selectRace(this.roomId, deckId);
     }
     
     /**
@@ -1547,6 +1566,15 @@ export class NetworkManager {
         if (!this.isMultiplayer || !this.roomId) return;
         
         this.clientSender.requestWorldDestroyer(this.roomId);
+    }
+    
+    /**
+     * 🆕 NUEVO: Activar disciplina
+     */
+    activateDiscipline(disciplineId) {
+        if (!this.isMultiplayer || !this.roomId) return;
+        
+        this.clientSender.activateDiscipline(this.roomId, disciplineId);
     }
     
     /**
@@ -1810,13 +1838,11 @@ export class NetworkManager {
      */
     getReasonText(reason, isWinner) {
         const winReasons = {
-            'front_reached_hq': 'Frente alcanzó el HQ enemigo',
-            'frontier_collapsed': 'Frontera enemiga colapsó'
+            'enemy_front_pushed': 'Empujaste al enemigo hasta su línea de derrota'
         };
         
         const loseReasons = {
-            'front_reached_hq': 'Frente enemigo alcanzó tu HQ',
-            'frontier_collapsed': 'Tu frontera colapsó'
+            'enemy_front_pushed': 'El enemigo te empujó hasta tu línea de derrota'
         };
         
         const reasons = isWinner ? winReasons : loseReasons;
@@ -2007,13 +2033,14 @@ export class NetworkManager {
      */
     generateDeckOptions(selectedDeckId) {
         if (!this.game || !this.game.deckManager) {
-            // Fallback si no hay DeckManager disponible
-            return '<option value="default">Mazo Predeterminado</option>';
+            // ✅ Fallback con UUID correcto
+            return `<option value="${DEFAULT_DECK_UUID}">Mazo Predeterminado</option>`;
         }
         
         const allDecks = this.game.deckManager.getAllDecks();
-        const defaultDeck = allDecks.find(d => d.isDefault === true);
-        const playerDecks = allDecks.filter(d => d.isDefault === false);
+        // ✅ Soportar ambos formatos: isDefault y is_default
+        const defaultDeck = allDecks.find(d => d.isDefault === true || d.is_default === true);
+        const playerDecks = allDecks.filter(d => !d.isDefault && !d.is_default);
         
         let optionsHTML = '';
         
@@ -2031,9 +2058,9 @@ export class NetworkManager {
             optionsHTML += `<option value="${deck.id}" ${isSelected ? 'selected' : ''}>${deck.name}</option>`;
         });
         
-        // Si no hay mazos guardados, mostrar solo el predeterminado
+        // Si no hay mazos guardados, mostrar solo el predeterminado con UUID correcto
         if (playerDecks.length === 0 && !defaultDeck) {
-            optionsHTML = '<option value="default">Mazo Predeterminado</option>';
+            optionsHTML = `<option value="${DEFAULT_DECK_UUID}">Mazo Predeterminado</option>`;
         }
         
         return optionsHTML;
@@ -2081,26 +2108,11 @@ export class NetworkManager {
                 
                 // Solo enviar si el jugador actual no tiene mazo seleccionado aún en el servidor
                 if (playerData && !playerData.selectedRace) {
-                    // 🎯 NUEVO: Obtener las unidades del mazo seleccionado
-                    let deckUnits = null;
                     const deckId = select.value;
+                    console.log('📤 [AUTO-SELECT] Enviando deckId al servidor:', deckId);
                     
-                    let benchUnits = null; // 🆕 NUEVO: Banquillo
-                    if (this.game && this.game.deckManager) {
-                        const deck = this.game.deckManager.getDeck(deckId);
-                        if (deck) {
-                            deckUnits = deck.units;
-                            benchUnits = deck.bench || []; // 🆕 NUEVO: Obtener banquillo
-                        } else if (deckId === 'default') {
-                            const defaultDeck = this.game.deckManager.getDefaultDeck();
-                            if (defaultDeck) {
-                                deckUnits = defaultDeck.units;
-                                benchUnits = defaultDeck.bench || []; // 🆕 NUEVO: Obtener banquillo
-                            }
-                        }
-                    }
-                    
-                    this.clientSender.selectRace(this.roomId, deckId, deckUnits, benchUnits);
+                    // ✅ NUEVO: Solo enviar el ID del mazo, el servidor lo obtiene de la BD
+                    this.clientSender.selectRace(this.roomId, deckId);
                 }
             }
             
@@ -2108,27 +2120,10 @@ export class NetworkManager {
             select.addEventListener('change', (e) => {
                 const deckId = e.target.value;
                 if (deckId) {
-                    // 🎯 NUEVO: Obtener las unidades del mazo seleccionado
-                    let deckUnits = null;
-                    let benchUnits = null; // 🆕 NUEVO: Banquillo
+                    console.log('📤 [MANUAL-SELECT] Enviando deckId al servidor:', deckId);
                     
-                    if (this.game && this.game.deckManager) {
-                        const deck = this.game.deckManager.getDeck(deckId);
-                        if (deck) {
-                            deckUnits = deck.units;
-                            benchUnits = deck.bench || []; // 🆕 NUEVO: Obtener banquillo
-                        } else if (deckId === 'default') {
-                            // Si es el mazo predeterminado, obtenerlo
-                            const defaultDeck = this.game.deckManager.getDefaultDeck();
-                            if (defaultDeck) {
-                                deckUnits = defaultDeck.units;
-                                benchUnits = defaultDeck.bench || []; // 🆕 NUEVO: Obtener banquillo
-                            }
-                        }
-                    }
-                    
-                    // Enviar al servidor con las unidades del mazo
-                    this.clientSender.selectRace(this.roomId, deckId, deckUnits, benchUnits);
+                    // ✅ NUEVO: Solo enviar el ID del mazo, el servidor lo obtiene de la BD
+                    this.clientSender.selectRace(this.roomId, deckId);
                 }
             });
         });
@@ -2573,13 +2568,11 @@ export class NetworkManager {
      */
     getReasonText(reason, isWinner) {
         const winReasons = {
-            'front_reached_hq': 'Frente alcanzó el HQ enemigo',
-            'frontier_collapsed': 'Frontera enemiga colapsó'
+            'enemy_front_pushed': 'Empujaste al enemigo hasta su línea de derrota'
         };
         
         const loseReasons = {
-            'front_reached_hq': 'Frente enemigo alcanzó tu HQ',
-            'frontier_collapsed': 'Tu frontera colapsó'
+            'enemy_front_pushed': 'El enemigo te empujó hasta tu línea de derrota'
         };
         
         const reasons = isWinner ? winReasons : loseReasons;

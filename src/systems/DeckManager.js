@@ -1,26 +1,21 @@
-// ===== GESTOR DE MAZOS =====
-// Maneja la persistencia y gestión de mazos (CRUD)
-// Preparado para migración fácil a base de datos
+// ===== GESTOR DE MAZOS (REFACTORIZADO) =====
+// Usa API REST en vez de localStorage
 
+import { deckService } from '../services/DeckService.js';
+import { MigrationService } from '../services/MigrationService.js';
 import { getNodeConfig } from '../config/nodes.js';
-
-// 🆕 NUEVO: El mazo predeterminado ahora viene del servidor
-// Se establece cuando se recibe game_config
-let DEFAULT_DECK_FROM_SERVER = null;
-
-const STORAGE_KEY = 'game_decks';
-// ✅ Los límites vienen SOLO del servidor (server/config/gameConfig.js) - NO hardcodear valores aquí
+import { DEFAULT_DECK_UUID } from '../config/deckConstants.js';
 
 export class DeckManager {
     constructor(game) {
         this.game = game;
-        this.decks = [];
-        this.defaultDeckId = null;
+        this.decks = []; // Cache en memoria
+        this.defaultDeckId = DEFAULT_DECK_UUID;
         this.lastSelectedDeckId = null;
-        this.deckPointLimit = null; // ✅ Solo se establece desde el servidor (gameConfig.js)
-        this.benchPointLimit = null; // ✅ Solo se establece desde el servidor (gameConfig.js)
+        this.deckPointLimit = null;
+        this.benchPointLimit = null;
         
-        // 🆕 NUEVO: Gestión de disponibilidad del mazo por defecto
+        // Sistema de notificaciones
         this.defaultDeckReady = false;
         this._defaultDeckResolve = null;
         this._defaultDeckReadyPromise = new Promise((resolve) => {
@@ -33,84 +28,75 @@ export class DeckManager {
     
     /**
      * Inicializa el sistema de mazos
-     * Carga desde localStorage o crea el mazo predeterminado
      */
-    initialize() {
-        this.loadDecks();
-        
-        // Asegurar que siempre haya un mazo predeterminado
-        if (!this.hasDefaultDeck()) {
-            this.createDefaultDeck();
-        } else {
-            // Asegurar que el defaultDeckId esté configurado
-            const defaultDeck = this.decks.find(d => d.isDefault === true);
-            if (defaultDeck) {
-                this.defaultDeckId = defaultDeck.id;
-            }
-        }
-        
-        // Si el último mazo seleccionado es el predeterminado, resetearlo
-        if (this.lastSelectedDeckId === this.defaultDeckId) {
-            this.lastSelectedDeckId = null;
-        }
-        
-        // Si no hay mazo seleccionado o solo hay el predeterminado, no seleccionar ninguno
-        // El arsenal empezará con mazo vacío
-        this.markDefaultDeckReady();
-    }
-    
-    /**
-     * Carga todos los mazos desde localStorage
-     * 🆕 NUEVO: Migra mazos antiguos añadiendo bench: [] si no existe
-     */
-    loadDecks() {
+    async initialize() {
         try {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (stored) {
-                const data = JSON.parse(stored);
-                this.decks = data.decks || [];
-                this.defaultDeckId = data.defaultDeckId || null;
-                this.lastSelectedDeckId = data.lastSelectedDeckId || null;
-                
-                // 🆕 NUEVO: Migración - añadir bench: [] a mazos antiguos que no lo tengan
-                let needsSave = false;
-                this.decks.forEach(deck => {
-                    if (!deck.bench) {
-                        deck.bench = [];
-                        needsSave = true;
-                    }
-                });
-                
-                if (needsSave) {
-                    this.saveDecks();
-                    console.log('🔄 Mazos migrados: añadido campo bench a mazos antiguos');
-                }
-            } else {
-                this.decks = [];
-                this.defaultDeckId = null;
-                this.lastSelectedDeckId = null;
-            }
+            console.log('🎴 Inicializando DeckManager (versión API)...');
+            
+            // Ejecutar migración automática
+            await this.runMigration();
+            
+            // Cargar mazos desde la API
+            await this.loadDecks();
+            
+            // Cargar el último mazo seleccionado desde localStorage
+            this.lastSelectedDeckId = localStorage.getItem('lastSelectedDeckId');
+            
+            console.log('✅ DeckManager inicializado correctamente');
         } catch (error) {
-            console.error('Error al cargar mazos:', error);
+            console.error('❌ Error inicializando DeckManager:', error);
+            // Asegurar que haya al menos el mazo por defecto vacío para no romper la app
             this.decks = [];
-            this.defaultDeckId = null;
-            this.lastSelectedDeckId = null;
+        } finally {
+            // Siempre marcar como listo (incluso si hubo error) para no colgar promesas
+            this.markDefaultDeckReady();
         }
     }
     
     /**
-     * Guarda todos los mazos en localStorage
+     * Ejecuta la migración de localStorage a BD (una sola vez)
      */
-    saveDecks() {
+    async runMigration() {
         try {
-            const data = {
-                decks: this.decks,
-                defaultDeckId: this.defaultDeckId,
-                lastSelectedDeckId: this.lastSelectedDeckId
-            };
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            const result = await MigrationService.migrateDecks();
+            if (result.migrated > 0) {
+                console.log(`✅ Migración completada: ${result.migrated} mazos migrados`);
+            }
         } catch (error) {
-            console.error('Error al guardar mazos:', error);
+            console.error('❌ Error en migración:', error);
+        }
+    }
+    
+    /**
+     * Carga todos los mazos desde la API
+     */
+    async loadDecks() {
+        try {
+            // Obtener mazos del usuario
+            const userDecks = await deckService.getUserDecks();
+            
+            // Obtener mazo por defecto
+            const defaultDeck = await deckService.getDefaultDeck();
+            
+            // Combinar (default + user decks)
+            this.decks = defaultDeck ? [defaultDeck, ...userDecks] : userDecks;
+            
+            console.log(`📂 Mazos cargados: ${this.decks.length} (1 default + ${userDecks.length} propios)`);
+        } catch (error) {
+            console.error('❌ Error cargando mazos:', error);
+            this.decks = [];
+        }
+    }
+    
+    /**
+     * Guarda el ID del último mazo seleccionado (solo el ID, no todo el mazo)
+     */
+    saveSelectedDeckId(deckId) {
+        this.lastSelectedDeckId = deckId;
+        if (deckId) {
+            localStorage.setItem('lastSelectedDeckId', deckId);
+        } else {
+            localStorage.removeItem('lastSelectedDeckId');
         }
     }
     
@@ -118,437 +104,96 @@ export class DeckManager {
      * Verifica si existe un mazo predeterminado
      */
     hasDefaultDeck() {
-        return this.decks.some(deck => deck.isDefault === true);
+        return this.decks.some(d => d.is_default === true);
     }
     
     /**
-     * 🆕 NUEVO: Establece el mazo por defecto recibido del servidor
-     * @param {Object} defaultDeck - Mazo por defecto del servidor
+     * Establece el mazo por defecto desde el servidor
      */
-    setDefaultDeckFromServer(defaultDeck) {
-        DEFAULT_DECK_FROM_SERVER = {
+    async setDefaultDeckFromServer(defaultDeck) {
+        console.log('📥 Mazo por defecto recibido del servidor');
+        
+        // Asegurar que el mazo tenga el UUID correcto
+        const normalizedDeck = {
             ...defaultDeck,
-            isDefault: true,
-            createdAt: Date.now(),
-            updatedAt: Date.now()
+            id: DEFAULT_DECK_UUID, // Forzar el UUID correcto
+            is_default: true
         };
         
-        // Actualizar o crear el mazo por defecto en localStorage
-        const existingIndex = this.decks.findIndex(d => d.id === 'default');
+        // El default deck ya está en la BD, solo actualizar cache
+        const existingIndex = this.decks.findIndex(d => d.id === DEFAULT_DECK_UUID);
         if (existingIndex >= 0) {
-            // Sobrescribir completamente con la versión del servidor (fuente única de verdad)
-            this.decks[existingIndex] = { ...DEFAULT_DECK_FROM_SERVER };
+            this.decks[existingIndex] = normalizedDeck;
         } else {
-            this.decks.push({ ...DEFAULT_DECK_FROM_SERVER });
+            this.decks.unshift(normalizedDeck);
         }
         
-        this.defaultDeckId = 'default';
-        if (!this.lastSelectedDeckId) {
-            this.lastSelectedDeckId = 'default';
-        }
-        
-        this.saveDecks();
-        console.log('🎴 Mazo por defecto actualizado desde servidor:', DEFAULT_DECK_FROM_SERVER);
+        this.defaultDeckId = DEFAULT_DECK_UUID;
         this.markDefaultDeckReady();
         this.notifyDefaultDeckUpdated();
     }
     
     /**
-     * Crea el mazo predeterminado (solo si no viene del servidor)
-     * 🆕 NUEVO: Ahora usa el mazo del servidor si está disponible
-     */
-    createDefaultDeck() {
-        // Si ya tenemos el mazo del servidor, usarlo
-        if (DEFAULT_DECK_FROM_SERVER) {
-            const existingIndex = this.decks.findIndex(d => d.id === 'default');
-            if (existingIndex >= 0) {
-                // Ya existe, no hacer nada
-                return this.decks[existingIndex];
-            } else {
-                // Crear desde el servidor
-                this.decks.push({ ...DEFAULT_DECK_FROM_SERVER });
-                this.defaultDeckId = 'default';
-                if (!this.lastSelectedDeckId) {
-                    this.lastSelectedDeckId = 'default';
-                }
-                this.saveDecks();
-                return this.decks[this.decks.length - 1];
-            }
-        }
-        
-        // Fallback: crear un mazo básico si no hay servidor (modo offline)
-        const now = Date.now();
-        const defaultDeck = {
-            id: 'default',
-            name: 'Mazo Predeterminado',
-            units: ['hq', 'fob'], // HQ y FOB como fallback
-            bench: [],
-            isDefault: true,
-            createdAt: now,
-            updatedAt: now
-        };
-        
-        const existingIndex = this.decks.findIndex(d => d.id === defaultDeck.id);
-        if (existingIndex >= 0) {
-            return this.decks[existingIndex];
-        } else {
-            this.decks.push(defaultDeck);
-        }
-        
-        this.defaultDeckId = defaultDeck.id;
-        if (!this.lastSelectedDeckId) {
-            this.lastSelectedDeckId = defaultDeck.id;
-        }
-        
-        this.saveDecks();
-        return defaultDeck;
-    }
-    
-    /**
-     * Calcula el costo total de un mazo (suma de precios de todas las unidades)
-     * @param {Array<string>} units - Array de IDs de unidades
-     * @returns {number} Costo total del mazo
-     */
-    calculateDeckCost(units) {
-        if (!units || !Array.isArray(units)) return 0;
-        
-        let totalCost = 0;
-        
-        units.forEach(unitId => {
-            // El HQ y FOB son gratis (no tienen costo o costo 0)
-            if (unitId === 'hq' || unitId === 'fob') {
-                return; // Continuar sin sumar
-            }
-            
-            // Obtener el costo de la unidad desde la configuración
-            const config = getNodeConfig(unitId);
-            const cost = config?.cost || 0;
-            
-            totalCost += cost;
-        });
-        
-        return totalCost;
-    }
-    
-    /**
-     * 🆕 NUEVO: Calcula el costo total del banquillo (suma de precios de todas las unidades)
-     * @param {Array<string>} bench - Array de IDs de unidades del banquillo
-     * @returns {number} Costo total del banquillo
-     */
-    calculateBenchCost(bench) {
-        if (!bench || !Array.isArray(bench)) return 0;
-        
-        let totalCost = 0;
-        
-        bench.forEach(unitId => {
-            // Obtener el costo de la unidad desde la configuración
-            const config = getNodeConfig(unitId);
-            const cost = config?.cost || 0;
-            
-            totalCost += cost;
-        });
-        
-        return totalCost;
-    }
-    
-    /**
-     * Obtiene el límite de puntos permitido para un mazo
-     * @returns {number|null} Límite de puntos (null si aún no se ha recibido del servidor)
-     */
-    getDeckPointLimit() {
-        return this.deckPointLimit;
-    }
-    
-    /**
-     * 🆕 NUEVO: Obtiene el límite de puntos permitido para el banquillo
-     * @returns {number|null} Límite de puntos del banquillo (null si aún no se ha recibido del servidor)
-     */
-    getBenchPointLimit() {
-        return this.benchPointLimit;
-    }
-    
-    /**
-     * Establece el límite de puntos desde el servidor (ANTI-HACK)
-     * @param {number} limit - Límite de puntos del servidor
-     */
-    setPointLimit(limit) {
-        if (typeof limit === 'number' && limit > 0) {
-            this.deckPointLimit = limit;
-            console.log(`🎯 Límite de puntos actualizado desde servidor: ${limit}`);
-            // Actualizar el HTML inmediatamente cuando se recibe el valor del servidor
-            if (this.game && this.game.arsenalManager) {
-                this.game.arsenalManager.initializePointLimits();
-                if (this.game.arsenalManager.isVisible) {
-                    this.game.arsenalManager.populateArsenal();
-                }
-            }
-        }
-    }
-    
-    /**
-     * 🆕 NUEVO: Establece el límite de puntos del banquillo desde el servidor (ANTI-HACK)
-     * @param {number} limit - Límite de puntos del banquillo del servidor
-     */
-    setBenchPointLimit(limit) {
-        if (typeof limit === 'number' && limit > 0) {
-            this.benchPointLimit = limit;
-            console.log(`🎯 Límite de puntos del banquillo actualizado desde servidor: ${limit}`);
-            // Actualizar el HTML inmediatamente cuando se recibe el valor del servidor
-            if (this.game && this.game.arsenalManager) {
-                this.game.arsenalManager.initializePointLimits();
-                if (this.game.arsenalManager.isVisible) {
-                    this.game.arsenalManager.populateArsenal();
-                }
-            }
-        }
-    }
-    
-    /**
-     * Valida que un mazo sea válido
-     * 🆕 NUEVO: También valida el banquillo
-     * @param {Object} deck - Objeto del mazo a validar
-     * @returns {Object} { valid: boolean, errors: string[] }
-     */
-    validateDeck(deck) {
-        const errors = [];
-        
-        if (!deck || typeof deck !== 'object') {
-            errors.push('El mazo no es válido');
-            return { valid: false, errors };
-        }
-        
-        if (!deck.name || deck.name.trim() === '') {
-            errors.push('El mazo debe tener un nombre');
-        }
-        
-        // 🆕 NUEVO: Asegurar que bench existe
-        if (!Array.isArray(deck.bench)) {
-            deck.bench = [];
-        }
-        
-        if (!Array.isArray(deck.units)) {
-            errors.push('El mazo debe tener un array de unidades');
-        } else {
-            // Verificar que el HQ esté incluido
-            if (!deck.units.includes('hq')) {
-                errors.push('El mazo debe incluir el HQ');
-            }
-            
-            // Verificar que no haya duplicados en el mazo
-            const uniqueUnits = [...new Set(deck.units)];
-            if (uniqueUnits.length !== deck.units.length) {
-                errors.push('El mazo no puede tener unidades duplicadas');
-            }
-            
-            // 🆕 NUEVO: Verificar límite de puntos del mazo
-            const deckCost = this.calculateDeckCost(deck.units);
-            if (deckCost > this.deckPointLimit) {
-                errors.push(`El mazo excede el límite de puntos (${deckCost}/${this.deckPointLimit})`);
-            }
-            
-            // 🆕 NUEVO: Verificar que no haya duplicados en el banquillo
-            const uniqueBench = [...new Set(deck.bench)];
-            if (uniqueBench.length !== deck.bench.length) {
-                errors.push('El banquillo no puede tener unidades duplicadas');
-            }
-            
-            // 🆕 NUEVO: Verificar límite de puntos del banquillo
-            const benchCost = this.calculateBenchCost(deck.bench);
-            if (benchCost > this.benchPointLimit) {
-                errors.push(`El banquillo excede el límite de puntos (${benchCost}/${this.benchPointLimit})`);
-            }
-            
-            // 🆕 NUEVO: Verificar que no haya duplicados entre mazo y banquillo
-            const deckSet = new Set(deck.units);
-            const benchSet = new Set(deck.bench);
-            const intersection = [...deckSet].filter(x => benchSet.has(x));
-            if (intersection.length > 0) {
-                errors.push(`No puede haber unidades duplicadas entre el mazo y el banquillo: ${intersection.join(', ')}`);
-            }
-            
-            // 🆕 NUEVO: Verificar que el HQ no esté en el banquillo
-            if (deck.bench.includes('hq')) {
-                errors.push('El HQ no puede estar en el banquillo');
-            }
-            
-            // Verificar que todas las unidades existan y estén habilitadas (si está disponible)
-            if (this.game && this.game.serverBuildingConfig && this.game.serverBuildingConfig.behavior) {
-                const enabled = this.game.serverBuildingConfig.behavior.enabled;
-                
-                // Validar unidades del mazo
-                deck.units.forEach(unitId => {
-                    if (unitId !== 'hq' && enabled[unitId] === false) {
-                        errors.push(`La unidad "${unitId}" está deshabilitada`);
-                    }
-                });
-                
-                // 🆕 NUEVO: Validar unidades del banquillo
-                deck.bench.forEach(unitId => {
-                    if (enabled[unitId] === false) {
-                        errors.push(`La unidad "${unitId}" del banquillo está deshabilitada`);
-                    }
-                });
-            }
-        }
-        
-        return {
-            valid: errors.length === 0,
-            errors
-        };
-    }
-    
-    /**
-     * Obtiene todos los mazos guardados
-     * @returns {Array<Object>} Array de mazos
-     */
-    getAllDecks() {
-        return [...this.decks];
-    }
-    
-    /**
-     * Obtiene un mazo por ID
-     * @param {string} deckId - ID del mazo
-     * @returns {Object|null} El mazo o null si no existe
-     */
-    getDeck(deckId) {
-        return this.decks.find(d => d.id === deckId) || null;
-    }
-    
-    /**
-     * Obtiene el mazo predeterminado
-     * @returns {Object|null} El mazo predeterminado o null si no existe
-     */
-    getDefaultDeck() {
-        return this.decks.find(d => d.isDefault === true) || null;
-    }
-    
-    /**
-     * Obtiene el mazo actualmente seleccionado
-     * @returns {Object|null} El mazo seleccionado (solo si no es predeterminado) o null
-     */
-    getSelectedDeck() {
-        if (this.lastSelectedDeckId && this.lastSelectedDeckId !== this.defaultDeckId) {
-            const deck = this.getDeck(this.lastSelectedDeckId);
-            if (deck && !deck.isDefault) {
-                return deck;
-            }
-        }
-        return null;
-    }
-    
-    /**
      * Crea un nuevo mazo
-     * 🆕 NUEVO: Incluye bench: [] por defecto
-     * @param {string} name - Nombre del mazo
-     * @param {Array<string>} units - Array de IDs de unidades
-     * @param {Array<string>} bench - Array de IDs de unidades del banquillo (opcional)
-     * @returns {Object|null} El mazo creado o null si hay error
      */
-    createDeck(name, units, bench = []) {
-        const now = Date.now();
-        const deck = {
-            id: `deck_${now}_${Math.random().toString(36).substr(2, 9)}`,
-            name: name.trim(),
-            units: [...units], // Copia del array
-            bench: [...(bench || [])], // 🆕 NUEVO: Copia del array del banquillo
-            createdAt: now,
-            updatedAt: now,
-            isDefault: false
-        };
-        
-        const validation = this.validateDeck(deck);
-        if (!validation.valid) {
-            console.error('Error al validar mazo:', validation.errors);
+    async createDeck(name, units, bench = [], disciplines = []) {
+        try {
+            const deck = await deckService.createDeck(name, units, bench, disciplines);
+            
+            // Actualizar cache
+            this.decks.push(deck);
+            
+            return deck;
+        } catch (error) {
+            console.error('❌ Error creando mazo:', error);
             return null;
         }
-        
-        this.decks.push(deck);
-        this.saveDecks();
-        return deck;
     }
     
     /**
      * Actualiza un mazo existente
-     * @param {string} deckId - ID del mazo a actualizar
-     * @param {Object} updates - Objeto con las propiedades a actualizar
-     * @returns {Object|null} El mazo actualizado o null si hay error
      */
-    updateDeck(deckId, updates) {
-        const deckIndex = this.decks.findIndex(d => d.id === deckId);
-        if (deckIndex < 0) {
-            console.error('Mazo no encontrado:', deckId);
+    async updateDeck(deckId, updates) {
+        try {
+            const updatedDeck = await deckService.updateDeck(deckId, updates);
+            
+            // Actualizar cache
+            const index = this.decks.findIndex(d => d.id === deckId);
+            if (index >= 0) {
+                this.decks[index] = updatedDeck;
+            }
+            
+            return updatedDeck;
+        } catch (error) {
+            console.error('❌ Error actualizando mazo:', error);
             return null;
         }
-        
-        const deck = this.decks[deckIndex];
-        
-        // No permitir cambiar el estado de default
-        if (deck.isDefault && updates.isDefault === false) {
-            console.error('No se puede quitar el estado de predeterminado');
-            return null;
-        }
-        
-        // Crear mazo actualizado
-        const updatedDeck = {
-            ...deck,
-            ...updates,
-            id: deck.id, // No permitir cambiar el ID
-            isDefault: deck.isDefault, // No permitir cambiar isDefault
-            updatedAt: Date.now()
-        };
-        
-        const validation = this.validateDeck(updatedDeck);
-        if (!validation.valid) {
-            console.error('Error al validar mazo actualizado:', validation.errors);
-            return null;
-        }
-        
-        this.decks[deckIndex] = updatedDeck;
-        this.saveDecks();
-        return updatedDeck;
     }
     
     /**
      * Elimina un mazo
-     * @param {string} deckId - ID del mazo a eliminar
-     * @returns {boolean} true si se eliminó correctamente
      */
-    deleteDeck(deckId) {
-        const deckIndex = this.decks.findIndex(d => d.id === deckId);
-        if (deckIndex < 0) {
-            console.error('Mazo no encontrado:', deckId);
+    async deleteDeck(deckId) {
+        try {
+            await deckService.deleteDeck(deckId);
+            
+            // Actualizar cache
+            this.decks = this.decks.filter(d => d.id !== deckId);
+            
+            // Si era el seleccionado, limpiar selección
+            if (this.lastSelectedDeckId === deckId) {
+                this.saveSelectedDeckId(null);
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('❌ Error eliminando mazo:', error);
             return false;
         }
-        
-        const deck = this.decks[deckIndex];
-        
-        // No permitir eliminar el mazo predeterminado
-        if (deck.isDefault) {
-            console.error('No se puede eliminar el mazo predeterminado');
-            return false;
-        }
-        
-        // Si se elimina el mazo seleccionado, resetear la selección (no usar predeterminado)
-        if (this.lastSelectedDeckId === deckId) {
-            this.lastSelectedDeckId = null;
-        }
-        
-        this.decks.splice(deckIndex, 1);
-        
-        // Si no quedan mazos del jugador, asegurar que el predeterminado exista
-        const playerDecks = this.decks.filter(d => !d.isDefault);
-        if (playerDecks.length === 0 && !this.hasDefaultDeck()) {
-            this.createDefaultDeck();
-        }
-        
-        this.saveDecks();
-        return true;
     }
     
     /**
      * Selecciona un mazo como el actual
-     * @param {string} deckId - ID del mazo a seleccionar
-     * @returns {boolean} true si se seleccionó correctamente
      */
     selectDeck(deckId) {
         const deck = this.getDeck(deckId);
@@ -558,63 +203,86 @@ export class DeckManager {
         }
         
         // No permitir seleccionar el mazo predeterminado
-        if (deck.isDefault) {
+        if (deck.is_default) {
             console.error('No se puede seleccionar el mazo predeterminado');
             return false;
         }
         
-        this.lastSelectedDeckId = deckId;
-        this.saveDecks();
+        this.saveSelectedDeckId(deckId);
         return true;
     }
     
     /**
-     * Exporta un mazo a JSON (útil para compartir o backup)
-     * 🆕 NUEVO: Incluye el banquillo en la exportación
-     * @param {string} deckId - ID del mazo a exportar
-     * @returns {string|null} JSON del mazo o null si hay error
+     * Obtiene un mazo por ID (desde cache)
      */
-    exportDeck(deckId) {
-        const deck = this.getDeck(deckId);
-        if (!deck) return null;
-        
-        // Crear copia sin metadatos internos
-        const exportData = {
-            name: deck.name,
-            units: [...deck.units],
-            bench: [...(deck.bench || [])] // 🆕 NUEVO: Incluir banquillo
-        };
-        
-        return JSON.stringify(exportData, null, 2);
-    }
-    
-    /**
-     * Importa un mazo desde JSON
-     * 🆕 NUEVO: Soporta importar banquillo
-     * @param {string} jsonString - JSON del mazo a importar
-     * @param {string} name - Nombre opcional (si no viene en el JSON)
-     * @returns {Object|null} El mazo importado o null si hay error
-     */
-    importDeck(jsonString, name = null) {
-        try {
-            const data = JSON.parse(jsonString);
-            const deckName = name || data.name || `Mazo Importado ${Date.now()}`;
-            const units = data.units || [];
-            const bench = data.bench || []; // 🆕 NUEVO: Importar banquillo
-            
-            return this.createDeck(deckName, units, bench);
-        } catch (error) {
-            console.error('Error al importar mazo:', error);
-            return null;
+    getDeck(deckId) {
+        const deck = this.decks.find(d => d.id === deckId) || null;
+        if (deck) {
+            console.log('🔍 [DECK_MANAGER] getDeck:', deckId, '→ Disciplinas:', deck.disciplines);
+        } else {
+            console.warn('⚠️ [DECK_MANAGER] getDeck: Mazo no encontrado:', deckId);
         }
+        return deck;
     }
     
     /**
-     * 🆕 NUEVO: Valida una permutación (intercambio) entre mazo y banquillo
-     * @param {Object} deck - Objeto del mazo
-     * @param {string} deckUnitId - ID de la unidad del mazo a intercambiar
-     * @param {string} benchUnitId - ID de la unidad del banquillo a intercambiar
-     * @returns {Object} { valid: boolean, errors: string[] }
+     * Obtiene el mazo predeterminado
+     */
+    getDefaultDeck() {
+        return this.decks.find(d => d.is_default === true) || null;
+    }
+    
+    /**
+     * Obtiene el mazo actualmente seleccionado
+     */
+    getSelectedDeck() {
+        if (this.lastSelectedDeckId && this.lastSelectedDeckId !== this.defaultDeckId) {
+            const deck = this.getDeck(this.lastSelectedDeckId);
+            if (deck && !deck.is_default) {
+                return deck;
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Obtiene todos los mazos
+     */
+    getAllDecks() {
+        return [...this.decks];
+    }
+    
+    /**
+     * Calcula el costo total de un mazo
+     */
+    calculateDeckCost(units) {
+        if (!units || !Array.isArray(units)) return 0;
+        
+        let totalCost = 0;
+        
+        units.forEach(unitId => {
+            // El HQ y FOB son gratis
+            if (unitId === 'hq' || unitId === 'fob') return;
+            
+            const config = getNodeConfig(unitId);
+            if (config && config.cost !== undefined) {
+                totalCost += config.cost;
+            }
+        });
+        
+        return totalCost;
+    }
+    
+    /**
+     * Calcula el costo total del banquillo
+     * (Alias de calculateDeckCost para compatibilidad)
+     */
+    calculateBenchCost(bench) {
+        return this.calculateDeckCost(bench);
+    }
+    
+    /**
+     * Valida un intercambio entre mazo y banquillo
      */
     validateSwap(deck, deckUnitId, benchUnitId) {
         const errors = [];
@@ -653,11 +321,11 @@ export class DeckManager {
         const newDeckCost = this.calculateDeckCost(newDeckUnits);
         const newBenchCost = this.calculateBenchCost(newBenchUnits);
         
-        if (newDeckCost > this.deckPointLimit) {
+        if (this.deckPointLimit && newDeckCost > this.deckPointLimit) {
             errors.push(`El intercambio excedería el límite del mazo (${newDeckCost}/${this.deckPointLimit})`);
         }
         
-        if (newBenchCost > this.benchPointLimit) {
+        if (this.benchPointLimit && newBenchCost > this.benchPointLimit) {
             errors.push(`El intercambio excedería el límite del banquillo (${newBenchCost}/${this.benchPointLimit})`);
         }
         
@@ -666,24 +334,9 @@ export class DeckManager {
             errors
         };
     }
-
+    
     /**
-     * 🆕 NUEVO: Marca que el mazo por defecto está disponible
-     */
-    markDefaultDeckReady() {
-        if (!this.defaultDeckReady) {
-            this.defaultDeckReady = true;
-        }
-        
-        if (this._defaultDeckResolve) {
-            this._defaultDeckResolve();
-            this._defaultDeckResolve = null;
-        }
-    }
-
-    /**
-     * 🆕 NUEVO: Permite esperar a que el mazo por defecto esté listo
-     * @returns {Promise<void>}
+     * Espera a que el mazo por defecto esté listo
      */
     ensureDefaultDeckReady() {
         if (this.defaultDeckReady) {
@@ -691,37 +344,103 @@ export class DeckManager {
         }
         return this._defaultDeckReadyPromise;
     }
-
+    
     /**
-     * 🆕 NUEVO: Registrar listeners para cambios del mazo predeterminado
-     * @param {Function} callback
+     * Valida un mazo (misma lógica que antes)
      */
+    validateDeck(deck) {
+        const errors = [];
+        
+        // Validar nombre
+        if (!deck.name || deck.name.trim() === '') {
+            errors.push('El mazo debe tener un nombre');
+        }
+        
+        // Validar unidades
+        if (!deck.units || !Array.isArray(deck.units) || deck.units.length === 0) {
+            errors.push('El mazo debe tener al menos una unidad');
+        }
+        
+        // Validar límite de puntos del mazo
+        if (this.deckPointLimit !== null) {
+            const deckCost = this.calculateDeckCost(deck.units.filter(u => u !== 'hq' && u !== 'fob'));
+            if (deckCost > this.deckPointLimit) {
+                errors.push(`El mazo excede el límite de ${this.deckPointLimit} puntos (actual: ${deckCost})`);
+            }
+        }
+        
+        // Validar límite de puntos del banquillo
+        if (this.benchPointLimit !== null && deck.bench && deck.bench.length > 0) {
+            const benchCost = this.calculateDeckCost(deck.bench);
+            if (benchCost > this.benchPointLimit) {
+                errors.push(`El banquillo excede el límite de ${this.benchPointLimit} puntos (actual: ${benchCost})`);
+            }
+        }
+        
+        // Validar disciplinas
+        if (deck.disciplines && deck.disciplines.length > 2) {
+            errors.push('Máximo 2 disciplinas permitidas');
+        }
+        
+        return {
+            valid: errors.length === 0,
+            errors
+        };
+    }
+    
+    // ============================================================
+    // MÉTODOS DE LÍMITES (desde servidor)
+    // ============================================================
+    
+    setPointLimit(limit) {
+        this.deckPointLimit = limit;
+        console.log('🎯 Límite de puntos actualizado desde servidor:', limit);
+    }
+    
+    setBenchPointLimit(limit) {
+        this.benchPointLimit = limit;
+        console.log('🎯 Límite de puntos del banquillo actualizado desde servidor:', limit);
+    }
+    
+    getDeckPointLimit() {
+        return this.deckPointLimit;
+    }
+    
+    getBenchPointLimit() {
+        return this.benchPointLimit;
+    }
+    
+    // ============================================================
+    // SISTEMA DE NOTIFICACIONES
+    // ============================================================
+    
+    markDefaultDeckReady() {
+        if (!this.defaultDeckReady) {
+            this.defaultDeckReady = true;
+            if (this._defaultDeckResolve) {
+                this._defaultDeckResolve();
+            }
+        }
+    }
+    
+    waitForDefaultDeck() {
+        return this._defaultDeckReadyPromise;
+    }
+    
     onDefaultDeckUpdated(callback) {
-        if (typeof callback === 'function') {
-            this.defaultDeckListeners.add(callback);
-        }
+        this.defaultDeckListeners.add(callback);
     }
-
-    /**
-     * 🆕 NUEVO: Quitar listeners registrados
-     * @param {Function} callback
-     */
+    
     offDefaultDeckUpdated(callback) {
-        if (callback && this.defaultDeckListeners.has(callback)) {
-            this.defaultDeckListeners.delete(callback);
-        }
+        this.defaultDeckListeners.delete(callback);
     }
-
-    /**
-     * 🆕 NUEVO: Notifica a los listeners que el mazo predeterminado cambió
-     */
+    
     notifyDefaultDeckUpdated() {
-        const defaultDeck = this.getDefaultDeck();
-        this.defaultDeckListeners.forEach((listener) => {
+        this.defaultDeckListeners.forEach(callback => {
             try {
-                listener(defaultDeck);
+                callback();
             } catch (error) {
-                console.error('❌ Error notificando actualización del mazo por defecto:', error);
+                console.error('Error en listener de default deck:', error);
             }
         });
     }

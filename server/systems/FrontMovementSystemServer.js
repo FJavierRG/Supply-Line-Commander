@@ -30,6 +30,9 @@ export class FrontMovementSystemServer {
         
         // Flags para sonidos únicos por frente
         this.noAmmoSoundPlayed = new Set(); // IDs de frentes que ya reprodujeron no_ammo
+        
+        // Timer para verificación de victoria (1 vez por segundo)
+        this.lastVictoryCheck = 0;
     }
 
     /**
@@ -50,9 +53,25 @@ export class FrontMovementSystemServer {
             this.updateFrontMovement(front, player1Fronts, -1, dt); // dirección -1 = izquierda
         }
         
-        // Verificar condiciones de victoria/derrota (solo cada 2 segundos)
+        // Verificar condiciones de victoria/derrota (solo cada 1 segundo)
         // Retorna resultado de victoria si la hay
-        return this.checkVictoryConditions();
+        const currentTime = Date.now();
+        if (currentTime - this.lastVictoryCheck >= 1000) {
+            this.lastVictoryCheck = currentTime;
+            return this.checkVictoryConditions(player1Fronts, player2Fronts);
+        }
+        
+        return null;
+    }
+
+    /**
+     * Obtiene la configuración del modo actual del frente
+     * @param {Object} front - Frente
+     * @returns {Object} Configuración del modo
+     */
+    getFrontModeConfig(front) {
+        const modes = SERVER_NODE_CONFIG.gameplay.front.modes;
+        return modes[front.frontMode] || modes.advance;
     }
 
     /**
@@ -66,9 +85,13 @@ export class FrontMovementSystemServer {
         // Buscar frente enemigo más cercano verticalmente
         const nearestEnemy = this.findNearestEnemyFrontVertical(front, enemyFronts);
         
+        // 🆕 SISTEMA DE MODOS: Obtener configuración del modo actual
+        const modeConfig = this.getFrontModeConfig(front);
+        
         let movement = 0;
         let inCollision = false;
         let reason = '';
+        let isVoluntaryRetreat = false; // Para tracking de currency por retroceso voluntario
         
         // Verificar colisión con enemigo
         if (nearestEnemy && this.areInCollisionRange(front, nearestEnemy, direction)) {
@@ -80,76 +103,150 @@ export class FrontMovementSystemServer {
                 this.gameState.hasPlayedEnemyContact = true;
             }
             
-            // EMPUJE: Comparar suministros
-            if (front.supplies > nearestEnemy.supplies) {
-                // Este frente tiene más → EMPUJA (avanza hacia el enemigo)
-                // PERO debe avanzar a la MISMA velocidad que el enemigo retrocede
-                // Así la distancia se mantiene constante
-                const pushSpeed = this.advanceSpeed; // 8 px/s
-                movement = pushSpeed * dt * direction;
-                reason = `EMPUJA (${front.supplies.toFixed(0)} > ${nearestEnemy.supplies.toFixed(0)})`;
-            } else if (front.supplies < nearestEnemy.supplies) {
-                // Enemigo tiene más → ES EMPUJADO (retrocede alejándose del enemigo)
-                // CRÍTICO: Retroceder a la MISMA velocidad que el enemigo avanza
-                // para mantener distancia constante
-                const pushSpeed = this.advanceSpeed; // Mismo que el empuje (8 px/s)
-                movement = -pushSpeed * dt * direction;
-                reason = `EMPUJADO (${front.supplies.toFixed(0)} < ${nearestEnemy.supplies.toFixed(0)})`;
-            } else {
-                // Recursos IGUALES
-                if (front.supplies === 0 && nearestEnemy.supplies === 0) {
-                    // AMBOS sin recursos → AMBOS retroceden (alejándose)
-                    movement = -this.retreatSpeed * dt * direction;
-                    reason = `AMBOS SIN RECURSOS (retroceden)`;
-                } else {
-                    // Recursos iguales pero > 0 → EMPATE (no se mueven)
-                    movement = 0;
-                    reason = `EMPATE (${front.supplies.toFixed(0)} = ${nearestEnemy.supplies.toFixed(0)})`;
-                }
-            }
-        } else {
-            // SIN COLISIÓN: Movimiento normal basado en recursos
-            if (front.supplies > 0) {
-                // Avanzar
-                movement = this.advanceSpeed * dt * direction;
-                reason = `AVANZA (supplies: ${front.supplies.toFixed(0)})`;
-                
-                // Resetear flag de no_ammo si volvió a tener supplies
-                if (this.noAmmoSoundPlayed.has(front.id)) {
-                    this.noAmmoSoundPlayed.delete(front.id);
-                }
-            } else {
-                // Retroceder (sin recursos)
+            // 🆕 MODO HOLD (ANCLA): No puede ser empujado mientras tenga supplies > 0
+            if (modeConfig.isAnchor && front.supplies > 0) {
+                // HOLD con supplies: ancla inmóvil, no puede ser empujado
+                movement = 0;
+                reason = `HOLD-ANCLA (supplies: ${front.supplies.toFixed(0)})`;
+            } else if (modeConfig.isAnchor && front.supplies === 0) {
+                // HOLD SIN supplies: pierde ancla y retrocede
                 movement = -this.retreatSpeed * dt * direction;
-                reason = `RETROCEDE (sin supplies)`;
+                reason = `HOLD-SIN-SUMINISTROS (retrocede)`;
                 
-                // SONIDO: No ammo (solo una vez por frente)
+                // SONIDO: No ammo
                 if (!this.noAmmoSoundPlayed.has(front.id)) {
                     this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
                     this.noAmmoSoundPlayed.add(front.id);
                 }
+            } else {
+                // Comportamiento normal de colisión (modos ADVANCE y RETREAT en colisión)
+                // Nota: RETREAT no puede colisionar normalmente porque va hacia atrás,
+                // pero si el enemigo lo alcanza, se aplica la lógica de empuje
+                
+                // 🆕 FIX: Verificar si el enemigo está en modo HOLD (ancla)
+                // Un ancla con supplies > 0 NO puede ser empujado, el atacante debe detenerse
+                const enemyModeConfig = this.getFrontModeConfig(nearestEnemy);
+                const enemyIsAnchor = enemyModeConfig.isAnchor && nearestEnemy.supplies > 0;
+                
+                if (enemyIsAnchor) {
+                    // 🆕 El enemigo es un ANCLA - no se puede empujar, quedarse bloqueado
+                    movement = 0;
+                    reason = `BLOQUEADO POR ANCLA (enemigo en HOLD con ${nearestEnemy.supplies.toFixed(0)} supplies)`;
+                }
+                // EMPUJE: Comparar suministros (solo si el enemigo NO es ancla)
+                else if (front.supplies > nearestEnemy.supplies) {
+                    // Este frente tiene más → EMPUJA (si no está en modo retreat)
+                    if (modeConfig.canAdvance) {
+                        const pushSpeed = this.advanceSpeed;
+                        movement = pushSpeed * dt * direction;
+                        reason = `EMPUJA (${front.supplies.toFixed(0)} > ${nearestEnemy.supplies.toFixed(0)})`;
+                    } else {
+                        // En RETREAT durante colisión: no empuja, mantiene posición
+                        movement = 0;
+                        reason = `RETREAT-COLISION (${front.supplies.toFixed(0)})`;
+                    }
+                } else if (front.supplies < nearestEnemy.supplies) {
+                    // Enemigo tiene más → ES EMPUJADO
+                    const pushSpeed = this.advanceSpeed;
+                    movement = -pushSpeed * dt * direction;
+                    reason = `EMPUJADO (${front.supplies.toFixed(0)} < ${nearestEnemy.supplies.toFixed(0)})`;
+                } else {
+                    // Recursos IGUALES
+                    if (front.supplies === 0 && nearestEnemy.supplies === 0) {
+                        // AMBOS sin recursos → AMBOS retroceden
+                        movement = -this.retreatSpeed * dt * direction;
+                        reason = `AMBOS SIN RECURSOS (retroceden)`;
+                    } else {
+                        // Recursos iguales pero > 0 → EMPATE
+                        movement = 0;
+                        reason = `EMPATE (${front.supplies.toFixed(0)} = ${nearestEnemy.supplies.toFixed(0)})`;
+                    }
+                }
+            }
+        } else {
+            // SIN COLISIÓN: Movimiento según modo
+            
+            // 🆕 MODO HOLD (sin colisión)
+            if (modeConfig.isAnchor) {
+                if (front.supplies > 0) {
+                    // HOLD con supplies: inmóvil
+                    movement = 0;
+                    reason = `HOLD (supplies: ${front.supplies.toFixed(0)})`;
+                    
+                    if (this.noAmmoSoundPlayed.has(front.id)) {
+                        this.noAmmoSoundPlayed.delete(front.id);
+                    }
+                } else {
+                    // HOLD SIN supplies: pierde ancla y retrocede
+                    movement = -this.retreatSpeed * dt * direction;
+                    reason = `HOLD-SIN-SUMINISTROS (retrocede)`;
+                    
+                    if (!this.noAmmoSoundPlayed.has(front.id)) {
+                        this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
+                        this.noAmmoSoundPlayed.add(front.id);
+                    }
+                }
+            }
+            // 🆕 MODO RETREAT (sin colisión)
+            else if (modeConfig.canRetreat) {
+                if (front.supplies > 0) {
+                    // RETREAT con supplies: retrocede voluntariamente
+                    movement = -this.retreatSpeed * dt * direction;
+                    reason = `RETREAT (supplies: ${front.supplies.toFixed(0)})`;
+                    isVoluntaryRetreat = true; // Marca para ganar currency
+                    
+                    if (this.noAmmoSoundPlayed.has(front.id)) {
+                        this.noAmmoSoundPlayed.delete(front.id);
+                    }
+                } else {
+                    // RETREAT SIN supplies: retrocede igual
+                    movement = -this.retreatSpeed * dt * direction;
+                    reason = `RETREAT-SIN-SUMINISTROS (retrocede)`;
+                    
+                    if (!this.noAmmoSoundPlayed.has(front.id)) {
+                        this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
+                        this.noAmmoSoundPlayed.add(front.id);
+                    }
+                }
+            }
+            // 🆕 MODO ADVANCE (comportamiento original)
+            else if (modeConfig.canAdvance) {
+                if (front.supplies > 0) {
+                    // Avanzar
+                    movement = this.advanceSpeed * dt * direction;
+                    reason = `AVANZA (supplies: ${front.supplies.toFixed(0)})`;
+                    
+                    if (this.noAmmoSoundPlayed.has(front.id)) {
+                        this.noAmmoSoundPlayed.delete(front.id);
+                    }
+                } else {
+                    // Sin recursos: retrocede
+                    movement = -this.retreatSpeed * dt * direction;
+                    reason = `RETROCEDE (sin supplies)`;
+                    
+                    if (!this.noAmmoSoundPlayed.has(front.id)) {
+                        this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
+                        this.noAmmoSoundPlayed.add(front.id);
+                    }
+                }
             }
         }
-        
-        // DEBUG: Log movimiento cada 2 segundos (COMENTADO - reduce spam)
-        // if (!this._lastFrontLog) this._lastFrontLog = {};
-        // if (!this._lastFrontLog[front.id] || Date.now() - this._lastFrontLog[front.id] > 2000) {
-        //     const dirStr = direction === 1 ? '→' : '←';
-        //     const enemyDist = nearestEnemy ? Math.abs(front.x - nearestEnemy.x).toFixed(0) : 'N/A';
-        //     console.log(`🎯 ${front.team} frente ${dirStr} x=${front.x.toFixed(0)} | ${reason} | dist=${enemyDist}px | col=${inCollision}`);
-        //     this._lastFrontLog[front.id] = Date.now();
-        // }
         
         // Aplicar movimiento
         front.x += movement;
         
-        // Trackear avance para currency
+        // Trackear movimiento para currency
         if (direction === 1) {
             // Player1: avanza a la derecha (+X)
             if (!front.maxXReached) front.maxXReached = front.x;
             
-            // 🔧 FIX: Si retrocedió, actualizar maxXReached para que cuente desde la nueva posición
             if (front.x < front.maxXReached) {
+                // Retrocedió
+                if (isVoluntaryRetreat) {
+                    // 🆕 RETREAT: Ganar currency por retroceso voluntario
+                    const pixelsRetreated = front.maxXReached - front.x;
+                    this.awardCurrencyForRetreat('player1', pixelsRetreated, front);
+                }
                 front.maxXReached = front.x;
             } else if (front.x > front.maxXReached) {
                 // Avanzó: otorgar currency
@@ -161,8 +258,13 @@ export class FrontMovementSystemServer {
             // Player2: avanza a la izquierda (-X)
             if (!front.minXReached) front.minXReached = front.x;
             
-            // 🔧 FIX: Si retrocedió, actualizar minXReached para que cuente desde la nueva posición
             if (front.x > front.minXReached) {
+                // Retrocedió
+                if (isVoluntaryRetreat) {
+                    // 🆕 RETREAT: Ganar currency por retroceso voluntario
+                    const pixelsRetreated = front.x - front.minXReached;
+                    this.awardCurrencyForRetreat('player2', pixelsRetreated, front);
+                }
                 front.minXReached = front.x;
             } else if (front.x < front.minXReached) {
                 // Avanzó: otorgar currency
@@ -229,6 +331,13 @@ export class FrontMovementSystemServer {
     awardCurrencyForAdvance(team, pixelsGained, front = null) {
         if (pixelsGained <= 0) return;
         
+        // 🆕 SISTEMA DE MODOS: Solo el modo ADVANCE gana currency por avance normal
+        const modeConfig = front ? this.getFrontModeConfig(front) : null;
+        const currencyMultiplier = modeConfig ? modeConfig.currencyMultiplier : 1.0;
+        
+        // Si el multiplicador es 0 (modo HOLD), no otorgar currency
+        if (currencyMultiplier === 0) return;
+        
         // Acumular pixels
         this.pendingCurrencyPixels[team] += pixelsGained;
         
@@ -253,6 +362,9 @@ export class FrontMovementSystemServer {
                 }
             }
             
+            // 🆕 Aplicar multiplicador del modo (normalmente 1.0 para ADVANCE)
+            finalCurrencyToAward = Math.floor(finalCurrencyToAward * currencyMultiplier);
+            
             this.gameState.currency[team] += finalCurrencyToAward;
             this.pendingCurrencyPixels[team] -= currencyToAward * GAME_CONFIG.currency.pixelsPerCurrency;
             
@@ -264,90 +376,88 @@ export class FrontMovementSystemServer {
     }
 
     /**
-     * Verificar condiciones de victoria/derrota
-     * Hay DOS formas de ganar:
-     * 1. Tu frente empuja hasta el HQ enemigo (victoria activa)
-     * 2. La frontera enemiga retrocede hasta su propio HQ (victoria pasiva)
+     * 🆕 Otorga currency por retroceso VOLUNTARIO de frentes (modo RETREAT)
+     * @param {string} team - Equipo del jugador ('player1' o 'player2')
+     * @param {number} pixelsRetreated - Píxeles retrocedidos voluntariamente
+     * @param {Object} front - Frente que está retrocediendo
      */
-    checkVictoryConditions() {
-        const player1Fronts = this.gameState.nodes.filter(n => n.type === 'front' && n.team === 'player1' && n.active !== false);
-        const player2Fronts = this.gameState.nodes.filter(n => n.type === 'front' && n.team === 'player2' && n.active !== false);
-        const player1HQ = this.gameState.nodes.find(n => n.type === 'hq' && n.team === 'player1' && n.active !== false);
-        const player2HQ = this.gameState.nodes.find(n => n.type === 'hq' && n.team === 'player2' && n.active !== false);
+    awardCurrencyForRetreat(team, pixelsRetreated, front) {
+        if (pixelsRetreated <= 0 || !front) return;
         
-        if (!player1HQ || !player2HQ) return null; // No hay HQs, no puede haber victoria
+        // Obtener configuración del modo RETREAT
+        const modeConfig = this.getFrontModeConfig(front);
+        const currencyMultiplier = modeConfig.currencyMultiplier; // 0.75 para RETREAT
         
-        // Calcular fronteras (usando la misma lógica que TerritorySystem)
-        const player1Frontier = this.calculateFrontier('player1', player1Fronts);
-        const player2Frontier = this.calculateFrontier('player2', player2Fronts);
+        // Si no está en modo retreat o multiplicador es 0, no otorgar
+        if (!modeConfig.canRetreat || currencyMultiplier === 0) return;
         
-        // Calcular líneas de victoria basadas en porcentajes (15% y 85% del ancho)
+        // Inicializar acumulador de retroceso si no existe
+        if (!this.pendingRetreatPixels) {
+            this.pendingRetreatPixels = { player1: 0, player2: 0 };
+        }
+        
+        // Acumular pixels de retroceso
+        this.pendingRetreatPixels[team] += pixelsRetreated;
+        
+        // Convertir a currency base (sin multiplicador todavía)
+        const baseCurrency = Math.floor(this.pendingRetreatPixels[team] / GAME_CONFIG.currency.pixelsPerCurrency);
+        
+        if (baseCurrency > 0) {
+            // Aplicar multiplicador del modo RETREAT (75%)
+            const currencyToAward = Math.floor(baseCurrency * currencyMultiplier);
+            
+            if (currencyToAward > 0) {
+                this.gameState.currency[team] += currencyToAward;
+                this.pendingRetreatPixels[team] -= baseCurrency * GAME_CONFIG.currency.pixelsPerCurrency;
+                
+                // Log para retrocesos significativos
+                if (currencyToAward >= 10) {
+                    console.log(`🔙 ${team}: +${currencyToAward}$ por retroceso voluntario (75% de ${baseCurrency}$) - total: ${this.gameState.currency[team]}$`);
+                }
+            }
+        }
+    }
+
+    /**
+     * Verificar condiciones de victoria/derrota
+     * Ganas si empujas algún nodo de frente enemigo hasta la línea de victoria
+     * @param {Array} player1Fronts - Frentes de player1
+     * @param {Array} player2Fronts - Frentes de player2
+     */
+    checkVictoryConditions(player1Fronts, player2Fronts) {
+        // Calcular líneas de victoria desde config (no hardcodear)
         const worldWidth = GAME_CONFIG.match.worldWidth;
-        const victoryLineLeft = GAME_CONFIG.match.victoryLineLeft * worldWidth;  // 15% = 288px
-        const victoryLineRight = GAME_CONFIG.match.victoryLineRight * worldWidth; // 85% = 1632px
+        const victoryLineLeft = GAME_CONFIG.match.victoryLineLeft * worldWidth;  // 15% del ancho
+        const victoryLineRight = GAME_CONFIG.match.victoryLineRight * worldWidth; // 85% del ancho
         
-        // CONDICIÓN 1: VICTORIA ACTIVA - Tu frente empuja hasta la línea de victoria
-        // VICTORIA PLAYER1: Algún frente player1 alcanza el 85% del ancho (1632px)
-        for (const front of player1Fronts) {
-            if (front.x >= victoryLineRight) {
-                console.log(`🎉 VICTORIA PLAYER1: Frente alcanzó línea de victoria (${(victoryLineRight).toFixed(0)}px = ${(GAME_CONFIG.match.victoryLineRight * 100).toFixed(0)}%)`);
-                return { winner: 'player1', reason: 'front_reached_hq' };
+        // Player1 gana si empujó algún frente de player2 hasta la línea derecha (85%)
+        for (const enemyFront of player2Fronts) {
+            if (enemyFront.x >= victoryLineRight) {
+                console.log(`🎉 VICTORIA PLAYER1: Empujó frente enemigo hasta línea de victoria (${victoryLineRight.toFixed(0)}px = ${(GAME_CONFIG.match.victoryLineRight * 100)}%)`);
+                console.log(`   Frente enemigo en: ${enemyFront.x.toFixed(0)}px (Y=${enemyFront.y.toFixed(0)})`);
+                return { winner: 'player1', reason: 'enemy_front_pushed' };
             }
         }
         
-        // VICTORIA PLAYER2: Algún frente player2 alcanza el 15% del ancho (288px)
-        for (const front of player2Fronts) {
-            if (front.x <= victoryLineLeft) {
-                console.log(`🎉 VICTORIA PLAYER2: Frente alcanzó línea de victoria (${(victoryLineLeft).toFixed(0)}px = ${(GAME_CONFIG.match.victoryLineLeft * 100).toFixed(0)}%)`);
-                return { winner: 'player2', reason: 'front_reached_hq' };
+        // Player2 gana si empujó algún frente de player1 hasta la línea izquierda (15%)
+        for (const enemyFront of player1Fronts) {
+            if (enemyFront.x <= victoryLineLeft) {
+                console.log(`🎉 VICTORIA PLAYER2: Empujó frente enemigo hasta línea de victoria (${victoryLineLeft.toFixed(0)}px = ${(GAME_CONFIG.match.victoryLineLeft * 100)}%)`);
+                console.log(`   Frente enemigo en: ${enemyFront.x.toFixed(0)}px (Y=${enemyFront.y.toFixed(0)})`);
+                return { winner: 'player2', reason: 'enemy_front_pushed' };
             }
-        }
-        
-        // CONDICIÓN 2: VICTORIA PASIVA - La frontera enemiga retrocede hasta las líneas de victoria
-        // DEBUG: Log cada 5 segundos (COMENTADO - reduce spam)
-        // if (!this._lastFrontierLog || Date.now() - this._lastFrontierLog > 5000) {
-        //     console.log(`🔍 Fronteras: P1=${player1Frontier?.toFixed(0) || 'null'} (HQ=${player1HQ.x.toFixed(0)}) | P2=${player2Frontier?.toFixed(0) || 'null'} (HQ=${player2HQ.x.toFixed(0)})`);
-        //     console.log(`🔍 Líneas victoria: Izquierda=${(victoryLineLeft).toFixed(0)}px (${(GAME_CONFIG.match.victoryLineLeft * 100)}%) | Derecha=${(victoryLineRight).toFixed(0)}px (${(GAME_CONFIG.match.victoryLineRight * 100)}%)`);
-        //     this._lastFrontierLog = Date.now();
-        // }
-        
-        // DERROTA PLAYER1: Su frontera retrocede hasta la línea del 15% (victoria para player2)
-        if (player1Frontier !== null && player1Frontier <= victoryLineLeft) {
-            console.log(`🎉 VICTORIA PLAYER2: Frontera de player1 retrocedió hasta línea de victoria (${(victoryLineLeft).toFixed(0)}px = ${(GAME_CONFIG.match.victoryLineLeft * 100)}%)`);
-            console.log(`   Frontera P1: ${player1Frontier.toFixed(0)} | Límite: ${(victoryLineLeft).toFixed(0)}`);
-            return { winner: 'player2', reason: 'frontier_collapsed' };
-        }
-        
-        // DERROTA PLAYER2: Su frontera retrocede hasta la línea del 85% (victoria para player1)
-        if (player2Frontier !== null && player2Frontier >= victoryLineRight) {
-            console.log(`🎉 VICTORIA PLAYER1: Frontera de player2 retrocedió hasta línea de victoria (${(victoryLineRight).toFixed(0)}px = ${(GAME_CONFIG.match.victoryLineRight * 100)}%)`);
-            console.log(`   Frontera P2: ${player2Frontier.toFixed(0)} | Límite: ${(victoryLineRight).toFixed(0)}`);
-            return { winner: 'player1', reason: 'frontier_collapsed' };
         }
         
         return null; // No hay victoria aún
     }
-    
-    /**
-     * Calcular frontera de un equipo (posición X más avanzada)
-     * Misma lógica que TerritorySystemServer.calculateFrontier()
-     */
-    calculateFrontier(team, fronts) {
-        if (fronts.length === 0) return null;
-        
-        const frontierGapPx = 25; // Mismo gap que en TerritorySystem
-        
-        if (team === 'player1') {
-            // Player1 avanza a la derecha: frontera es el X más alto
-            return Math.max(...fronts.map(f => f.x + frontierGapPx));
-        } else {
-            // Player2 avanza a la izquierda: frontera es el X más bajo
-            return Math.min(...fronts.map(f => f.x - frontierGapPx));
-        }
-    }
 
     reset() {
         this.pendingCurrencyPixels = {
+            player1: 0,
+            player2: 0
+        };
+        // 🆕 Reset acumulador de retroceso voluntario
+        this.pendingRetreatPixels = {
             player1: 0,
             player2: 0
         };

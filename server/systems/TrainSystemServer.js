@@ -158,6 +158,9 @@ export class TrainSystemServer {
             // Velocidad del tren (píxeles por segundo)
             let trainSpeed = this.TRAIN_SPEED;
             
+            // 🆕 NUEVO: Aplicar modificadores de disciplinas activas
+            trainSpeed = this.applyDisciplineModifiers(train, trainSpeed);
+            
             // Progress por segundo = velocidad / distancia
             const progressPerSecond = trainSpeed / distance;
             
@@ -170,6 +173,25 @@ export class TrainSystemServer {
                 // El tren llegará en el siguiente checkTrainArrivals()
             }
         }
+    }
+    
+    /**
+     * 🆕 NUEVO: Aplica modificadores de disciplinas activas a los trenes
+     * @param {Object} train - Tren
+     * @param {number} trainSpeed - Velocidad actual del tren
+     * @returns {number} Velocidad con modificadores de disciplina aplicados
+     */
+    applyDisciplineModifiers(train, trainSpeed) {
+        // Obtener modificadores de la disciplina activa del jugador
+        const modifiers = this.gameState.disciplineManager.getModifiersForSystem(train.team, 'convoy');
+        
+        // Aplicar multiplicadores específicos por tipo de vehículo
+        if (modifiers.speedMultipliers) {
+            const multiplier = modifiers.speedMultipliers.train || modifiers.speedMultipliers.default || 1.0;
+            trainSpeed *= multiplier;
+        }
+        
+        return trainSpeed;
     }
     
     /**

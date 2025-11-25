@@ -145,6 +145,9 @@ export class ConvoyMovementManager {
             // 🆕 NUEVO: Bonus de VehicleWorkshop: +20 px/s para camiones ligeros (truck)
             vehicleSpeed = this.applyVehicleWorkshopBonus(convoy, vehicleSpeed);
             
+            // 🆕 NUEVO: Modificadores de disciplinas activas
+            vehicleSpeed = this.applyDisciplineModifiers(convoy, vehicleSpeed);
+            
             // Progress por segundo = velocidad / distancia (usa distancia fija)
             const progressPerSecond = vehicleSpeed / distance;
             
@@ -258,6 +261,28 @@ export class ConvoyMovementManager {
                 vehicleSpeed += bonusConfig.speedBonus;
             }
         }
+        return vehicleSpeed;
+    }
+    
+    /**
+     * 🆕 NUEVO: Aplica modificadores de disciplinas activas
+     * @param {Object} convoy - Convoy
+     * @param {number} vehicleSpeed - Velocidad actual
+     * @returns {number} Velocidad con modificadores de disciplina aplicados
+     */
+    applyDisciplineModifiers(convoy, vehicleSpeed) {
+        // Obtener modificadores de la disciplina activa del jugador
+        const modifiers = this.gameState.disciplineManager.getModifiersForSystem(convoy.team, 'convoy');
+        
+        // 🆕 NUEVO: Aplicar multiplicadores específicos por tipo de vehículo
+        if (modifiers.speedMultipliers) {
+            const vehicleType = convoy.vehicleType; // 'truck', 'heavy_truck', 'train', etc.
+            const multiplier = modifiers.speedMultipliers[vehicleType] || modifiers.speedMultipliers.default || 1.0;
+            vehicleSpeed *= multiplier;
+        }
+        
+        // deploymentCost se maneja en ConvoyHandler.handleConvoy(), no aquí
+        
         return vehicleSpeed;
     }
     

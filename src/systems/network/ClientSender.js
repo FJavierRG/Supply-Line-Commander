@@ -68,12 +68,15 @@ export class ClientSender {
     /**
      * Seleccionar raza y mazo
      */
-    selectRace(roomId, raceId, deckUnits, benchUnits) {
+    /**
+     * ✅ REFACTORIZADO: Solo envía el deckId, el servidor obtiene el mazo de la BD
+     */
+    selectRace(roomId, deckId) {
+        console.log('📤 [CLIENT_SENDER] Enviando select_race con deckId:', deckId);
+        
         this.socket.emit('select_race', {
             roomId,
-            raceId,
-            deckUnits,
-            benchUnits
+            deckId
         });
     }
 
@@ -216,6 +219,37 @@ export class ClientSender {
      */
     kickPlayer(roomId, targetPlayerId) {
         this.socket.emit('kick_player', { roomId, targetPlayerId });
+    }
+
+    // ========== DISCIPLINAS ==========
+
+    /**
+     * 🆕 NUEVO: Activar disciplina
+     */
+    activateDiscipline(roomId, disciplineId) {
+        this.socket.emit('activate_discipline', { roomId, disciplineId });
+    }
+
+    // ========== SISTEMA DE MODOS DE FRENTE ==========
+
+    /**
+     * 🆕 NUEVO: Cambiar modo de comportamiento de un frente
+     * @param {string} frontId - ID del nodo de frente
+     * @param {string} newMode - Nuevo modo ('advance', 'retreat', 'hold')
+     */
+    sendFrontModeChange(frontId, newMode) {
+        const roomId = this.networkManager.roomId;
+        if (!roomId) {
+            console.warn('⚠️ No hay roomId para enviar cambio de modo de frente');
+            return;
+        }
+        
+        console.log(`🎮 Enviando cambio de modo: frente=${frontId.substring(0, 8)}, modo=${newMode}`);
+        this.socket.emit('change_front_mode', {
+            roomId,
+            frontId,
+            newMode
+        });
     }
 
     // ========== SISTEMA ==========

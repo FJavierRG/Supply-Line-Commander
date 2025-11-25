@@ -36,6 +36,8 @@ import { GameStateManager } from './systems/GameStateManager.js';
 import { InputRouter } from './systems/InputRouter.js';
 import { ScreenManager } from './systems/ScreenManager.js';
 import { CanvasManager } from './systems/CanvasManager.js';
+import { FogOfWarSystem } from './systems/FogOfWarSystem.js';
+import { FogOfWarRenderer } from './systems/rendering/FogOfWarRenderer.js';
 import { GAME_CONFIG } from './config/constants.js';
 // ELIMINADO: MAP_CONFIG, calculateAbsolutePosition - Ya no se genera el mapa en el cliente
 import { getNodeConfig } from './config/nodes.js';
@@ -97,6 +99,13 @@ export class Game {
         
         this.options = new OptionsManager(this.audio);
         this.deckManager = new DeckManager(this);
+        
+        // ✅ NUEVO: El DeckManager ahora ejecuta la migración automáticamente en su inicialización
+        // No necesitamos hacer nada adicional aquí, pero si quieres puedes escuchar el resultado:
+        this.deckManager.waitForDefaultDeck().then(() => {
+            console.log('✅ DeckManager inicializado y migración completada (si era necesaria)');
+        });
+        
         this.arsenal = new ArsenalManager(this.assetManager, this);
         this.convoyManager = new ConvoyManager(this);
         this.trainSystem = new TrainSystem(this);
@@ -107,6 +116,35 @@ export class Game {
         this.antiDroneSystem = new AntiDroneSystem(this);
         this.frontMovement = new FrontMovementSystem(this);
         this.territory = new TerritorySystem(this);
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 🌫️ SISTEMA DE NIEBLA DE GUERRA (FOG OF WAR)
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 
+        // El sistema divide el mapa en 2 carriles (superior/inferior) y oculta
+        // entidades enemigas en zonas donde los frentes no están en combate cercano.
+        //
+        // 📌 API PARA CONTROLAR LA NIEBLA:
+        // 
+        //   this.fogOfWar.setEnabled(true/false)
+        //     → Activa/desactiva todo el sistema de niebla
+        //
+        //   this.fogOfWar.setLaneForcedVisible(1, true)  // Carril superior
+        //   this.fogOfWar.setLaneForcedVisible(2, true)  // Carril inferior
+        //     → Fuerza visibilidad de un carril (para efectos de edificios tipo radar)
+        //
+        //   this.fogOfWar.resetForcedVisibility()
+        //     → Quita todas las revelaciones forzadas
+        //
+        //   this.fogOfWar.setRevealDistance(200)
+        //     → Cambia distancia (px) para revelar por proximidad de frentes
+        //
+        // ═══════════════════════════════════════════════════════════════════════════
+        this.fogOfWar = new FogOfWarSystem(this);
+        this.fogOfWarRenderer = new FogOfWarRenderer(this.renderer.ctx, this, this.fogOfWar);
+        
+        // ⚠️ DESACTIVADO TEMPORALMENTE - Activar cuando se implemente efecto de edificio
+        this.fogOfWar.setEnabled(false);
         
         // 🆕 NUEVO: Enlazar territory con topBar
         this.topBar.territory = this.territory;
@@ -133,6 +171,15 @@ export class Game {
         
         // 🆕 SERVIDOR COMO AUTORIDAD: Inicializar configuración de edificios localmente
         this.serverBuildingConfig = null;
+        
+        // 🆕 NUEVO: Configuración de disciplinas
+        this.serverDisciplineConfig = null;
+        
+        // 🆕 NUEVO: Estado de disciplinas (inicializado vacío, se sincroniza con servidor)
+        this.disciplineStates = {
+            player1: { equipped: [], active: null, timeRemaining: 0, cooldownRemaining: 0 },
+            player2: { equipped: [], active: null, timeRemaining: 0, cooldownRemaining: 0 }
+        };
         
         // Configurar canvas
         this.resizeCanvas();
@@ -659,6 +706,12 @@ export class Game {
             }
         }
         
+        // 🆕 NUEVO: Actualizar visibilidad de niebla de guerra
+        // (después de que las posiciones de los frentes estén actualizadas)
+        if (this.fogOfWar) {
+            this.fogOfWar.updateVisibility();
+        }
+        
         // Actualizar sistemas visuales (interpolación)
         this.tankSystem.update(dt);
         this.lightVehicleSystem.update(dt); // 🆕 NUEVO: Artillado ligero
@@ -732,6 +785,14 @@ export class Game {
                                      (antiDrone.team === 'player2' && !drone.isEnemy);
                 
                 if (!isDroneEnemy) continue;
+                
+                // 🆕 FOG OF WAR: No dibujar líneas hacia drones ocultos por niebla
+                if (this.fogOfWar && this.isMultiplayer && drone.isEnemy) {
+                    const droneTeam = drone.team || 'player2';
+                    if (!this.fogOfWar.isVisible({ team: droneTeam, y: drone.y })) {
+                        continue;
+                    }
+                }
                 
                 // Calcular distancia
                 const distance = Math.hypot(drone.x - antiDrone.x, drone.y - antiDrone.y);
@@ -919,6 +980,11 @@ export class Game {
         // Renderizar territorio controlado (debajo de las bases, por encima de carreteras)
         this.territory.render(this.renderer.ctx);
         
+        // 🆕 NUEVO: Renderizar niebla de guerra (sobre territorio, debajo de nodos)
+        if (this.fogOfWarRenderer && this.isMultiplayer) {
+            this.fogOfWarRenderer.render();
+        }
+        
         // 🆕 NUEVO: Renderizar overlay de áreas válidas/inválidas cuando está en modo construcción
         if (this.buildSystem.isActive()) {
             if (this.buildSystem.buildMode && this.buildSystem.currentBuildingType) {
@@ -1015,25 +1081,8 @@ export class Game {
             this.antiDroneSystem.renderDebug(this.renderer.ctx);
         }
         
-        // Renderizar textos flotantes en BATCH (optimización crítica)
-        const floatingTexts = this.particleSystem.getFloatingTexts();
-        if (floatingTexts.length > 0) {
-            this.renderer.renderFloatingTextsBatch(floatingTexts);
-        }
-        
-        // Renderizar sprites flotantes (ej: sniper kill feed)
-        const floatingSprites = this.particleSystem.getFloatingSprites();
-        if (floatingSprites.length > 0) {
-            this.renderer.renderFloatingSprites(floatingSprites);
-        }
-        
-        // Renderizar sprites que caen (ej: specops unit)
-        if (this.particleSystem.getFallingSprites && this.renderer.renderFallingSprites) {
-            const fallingSprites = this.particleSystem.getFallingSprites();
-            if (fallingSprites.length > 0) {
-                this.renderer.renderFallingSprites(fallingSprites);
-            }
-        }
+        // 🆕 MOVIDO: Textos flotantes, sprites flotantes y sprites que caen se renderizan DESPUÉS del TopBar
+        // para que aparezcan ENCIMA de la UI (ver línea ~1180)
         
         // Preview de ruta (solo si la ruta es válida)
         if (this.selectedNode && this.hoveredNode && this.selectedNode !== this.hoveredNode) {
@@ -1166,7 +1215,26 @@ export class Game {
         this.storeUI.updateLayout(this.canvas.width, this.canvas.height, storeIconX);
         this.storeUI.render(this.renderer.ctx, benchIconX);
         
-        // Renderizar tooltip de hover prolongado
+        // 🆕 NUEVO: Renderizar textos flotantes, sprites flotantes y sprites que caen ENCIMA del TopBar
+        // (movido desde línea ~1030 para que aparezcan sobre la UI)
+        const floatingTexts = this.particleSystem.getFloatingTexts();
+        if (floatingTexts.length > 0) {
+            this.renderer.renderFloatingTextsBatch(floatingTexts);
+        }
+        
+        const floatingSprites = this.particleSystem.getFloatingSprites();
+        if (floatingSprites.length > 0) {
+            this.renderer.renderFloatingSprites(floatingSprites);
+        }
+        
+        if (this.particleSystem.getFallingSprites && this.renderer.renderFallingSprites) {
+            const fallingSprites = this.particleSystem.getFallingSprites();
+            if (fallingSprites.length > 0) {
+                this.renderer.renderFallingSprites(fallingSprites);
+            }
+        }
+        
+        // Renderizar tooltip de hover prolongado (siempre encima de todo)
         if (this.hoverTooltip) {
             this.renderer.renderHoverTooltip(this.hoverTooltip);
         }
@@ -1982,10 +2050,12 @@ export class Game {
         // Importar la configuración del servidor directamente
         Promise.all([
             import('../server/config/serverNodes.js'),
-            import('../server/config/gameConfig.js')
-        ]).then(([serverNodesModule, gameConfigModule]) => {
+            import('../server/config/gameConfig.js'),
+            import('../server/config/disciplines.js') // 🆕 NUEVO: Importar disciplinas
+        ]).then(([serverNodesModule, gameConfigModule, disciplinesModule]) => {
             const { SERVER_NODE_CONFIG } = serverNodesModule;
             const { GAME_CONFIG } = gameConfigModule;
+            const { DISCIPLINES } = disciplinesModule; // 🆕 NUEVO: Extraer disciplinas
             
             // Usar la configuración real del servidor
             this.serverBuildingConfig = {
@@ -2035,6 +2105,10 @@ export class Game {
                     ambulance: { capacity: 0 }
                 }
             };
+            
+            // 🆕 NUEVO: Cargar configuración de disciplinas
+            this.serverDisciplineConfig = DISCIPLINES;
+            console.log('✅ Configuración de disciplinas cargada:', Object.keys(DISCIPLINES).length, 'disciplinas disponibles');
             
         }).catch(error => {
             

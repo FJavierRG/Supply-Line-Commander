@@ -30,6 +30,20 @@ export class VehicleRenderer {
             return;
         }
         
+        // 🆕 FOG OF WAR: Verificar si el convoy enemigo es visible
+        if (this.game?.fogOfWar && this.game.isMultiplayer) {
+            const myTeam = this.game.myTeam || 'player1';
+            // Determinar el equipo del convoy de múltiples fuentes posibles
+            const convoyTeam = convoy.team || convoy.fromBase?.team;
+            
+            if (convoyTeam && convoyTeam !== myTeam) {
+                // Es un convoy enemigo, verificar visibilidad
+                if (!this.game.fogOfWar.isVisible({ team: convoyTeam, y: convoy.y })) {
+                    return; // No renderizar convoy oculto por niebla
+                }
+            }
+        }
+        
         // Si está volviendo, renderizar en blanco y negro semi-transparente
         const isReturning = convoy.returning;
         const vehicleColor = isReturning ? '#888' : (convoy.vehicle?.color || '#4CAF50'); // Fallback a verde si no hay color
@@ -199,6 +213,16 @@ export class VehicleRenderer {
     renderTrain(train) {
         if (!train) return;
         
+        // 🆕 FOG OF WAR: Verificar si el tren enemigo es visible
+        if (this.game?.fogOfWar && this.game.isMultiplayer) {
+            const myTeam = this.game.myTeam || 'player1';
+            if (train.team && train.team !== myTeam) {
+                if (!this.game.fogOfWar.isVisible({ team: train.team, y: train.y })) {
+                    return; // No renderizar tren oculto por niebla
+                }
+            }
+        }
+        
         const sprite = this.assetManager?.getSprite('train');
         
         if (sprite) {
@@ -251,6 +275,16 @@ export class VehicleRenderer {
      */
     renderHelicopter(heli) {
         if (!heli || heli.state !== 'flying') return;
+        
+        // 🆕 FOG OF WAR: Verificar si el helicóptero enemigo es visible
+        if (this.game?.fogOfWar && this.game.isMultiplayer) {
+            const myTeam = this.game.myTeam || 'player1';
+            if (heli.team && heli.team !== myTeam) {
+                if (!this.game.fogOfWar.isVisible({ team: heli.team, y: heli.y })) {
+                    return; // No renderizar helicóptero oculto por niebla
+                }
+            }
+        }
         
         // Obtener nodos de origen y destino
         const fromNode = this.game.nodes.find(n => n.id === heli.currentNodeId);
@@ -385,6 +419,16 @@ export class VehicleRenderer {
      * @param {Object} config - Configuración del vehículo
      */
     renderCombatVehicle(vehicle, config) {
+        // 🆕 FOG OF WAR: Verificar si el vehículo enemigo es visible
+        if (this.game?.fogOfWar && this.game.isMultiplayer) {
+            const myTeam = this.game.myTeam || 'player1';
+            if (vehicle.team && vehicle.team !== myTeam) {
+                if (!this.game.fogOfWar.isVisible({ team: vehicle.team, y: vehicle.y })) {
+                    return; // No renderizar vehículo oculto por niebla
+                }
+            }
+        }
+        
         const { getSpriteKey, fallbackEmoji, size = 100, shadowEnabled = true } = config;
         
         // Obtener sprite key (puede ser función o string)

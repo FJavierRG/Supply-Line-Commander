@@ -104,6 +104,11 @@ export class CurrencySystem {
         player1Income += player1Servers * serversBonus;
         player2Income += player2Servers * serversBonus;
         
+        // 🆕 DISCIPLINA: Bonus de "Combate Defensivo" (+1 currency/segundo por frente en modo hold)
+        const disciplineBonus = this.applyDisciplineBonus();
+        player1Income += disciplineBonus.player1;
+        player2Income += disciplineBonus.player2;
+        
         const p1Generated = player1Income * dt;
         const p2Generated = player2Income * dt;
         
@@ -115,6 +120,41 @@ export class CurrencySystem {
         this.gameState.currencyGenerated.player2 += p2Generated;
         
 
+    }
+    
+    /**
+     * 🆕 NUEVO: Aplica bonus de currency de disciplinas activas
+     * @returns {Object} - { player1: number, player2: number } - Bonus de income por segundo
+     */
+    applyDisciplineBonus() {
+        let player1Bonus = 0;
+        let player2Bonus = 0;
+        
+        // Obtener modificadores de frontMode para cada equipo
+        const p1Modifiers = this.gameState.disciplineManager.getModifiersForSystem('player1', 'frontMode');
+        const p2Modifiers = this.gameState.disciplineManager.getModifiersForSystem('player2', 'frontMode');
+        
+        // Player 1: Contar frentes en modo hold si la disciplina está activa
+        if (p1Modifiers.targetMode && p1Modifiers.currencyPerSecondPerFront) {
+            const frontesInHold = this.gameState.nodes.filter(n => 
+                n.type === 'front' && 
+                n.team === 'player1' && 
+                n.frontMode === p1Modifiers.targetMode
+            ).length;
+            player1Bonus = frontesInHold * p1Modifiers.currencyPerSecondPerFront;
+        }
+        
+        // Player 2: Contar frentes en modo hold si la disciplina está activa
+        if (p2Modifiers.targetMode && p2Modifiers.currencyPerSecondPerFront) {
+            const frontesInHold = this.gameState.nodes.filter(n => 
+                n.type === 'front' && 
+                n.team === 'player2' && 
+                n.frontMode === p2Modifiers.targetMode
+            ).length;
+            player2Bonus = frontesInHold * p2Modifiers.currencyPerSecondPerFront;
+        }
+        
+        return { player1: player1Bonus, player2: player2Bonus };
     }
 }
 

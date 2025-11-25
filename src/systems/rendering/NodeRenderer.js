@@ -108,6 +108,13 @@ export class NodeRenderer {
         if (!node) return;
         if (!node.active && !node.isAbandoning) return;
         
+        // 🆕 FOG OF WAR: Verificar si el nodo enemigo es visible
+        if (game?.fogOfWar && game.isMultiplayer) {
+            if (!game.fogOfWar.isVisible(node)) {
+                return; // No renderizar nodo oculto por niebla
+            }
+        }
+        
         // Determinar orientación dinámica basada en equipo
         // Los edificios deben mirar hacia el centro del mapa (hacia el enemigo)
         const myTeam = this.game?.myTeam || 'player1';
@@ -571,6 +578,11 @@ export class NodeRenderer {
             this.renderResourceSelector(node);
         }
         
+        // 🆕 NUEVO: Selector de modos de frente (advance, retreat, hold)
+        if ((isSelected || node === game?.hoveredNode) && node.type === 'front') {
+            this.renderFrontModeSelector(node);
+        }
+        
         // 🆕 NUEVO: Anillo de duración del comando
         if (node.isCommando && node.active) {
             this.renderCommandoDurationRing(node, game);
@@ -1013,6 +1025,149 @@ export class NodeRenderer {
         }
     }
     
+    /**
+     * 🆕 NUEVO: Renderiza el selector de modos de comportamiento para nodos de frente
+     * Los modos son: advance (avanzar), retreat (retroceder), hold (mantener/ancla)
+     * Los botones se muestran verticalmente hacia el lado del enemigo
+     */
+    renderFrontModeSelector(front) {
+        if (!this.game) return;
+        if (!front || front.type !== 'front') return;
+        
+        // Solo mostrar para frentes propios (no enemigos)
+        const isMyFront = front.team === this.game.myTeam || 
+                         (front.team === 'ally' && this.game.myTeam === 'player1') ||
+                         (front.team === 'player1' && this.game.myTeam === 'player1') ||
+                         (front.team === 'player2' && this.game.myTeam === 'player2');
+        if (!isMyFront) return;
+        
+        // 🆕 NUEVO: Compensar mirror view para que la UI se vea correctamente orientada
+        const wasCompensated = this.applyMirrorCompensation(front.x, front.y);
+        
+        try {
+            const buttonSize = 36;
+            const buttonRadius = buttonSize / 2;
+            
+            // Colores para los modos
+            const modeColors = {
+                advance: { bg: '#2d5016', border: '#4a8f29' },  // Verde (avance)
+                retreat: { bg: '#6b3a1a', border: '#a65b2a' },  // Naranja/marrón (retroceso)
+                hold: { bg: '#1a4a6b', border: '#2a7aa6' }      // Azul (defensa/ancla)
+            };
+            
+            // Configuración de los modos
+            const modes = [
+                { id: 'advance', icon: 'ui-mode-advance', name: 'Avanzar' },
+                { id: 'retreat', icon: 'ui-mode-retreat', name: 'Retroceder' },
+                { id: 'hold', icon: 'ui-mode-hold', name: 'Mantener' }
+            ];
+            
+            // 🆕 MODIFICADO: Botones alineados verticalmente hacia el lado del enemigo
+            // Player1 avanza hacia la derecha (enemigo a la derecha) -> botones a la derecha
+            // Player2 avanza hacia la izquierda (enemigo a la izquierda) -> botones a la izquierda
+            const isPlayer1 = front.team === 'player1' || front.team === 'ally';
+            const directionToEnemy = isPlayer1 ? 1 : -1; // +1 = derecha, -1 = izquierda
+            
+            const buttonDistanceX = front.radius + 45; // Distancia horizontal del centro
+            const buttonSpacingY = 40; // Espacio vertical entre botones
+            
+            // Verificar cooldown
+            const currentTime = Date.now();
+            const isOnCooldown = front.modeCooldownUntil && currentTime < front.modeCooldownUntil;
+            const cooldownRemaining = isOnCooldown ? Math.ceil((front.modeCooldownUntil - currentTime) / 1000) : 0;
+            
+            modes.forEach((mode, index) => {
+                // Posición vertical: distribuir arriba, centro, abajo
+                const offsetY = (index - 1) * buttonSpacingY; // -1, 0, 1 -> -40, 0, 40
+                
+                // Posición horizontal: hacia el lado del enemigo
+                const centerX = front.x + (buttonDistanceX * directionToEnemy);
+                const centerY = front.y + offsetY;
+                
+                const isSelected = front.frontMode === mode.id;
+                const colors = modeColors[mode.id];
+                
+                // Color más apagado si está en cooldown y no es el modo actual
+                const isAvailable = !isOnCooldown || isSelected;
+                const bgColor = !isAvailable ? 'rgba(60, 60, 60, 0.7)' : 
+                               isSelected ? colors.bg : 'rgba(0, 0, 0, 0.7)';
+                const borderColor = !isAvailable ? 'rgba(100, 100, 100, 0.5)' :
+                                   isSelected ? colors.border : 'rgba(100, 100, 100, 0.5)';
+                
+                // Renderizar botón (REDONDO)
+                this.ctx.fillStyle = bgColor;
+                this.ctx.beginPath();
+                this.ctx.arc(centerX, centerY, buttonRadius, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.strokeStyle = borderColor;
+                this.ctx.lineWidth = isSelected ? 3 : 2;
+                this.ctx.stroke();
+                
+                // Renderizar icono del modo
+                const icon = this.assetManager.getSprite(mode.icon);
+                if (icon) {
+                    const iconSize = 28;
+                    if (!isAvailable) {
+                        this.ctx.globalAlpha = 0.4;
+                    }
+                    this.ctx.drawImage(icon, 
+                        centerX - iconSize/2, centerY - iconSize/2, 
+                        iconSize, iconSize);
+                    if (!isAvailable) {
+                        this.ctx.globalAlpha = 1.0;
+                    }
+                } else {
+                    // Fallback a emoji si no hay sprite
+                    const emojiMap = {
+                        'advance': '⚔️',
+                        'retreat': '🔙',
+                        'hold': '🛡️'
+                    };
+                    this.ctx.font = '20px Arial';
+                    this.ctx.fillStyle = isAvailable ? '#fff' : '#666';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    this.ctx.fillText(emojiMap[mode.id] || '?', centerX, centerY);
+                }
+            });
+            
+            // Texto indicador del modo actual y cooldown (debajo del frente)
+            const currentMode = modes.find(m => m.id === front.frontMode);
+            let modeText = currentMode ? currentMode.name.toUpperCase() : 'AVANZAR';
+            
+            if (isOnCooldown) {
+                modeText += ` (${cooldownRemaining}s)`;
+            }
+            
+            // Color según el modo actual
+            const modeTextColor = modeColors[front.frontMode]?.border || '#4a5d23';
+            
+            // Posición del texto debajo del frente
+            const textY = front.y + front.radius + 55;
+            
+            // Fondo para el texto
+            this.ctx.font = 'bold 14px Arial';
+            const textMetrics = this.ctx.measureText(modeText);
+            const textWidth = textMetrics.width;
+            const textHeight = 16;
+            const textX = front.x - textWidth / 2;
+            
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            this.ctx.fillRect(textX - 4, textY - textHeight / 2, textWidth + 8, textHeight);
+            
+            this.ctx.strokeStyle = modeTextColor;
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(textX - 4, textY - textHeight / 2, textWidth + 8, textHeight);
+            
+            this.ctx.fillStyle = modeTextColor;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(modeText, front.x, textY);
+        } finally {
+            this.restoreMirrorCompensation(wasCompensated);
+        }
+    }
+    
     renderSupplyBar(base) {
         // 🆕 NUEVO: Ancho de barra específico para base aérea (más pequeño)
         let barWidth;
@@ -1375,6 +1530,13 @@ export class NodeRenderer {
      */
     renderVehicleUI(node, game) {
         if (!node || (!node.active && !node.isAbandoning)) return;
+        
+        // 🆕 FOG OF WAR: Verificar si el nodo enemigo es visible
+        if (game?.fogOfWar && game.isMultiplayer) {
+            if (!game.fogOfWar.isVisible(node)) {
+                return; // No renderizar UI de nodo oculto por niebla
+            }
+        }
         
         // Calcular spriteSize igual que en renderNode
         let spriteSize = node.radius * 2 * 1.875;
@@ -1949,12 +2111,23 @@ export class NodeRenderer {
         }
         
         // 2. Renderizar áreas de exclusión en rojo según las reglas
+        const myTeam = this.game?.myTeam || 'player1';
+        
         for (const rule of rules.exclusionRules) {
             const filteredNodes = allNodes.filter(node => 
                 node.active && rule.filter(node, this.game)
             );
             
             for (const node of filteredNodes) {
+                // 🆕 FOG OF WAR: No mostrar círculos de exclusión de edificios enemigos ocultos por niebla
+                if (this.game?.fogOfWar && this.game.isMultiplayer) {
+                    if (node.team && node.team !== myTeam) {
+                        if (!this.game.fogOfWar.isVisible(node)) {
+                            continue; // No renderizar círculo de nodo oculto por niebla
+                        }
+                    }
+                }
+                
                 const radius = getExclusionRadius(node, rule.radiusType, this.game);
                 this.renderExclusionCircle(node.x, node.y, radius, rule.color);
             }

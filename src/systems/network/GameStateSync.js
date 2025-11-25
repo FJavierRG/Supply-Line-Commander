@@ -41,6 +41,7 @@ export class GameStateSync {
         this.syncTanks(gameState);
         this.syncLightVehicles(gameState);
         this.syncMedicalEmergencies(gameState);
+        this.syncDisciplines(gameState); // 🆕 NUEVO: Estado de disciplinas
         
         // 🆕 PROCESAR EVENTOS DE SONIDO ===
         if (gameState.soundEvents && gameState.soundEvents.length > 0) {
@@ -288,6 +289,16 @@ export class GameStateSync {
                 }
                 if (nodeData.minXReached !== undefined) {
                     node.minXReached = nodeData.minXReached;
+                }
+                
+                // 🆕 NUEVO: Sincronizar sistema de modos de frente
+                if (node.type === 'front') {
+                    if (nodeData.frontMode !== undefined) {
+                        node.frontMode = nodeData.frontMode;
+                    }
+                    if (nodeData.modeCooldownUntil !== undefined) {
+                        node.modeCooldownUntil = nodeData.modeCooldownUntil;
+                    }
                 }
                 
                 // Actualizar abandono
@@ -546,6 +557,7 @@ export class GameStateSync {
                         deliveryId: deliveryData.id,
                         factoryId: deliveryData.factoryId,
                         hqId: deliveryData.hqId,
+                        team: factory.team, // 🆕 FOG OF WAR: Incluir equipo de la fábrica
                         startX: factory.x,
                         startY: factory.y,
                         targetX: hq.x,
@@ -722,6 +734,35 @@ export class GameStateSync {
                 });
             }
         });
+    }
+
+    // ========== SINCRONIZACIÓN DE DISCIPLINAS ==========
+
+    /**
+     * 🆕 NUEVO: Sincronizar estado de disciplinas desde el servidor
+     */
+    syncDisciplines(gameState) {
+        if (!gameState.disciplines) return;
+        
+        // Guardar estado de disciplinas en el game
+        if (!this.game.disciplineStates) {
+            this.game.disciplineStates = {};
+        }
+        
+        // Actualizar estado de disciplinas para ambos jugadores
+        this.game.disciplineStates.player1 = gameState.disciplines.player1 || {
+            equipped: [],
+            active: null,
+            timeRemaining: 0,
+            cooldownRemaining: 0
+        };
+        
+        this.game.disciplineStates.player2 = gameState.disciplines.player2 || {
+            equipped: [],
+            active: null,
+            timeRemaining: 0,
+            cooldownRemaining: 0
+        };
     }
 
     // ========== MÉTODOS AUXILIARES ==========

@@ -6,19 +6,28 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "security-check": "node scripts/check-security.js",
+    "install-hooks": "node scripts/install-hooks.js"
   },
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": ["game", "multiplayer", "rts", "socket.io"],
+  "keywords": [
+    "game",
+    "multiplayer",
+    "rts",
+    "socket.io"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@supabase/supabase-js": "^2.84.0",
+    "better-sqlite3": "^12.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "express": "^4.18.2",
     "socket.io": "^4.6.1",
-    "uuid": "^9.0.0",
-    "cors": "^2.8.5"
+    "uuid": "^9.0.0"
   }
 }
-

@@ -1,6 +1,8 @@
 // ===== GESTOR DE LOBBY Y UI PRE-JUEGO =====
 // Responsabilidad: Gestión de la interfaz y estado del lobby (sala de espera)
 
+import { DEFAULT_DECK_UUID } from '../../config/deckConstants.js';
+
 export class LobbyHandler {
     constructor(networkManager, game) {
         this.networkManager = networkManager;
@@ -383,12 +385,12 @@ export class LobbyHandler {
      */
     generateDeckOptions(selectedDeckId) {
         if (!this.game || !this.game.deckManager) {
-            return '<option value="default">Mazo Predeterminado</option>';
+            return `<option value="${DEFAULT_DECK_UUID}">Mazo Predeterminado</option>`;
         }
         
         const allDecks = this.game.deckManager.getAllDecks();
-        const defaultDeck = allDecks.find(d => d.isDefault === true);
-        const playerDecks = allDecks.filter(d => d.isDefault === false);
+        const defaultDeck = allDecks.find(d => d.isDefault === true || d.is_default === true);
+        const playerDecks = allDecks.filter(d => !d.isDefault && !d.is_default);
         
         let optionsHTML = '';
         
@@ -408,7 +410,7 @@ export class LobbyHandler {
         
         // Si no hay mazos guardados, mostrar solo el predeterminado
         if (playerDecks.length === 0 && !defaultDeck) {
-            optionsHTML = '<option value="default">Mazo Predeterminado</option>';
+            optionsHTML = `<option value="${DEFAULT_DECK_UUID}">Mazo Predeterminado</option>`;
         }
         
         return optionsHTML;
@@ -476,7 +478,7 @@ export class LobbyHandler {
             if (deck) {
                 deckUnits = deck.units;
                 benchUnits = deck.bench || [];
-            } else if (deckId === 'default') {
+            } else if (deckId === DEFAULT_DECK_UUID || deckId === 'default') {
                 const defaultDeck = this.game.deckManager.getDefaultDeck();
                 if (defaultDeck) {
                     deckUnits = defaultDeck.units;

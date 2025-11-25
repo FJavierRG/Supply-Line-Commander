@@ -110,7 +110,7 @@ export const SERVER_NODE_CONFIG = {
         },
         factory: {
             supplyGeneration: {
-                amount: 5,              // Suministros generados por cada ciclo
+                amount: 6,              // Suministros generados por cada ciclo
                 interval: 5,            // Intervalo en segundos entre envíos
                 speed: 120              // Velocidad de movimiento en píxeles por segundo
             }
@@ -420,7 +420,47 @@ export const SERVER_NODE_CONFIG = {
     gameplay: {
         // Propiedades de frentes
         front: {
-            consumeRate: 1.6 // Consumo de suministros por segundo
+            consumeRate: 1.6, // Consumo de suministros por segundo
+            
+            // 🆕 SISTEMA DE MODOS DE COMPORTAMIENTO DE FRENTES
+            modes: {
+                // Modo Avanzar: Comportamiento por defecto
+                advance: {
+                    id: 'advance',
+                    name: 'Avanzar',
+                    icon: 'ui-mode-advance',
+                    consumeMultiplier: 1.0,    // Consumo normal (100%)
+                    currencyMultiplier: 1.0,   // Ganancia normal (100%)
+                    canAdvance: true,          // Puede avanzar
+                    canRetreat: false,         // No retrocede voluntariamente
+                    isAnchor: false            // No es ancla (puede ser empujado)
+                },
+                // Modo Retroceder: Retroceso voluntario
+                retreat: {
+                    id: 'retreat',
+                    name: 'Retroceder',
+                    icon: 'ui-mode-retreat',
+                    consumeMultiplier: 1.0,    // Consumo normal (100%)
+                    currencyMultiplier: 0.75,  // 75% de ganancia por pixel retrocedido
+                    canAdvance: false,         // No avanza
+                    canRetreat: true,          // Retrocede voluntariamente
+                    isAnchor: false            // No es ancla
+                },
+                // Modo Mantener: Ancla defensiva
+                hold: {
+                    id: 'hold',
+                    name: 'Mantener',
+                    icon: 'ui-mode-hold',
+                    consumeMultiplier: 0.75,   // 75% de consumo
+                    currencyMultiplier: 0,     // No gana currency (no se mueve)
+                    canAdvance: false,         // No avanza
+                    canRetreat: false,         // No retrocede voluntariamente
+                    isAnchor: true             // ES ancla (no puede ser empujado, EXCEPTO con supplies=0)
+                },
+                // Configuración general de modos
+                defaultMode: 'advance',        // Modo por defecto al inicio
+                cooldownDuration: 15           // Segundos de cooldown al cambiar de modo
+            }
         },
         
         // Propiedades de anti-drones
@@ -443,7 +483,7 @@ export const SERVER_NODE_CONFIG = {
         // Propiedades de radio inteligencia
         intelRadio: {
             investmentTime: 20,      // Tiempo en segundos antes de pagar
-            investmentBonus: 15       // Beneficio adicional (se suma al costo del edificio)
+            investmentBonus: 30       // Beneficio adicional (se suma al costo del edificio)
         },
         
         // Propiedades de sniper
@@ -454,7 +494,7 @@ export const SERVER_NODE_CONFIG = {
         
         // Propiedades de sabotaje
         fobSabotage: {
-            speedPenalty: 0.35,
+            speedPenalty: 0.40,
             truckCount: 2
         },
         

@@ -82,3 +82,10 @@ assets/sounds/
 # Archivos locales de testing
 test-local/
 local-config/
+
+# ===== DATABASE =====
+# SQLite local (desarrollo)
+server/data/
+*.db
+*.db-shm
+*.db-wal

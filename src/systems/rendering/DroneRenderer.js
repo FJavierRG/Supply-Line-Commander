@@ -21,6 +21,15 @@ export class DroneRenderer {
      * @param {Object} drone - Drone a renderizar
      */
     renderDrone(drone) {
+        // 🆕 FOG OF WAR: Verificar si el drone enemigo es visible
+        if (this.game?.fogOfWar && this.game.isMultiplayer && drone.isEnemy) {
+            // Determinar el equipo del drone
+            const droneTeam = drone.team || (drone.isEnemy ? 'player2' : 'player1');
+            if (!this.game.fogOfWar.isVisible({ team: droneTeam, y: drone.y })) {
+                return; // No renderizar drone oculto por niebla
+            }
+        }
+        
         const droneSprite = this.assetManager.getSprite('vehicle-drone');
         const size = 50 * 1.15; // Tamaño del sprite del dron +15%
         

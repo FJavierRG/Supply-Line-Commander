@@ -163,6 +163,15 @@ export class FactorySupplySystem {
         // Usar velocidad configurada en serverNodes.js
         const speed = this.SUPPLY_SPEED;
         
+        // 🆕 NUEVO: Aplicar modificadores de disciplinas
+        const disciplineModifiers = this.gameState.disciplineManager.getModifiersForSystem(factory.team, 'factory');
+        let effectiveCargo = this.SUPPLY_AMOUNT;
+        
+        // Aplicar penalización de supplies si la disciplina está activa
+        if (disciplineModifiers.supplyPenalty) {
+            effectiveCargo = Math.max(1, effectiveCargo + disciplineModifiers.supplyPenalty); // El penalty es negativo
+        }
+        
         const delivery = {
             id: `factory_supply_${uuidv4().substring(0, 8)}`,
             factoryId: factory.id,
@@ -171,12 +180,12 @@ export class FactorySupplySystem {
             progress: 0, // 0 a 1
             initialDistance: distance,
             speed: speed,
-            cargo: this.SUPPLY_AMOUNT
+            cargo: effectiveCargo
         };
         
         this.gameState.factorySupplyDeliveries.push(delivery);
         
-        console.log(`🏭 Fábrica ${factory.id} envió ${this.SUPPLY_AMOUNT} suministros al HQ (distancia: ${Math.round(distance)}px, velocidad: ${Math.round(speed)}px/s)`);
+        console.log(`🏭 Fábrica ${factory.id} envió ${effectiveCargo} suministros al HQ (distancia: ${Math.round(distance)}px, velocidad: ${Math.round(speed)}px/s)`);
     }
     
     /**
@@ -238,6 +247,27 @@ export class FactorySupplySystem {
                     // Entregar suministros
                     const oldSupplies = hq.supplies;
                     hq.supplies = Math.min(hq.maxSupplies, hq.supplies + delivery.cargo);
+                    
+                    // 🆕 NUEVO: Aplicar bonus de currency de disciplinas
+                    const disciplineModifiers = this.gameState.disciplineManager.getModifiersForSystem(delivery.team, 'factory');
+                    if (disciplineModifiers.currencyPerDelivery && disciplineModifiers.currencyPerDelivery > 0) {
+                        const currencyBonus = disciplineModifiers.currencyPerDelivery;
+                        this.gameState.currency[delivery.team] += currencyBonus;
+                        
+                        // 🆕 NUEVO: Crear evento visual para mostrar texto flotante en la fábrica
+                        const factory = this.gameState.nodes.find(n => n.id === delivery.factoryId);
+                        if (factory && this.gameState.addVisualEvent) {
+                            this.gameState.addVisualEvent('factory_currency_bonus', {
+                                factoryId: factory.id,
+                                x: factory.x,
+                                y: factory.y,
+                                amount: currencyBonus,
+                                team: delivery.team
+                            });
+                        }
+                        
+                        console.log(`💰 Disciplina activa: +${currencyBonus} currency por entrega de fábrica - ${delivery.team} (nuevo total: ${Math.floor(this.gameState.currency[delivery.team])})`);
+                    }
                     
                     console.log(`🏭 Envío ${delivery.id} entregó ${delivery.cargo} suministros al HQ ${hq.id}: ${oldSupplies} → ${hq.supplies}/${hq.maxSupplies}`);
                 }

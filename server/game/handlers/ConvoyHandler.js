@@ -183,6 +183,19 @@ export class ConvoyHandler {
         const dy = toNode.y - fromNode.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
+        // 🆕 NUEVO: Aplicar costo de despliegue de disciplinas (si hay alguna activa)
+        const disciplineModifiers = this.gameState.disciplineManager.getModifiersForSystem(playerTeam, 'convoy');
+        if (disciplineModifiers.deploymentCost && disciplineModifiers.deploymentCost > 0) {
+            // Verificar si hay suficiente currency
+            if (this.gameState.currency[playerTeam] < disciplineModifiers.deploymentCost) {
+                return { success: false, reason: 'Currency insuficiente para desplegar vehículo' };
+            }
+            
+            // Descontar currency y emitir evento visual
+            this.gameState.spendCurrency(playerTeam, disciplineModifiers.deploymentCost, 'vehicle_deployment_discipline');
+            console.log(`💰 Costo de despliegue de vehículo (disciplina): ${disciplineModifiers.deploymentCost} - ${playerTeam}`);
+        }
+        
         // ✅ CRÍTICO: Aplicar sabotaje cuando el camión SALE (no cuando regresa)
         // Consumir contador de sabotaje si el FOB está saboteado
         let sabotagePenaltyApplied = false;

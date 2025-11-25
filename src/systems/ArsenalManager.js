@@ -25,6 +25,12 @@ export class ArsenalManager {
         this.swapMode = null; // Modo de permutación: null, { benchUnitId: 'xxx' } cuando se selecciona una carta del bench
         this.destination = 'deck'; // 🆕 NUEVO: Destino por defecto: 'deck' o 'bench'
         
+        // 🆕 NUEVO: Sistema de tabs (Unidades / Disciplinas)
+        this.activeTab = 'units'; // Por defecto mostrar unidades
+        
+        // 🆕 NUEVO: Sistema de disciplinas
+        this.disciplines = []; // Array de IDs de disciplinas (máximo 2)
+        
         // Inicializar handlers para limpieza de eventos
         this.initHandlers();
         
@@ -87,6 +93,13 @@ export class ArsenalManager {
             },
             benchDestBtnClick: () => {
                 this.setDestination('bench');
+            },
+            // 🆕 NUEVO: Handlers para tabs
+            unitsTabClick: () => {
+                this.setActiveTab('units');
+            },
+            disciplinesTabClick: () => {
+                this.setActiveTab('disciplines');
             }
         };
     }
@@ -182,6 +195,18 @@ export class ArsenalManager {
         if (benchDestBtn) {
             benchDestBtn.addEventListener('click', this.handlers.benchDestBtnClick);
         }
+        
+        // 🆕 NUEVO: Tabs de Unidades / Disciplinas
+        const unitsTab = document.getElementById('arsenal-tab-units');
+        const disciplinesTab = document.getElementById('arsenal-tab-disciplines');
+        
+        if (unitsTab) {
+            unitsTab.addEventListener('click', this.handlers.unitsTabClick);
+        }
+        
+        if (disciplinesTab) {
+            disciplinesTab.addEventListener('click', this.handlers.disciplinesTabClick);
+        }
     }
 
     /**
@@ -236,6 +261,13 @@ export class ArsenalManager {
         const benchDestBtn = document.getElementById('destination-bench-btn');
         if (benchDestBtn) benchDestBtn.removeEventListener('click', this.handlers.benchDestBtnClick);
         
+        // 🆕 NUEVO: Limpiar listeners de tabs
+        const unitsTab = document.getElementById('arsenal-tab-units');
+        if (unitsTab) unitsTab.removeEventListener('click', this.handlers.unitsTabClick);
+        
+        const disciplinesTab = document.getElementById('arsenal-tab-disciplines');
+        if (disciplinesTab) disciplinesTab.removeEventListener('click', this.handlers.disciplinesTabClick);
+        
         // Limpiar suscripción al DeckManager
         /* this.deckManager se destruye con el juego, pero es buena práctica desuscribirse si existe el método */
     }
@@ -249,6 +281,7 @@ export class ArsenalManager {
                 // Ya estamos editando el default, solo actualizar el contenido
                 this.deck = [...defaultDeck.units];
                 this.bench = [...(defaultDeck.bench || [])];
+                this.disciplines = [...(defaultDeck.disciplines || [])]; // 🆕 NUEVO
                 this.updateDeckDisplay();
             } else {
                 // No estamos editando el default, usar loadSelectedDeck normalmente
@@ -259,6 +292,7 @@ export class ArsenalManager {
             this.currentDeckId = defaultDeck.id;
             this.deck = [...defaultDeck.units];
             this.bench = [...(defaultDeck.bench || [])];
+            this.disciplines = [...(defaultDeck.disciplines || [])]; // 🆕 NUEVO
         }
     }
     
@@ -297,6 +331,33 @@ export class ArsenalManager {
         
         // Actualizar la visualización según el destino
         this.updateDeckDisplay();
+    }
+    
+    /**
+     * 🆕 NUEVO: Establece el tab activo (unidades o disciplinas)
+     * @param {string} tab - 'units' o 'disciplines'
+     */
+    setActiveTab(tab) {
+        this.activeTab = tab;
+        
+        const unitsTab = document.getElementById('arsenal-tab-units');
+        const disciplinesTab = document.getElementById('arsenal-tab-disciplines');
+        
+        // Actualizar clases visuales de los tabs
+        if (unitsTab && disciplinesTab) {
+            if (tab === 'units') {
+                unitsTab.classList.add('active');
+                disciplinesTab.classList.remove('active');
+            } else if (tab === 'disciplines') {
+                unitsTab.classList.remove('active');
+                disciplinesTab.classList.add('active');
+            }
+        }
+        
+        // Repoblar el contenido según el tab activo
+        if (this.isVisible) {
+            this.populateArsenal();
+        }
     }
     
     async show() {
@@ -374,7 +435,7 @@ export class ArsenalManager {
     /**
      * Carga el mazo seleccionado desde DeckManager
      * Si hay un mazo seleccionado del jugador, lo carga; si no, empieza con mazo vacío
-     * 🆕 NUEVO: También carga el banquillo
+     * 🆕 NUEVO: También carga el banquillo y disciplinas
      * 🆕 NUEVO: Siempre empieza con mazo vacío (no carga el default automáticamente)
      * 🔧 FIX: Si ya estamos editando el default, mantenerlo o recargarlo
      */
@@ -386,18 +447,21 @@ export class ArsenalManager {
             // Ya estamos editando el default, recargarlo desde el DeckManager
             this.deck = [...selectedDeck.units]; // Copia del array
             this.bench = [...(selectedDeck.bench || [])]; // 🆕 NUEVO: Copia del banquillo
+            this.disciplines = [...(selectedDeck.disciplines || [])]; // 🆕 NUEVO: Copia de disciplinas
         }
         // Si hay un mazo seleccionado del jugador, cargarlo
         else if (selectedDeck && !selectedDeck.isDefault) {
             this.currentDeckId = selectedDeck.id;
             this.deck = [...selectedDeck.units]; // Copia del array
             this.bench = [...(selectedDeck.bench || [])]; // 🆕 NUEVO: Copia del banquillo
+            this.disciplines = [...(selectedDeck.disciplines || [])]; // 🆕 NUEVO: Copia de disciplinas
         } else {
             // Solo resetear a mazo vacío si NO estamos editando el default
             if (this.currentDeckId !== 'default') {
                 this.currentDeckId = null;
                 this.deck = ['hq', 'fob'];
                 this.bench = []; // 🆕 NUEVO: Banquillo vacío
+                this.disciplines = []; // 🆕 NUEVO: Disciplinas vacías
             }
         }
         
@@ -684,10 +748,15 @@ export class ArsenalManager {
      */
     clearDeck() {
         const nonEssentialItems = this.deck.filter(id => id !== 'hq' && id !== 'fob');
-        if (nonEssentialItems.length === 0) return;
+        const hasBench = this.bench && this.bench.length > 0;
+        const hasDisciplines = this.disciplines && this.disciplines.length > 0;
+        
+        if (nonEssentialItems.length === 0 && !hasBench && !hasDisciplines) return;
         
         if (confirm('¿Estás seguro de que quieres limpiar el mazo? (El HQ y FOB permanecerán)')) {
             this.deck = ['hq', 'fob']; // Mantener solo el HQ y FOB
+            this.bench = []; // 🆕 NUEVO: Limpiar banquillo
+            this.disciplines = []; // 🆕 NUEVO: Limpiar disciplinas
             this.updateDeckDisplay();
         }
     }
@@ -726,7 +795,7 @@ export class ArsenalManager {
     /**
      * Guarda el mazo actual usando DeckManager
      */
-    saveDeck() {
+    async saveDeck() {
         console.log('🔍 saveDeck() llamado');
         try {
             if (this.deck.length === 0) {
@@ -771,7 +840,7 @@ export class ArsenalManager {
             // 🆕 NUEVO: Si estamos editando el mazo default, siempre crear uno nuevo (nunca sobreescribir)
             console.log('🔍 Obteniendo mazo actual...');
             const currentDeck = this.currentDeckId ? this.deckManager.getDeck(this.currentDeckId) : null;
-            const isDefaultDeck = currentDeck && currentDeck.isDefault;
+            const isDefaultDeck = currentDeck && (currentDeck.isDefault || currentDeck.is_default); // ✅ Soportar ambos formatos
             
             console.log('🔍 Estado del guardado:', {
                 currentDeckId: this.currentDeckId,
@@ -783,9 +852,10 @@ export class ArsenalManager {
             // Si estamos editando un mazo existente Y no es el default, actualizarlo
             if (this.currentDeckId && !isDefaultDeck) {
                 console.log('🔍 Actualizando mazo existente:', this.currentDeckId);
-                const updated = this.deckManager.updateDeck(this.currentDeckId, {
+                const updated = await this.deckManager.updateDeck(this.currentDeckId, {
                     units: [...this.deck],
-                    bench: [...this.bench] // 🆕 NUEVO: Guardar banquillo
+                    bench: [...this.bench], // 🆕 NUEVO: Guardar banquillo
+                    disciplines: [...this.disciplines] // 🆕 NUEVO: Guardar disciplinas
                 });
                 
                 if (updated) {
@@ -803,16 +873,16 @@ export class ArsenalManager {
                     : 'Introduce un nombre para el nuevo mazo:';
                 
                 console.log('🔍 Llamando showDeckNameModal con mensaje:', promptMessage);
-                this.showDeckNameModal((name) => {
+                this.showDeckNameModal(async (name) => {
                     console.log('🔍 Callback del modal llamado con nombre:', name);
                     if (!name || name.trim() === '') {
                         return;
                     }
                     
-                    const newDeck = this.deckManager.createDeck(name.trim(), [...this.deck], [...this.bench]); // 🆕 NUEVO: Incluir banquillo
+                    const newDeck = await this.deckManager.createDeck(name.trim(), [...this.deck], [...this.bench], [...this.disciplines]); // ✅ await
                     if (newDeck) {
                         this.currentDeckId = newDeck.id; // 🆕 NUEVO: Actualizar currentDeckId al nuevo mazo
-                        this.deckManager.selectDeck(newDeck.id);
+                        this.deckManager.selectDeck(newDeck.id); // selectDeck no es async
                         console.log('Nuevo mazo creado:', newDeck.name, isDefaultDeck ? '(basado en default)' : '');
                         this.showNotification(`Mazo "${newDeck.name}" creado y guardado`, 'success');
                     } else {
@@ -843,6 +913,7 @@ export class ArsenalManager {
         this.currentDeckId = deckToLoad.id;
         this.deck = [...deckToLoad.units]; // Copia del array
         this.bench = [...(deckToLoad.bench || [])]; // 🆕 NUEVO: Cargar banquillo
+        this.disciplines = [...(deckToLoad.disciplines || [])]; // 🆕 NUEVO: Cargar disciplinas
         this.updateDeckDisplay();
         console.log('Mazo cargado:', deckToLoad.name, deckToLoad.isDefault ? '(default - se creará nuevo al guardar)' : '');
         return true;
@@ -1026,6 +1097,24 @@ export class ArsenalManager {
                 hintMsg.style.fontSize = '12px';
                 hintMsg.textContent = 'Añade más unidades para completar tu mazo.';
                 deckList.appendChild(hintMsg);
+            }
+            
+            // 🆕 NUEVO: Añadir disciplinas equipadas
+            if (this.disciplines && this.disciplines.length > 0) {
+                // Separador visual
+                const separator = document.createElement('div');
+                separator.className = 'disciplines-separator';
+                separator.textContent = '⚡ Disciplinas';
+                deckList.appendChild(separator);
+                
+                // Renderizar cada disciplina
+                this.disciplines.forEach(disciplineId => {
+                    const discipline = this.game?.serverDisciplineConfig?.[disciplineId];
+                    if (discipline) {
+                        const disciplineEl = this.createDisciplineDeckItem(disciplineId, discipline);
+                        deckList.appendChild(disciplineEl);
+                    }
+                });
             }
         }
         
@@ -1444,6 +1533,77 @@ export class ArsenalManager {
     }
     
     /**
+     * 🆕 NUEVO: Crea un elemento visual para una disciplina en el mazo
+     * @param {string} disciplineId - ID de la disciplina
+     * @param {Object} discipline - Configuración de la disciplina
+     * @returns {HTMLElement} Elemento visual de la disciplina
+     */
+    createDisciplineDeckItem(disciplineId, discipline) {
+        const div = document.createElement('div');
+        div.className = 'deck-item discipline-deck-item'; // Clase adicional para estilos específicos
+        div.dataset.disciplineId = disciplineId;
+        
+        // Click derecho → vista ampliada (usar método común)
+        div.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            
+            // Adaptar disciplina al formato que espera showCardZoom
+            const disciplineAsCard = {
+                name: discipline.name,
+                cost: 0,
+                description: this.getDisciplineDescription(discipline), // 🆕 Descripción dinámica
+                details: this.formatDisciplineDetails(discipline),
+                spriteKey: null,
+                _isDiscipline: true,
+                _disciplineIcon: discipline.icon
+            };
+            
+            this.showCardZoom(disciplineAsCard);
+        });
+        
+        // Icono (usar imagen directamente en vez de canvas)
+        const iconContainer = document.createElement('div');
+        iconContainer.className = 'deck-item-icon';
+        iconContainer.style.padding = '0';
+        iconContainer.style.display = 'flex';
+        iconContainer.style.alignItems = 'center';
+        iconContainer.style.justifyContent = 'center';
+        
+        const icon = document.createElement('img');
+        icon.src = discipline.icon;
+        icon.alt = discipline.name;
+        icon.style.width = '48px';
+        icon.style.height = '48px';
+        icon.style.objectFit = 'contain';
+        
+        iconContainer.appendChild(icon);
+        div.appendChild(iconContainer);
+        
+        // Info
+        const info = document.createElement('div');
+        info.className = 'deck-item-info';
+        
+        const name = document.createElement('div');
+        name.className = 'deck-item-name';
+        name.textContent = discipline.name;
+        info.appendChild(name);
+        
+        div.appendChild(info);
+        
+        // Botón quitar
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'deck-item-remove';
+        removeBtn.textContent = '−';
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.removeDisciplineFromDeck(disciplineId);
+        });
+        div.appendChild(removeBtn);
+        
+        return div;
+    }
+    
+    /**
      * Obtiene la configuración de un item por ID
      * Usa getNodeConfig para obtener descripciones del servidor si están disponibles
      */
@@ -1460,6 +1620,13 @@ export class ArsenalManager {
         
         container.innerHTML = '';
         
+        // 🆕 NUEVO: Renderizar contenido según el tab activo
+        if (this.activeTab === 'disciplines') {
+            this.populateDisciplines(container);
+            return;
+        }
+        
+        // Tab 'units': Renderizar unidades (comportamiento actual)
         // Obtener todas las cartas (HQ, edificios y consumibles)
         const allyNodes = getAllyNodes();
         const projectiles = getProjectiles();
@@ -1533,6 +1700,258 @@ export class ArsenalManager {
         // Actualizar estado visual de items ya en el mazo
         this.updateAvailableItemsState();
     }
+    
+    /**
+     * 🆕 NUEVO: Renderiza el contenido de la pestaña de Disciplinas
+     * @param {HTMLElement} container - Contenedor donde renderizar
+     */
+    populateDisciplines(container) {
+        console.log('📋 populateDisciplines() llamado');
+        console.log('📋 this.game:', !!this.game);
+        console.log('📋 this.game.serverDisciplineConfig:', this.game?.serverDisciplineConfig);
+        
+        // Verificar que tengamos la configuración de disciplinas del servidor
+        if (!this.game || !this.game.serverDisciplineConfig) {
+            console.warn('⚠️ Configuración de disciplinas no disponible aún');
+            this.showDisciplinesPlaceholder(container, 'Cargando disciplinas...');
+            return;
+        }
+        
+        const disciplines = Object.values(this.game.serverDisciplineConfig);
+        console.log('📋 Disciplinas encontradas:', disciplines.length);
+        
+        // Filtrar solo disciplinas habilitadas
+        const enabledDisciplines = disciplines.filter(d => d.enabled !== false);
+        console.log('📋 Disciplinas habilitadas:', enabledDisciplines.length);
+        
+        if (enabledDisciplines.length === 0) {
+            this.showDisciplinesPlaceholder(container, 'No hay disciplinas disponibles');
+            return;
+        }
+        
+        // Crear contenedor de items similar al de unidades
+        const itemsContainer = document.createElement('div');
+        itemsContainer.className = 'arsenal-items';
+        
+        enabledDisciplines.forEach(discipline => {
+            console.log('📋 Creando carta para:', discipline.id);
+            const disciplineCard = this.createDisciplineCard(discipline);
+            itemsContainer.appendChild(disciplineCard);
+        });
+        
+        console.log('📋 Container appendChild ejecutado');
+        container.appendChild(itemsContainer);
+    }
+    
+    /**
+     * 🆕 NUEVO: Muestra un placeholder cuando no hay disciplinas
+     * @param {HTMLElement} container - Contenedor donde renderizar
+     * @param {string} message - Mensaje a mostrar
+     */
+    showDisciplinesPlaceholder(container, message) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'disciplines-placeholder';
+        placeholder.innerHTML = `
+            <div style="
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100%;
+                padding: 40px;
+                color: rgba(255, 255, 255, 0.6);
+                text-align: center;
+            ">
+                <div style="font-size: 48px; margin-bottom: 20px;">⚡</div>
+                <h3 style="
+                    font-size: 20px;
+                    color: #66bb6a;
+                    margin-bottom: 12px;
+                    font-weight: 600;
+                ">Sistema de Disciplinas</h3>
+                <p style="
+                    font-size: 14px;
+                    line-height: 1.6;
+                    max-width: 400px;
+                ">
+                    ${message}
+                </p>
+            </div>
+        `;
+        
+        container.appendChild(placeholder);
+    }
+    
+    /**
+     * 🆕 NUEVO: Crea una carta de disciplina
+     * @param {Object} discipline - Configuración de la disciplina
+     * @returns {HTMLElement} Elemento de la carta
+     */
+    createDisciplineCard(discipline) {
+        const card = document.createElement('div');
+        card.className = 'arsenal-item discipline-card';
+        card.dataset.disciplineId = discipline.id;
+        
+        // Estructura similar a las cartas de unidades (usando arsenal-item-icon como el resto)
+        const icon = document.createElement('img');
+        icon.className = 'arsenal-item-icon';
+        icon.src = discipline.icon;
+        icon.alt = discipline.name;
+        
+        const info = document.createElement('div');
+        info.className = 'arsenal-item-info';
+        
+        const name = document.createElement('div');
+        name.className = 'arsenal-item-name';
+        name.textContent = discipline.name;
+        
+        const description = document.createElement('div');
+        description.className = 'arsenal-item-description';
+        description.textContent = this.getDisciplineDescription(discipline); // 🆕 Descripción dinámica
+        
+        info.appendChild(name);
+        info.appendChild(description);
+        
+        card.appendChild(icon);
+        card.appendChild(info);
+        
+        // IMPORTANTE: Click derecho - usar método común showCardZoom
+        card.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('🖱️ Click derecho en disciplina:', discipline.id);
+            
+            // Adaptar disciplina al formato que espera showCardZoom
+            const disciplineAsCard = {
+                name: discipline.name,
+                cost: 0, // Las disciplinas no cuestan nada al activar
+                description: this.getDisciplineDescription(discipline), // 🆕 Descripción dinámica
+                details: this.formatDisciplineDetails(discipline),
+                spriteKey: null, // Las disciplinas usan path directo
+                _isDiscipline: true,
+                _disciplineIcon: discipline.icon
+            };
+            
+            this.showCardZoom(disciplineAsCard);
+            return false;
+        }, true);
+        
+        // Click izquierdo: añadir al mazo
+        card.addEventListener('click', (e) => {
+            // Solo procesar si no es click derecho
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('🖱️ Click izquierdo en disciplina:', discipline.id);
+            this.addDisciplineToDeck(discipline.id);
+        });
+        
+        console.log('✅ Carta de disciplina creada:', discipline.id);
+        
+        return card;
+    }
+    
+    /**
+     * 🆕 NUEVO: Añade una disciplina al mazo
+     * @param {string} disciplineId - ID de la disciplina
+     */
+    addDisciplineToDeck(disciplineId) {
+        // Verificar que no tengamos ya 2 disciplinas
+        if (this.disciplines && this.disciplines.length >= 2) {
+            console.warn('⚠️ Ya tienes 2 disciplinas en el mazo');
+            this.showNotification('Ya tienes 2 disciplinas en el mazo (máximo permitido)', 'error');
+            return;
+        }
+        
+        // Verificar que no esté duplicada
+        if (this.disciplines && this.disciplines.includes(disciplineId)) {
+            console.warn('⚠️ Esta disciplina ya está en el mazo');
+            this.showNotification('Esta disciplina ya está en el mazo', 'error');
+            return;
+        }
+        
+        // Añadir disciplina
+        if (!this.disciplines) {
+            this.disciplines = [];
+        }
+        this.disciplines.push(disciplineId);
+        
+        console.log('✅ Disciplina añadida:', disciplineId);
+        this.showNotification('Disciplina añadida al mazo', 'success');
+        
+        // Actualizar visualización
+        this.updateDeckDisplay(); // Esto renderizará la disciplina en el panel derecho
+    }
+    
+    /**
+     * 🆕 NUEVO: Quita una disciplina del mazo
+     * @param {string} disciplineId - ID de la disciplina
+     */
+    removeDisciplineFromDeck(disciplineId) {
+        if (!this.disciplines) return;
+        
+        const index = this.disciplines.indexOf(disciplineId);
+        if (index > -1) {
+            this.disciplines.splice(index, 1);
+            console.log('✅ Disciplina quitada:', disciplineId);
+            this.showNotification('Disciplina quitada del mazo', 'info');
+            
+            // Actualizar visualización
+            this.updateDeckDisplay(); // Esto re-renderizará el deck sin la disciplina
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Formatea los detalles de una disciplina para mostrar en zoom
+     * @param {Object} discipline - Configuración de la disciplina
+     * @returns {string} Solo la descripción, sin iconos ni información adicional
+     */
+    /**
+     * 🆕 NUEVO: Genera descripción dinámica de una disciplina desde sus efectos
+     */
+    getDisciplineDescription(discipline) {
+        if (!discipline || !discipline.effects) return '';
+        
+        // Generar descripción según los efectos
+        switch (discipline.id) {
+            case 'motorized_industry': {
+                const effects = discipline.effects.convoy;
+                const multipliers = effects.speedMultipliers;
+                const cost = effects.deploymentCost;
+                
+                const truckBonus = Math.round((multipliers.truck - 1) * 100);
+                const heavyTruckBonus = Math.round((multipliers.heavy_truck - 1) * 100);
+                const trainBonus = Math.round((multipliers.train - 1) * 100);
+                
+                return `Aumenta la velocidad: camiones ligeros +${truckBonus}%, camiones pesados +${heavyTruckBonus}%, trenes +${trainBonus}%. Enviar un vehículo cuesta ${cost} currency.`;
+            }
+            
+            case 'improved_infrastructure': {
+                const effects = discipline.effects.factory;
+                const currencyBonus = effects.currencyPerDelivery;
+                const supplyPenalty = Math.abs(effects.supplyPenalty);
+                return `Por cada paquete que una fábrica entrega al HQ genera +${currencyBonus} currency. Los suministros de las fábricas disminuyen en -${supplyPenalty}.`;
+            }
+            
+            case 'defensive_combat': {
+                const effects = discipline.effects.frontMode;
+                const consumeReduction = Math.abs(Math.round(effects.consumeMultiplierBonus * 100));
+                const currencyPerFront = effects.currencyPerSecondPerFront;
+                return `En modo Mantener: el gasto de suministros disminuye un ${consumeReduction}% adicional y otorga +${currencyPerFront} currency/segundo por frente.`;
+            }
+            
+            // 🔧 Más disciplinas se añadirán aquí
+            
+            default:
+                return discipline.description || 'Sin descripción disponible.';
+        }
+    }
+    
+    formatDisciplineDetails(discipline) {
+        // Generar descripción dinámica
+        return this.getDisciplineDescription(discipline);
+    }
+    
     
     createCategory(title, items) {
         const category = document.createElement('div');
@@ -1966,12 +2385,12 @@ export class ArsenalManager {
      * Borra un mazo desde el selector
      * @param {string} deckId - ID del mazo a borrar
      */
-    deleteDeckFromSelector(deckId) {
+    async deleteDeckFromSelector(deckId) {
         if (!confirm('¿Estás seguro de que quieres borrar este mazo? Esta acción no se puede deshacer.')) {
             return;
         }
         
-        const success = this.deckManager.deleteDeck(deckId);
+        const success = await this.deckManager.deleteDeck(deckId);
         if (success) {
             // Si se borró el mazo que estábamos editando, empezar con mazo vacío
             if (this.currentDeckId === deckId) {
@@ -2210,22 +2629,45 @@ export class ArsenalManager {
             ctx.imageSmoothingQuality = 'high';
         }
         
-        const sprite = this.assetManager.getSprite(item.spriteKey);
-        if (sprite) {
-            // Calcular dimensiones manteniendo proporción
-            const scale = Math.min(canvas.width / sprite.width, canvas.height / sprite.height);
-            const targetW = sprite.width * scale;
-            const targetH = sprite.height * scale;
-            const x = (canvas.width - targetW) / 2;
-            const y = (canvas.height - targetH) / 2;
-            ctx.drawImage(sprite, 0, 0, sprite.width, sprite.height, x, y, targetW, targetH);
+        // 🆕 NUEVO: Soporte para disciplinas (usan path directo en vez de spriteKey)
+        if (item._isDiscipline && item._disciplineIcon) {
+            const img = new Image();
+            img.onload = () => {
+                // Calcular dimensiones manteniendo proporción
+                const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+                const targetW = img.width * scale;
+                const targetH = img.height * scale;
+                const x = (canvas.width - targetW) / 2;
+                const y = (canvas.height - targetH) / 2;
+                ctx.drawImage(img, 0, 0, img.width, img.height, x, y, targetW, targetH);
+            };
+            img.src = item._disciplineIcon;
+        } else {
+            // Cartas normales usan spriteKey
+            const sprite = this.assetManager.getSprite(item.spriteKey);
+            if (sprite) {
+                // Calcular dimensiones manteniendo proporción
+                const scale = Math.min(canvas.width / sprite.width, canvas.height / sprite.height);
+                const targetW = sprite.width * scale;
+                const targetH = sprite.height * scale;
+                const x = (canvas.width - targetW) / 2;
+                const y = (canvas.height - targetH) / 2;
+                ctx.drawImage(sprite, 0, 0, sprite.width, sprite.height, x, y, targetW, targetH);
+            }
         }
         
         // Actualizar información de la carta
         nameEl.textContent = item.name || '';
         
         if (costEl) {
-            costEl.textContent = item.cost ? `Coste: ${item.cost} $` : '';
+            // 🆕 NUEVO: Disciplinas no muestran coste (siempre es 0)
+            if (item._isDiscipline) {
+                costEl.textContent = '⚡ DISCIPLINA';
+                costEl.style.color = '#f39c12';
+            } else {
+                costEl.textContent = item.cost ? `Coste: ${item.cost} $` : '';
+                costEl.style.color = '';
+            }
         }
         
         if (descEl) {

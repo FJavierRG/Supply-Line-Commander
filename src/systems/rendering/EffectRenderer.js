@@ -111,10 +111,18 @@ export class EffectRenderer {
         }
         
         const countdownDuration = 3; // 3 segundos según configuración
+        const myTeam = this.game.myTeam || 'player1';
         
         // Renderizar cada bombardeo de artillería activo
         for (let i = this.artilleryStrikes.length - 1; i >= 0; i--) {
             const artillery = this.artilleryStrikes[i];
+            
+            // 🆕 FOG OF WAR: Verificar si el efecto de artillería enemiga es visible
+            if (this.game.fogOfWar && this.game.isMultiplayer && artillery.team && artillery.team !== myTeam) {
+                if (!this.game.fogOfWar.isVisible({ team: artillery.team, y: artillery.y })) {
+                    continue; // No renderizar efecto de artillería oculto por niebla
+                }
+            }
             
             if (!artillery.active) {
                 this.artilleryStrikes.splice(i, 1);
@@ -390,6 +398,8 @@ export class EffectRenderer {
     renderFactoryConnections() {
         if (!this.game || !this.game.nodes) return;
         
+        const myTeam = this.game.myTeam || 'player1';
+        
         // Buscar todas las fábricas construidas y activas
         const factories = this.game.nodes.filter(n => 
             n.type === 'factory' && 
@@ -400,6 +410,12 @@ export class EffectRenderer {
         
         // Renderizar línea roja desde cada fábrica a su HQ
         for (const factory of factories) {
+            // 🆕 FOG OF WAR: Verificar si la fábrica enemiga es visible
+            if (this.game.fogOfWar && this.game.isMultiplayer && factory.team && factory.team !== myTeam) {
+                if (!this.game.fogOfWar.isVisible(factory)) {
+                    continue; // No renderizar conexión de fábrica oculta por niebla
+                }
+            }
             const hq = this.game.nodes.find(n => 
                 n.type === 'hq' && 
                 n.team === factory.team &&
@@ -431,10 +447,23 @@ export class EffectRenderer {
         if (!sprite) return;
         
         const iconSize = 32; // Tamaño del icono
+        const myTeam = this.game?.myTeam || 'player1';
         
         // Renderizar cada icono
         for (const icon of this.factorySupplyIcons) {
             if (!icon.active) continue;
+            
+            // 🆕 FOG OF WAR: Verificar si el icono de suministro enemigo es visible
+            // El icono viaja de factory a HQ, verificar si está en zona con niebla
+            if (this.game?.fogOfWar && this.game.isMultiplayer) {
+                // Determinar equipo del icono: puede venir de icon.team o de la factory origen
+                const iconTeam = icon.team || icon.factoryTeam;
+                if (iconTeam && iconTeam !== myTeam) {
+                    if (!this.game.fogOfWar.isVisible({ team: iconTeam, y: icon.currentY })) {
+                        continue; // No renderizar icono oculto por niebla
+                    }
+                }
+            }
             
             this.ctx.save();
             this.ctx.globalAlpha = 0.7; // Más transparente

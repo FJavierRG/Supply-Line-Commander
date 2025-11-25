@@ -40,8 +40,8 @@ export class CombatHandler {
             return { success: false, reason: 'Currency insuficiente' };
         }
         
-        // Descontar currency
-        this.gameState.currency[playerTeam] -= sniperCost;
+        // Descontar currency y emitir evento visual
+        this.gameState.spendCurrency(playerTeam, sniperCost, 'sniper_shot');
         
         // 🆕 NUEVO: Lógica condicional según el tipo de objetivo
         if (targetNode.type === 'specopsCommando' || targetNode.type === 'truckAssault' || targetNode.type === 'cameraDrone') {
@@ -201,8 +201,8 @@ export class CombatHandler {
             return { success: false, reason: 'Currency insuficiente' };
         }
         
-        // Descontar currency
-        this.gameState.currency[playerTeam] -= sabotageCost;
+        // Descontar currency y emitir evento visual
+        this.gameState.spendCurrency(playerTeam, sabotageCost, 'fob_sabotage');
         
         // Añadir efecto de sabotaje
         if (!targetNode.effects) targetNode.effects = [];
@@ -287,8 +287,8 @@ export class CombatHandler {
             return { success: false, reason: 'Currency insuficiente' };
         }
         
-        // Descontar currency
-        this.gameState.currency[playerTeam] -= droneCost;
+        // Descontar currency y emitir evento visual
+        this.gameState.spendCurrency(playerTeam, droneCost, 'launch_drone');
         
         // 🆕 NUEVO: Incrementar contador de usos de la lanzadera
         launcher.uses++;
@@ -348,8 +348,8 @@ export class CombatHandler {
             return { success: false, reason: 'Currency insuficiente' };
         }
         
-        // Descontar currency
-        this.gameState.currency[playerTeam] -= tankCost;
+        // Descontar currency y emitir evento visual
+        this.gameState.spendCurrency(playerTeam, tankCost, 'deploy_tank');
         
         // Lanzar tanque desde el extremo del mapa
         const tank = this.gameState.tankSystem.launchTank(playerTeam, targetNode);
@@ -399,8 +399,8 @@ export class CombatHandler {
             return { success: false, reason: 'Currency insuficiente' };
         }
         
-        // Descontar currency
-        this.gameState.currency[playerTeam] -= lightVehicleCost;
+        // Descontar currency y emitir evento visual
+        this.gameState.spendCurrency(playerTeam, lightVehicleCost, 'deploy_light_vehicle');
         
         // Lanzar artillado ligero desde el extremo del mapa
         const lightVehicle = this.gameState.lightVehicleSystem.launchLightVehicle(playerTeam, targetNode);
@@ -426,8 +426,8 @@ export class CombatHandler {
             return { success: false, reason: 'Currency insuficiente' };
         }
         
-        // Descontar currency
-        this.gameState.currency[playerTeam] -= artilleryCost;
+        // Descontar currency y emitir evento visual
+        this.gameState.spendCurrency(playerTeam, artilleryCost, 'artillery_strike');
         
         // Lanzar bombardeo de artillería
         const artillery = this.gameState.artillerySystem.launchArtillery(playerTeam, x, y);
@@ -499,8 +499,8 @@ export class CombatHandler {
             return { success: false, reason: 'Ubicación no válida' };
         }
         
-        // Descontar currency
-        this.gameState.currency[playerTeam] -= commandoCost;
+        // Descontar currency y emitir evento visual
+        this.gameState.spendCurrency(playerTeam, commandoCost, 'deploy_commando');
         
         // Crear nodo del comando
         const commandoNode = this.gameState.buildHandler.createNode('specopsCommando', playerTeam, x, y);
@@ -570,8 +570,8 @@ export class CombatHandler {
             return { success: false, reason: 'Ubicación no válida' };
         }
         
-        // Descontar currency
-        this.gameState.currency[playerTeam] -= truckAssaultCost;
+        // Descontar currency y emitir evento visual
+        this.gameState.spendCurrency(playerTeam, truckAssaultCost, 'deploy_truck_assault');
         
         // Crear nodo del truck assault
         const truckAssaultNode = this.gameState.buildHandler.createNode('truckAssault', playerTeam, x, y);
@@ -652,8 +652,8 @@ export class CombatHandler {
             return { success: false, reason: 'Ubicación no válida' };
         }
         
-        // Descontar currency
-        this.gameState.currency[playerTeam] -= cameraDroneCost;
+        // Descontar currency y emitir evento visual
+        this.gameState.spendCurrency(playerTeam, cameraDroneCost, 'deploy_camera_drone');
         
         // 🆕 NUEVO: Incrementar contador de usos de la lanzadera
         launcher.uses++;
@@ -794,8 +794,8 @@ export class CombatHandler {
             return { success: false, reason: 'El Destructor de mundos ya está activo' };
         }
         
-        // Descontar currency
-        this.gameState.currency[playerTeam] -= worldDestroyerCost;
+        // Descontar currency y emitir evento visual
+        this.gameState.spendCurrency(playerTeam, worldDestroyerCost, 'world_destroyer');
         
         // Iniciar el destructor
         const worldDestroyerConfig = SERVER_NODE_CONFIG.gameplay.worldDestroyer;

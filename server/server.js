@@ -6,6 +6,8 @@ import cors from 'cors';
 import { RoomManager } from './game/managers/RoomManager.js';
 import { GameStateManager } from './game/GameStateManager.js';
 import { AISystem } from './game/managers/AISystem.js';
+import decksRouter from './routes/decks.js';
+import { preventEnvLeaks, securityHeaders, safeErrorHandler } from './middleware/security.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -34,6 +36,13 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+
+// ===== SEGURIDAD =====
+app.use(securityHeaders);
+app.use(preventEnvLeaks);
+
+// ===== RUTAS API =====
+app.use('/api/decks', decksRouter);
 
 // Servir archivos estáticos del cliente (para ngrok/producción)
 // IMPORTANTE: Configurar headers correctos para módulos ES6
@@ -202,16 +211,22 @@ io.on('connection', (socket) => {
     (async () => {
         const { GAME_CONFIG } = await import('./config/gameConfig.js');
         const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
-        socket.emit('game_config', {
+        const gameConfig = {
             deckPointLimit: GAME_CONFIG.deck.pointLimit,
             benchPointLimit: GAME_CONFIG.deck.benchPointLimit, // 🆕 NUEVO: Límite del banquillo
             defaultDeck: { // 🆕 NUEVO: Mazo por defecto del servidor
                 id: DEFAULT_DECK.id,
                 name: DEFAULT_DECK.name,
                 units: DEFAULT_DECK.units,
-                bench: DEFAULT_DECK.bench || []
+                bench: DEFAULT_DECK.bench || [],
+                disciplines: DEFAULT_DECK.disciplines || [] // 🆕 NUEVO: Disciplinas del mazo default
             }
-        });
+        };
+        
+        // 🐛 DEBUG: Verificar que las disciplinas se están enviando
+        console.log('📤 [GAME_CONFIG] Enviando disciplinas al cliente:', gameConfig.defaultDeck.disciplines);
+        
+        socket.emit('game_config', gameConfig);
     })();
     
     // === LOBBY ===
@@ -337,8 +352,8 @@ io.on('connection', (socket) => {
      * 🎯 ACTUALIZADO: Ahora acepta deckId y valida el mazo del jugador
      */
     socket.on('select_race', async (data) => {
-        console.log('🎴 SERVIDOR: Recibido select_race (ahora maneja mazos):', data);
-        const { roomId, raceId, deckUnits, benchUnits } = data; // raceId ahora es deckId, deckUnits y benchUnits son opcionales
+        console.log('🎴 SERVIDOR: Recibido select_race con deckId:', data);
+        const { roomId, deckId } = data; // ✅ REFACTORIZADO: Solo deckId
         
         try {
             const room = roomManager.getRoom(roomId);
@@ -348,19 +363,29 @@ io.on('connection', (socket) => {
             const player = room.players.find(p => p.id === socket.id);
             if (!player) throw new Error('Jugador no encontrado');
             
-            // 🎯 NUEVO: Validar y almacenar el mazo
-            let validatedDeck = null;
+            // ✅ REFACTORIZADO: Obtener el mazo desde la BD
+            const { getDeckFromDatabase } = await import('./utils/deckLoader.js');
             
-            if (raceId === 'default') {
-                // Mazo predeterminado - usar el del servidor
-                const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
-                validatedDeck = {
-                    id: 'default',
-                    name: 'Mazo Predeterminado',
-                    units: DEFAULT_DECK.units,
-                    bench: DEFAULT_DECK.bench || [] // 🆕 NUEVO: Incluir banquillo
-                };
-            } else if (deckUnits && Array.isArray(deckUnits)) {
+            console.log('📥 Obteniendo mazo desde BD:', deckId);
+            const validatedDeck = await getDeckFromDatabase(deckId);
+            
+            if (!validatedDeck) {
+                console.warn('🚫 Mazo no encontrado:', deckId);
+                socket.emit('deck_validation_error', {
+                    error: 'DECK_NOT_FOUND',
+                    message: `El mazo "${deckId}" no existe`
+                });
+                return;
+            }
+            
+            console.log(`✅ Mazo cargado desde BD: "${validatedDeck.name}" (${validatedDeck.units.length} unidades, ${validatedDeck.bench.length} bench, ${validatedDeck.disciplines.length} disciplinas)`);
+            
+            // ✅ El mazo ya está validado (se validó al crearlo en /api/decks)
+            // No necesitamos hacer validación aquí, solo cargarlo
+            
+            /*
+            // TODO: Código antiguo de validación manual - ELIMINAR después de testing
+            if (deckUnits && Array.isArray(deckUnits)) {
                 // 🎯 VALIDACIÓN ANTI-HACK: Validar que todas las unidades sean válidas
                 const { SERVER_NODE_CONFIG } = await import('./config/serverNodes.js');
                 const { GAME_CONFIG } = await import('./config/gameConfig.js');
@@ -466,24 +491,85 @@ io.on('connection', (socket) => {
                     }
                 }
                 
+                // 🆕 NUEVO: Validar disciplinas si se proporcionan
+                let validDisciplines = [];
+                if (disciplines && Array.isArray(disciplines)) {
+                    const { disciplineExists, getDiscipline } = await import('./config/disciplines.js');
+                    const maxDisciplines = GAME_CONFIG.disciplines.maxEquipped;
+                    
+                    // Validar cantidad máxima
+                    if (disciplines.length > maxDisciplines) {
+                        console.warn(`🚫 Mazo rechazado: ${disciplines.length} disciplinas excede máximo de ${maxDisciplines}`);
+                        socket.emit('deck_validation_error', {
+                            error: 'TOO_MANY_DISCIPLINES',
+                            message: `Solo puedes tener ${maxDisciplines} disciplinas en el mazo`,
+                            disciplineCount: disciplines.length,
+                            maxDisciplines: maxDisciplines
+                        });
+                        return; // Rechazar el mazo
+                    }
+                    
+                    // Validar que no haya duplicados
+                    const uniqueDisciplines = [...new Set(disciplines)];
+                    if (uniqueDisciplines.length !== disciplines.length) {
+                        console.warn(`🚫 Mazo rechazado: disciplinas duplicadas`);
+                        socket.emit('deck_validation_error', {
+                            error: 'DUPLICATE_DISCIPLINES',
+                            message: 'No puedes tener disciplinas duplicadas'
+                        });
+                        return; // Rechazar el mazo
+                    }
+                    
+                    // Validar que todas existan y estén habilitadas
+                    for (const disciplineId of disciplines) {
+                        if (!disciplineExists(disciplineId)) {
+                            console.warn(`🚫 Mazo rechazado: disciplina no existe: ${disciplineId}`);
+                            socket.emit('deck_validation_error', {
+                                error: 'INVALID_DISCIPLINE',
+                                message: `La disciplina "${disciplineId}" no existe`,
+                                disciplineId: disciplineId
+                            });
+                            return; // Rechazar el mazo
+                        }
+                        
+                        const discipline = getDiscipline(disciplineId);
+                        if (discipline.enabled === false) {
+                            console.warn(`🚫 Mazo rechazado: disciplina deshabilitada: ${disciplineId}`);
+                            socket.emit('deck_validation_error', {
+                                error: 'DISABLED_DISCIPLINE',
+                                message: `La disciplina "${disciplineId}" está deshabilitada`,
+                                disciplineId: disciplineId
+                            });
+                            return; // Rechazar el mazo
+                        }
+                    }
+                    
+                    validDisciplines = [...disciplines];
+                    console.log(`✅ Disciplinas validadas: ${validDisciplines.length} (${validDisciplines.join(', ')})`);
+                }
+                
                 console.log(`✅ Mazo validado: ${validUnits.length} unidades (${deckCost}/${deckPointLimit} puntos), banquillo: ${validBenchUnits.length} unidades (${benchCost}/${benchPointLimit} puntos)`);
                 
+                // ❌ CÓDIGO VIEJO - YA NO SE USA
                 validatedDeck = {
                     id: raceId, // El deckId del cliente
                     name: `Mazo del jugador ${player.name}`,
                     units: validUnits,
-                    bench: validBenchUnits // 🆕 NUEVO: Incluir banquillo
+                    bench: validBenchUnits, // 🆕 NUEVO: Incluir banquillo
+                    disciplines: validDisciplines // 🆕 NUEVO: Incluir disciplinas
                 };
             } else {
-                // Si no hay deckUnits, asumir que es el mazo predeterminado
+                // ❌ CÓDIGO VIEJO - YA NO SE USA
                 const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
                 validatedDeck = {
                     id: 'default',
                     name: 'Mazo Predeterminado',
                     units: DEFAULT_DECK.units,
-                    bench: DEFAULT_DECK.bench || [] // 🆕 NUEVO: Incluir banquillo
+                    bench: DEFAULT_DECK.bench || [], // 🆕 NUEVO: Incluir banquillo
+                    disciplines: DEFAULT_DECK.disciplines || [] // 🆕 NUEVO: Incluir disciplinas
                 };
             }
+            */
             
             // Almacenar el mazo en el jugador
             player.selectedRace = validatedDeck.id; // Mantener compatibilidad con nombre anterior
@@ -629,6 +715,70 @@ io.on('connection', (socket) => {
         } catch (error) {
             console.error('❌ Error al permutar carta:', error);
             socket.emit('swap_card_error', {
+                error: 'UNKNOWN_ERROR',
+                message: error.message
+            });
+        }
+    });
+    
+    /**
+     * 🆕 NUEVO: Activar disciplina
+     */
+    socket.on('activate_discipline', async (data) => {
+        const { roomId, disciplineId } = data;
+        console.log(`⚡ Activar disciplina: ${disciplineId} en sala ${roomId}`);
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room) throw new Error('Sala no encontrada');
+            
+            // Verificar que la partida esté en curso
+            if (room.status !== 'playing' || !room.gameState) {
+                socket.emit('activate_discipline_error', {
+                    error: 'GAME_NOT_STARTED',
+                    message: 'La partida no ha comenzado'
+                });
+                return;
+            }
+            
+            // Encontrar el jugador
+            const player = room.players.find(p => p.id === socket.id);
+            if (!player) throw new Error('Jugador no encontrado');
+            
+            // Intentar activar disciplina
+            const result = room.gameState.disciplineManager.activateDiscipline(
+                player.team,
+                disciplineId,
+                Date.now()
+            );
+            
+            if (result.success) {
+                console.log(`✅ Disciplina activada: ${disciplineId} por ${player.team}`);
+                
+                // Notificar a todos los jugadores de la sala
+                io.to(roomId).emit('discipline_activated', {
+                    playerId: player.team,
+                    disciplineId: disciplineId,
+                    discipline: result.discipline,
+                    timestamp: Date.now()
+                });
+                
+                // Confirmar al jugador que lo activó
+                socket.emit('activate_discipline_success', {
+                    disciplineId: disciplineId,
+                    discipline: result.discipline
+                });
+            } else {
+                console.log(`⚠️ No se pudo activar disciplina: ${result.reason}`);
+                socket.emit('activate_discipline_error', {
+                    error: 'ACTIVATION_FAILED',
+                    message: result.reason,
+                    disciplineId: disciplineId
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error al activar disciplina:', error);
+            socket.emit('activate_discipline_error', {
                 error: 'UNKNOWN_ERROR',
                 message: error.message
             });
@@ -1090,6 +1240,40 @@ io.on('connection', (socket) => {
                 console.log(`⚠️ Sabotaje rechazado: ${result.reason}`);
             }
         } catch (error) {
+            socket.emit('error', { message: error.message });
+        }
+    });
+    
+    /**
+     * 🆕 NUEVO: Cambio de modo de comportamiento de frente
+     */
+    socket.on('change_front_mode', (data) => {
+        const { roomId, frontId, newMode } = data;
+        
+        try {
+            const room = roomManager.getRoom(roomId);
+            if (!room || !room.gameState) throw new Error('Partida no iniciada');
+            
+            const playerTeam = roomManager.getPlayerTeam(roomId, socket.id);
+            const result = room.gameState.handleFrontModeChange(playerTeam, frontId, newMode);
+            
+            if (result.success) {
+                // Broadcast a todos para sincronización
+                io.to(roomId).emit('front_mode_changed', {
+                    frontId: result.frontId,
+                    oldMode: result.oldMode,
+                    newMode: result.newMode,
+                    cooldownUntil: result.cooldownUntil,
+                    team: playerTeam
+                });
+                
+                console.log(`🎮 Modo de frente cambiado: ${playerTeam} → ${result.frontId.substring(0, 8)} (${result.oldMode} → ${result.newMode})`);
+            } else {
+                socket.emit('front_mode_change_failed', { reason: result.reason });
+                console.log(`⚠️ Cambio de modo rechazado: ${result.reason}`);
+            }
+        } catch (error) {
+            console.error('❌ Error en change_front_mode:', error);
             socket.emit('error', { message: error.message });
         }
     });
@@ -1615,6 +1799,32 @@ async function startGame(roomId) {
             throw error;
         }
         
+        // 🆕 NUEVO: Configurar disciplinas equipadas para cada jugador
+        console.log(`⚡ [startGame] Configurando disciplinas equipadas...`);
+        try {
+            if (player1 && player1.selectedDeck && player1.selectedDeck.disciplines) {
+                console.log(`⚡ [startGame] Estableciendo disciplinas para player1:`, player1.selectedDeck.disciplines);
+                gameState.disciplineManager.setEquippedDisciplines('player1', player1.selectedDeck.disciplines);
+                console.log(`✅ [startGame] Disciplinas establecidas para player1`);
+            } else {
+                console.log(`⚡ [startGame] Player1 no tiene disciplinas equipadas`);
+                gameState.disciplineManager.setEquippedDisciplines('player1', []);
+            }
+            
+            if (player2 && player2.selectedDeck && player2.selectedDeck.disciplines) {
+                console.log(`⚡ [startGame] Estableciendo disciplinas para player2:`, player2.selectedDeck.disciplines);
+                gameState.disciplineManager.setEquippedDisciplines('player2', player2.selectedDeck.disciplines);
+                console.log(`✅ [startGame] Disciplinas establecidas para player2`);
+            } else {
+                console.log(`⚡ [startGame] Player2 no tiene disciplinas equipadas (IA o sin disciplinas)`);
+                gameState.disciplineManager.setEquippedDisciplines('player2', []);
+            }
+        } catch (error) {
+            console.error(`❌ [startGame] Error configurando disciplinas:`, error);
+            console.error(`❌ [startGame] Stack trace:`, error.stack);
+            throw error;
+        }
+        
         // 🆕 CENTRALIZADO: Ahora crear estado inicial con las razas ya configuradas
         console.log(`🌍 [startGame] Generando estado inicial del juego...`);
         let initialState;
@@ -1718,6 +1928,14 @@ async function startGame(roomId) {
                             });
                             gameState.droneAlerts = []; // Limpiar después de enviar
                         }
+                        
+                        // 🆕 NUEVO: Enviar eventos de disciplinas si hay (ended, cooldown_ready)
+                        if (gameState.disciplineEvents && gameState.disciplineEvents.length > 0) {
+                            gameState.disciplineEvents.forEach(event => {
+                                io.to(roomId).emit('discipline_event', event);
+                            });
+                            gameState.disciplineEvents = []; // Limpiar después de enviar
+                        }
                     } catch (error) {
                         console.error(`❌ [startGame] Error en updateCallback:`, error);
                         console.error(`❌ [startGame] Stack trace:`, error.stack);
@@ -1757,6 +1975,9 @@ async function startGame(roomId) {
         });
     }
 }
+
+// ===== ERROR HANDLER (debe ir al final de todas las rutas) =====
+app.use(safeErrorHandler);
 
 // ===== INICIO DEL SERVIDOR =====
 

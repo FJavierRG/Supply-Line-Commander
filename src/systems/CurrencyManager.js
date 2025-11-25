@@ -84,6 +84,18 @@ export class CurrencyManager {
     }
     
     /**
+     * Calcula el ingreso pasivo total por segundo (base + bonus)
+     * SOLO para visualización - el servidor calcula el valor real
+     * @returns {number} Ingreso pasivo total por segundo (visual)
+     */
+    getPassiveIncomePerSecond() {
+        // 🔧 SINCRONIZADO CON SERVIDOR: server/config/gameConfig.js -> GAME_CONFIG.currency.passiveRate
+        const basePassiveRate = 0.5; // Base: 0.5 currency/segundo
+        const bonus = this.getNuclearPlantBonus();
+        return basePassiveRate + bonus;
+    }
+    
+    /**
      * Añade currency temporal de la misión (por avance de terreno)
      * ⚠️ SOLO PARA VISUALIZACIÓN: El servidor maneja todos los cambios de currency.
      * Este método solo actualiza el valor visual cuando el servidor notifica cambios.

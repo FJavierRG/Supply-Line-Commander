@@ -32,6 +32,7 @@ import { CommandoSystem } from '../systems/CommandoSystem.js';
 import { TruckAssaultSystem } from '../systems/TruckAssaultSystem.js';
 import { VehicleWorkshopSystem } from '../systems/VehicleWorkshopSystem.js';
 import { CameraDroneSystem } from '../systems/CameraDroneSystem.js';
+import { DisciplineManager } from './managers/DisciplineManager.js'; // 🆕 NUEVO: Sistema de disciplinas
 import { MAP_CONFIG, calculateAbsolutePosition } from '../utils/mapGenerator.js';
 
 export class GameStateManager {
@@ -42,6 +43,7 @@ export class GameStateManager {
         this.trains = []; // 🆕 NUEVO: Array de trenes
         this.helicopters = []; // 🆕 NUEVO: Array de helicópteros persistentes
         this.factorySupplyDeliveries = []; // 🆕 NUEVO: Array de envíos de suministros desde fábricas
+        this.disciplineEvents = []; // 🆕 NUEVO: Eventos de disciplinas (ended, cooldown_ready)
         this.currency = {
             player1: GAME_CONFIG.currency.initial,
             player2: GAME_CONFIG.currency.initial
@@ -92,6 +94,7 @@ export class GameStateManager {
         this.convoyMovementManager = new ConvoyMovementManager(this);
         this.supplyManager = new SupplyManager(this);
         this.investmentManager = new InvestmentManager(this);
+        this.disciplineManager = new DisciplineManager(room.id); // 🆕 NUEVO: Gestor de disciplinas
         // AISystem se inicializa después con io y roomId
         this.aiSystem = null;
         
@@ -394,6 +397,11 @@ export class GameStateManager {
             node.hasHelicopters = vehicleConfig.hasHelicopters;
             node.maxHelicopters = vehicleConfig.hasHelicopters ? vehicleConfig.availableHelicopters : 0;
             node.availableHelicopters = vehicleConfig.availableHelicopters;
+            
+            // 🆕 SISTEMA DE MODOS DE FRENTE
+            const frontModes = SERVER_NODE_CONFIG.gameplay.front.modes;
+            node.frontMode = frontModes.defaultMode; // 'advance' por defecto
+            node.modeCooldownUntil = 0; // Sin cooldown inicial (timestamp en ms)
         }
         
         // 🆕 NUEVO: Inicializar contador de usos para lanzadera de drones
@@ -430,6 +438,25 @@ export class GameStateManager {
     addVisualEvent(type, data = {}) {
         const event = { type, ...data, timestamp: this.gameTime };
         this.visualEvents.push(event);
+    }
+    
+    /**
+     * 🆕 NUEVO: Gasta currency y emite evento visual automáticamente
+     * @param {string} team - Equipo ('player1' o 'player2')
+     * @param {number} amount - Cantidad a gastar (positivo)
+     * @param {string} reason - Razón del gasto (para debugging)
+     */
+    spendCurrency(team, amount, reason = 'unknown') {
+        if (!this.currency[team]) return;
+        
+        this.currency[team] -= amount;
+        
+        // Emitir evento visual para mostrar "-n" en el UI
+        this.addVisualEvent('currency_spent', {
+            team: team,
+            amount: amount,
+            reason: reason
+        });
     }
     
     /**
@@ -540,6 +567,79 @@ export class GameStateManager {
      */
     handleCameraDroneDeploy(playerTeam, x, y) {
         return this.combatHandler.handleCameraDroneDeploy(playerTeam, x, y);
+    }
+    
+    /**
+     * 🆕 Maneja cambio de modo de comportamiento de un frente
+     * @param {string} playerTeam - Equipo del jugador ('player1' o 'player2')
+     * @param {string} frontId - ID del nodo de frente
+     * @param {string} newMode - Nuevo modo ('advance', 'retreat', 'hold')
+     * @returns {Object} Resultado de la operación
+     */
+    handleFrontModeChange(playerTeam, frontId, newMode) {
+        // Validar que el modo sea válido
+        const modesConfig = SERVER_NODE_CONFIG.gameplay.front.modes;
+        const validModes = ['advance', 'retreat', 'hold'];
+        
+        if (!validModes.includes(newMode)) {
+            return { 
+                success: false, 
+                reason: `Modo inválido: ${newMode}. Modos válidos: ${validModes.join(', ')}` 
+            };
+        }
+        
+        // Buscar el nodo de frente
+        const front = this.nodes.find(n => n.id === frontId && n.type === 'front');
+        
+        if (!front) {
+            return { success: false, reason: 'Frente no encontrado' };
+        }
+        
+        // Validar que el frente pertenece al jugador
+        if (front.team !== playerTeam) {
+            return { success: false, reason: 'Este frente no te pertenece' };
+        }
+        
+        // Verificar cooldown
+        const currentTime = Date.now();
+        if (front.modeCooldownUntil && currentTime < front.modeCooldownUntil) {
+            const remainingSeconds = Math.ceil((front.modeCooldownUntil - currentTime) / 1000);
+            return { 
+                success: false, 
+                reason: `Cambio de modo en cooldown. Espera ${remainingSeconds}s` 
+            };
+        }
+        
+        // Verificar que no sea el mismo modo
+        if (front.frontMode === newMode) {
+            return { success: false, reason: `El frente ya está en modo ${newMode}` };
+        }
+        
+        // Cambiar modo
+        const oldMode = front.frontMode;
+        front.frontMode = newMode;
+        
+        // Aplicar cooldown
+        const cooldownDuration = modesConfig.cooldownDuration * 1000; // Convertir a ms
+        front.modeCooldownUntil = currentTime + cooldownDuration;
+        
+        console.log(`🎮 ${playerTeam} cambió frente ${frontId.substring(0, 8)} de modo ${oldMode} → ${newMode} (cooldown: ${modesConfig.cooldownDuration}s)`);
+        
+        // Añadir evento de sonido para feedback
+        this.addSoundEvent('front_mode_change', { 
+            frontId, 
+            oldMode, 
+            newMode, 
+            team: playerTeam 
+        });
+        
+        return { 
+            success: true, 
+            frontId,
+            oldMode,
+            newMode,
+            cooldownUntil: front.modeCooldownUntil
+        };
     }
     
     /**
@@ -736,6 +836,14 @@ export class GameStateManager {
             this.aiSystem.update(dt);
         }
         
+        // === SISTEMA DE DISCIPLINAS ===
+        // Actualizar disciplinas (duración y cooldowns)
+        const disciplineEvents = this.disciplineManager.update(Date.now());
+        // Guardar eventos para enviar al cliente
+        if (disciplineEvents.length > 0) {
+            this.disciplineEvents = disciplineEvents;
+        }
+        
         // === SISTEMAS DE SIMULACIÓN ===
         
         // Sistema de helicópteros (actualizar helicópteros volando)
@@ -916,7 +1024,11 @@ export class GameStateManager {
             },
             soundEvents: this.getSoundEvents(), // Eventos de sonido de este tick
             visualEvents: this.getVisualEvents(), // 🆕 NUEVO: Eventos visuales de este tick
-            benchCooldowns: this.benchCooldowns ? { ...this.benchCooldowns } : {} // 🆕 NUEVO: Cooldowns del banquillo
+            benchCooldowns: this.benchCooldowns ? { ...this.benchCooldowns } : {}, // 🆕 NUEVO: Cooldowns del banquillo
+            disciplines: { // 🆕 NUEVO: Estado de disciplinas
+                player1: this.disciplineManager.getPlayerState('player1', Date.now()),
+                player2: this.disciplineManager.getPlayerState('player2', Date.now())
+            }
         };
         
         // Durante sync inicial, siempre enviar. Después, aplicar optimización

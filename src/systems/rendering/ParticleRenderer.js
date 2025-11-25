@@ -40,6 +40,26 @@ export class ParticleRenderer {
         // Cada frame: 0.2s (total 0.6s)
         if (!explosion || typeof explosion.life === 'undefined') return;
         
+        // 🆕 FOG OF WAR: Verificar si la explosión está en zona con niebla
+        const game = this.renderContext?.game;
+        if (game?.fogOfWar && game.isMultiplayer) {
+            const myTeam = game.myTeam || 'player1';
+            const enemyTeam = myTeam === 'player1' ? 'player2' : 'player1';
+            const worldWidth = game.worldWidth || 1920;
+            const centerX = worldWidth / 2;
+            
+            // Determinar si la explosión está en territorio enemigo
+            const isInEnemyTerritory = (myTeam === 'player1' && explosion.x > centerX) ||
+                                        (myTeam === 'player2' && explosion.x < centerX);
+            
+            if (isInEnemyTerritory) {
+                // Verificar si esa zona tiene niebla
+                if (!game.fogOfWar.isVisible({ team: enemyTeam, y: explosion.y })) {
+                    return; // No renderizar explosión oculta por niebla
+                }
+            }
+        }
+        
         // Obtener el frame actual según el progreso
         const currentFrame = explosion.getCurrentFrame ? explosion.getCurrentFrame() : 'explosion-1';
         const sprite = this.assetManager.getSprite(currentFrame);
@@ -88,6 +108,38 @@ export class ParticleRenderer {
      * @param {Object} impactMark - Marca de impacto a renderizar
      */
     renderImpactMark(impactMark) {
+        // 🆕 FOG OF WAR: Verificar si la marca de impacto está en zona con niebla
+        const game = this.renderContext?.game;
+        if (game?.fogOfWar && game.isMultiplayer) {
+            const myTeam = game.myTeam || 'player1';
+            const enemyTeam = myTeam === 'player1' ? 'player2' : 'player1';
+            
+            // Si la marca tiene equipo, usar ese. Sino, determinar por posición
+            if (impactMark.team) {
+                // La marca tiene equipo asignado
+                if (impactMark.team !== myTeam) {
+                    if (!game.fogOfWar.isVisible({ team: impactMark.team, y: impactMark.y })) {
+                        return; // No renderizar marca de impacto oculta por niebla
+                    }
+                }
+            } else {
+                // Determinar por posición en el mapa
+                const worldWidth = game.worldWidth || 1920;
+                const centerX = worldWidth / 2;
+                
+                // Determinar si la marca está en territorio enemigo
+                const isInEnemyTerritory = (myTeam === 'player1' && impactMark.x > centerX) ||
+                                            (myTeam === 'player2' && impactMark.x < centerX);
+                
+                if (isInEnemyTerritory) {
+                    // Verificar si esa zona tiene niebla
+                    if (!game.fogOfWar.isVisible({ team: enemyTeam, y: impactMark.y })) {
+                        return; // No renderizar marca de impacto oculta por niebla
+                    }
+                }
+            }
+        }
+        
         const sprite = this.assetManager.getSprite(impactMark.spriteKey);
         if (!sprite) return;
         
@@ -153,7 +205,13 @@ export class ParticleRenderer {
         for (const [color, colorTexts] of textsByColor) {
             // 🆕 NUEVO: Configurar estilo según el tipo de texto
             const isDisabledText = colorTexts.some(t => t.text === 'Disabled');
-            const fontSize = isDisabledText ? 'bold 18px Arial' : 'bold 16px Arial';
+            const isCurrencyText = colorTexts.some(t => t.text.startsWith('-') || t.text.startsWith('+'));
+            
+            // Tamaño según tipo de texto
+            let fontSize = 'bold 16px Arial';
+            if (isDisabledText) fontSize = 'bold 18px Arial';
+            if (isCurrencyText) fontSize = 'bold 22px Arial'; // 🆕 NUEVO: Más grande para currency pero no excesivo
+            
             this.ctx.font = fontSize;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';

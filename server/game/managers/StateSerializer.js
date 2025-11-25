@@ -81,6 +81,14 @@ export class StateSerializer {
             }
         }
         
+        // 🆕 NUEVO: Cambios en modo de frente (frontMode y modeCooldownUntil)
+        if (node.type === 'front') {
+            if (node.frontMode !== lastNodeState.frontMode ||
+                node.modeCooldownUntil !== lastNodeState.modeCooldownUntil) {
+                return true;
+            }
+        }
+        
         return false;
     }
     
@@ -113,7 +121,10 @@ export class StateSerializer {
                     disabled: node.disabled || false, // 🆕 NUEVO: Estado disabled
                     // 🆕 NUEVO: Tiempo de comando
                     spawnTime: node.spawnTime,
-                    expiresAt: node.expiresAt
+                    expiresAt: node.expiresAt,
+                    // 🆕 NUEVO: Sistema de modos de frente
+                    frontMode: node.frontMode,
+                    modeCooldownUntil: node.modeCooldownUntil
                 });
                 
                 return {
@@ -167,7 +178,10 @@ export class StateSerializer {
                     spawnTime: node.isCommando ? node.spawnTime : undefined,
                     expiresAt: node.isCommando ? node.expiresAt : undefined,
                     // 🆕 NUEVO: detectionRadius para comandos, truck assaults y camera drones
-                    detectionRadius: (node.isCommando || node.isTruckAssault || node.isCameraDrone) ? node.detectionRadius : undefined
+                    detectionRadius: (node.isCommando || node.isTruckAssault || node.isCameraDrone) ? node.detectionRadius : undefined,
+                    // 🆕 NUEVO: Sistema de modos de frente
+                    frontMode: node.type === 'front' ? node.frontMode : undefined,
+                    modeCooldownUntil: node.type === 'front' ? node.modeCooldownUntil : undefined
                 };
             });
     }
@@ -254,7 +268,10 @@ export class StateSerializer {
                     broken: node.broken || false, // 🆕 NUEVO: Estado broken (roto)
                     // 🆕 NUEVO: Tiempo de comando
                     spawnTime: node.spawnTime,
-                    expiresAt: node.expiresAt
+                    expiresAt: node.expiresAt,
+                    // 🆕 NUEVO: Sistema de modos de frente
+                    frontMode: node.frontMode,
+                    modeCooldownUntil: node.modeCooldownUntil
                 });
                 
                 return {
@@ -310,7 +327,10 @@ export class StateSerializer {
                     // 🆕 NUEVO: detectionRadius para comandos, truck assaults y camera drones
                     detectionRadius: (node.isCommando || node.isTruckAssault || node.isCameraDrone) ? node.detectionRadius : undefined,
                     // 🆕 NUEVO: Contador de usos para lanzadera de drones
-                    uses: (node.type === 'droneLauncher' && typeof node.uses === 'number') ? node.uses : undefined
+                    uses: (node.type === 'droneLauncher' && typeof node.uses === 'number') ? node.uses : undefined,
+                    // 🆕 NUEVO: Sistema de modos de frente
+                    frontMode: node.type === 'front' ? node.frontMode : undefined,
+                    modeCooldownUntil: node.type === 'front' ? node.modeCooldownUntil : undefined
                 };
             });
     }

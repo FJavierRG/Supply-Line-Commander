@@ -587,6 +587,50 @@ export class InputHandler {
             }
         }
         
+        // 🆕 NUEVO: Detectar clic en selector de modos de frente
+        // Verificar todos los frentes propios que estén seleccionados o en hover
+        const myFronts = this.game.bases.filter(b => 
+            b.type === 'front' && 
+            (b.team === this.game.myTeam || 
+             (b.team === 'player1' && this.game.myTeam === 'player1') ||
+             (b.team === 'player2' && this.game.myTeam === 'player2'))
+        );
+        
+        for (const front of myFronts) {
+            // Solo verificar si el frente está seleccionado o en hover
+            if (front === this.game.selectedNode || front === this.game.hoveredNode) {
+                const modeButtonClick = this.checkFrontModeSelectorClick(x, y, front);
+                if (modeButtonClick) {
+                    // Verificar cooldown antes de enviar al servidor
+                    const currentTime = Date.now();
+                    if (front.modeCooldownUntil && currentTime < front.modeCooldownUntil) {
+                        const remaining = Math.ceil((front.modeCooldownUntil - currentTime) / 1000);
+                        console.log(`⏱️ Cambio de modo en cooldown: ${remaining}s restantes`);
+                        return;
+                    }
+                    
+                    // No cambiar si ya está en ese modo
+                    if (front.frontMode === modeButtonClick) {
+                        console.log(`🎮 El frente ya está en modo ${modeButtonClick}`);
+                        return;
+                    }
+                    
+                    // Enviar cambio al servidor
+                    if (this.game.network && this.game.network.clientSender) {
+                        this.game.network.clientSender.sendFrontModeChange(front.id, modeButtonClick);
+                    }
+                    
+                    const modeNames = {
+                        'advance': 'AVANZAR ⚔️',
+                        'retreat': 'RETROCEDER 🔙',
+                        'hold': 'MANTENER 🛡️'
+                    };
+                    console.log(`🎮 Frente ${front.id.substring(0, 8)}: Cambiando a modo ${modeNames[modeButtonClick] || modeButtonClick}`);
+                    return;
+                }
+            }
+        }
+        
         const clickedBase = this.getBaseAt(x, y);
         const clickedBuilding = this.getBuildingAt(x, y);
         
@@ -628,10 +672,11 @@ export class InputHandler {
                     return;
                 }
                 
-                // No permitir seleccionar frentes ni nodos enemigos
-                if (clickedBase.type === 'front') {
-                    return;
-                } else if (clickedBase.team !== this.game.myTeam) {
+                // No permitir seleccionar nodos enemigos
+                // 🆕 MODIFICADO: Permitir seleccionar frentes propios para cambiar modo
+                if (clickedBase.team !== this.game.myTeam && 
+                    !(clickedBase.team === 'player1' && this.game.myTeam === 'player1') &&
+                    !(clickedBase.team === 'player2' && this.game.myTeam === 'player2')) {
                     return;
                 }
                 
@@ -861,6 +906,71 @@ export class InputHandler {
             
             if (distance < buttonRadius + hitboxPadding) {
                 return vehicleTypeId;
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 🆕 NUEVO: Detecta click en botones del selector de modos de frente
+     * Los botones están alineados verticalmente hacia el lado del enemigo
+     * @param {number} x - Coordenada X del click
+     * @param {number} y - Coordenada Y del click
+     * @param {Object} front - Nodo de frente
+     * @returns {string|null} ID del modo clickeado ('advance', 'retreat', 'hold') o null
+     */
+    checkFrontModeSelectorClick(x, y, front) {
+        if (!this.game) return null;
+        if (!front || front.type !== 'front') return null;
+        
+        // Solo para frentes propios
+        const isMyFront = front.team === this.game.myTeam || 
+                         (front.team === 'ally' && this.game.myTeam === 'player1') ||
+                         (front.team === 'player1' && this.game.myTeam === 'player1') ||
+                         (front.team === 'player2' && this.game.myTeam === 'player2');
+        if (!isMyFront) return null;
+        
+        const isPlayer2WithMirror = this.game.isMultiplayer && this.game.myTeam === 'player2';
+        
+        const buttonSize = 36;
+        const buttonRadius = buttonSize / 2;
+        const hitboxPadding = 5;
+        
+        // Los modos disponibles
+        const modes = ['advance', 'retreat', 'hold'];
+        
+        // 🆕 MODIFICADO: Botones alineados verticalmente hacia el lado del enemigo
+        const isPlayer1 = front.team === 'player1' || front.team === 'ally';
+        const directionToEnemy = isPlayer1 ? 1 : -1;
+        
+        const buttonDistanceX = front.radius + 45;
+        const buttonSpacingY = 40;
+        
+        for (let index = 0; index < modes.length; index++) {
+            const modeId = modes[index];
+            
+            // Posición física del botón (igual que en renderFrontModeSelector)
+            const offsetY = (index - 1) * buttonSpacingY;
+            const physicalCenterX = front.x + (buttonDistanceX * directionToEnemy);
+            const physicalCenterY = front.y + offsetY;
+            
+            // Transformar a coordenadas visuales si es necesario
+            let centerX, centerY;
+            if (isPlayer2WithMirror) {
+                // Con mirror view, invertir el offset X
+                centerX = front.x - (buttonDistanceX * directionToEnemy);
+                centerY = physicalCenterY;
+            } else {
+                centerX = physicalCenterX;
+                centerY = physicalCenterY;
+            }
+            
+            // Verificar si el click está dentro del botón
+            const distance = Math.hypot(x - centerX, y - centerY);
+            
+            if (distance < buttonRadius + hitboxPadding) {
+                return modeId;
             }
         }
         

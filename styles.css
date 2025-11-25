@@ -2381,7 +2381,49 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     box-sizing: border-box;
 }
 
+/* 🆕 NUEVO: Tabs para Unidades / Disciplinas */
+.arsenal-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 16px;
+    border-bottom: 2px solid rgba(76, 175, 80, 0.3);
+}
+
+.arsenal-tab {
+    flex: 1;
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    bottom: -2px; /* Alinear con el borde inferior del contenedor */
+}
+
+.arsenal-tab:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.arsenal-tab.active {
+    color: #66bb6a;
+    border-bottom-color: #66bb6a;
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.arsenal-tab:focus {
+    outline: none;
+}
+
+/* DEPRECATED: Ya no se usa el título directo, ahora son tabs */
 .available-panel .panel-title {
+    display: none; /* Oculto porque ahora usamos tabs */
     font-size: 18px;
     font-weight: 700;
     color: #66bb6a;
@@ -2557,6 +2599,43 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     -webkit-box-orient: vertical;
     line-clamp: 4; /* Propiedad estándar para compatibilidad */
     overflow: hidden;
+}
+
+/* 🆕 NUEVO: Separador de disciplinas en el deck */
+.disciplines-separator {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f39c12;
+    text-transform: uppercase;
+    margin: 16px 0 8px 0;
+    padding: 8px 12px;
+    background: rgba(243, 156, 18, 0.1);
+    border-left: 3px solid #f39c12;
+    letter-spacing: 0.5px;
+}
+
+/* 🆕 NUEVO: Disciplina en el deck-list (borde amarillo) */
+.deck-item.discipline-deck-item {
+    border-left: 4px solid #f39c12 !important;
+    background: linear-gradient(90deg, rgba(243, 156, 18, 0.15) 0%, rgba(243, 156, 18, 0.05) 100%);
+}
+
+.deck-item.discipline-deck-item:hover {
+    background: linear-gradient(90deg, rgba(243, 156, 18, 0.25) 0%, rgba(243, 156, 18, 0.1) 100%);
+    border-left-color: #f39c12 !important;
+}
+
+.deck-item.discipline-deck-item .deck-item-name {
+    color: #f39c12;
+}
+
+.deck-item.discipline-deck-item .deck-item-remove {
+    background-color: rgba(243, 156, 18, 0.2);
+}
+
+.deck-item.discipline-deck-item .deck-item-remove:hover {
+    background-color: #f39c12;
+    color: #000;
 }
 
 /* Item ya añadido al mazo */

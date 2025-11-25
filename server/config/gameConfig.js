@@ -10,16 +10,16 @@ export const GAME_CONFIG = {
         tickRate: 10,         // Ticks por segundo (TPS) - Optimización: reducido de 20 a 10
         worldWidth: 1920,     // Ancho del mundo (px)
         worldHeight: 1080,    // Alto del mundo (px)
-        // Líneas de victoria (15% y 85% del ancho de pantalla)
-        victoryLineLeft: 0.15,    // 15% del ancho = línea de victoria para player2
-        victoryLineRight: 0.85     // 85% del ancho = línea de victoria para player1
+        // Líneas de victoria (8% y 92% del ancho de pantalla - cerca de los HQs)
+        victoryLineLeft: 0.05,    // 8% del ancho = 153.6px - línea de victoria para player2
+        victoryLineRight: 0.95     // 92% del ancho = 1766.4px - línea de victoria para player1
     },
 
     // ═══════════════════════════════════════════════════════════════
     // MAZOS (DECKS)
     // ═══════════════════════════════════════════════════════════════
     deck: {
-        pointLimit: 825,        // 🎯 Límite de puntos por mazo (ANTI-HACK: validado en servidor)
+        pointLimit: 700,        // 🎯 Límite de puntos por mazo (ANTI-HACK: validado en servidor)
         benchPointLimit: 300    // 🆕 NUEVO: Límite de puntos para el banquillo (ANTI-HACK: validado en servidor)
     },
 
@@ -28,7 +28,7 @@ export const GAME_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
     currency: {
         initial: 0,          // Currency inicial de cada jugador
-        passiveRate: 0.5,       // Generación pasiva base ($/s)
+        passiveRate: 1,       // Generación pasiva base ($/s)
         pixelsPerCurrency: 2,  // Nº de pixeles necesarios para generar 1 currency
         currencyName: 'Terreno Ganado' // Nombre de la currency
     },
@@ -182,12 +182,20 @@ export const GAME_CONFIG = {
     },
     
     // ═══════════════════════════════════════════════════════════════
-    // CONFIGURACIÓN DE TERRITORIO
+    // CONFIGURACIÓN DE TERRITORIO MEZCLADO DE FORMA CAÓTICA CON ABANDONO
     // ═══════════════════════════════════════════════════════════════
     territory: {
         frontierGapPx: 25,                    // Gap entre frontera y edificios
         checkAbandonmentInterval: 0.2,        // Verificar cada 0.2 segundos (5 veces por segundo) - FIX: reducido para consistencia
         graceTime: 3.0                       // 3 segundos de gracia antes de iniciar abandono
+    },
+    
+    // ═══════════════════════════════════════════════════════════════
+    // DISCIPLINAS
+    // ═══════════════════════════════════════════════════════════════
+    disciplines: {
+        maxEquipped: 2,      // Máximo de disciplinas por mazo
+        activationCost: 0    // Coste para activar (0 = gratis)
     }
 };
 
