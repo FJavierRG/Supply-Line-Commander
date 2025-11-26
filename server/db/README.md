@@ -102,3 +102,5 @@ cp server/data/dev.db server/data/dev.db.backup
 ### Supabase (prod):
 Dashboard → Database → Backups (automático cada 24h en free tier)
 
+
+

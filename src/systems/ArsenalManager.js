@@ -793,7 +793,7 @@ export class ArsenalManager {
     }
     
     /**
-     * Guarda el mazo actual usando DeckManager
+     * Guarda el mazo actual usando DeckManager (ahora async)
      */
     async saveDeck() {
         console.log('🔍 saveDeck() llamado');
@@ -840,7 +840,7 @@ export class ArsenalManager {
             // 🆕 NUEVO: Si estamos editando el mazo default, siempre crear uno nuevo (nunca sobreescribir)
             console.log('🔍 Obteniendo mazo actual...');
             const currentDeck = this.currentDeckId ? this.deckManager.getDeck(this.currentDeckId) : null;
-            const isDefaultDeck = currentDeck && (currentDeck.isDefault || currentDeck.is_default); // ✅ Soportar ambos formatos
+            const isDefaultDeck = currentDeck && currentDeck.isDefault;
             
             console.log('🔍 Estado del guardado:', {
                 currentDeckId: this.currentDeckId,
@@ -879,14 +879,19 @@ export class ArsenalManager {
                         return;
                     }
                     
-                    const newDeck = await this.deckManager.createDeck(name.trim(), [...this.deck], [...this.bench], [...this.disciplines]); // ✅ await
-                    if (newDeck) {
-                        this.currentDeckId = newDeck.id; // 🆕 NUEVO: Actualizar currentDeckId al nuevo mazo
-                        this.deckManager.selectDeck(newDeck.id); // selectDeck no es async
-                        console.log('Nuevo mazo creado:', newDeck.name, isDefaultDeck ? '(basado en default)' : '');
-                        this.showNotification(`Mazo "${newDeck.name}" creado y guardado`, 'success');
-                    } else {
-                        this.showNotification('Error al crear el mazo', 'error');
+                    try {
+                        const newDeck = await this.deckManager.createDeck(name.trim(), [...this.deck], [...this.bench], [...this.disciplines]); // 🆕 NUEVO: Incluir banquillo y disciplinas
+                        if (newDeck) {
+                            this.currentDeckId = newDeck.id; // 🆕 NUEVO: Actualizar currentDeckId al nuevo mazo
+                            this.deckManager.selectDeck(newDeck.id);
+                            console.log('Nuevo mazo creado:', newDeck.name, isDefaultDeck ? '(basado en default)' : '');
+                            this.showNotification(`Mazo "${newDeck.name}" creado y guardado`, 'success');
+                        } else {
+                            this.showNotification('Error al crear el mazo', 'error');
+                        }
+                    } catch (error) {
+                        console.error('❌ Error creando mazo:', error);
+                        this.showNotification('Error al crear el mazo: ' + error.message, 'error');
                     }
                 }, promptMessage);
             }
@@ -920,9 +925,9 @@ export class ArsenalManager {
     }
     
     /**
-     * Confirma el mazo y lo asigna al juego
+     * Confirma el mazo y lo asigna al juego (ahora async)
      */
-    confirmDeck() {
+    async confirmDeck() {
         if (this.deck.length === 0) {
             this.showNotification('El mazo está vacío. Añade unidades antes de confirmar.', 'error');
             return;
@@ -950,41 +955,48 @@ export class ArsenalManager {
         
         // Guardar el mazo si hay cambios
         if (this.currentDeckId) {
-            this.deckManager.updateDeck(this.currentDeckId, {
-                units: [...this.deck],
-                bench: [...this.bench] // 🆕 NUEVO: Guardar banquillo
-            });
+            try {
+                await this.deckManager.updateDeck(this.currentDeckId, {
+                    units: [...this.deck],
+                    bench: [...this.bench], // 🆕 NUEVO: Guardar banquillo
+                    disciplines: [...this.disciplines] // 🆕 NUEVO: Guardar disciplinas
+                });
+            } catch (error) {
+                console.error('❌ Error guardando mazo antes de confirmar:', error);
+                this.showNotification('Error al guardar el mazo: ' + error.message, 'error');
+                return;
+            }
         } else {
             // Si no hay mazo actual, pedir nombre antes de crear
-            this.showDeckNameModal((name) => {
+            this.showDeckNameModal(async (name) => {
                 if (!name || name.trim() === '') {
                     return;
                 }
                 
-                const newDeck = this.deckManager.createDeck(name.trim(), [...this.deck], [...this.bench]); // 🆕 NUEVO: Incluir banquillo
-                if (newDeck) {
-                    this.currentDeckId = newDeck.id;
+                try {
+                    const newDeck = await this.deckManager.createDeck(name.trim(), [...this.deck], [...this.bench], [...this.disciplines]); // 🆕 NUEVO: Incluir banquillo y disciplinas
+                    if (newDeck) {
+                        this.currentDeckId = newDeck.id;
+                    }
+                    
+                    // Seleccionar este mazo como el actual
+                    if (this.currentDeckId) {
+                        this.deckManager.selectDeck(this.currentDeckId);
+                    }
+                    
+                    // TODO: Enviar el mazo al servidor cuando se inicie la partida
+                    console.log('Mazo confirmado:', this.deck, 'Banquillo:', this.bench, 'Disciplinas:', this.disciplines);
+                    this.hide();
+                } catch (error) {
+                    console.error('❌ Error creando mazo antes de confirmar:', error);
+                    this.showNotification('Error al crear el mazo: ' + error.message, 'error');
                 }
-                
-                // Seleccionar este mazo como el actual
-                if (this.currentDeckId) {
-                    this.deckManager.selectDeck(this.currentDeckId);
-                }
-                
-                // TODO: Enviar el mazo al servidor cuando se inicie la partida
-                console.log('Mazo confirmado:', this.deck, 'Banquillo:', this.bench);
-                this.hide();
             });
-            return; // Salir aquí, el modal manejará el resto
-        }
-        
-        // Seleccionar este mazo como el actual
-        if (this.currentDeckId) {
-            this.deckManager.selectDeck(this.currentDeckId);
+            return; // Salir aquí porque el modal manejará el flujo
         }
         
         // TODO: Enviar el mazo al servidor cuando se inicie la partida
-        console.log('Mazo confirmado:', this.deck, 'Banquillo:', this.bench);
+        console.log('Mazo confirmado:', this.deck, 'Banquillo:', this.bench, 'Disciplinas:', this.disciplines);
         this.hide();
     }
     
@@ -2382,7 +2394,7 @@ export class ArsenalManager {
     }
     
     /**
-     * Borra un mazo desde el selector
+     * Borra un mazo desde el selector (ahora async)
      * @param {string} deckId - ID del mazo a borrar
      */
     async deleteDeckFromSelector(deckId) {
@@ -2390,8 +2402,9 @@ export class ArsenalManager {
             return;
         }
         
-        const success = await this.deckManager.deleteDeck(deckId);
-        if (success) {
+        try {
+            await this.deckManager.deleteDeck(deckId);
+            
             // Si se borró el mazo que estábamos editando, empezar con mazo vacío
             if (this.currentDeckId === deckId) {
                 this.currentDeckId = null;
@@ -2402,6 +2415,9 @@ export class ArsenalManager {
             
             // Actualizar la lista
             this.populateDeckSelector();
+        } catch (error) {
+            console.error('❌ Error borrando mazo:', error);
+            this.showNotification('Error al borrar el mazo: ' + error.message, 'error');
         }
     }
     

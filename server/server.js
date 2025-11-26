@@ -7,29 +7,39 @@ import { RoomManager } from './game/managers/RoomManager.js';
 import { GameStateManager } from './game/GameStateManager.js';
 import { AISystem } from './game/managers/AISystem.js';
 import decksRouter from './routes/decks.js';
+import authRouter from './routes/auth.js';
 import { preventEnvLeaks, securityHeaders, safeErrorHandler } from './middleware/security.js';
+import { db, DEFAULT_DECK_ID } from './db/database.js';
 
 const app = express();
 const httpServer = createServer(app);
 
 // Configurar CORS más permisivo para desarrollo
+// IMPORTANTE: CORS debe estar ANTES de cualquier otro middleware
 app.use(cors({
-    origin: true, // Permitir cualquier origen
+    origin: ['http://localhost:8000', 'http://localhost:3000', 'http://127.0.0.1:8000', 'http://127.0.0.1:3000'],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    preflightContinue: false,
+    optionsSuccessStatus: 204
 }));
 
-// Middleware adicional para CORS
+// Middleware adicional para CORS (backup)
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    const origin = req.headers.origin;
+    if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+        res.header('Access-Control-Allow-Origin', origin);
+    } else {
+        res.header('Access-Control-Allow-Origin', '*');
+    }
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
     
     // Manejar preflight OPTIONS
     if (req.method === 'OPTIONS') {
-        res.sendStatus(200);
-        return;
+        return res.sendStatus(204);
     }
     
     next();
@@ -42,6 +52,7 @@ app.use(securityHeaders);
 app.use(preventEnvLeaks);
 
 // ===== RUTAS API =====
+app.use('/api/auth', authRouter);
 app.use('/api/decks', decksRouter);
 
 // Servir archivos estáticos del cliente (para ngrok/producción)
@@ -103,6 +114,12 @@ app.use(express.static(rootDir, {
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.js')) {
             res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        } else if (filePath.endsWith('.wav')) {
+            res.setHeader('Content-Type', 'audio/wav');
+        } else if (filePath.endsWith('.mp3')) {
+            res.setHeader('Content-Type', 'audio/mpeg');
+        } else if (filePath.endsWith('.ogg')) {
+            res.setHeader('Content-Type', 'audio/ogg');
         }
         // Headers adicionales para CORS en archivos estáticos
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -135,7 +152,7 @@ const io = new Server(httpServer, {
 const roomManager = new RoomManager();
 
 // Variables globales
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8000;
 
 // ===== ENDPOINTS HTTP =====
 
@@ -187,7 +204,7 @@ app.get('*', (req, res, next) => {
     
     // Si es un archivo estático (con extensión), el middleware de static ya lo maneja
     // Si llegamos aquí y es un archivo estático, significa que no se encontró
-    if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot)$/)) {
+    if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot|wav|mp3|ogg)$/)) {
         // El archivo no existe, devolver 404
         res.status(404).send(`Archivo no encontrado: ${req.path}`);
         return;
@@ -352,8 +369,8 @@ io.on('connection', (socket) => {
      * 🎯 ACTUALIZADO: Ahora acepta deckId y valida el mazo del jugador
      */
     socket.on('select_race', async (data) => {
-        console.log('🎴 SERVIDOR: Recibido select_race con deckId:', data);
-        const { roomId, deckId } = data; // ✅ REFACTORIZADO: Solo deckId
+        console.log('🎴 SERVIDOR: Recibido select_race (carga mazo desde BD):', data);
+        const { roomId, deckId } = data; // 🆕 REFACTOR: Solo recibir deckId
         
         try {
             const room = roomManager.getRoom(roomId);
@@ -363,213 +380,207 @@ io.on('connection', (socket) => {
             const player = room.players.find(p => p.id === socket.id);
             if (!player) throw new Error('Jugador no encontrado');
             
-            // ✅ REFACTORIZADO: Obtener el mazo desde la BD
-            const { getDeckFromDatabase } = await import('./utils/deckLoader.js');
+            // 🆕 REFACTOR: Cargar mazo desde BD o default
+            let deck = null;
             
-            console.log('📥 Obteniendo mazo desde BD:', deckId);
-            const validatedDeck = await getDeckFromDatabase(deckId);
+            if (deckId === 'default' || deckId === DEFAULT_DECK_ID) {
+                // Mazo predeterminado - usar el del servidor
+                const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
+                deck = {
+                    id: 'default',
+                    name: 'Mazo Predeterminado',
+                    units: DEFAULT_DECK.units,
+                    bench: DEFAULT_DECK.bench || [],
+                    disciplines: DEFAULT_DECK.disciplines || []
+                };
+            } else {
+                // Cargar mazo desde la BD
+                deck = await db.getDeck(deckId);
+                if (!deck) {
+                    console.warn(`🚫 Mazo no encontrado: ${deckId}`);
+                    socket.emit('deck_validation_error', {
+                        error: 'DECK_NOT_FOUND',
+                        message: `El mazo "${deckId}" no existe`,
+                        deckId: deckId
+                    });
+                    return;
+                }
+                
+                // Convertir arrays si vienen como strings (SQLite)
+                if (typeof deck.units === 'string') {
+                    deck.units = JSON.parse(deck.units);
+                }
+                if (typeof deck.bench === 'string') {
+                    deck.bench = JSON.parse(deck.bench || '[]');
+                }
+                if (typeof deck.disciplines === 'string') {
+                    deck.disciplines = JSON.parse(deck.disciplines || '[]');
+                }
+            }
             
-            if (!validatedDeck) {
-                console.warn('🚫 Mazo no encontrado:', deckId);
+            // 🎯 VALIDACIÓN ANTI-HACK: Validar que todas las unidades sean válidas
+            const { SERVER_NODE_CONFIG } = await import('./config/serverNodes.js');
+            const { GAME_CONFIG } = await import('./config/gameConfig.js');
+            const enabled = SERVER_NODE_CONFIG.gameplay.enabled || {};
+            const costs = SERVER_NODE_CONFIG.costs || {};
+            const deckPointLimit = GAME_CONFIG.deck.pointLimit;
+            const benchPointLimit = GAME_CONFIG.deck.benchPointLimit;
+            
+            // Verificar que todas las unidades estén habilitadas en el servidor
+            const validUnits = (deck.units || []).filter(unitId => {
+                const isEnabled = enabled[unitId] === true;
+                if (!isEnabled) {
+                    console.warn(`⚠️ Unidad deshabilitada en mazo: ${unitId}`);
+                }
+                return isEnabled;
+            });
+            
+            // El HQ y FOB siempre deben estar presentes
+            if (!validUnits.includes('hq')) {
+                validUnits.unshift('hq');
+            }
+            if (!validUnits.includes('fob')) {
+                const hqIndex = validUnits.indexOf('hq');
+                validUnits.splice(hqIndex + 1, 0, 'fob');
+            }
+            
+            // 🎯 VALIDACIÓN ANTI-HACK: Calcular costo total del mazo
+            const deckCost = validUnits
+                .filter(unitId => unitId !== 'hq' && unitId !== 'fob')
+                .reduce((total, unitId) => {
+                    const unitCost = costs[unitId] || 0;
+                    return total + unitCost;
+                }, 0);
+            
+            // Validar que el costo no exceda el límite
+            if (deckCost > deckPointLimit) {
+                console.warn(`🚫 Mazo rechazado: costo ${deckCost} excede límite ${deckPointLimit}`);
                 socket.emit('deck_validation_error', {
-                    error: 'DECK_NOT_FOUND',
-                    message: `El mazo "${deckId}" no existe`
+                    error: 'INVALID_DECK_COST',
+                    message: `El costo del mazo (${deckCost}) excede el límite permitido (${deckPointLimit})`,
+                    deckCost: deckCost,
+                    deckLimit: deckPointLimit
                 });
                 return;
             }
             
-            console.log(`✅ Mazo cargado desde BD: "${validatedDeck.name}" (${validatedDeck.units.length} unidades, ${validatedDeck.bench.length} bench, ${validatedDeck.disciplines.length} disciplinas)`);
+            // 🆕 NUEVO: Validar banquillo
+            let validBenchUnits = [];
+            let benchCost = 0;
             
-            // ✅ El mazo ya está validado (se validó al crearlo en /api/decks)
-            // No necesitamos hacer validación aquí, solo cargarlo
-            
-            /*
-            // TODO: Código antiguo de validación manual - ELIMINAR después de testing
-            if (deckUnits && Array.isArray(deckUnits)) {
-                // 🎯 VALIDACIÓN ANTI-HACK: Validar que todas las unidades sean válidas
-                const { SERVER_NODE_CONFIG } = await import('./config/serverNodes.js');
-                const { GAME_CONFIG } = await import('./config/gameConfig.js');
-                const enabled = SERVER_NODE_CONFIG.gameplay.enabled || {};
-                const costs = SERVER_NODE_CONFIG.costs || {};
-                const deckPointLimit = GAME_CONFIG.deck.pointLimit;
-                const benchPointLimit = GAME_CONFIG.deck.benchPointLimit; // 🆕 NUEVO: Límite del banquillo
-                
-                // Verificar que todas las unidades estén habilitadas en el servidor
-                const validUnits = deckUnits.filter(unitId => {
+            if (deck.bench && Array.isArray(deck.bench)) {
+                validBenchUnits = deck.bench.filter(unitId => {
                     const isEnabled = enabled[unitId] === true;
                     if (!isEnabled) {
-                        console.warn(`⚠️ Unidad deshabilitada en mazo: ${unitId}`);
+                        console.warn(`⚠️ Unidad deshabilitada en banquillo: ${unitId}`);
                     }
                     return isEnabled;
                 });
                 
-                // El HQ y FOB siempre deben estar presentes
-                if (!validUnits.includes('hq')) {
-                    validUnits.unshift('hq');
-                }
-                if (!validUnits.includes('fob')) {
-                    // Añadir FOB después del HQ
-                    const hqIndex = validUnits.indexOf('hq');
-                    validUnits.splice(hqIndex + 1, 0, 'fob');
-                }
+                benchCost = validBenchUnits.reduce((total, unitId) => {
+                    const unitCost = costs[unitId] || 0;
+                    return total + unitCost;
+                }, 0);
                 
-                // 🎯 VALIDACIÓN ANTI-HACK: Calcular costo total del mazo
-                // El HQ y FOB siempre están presentes y no cuentan para el límite
-                const deckCost = validUnits
-                    .filter(unitId => unitId !== 'hq' && unitId !== 'fob') // Excluir HQ y FOB del cálculo
-                    .reduce((total, unitId) => {
-                        const unitCost = costs[unitId] || 0;
-                        return total + unitCost;
-                    }, 0);
-                
-                // Validar que el costo no exceda el límite
-                if (deckCost > deckPointLimit) {
-                    console.warn(`🚫 Mazo rechazado: costo ${deckCost} excede límite ${deckPointLimit}`);
+                if (benchCost > benchPointLimit) {
+                    console.warn(`🚫 Banquillo rechazado: costo ${benchCost} excede límite ${benchPointLimit}`);
                     socket.emit('deck_validation_error', {
-                        error: 'INVALID_DECK_COST',
-                        message: `El costo del mazo (${deckCost}) excede el límite permitido (${deckPointLimit})`,
-                        deckCost: deckCost,
-                        deckLimit: deckPointLimit
+                        error: 'INVALID_BENCH_COST',
+                        message: `El costo del banquillo (${benchCost}) excede el límite permitido (${benchPointLimit})`,
+                        benchCost: benchCost,
+                        benchLimit: benchPointLimit
                     });
-                    return; // Rechazar el mazo
+                    return;
                 }
                 
-                // 🆕 NUEVO: Validar banquillo si se proporciona
-                let validBenchUnits = [];
-                let benchCost = 0;
-                
-                if (benchUnits && Array.isArray(benchUnits)) {
-                    // Verificar que todas las unidades del banquillo estén habilitadas
-                    validBenchUnits = benchUnits.filter(unitId => {
-                        const isEnabled = enabled[unitId] === true;
-                        if (!isEnabled) {
-                            console.warn(`⚠️ Unidad deshabilitada en banquillo: ${unitId}`);
-                        }
-                        return isEnabled;
+                // Verificar que no haya duplicados entre mazo y banquillo
+                const deckSet = new Set(validUnits);
+                const benchSet = new Set(validBenchUnits);
+                const intersection = [...deckSet].filter(x => benchSet.has(x));
+                if (intersection.length > 0) {
+                    console.warn(`🚫 Mazo rechazado: duplicados entre mazo y banquillo: ${intersection.join(', ')}`);
+                    socket.emit('deck_validation_error', {
+                        error: 'DUPLICATE_UNITS',
+                        message: `No puede haber unidades duplicadas entre el mazo y el banquillo: ${intersection.join(', ')}`,
+                        duplicates: intersection
                     });
-                    
-                    // Calcular costo del banquillo
-                    benchCost = validBenchUnits.reduce((total, unitId) => {
-                        const unitCost = costs[unitId] || 0;
-                        return total + unitCost;
-                    }, 0);
-                    
-                    // Validar que el costo del banquillo no exceda el límite
-                    if (benchCost > benchPointLimit) {
-                        console.warn(`🚫 Banquillo rechazado: costo ${benchCost} excede límite ${benchPointLimit}`);
-                        socket.emit('deck_validation_error', {
-                            error: 'INVALID_BENCH_COST',
-                            message: `El costo del banquillo (${benchCost}) excede el límite permitido (${benchPointLimit})`,
-                            benchCost: benchCost,
-                            benchLimit: benchPointLimit
-                        });
-                        return; // Rechazar el mazo
-                    }
-                    
-                    // 🆕 NUEVO: Verificar que no haya duplicados entre mazo y banquillo
-                    const deckSet = new Set(validUnits);
-                    const benchSet = new Set(validBenchUnits);
-                    const intersection = [...deckSet].filter(x => benchSet.has(x));
-                    if (intersection.length > 0) {
-                        console.warn(`🚫 Mazo rechazado: duplicados entre mazo y banquillo: ${intersection.join(', ')}`);
-                        socket.emit('deck_validation_error', {
-                            error: 'DUPLICATE_UNITS',
-                            message: `No puede haber unidades duplicadas entre el mazo y el banquillo: ${intersection.join(', ')}`,
-                            duplicates: intersection
-                        });
-                        return; // Rechazar el mazo
-                    }
-                    
-                    // 🆕 NUEVO: Verificar que el HQ no esté en el banquillo
-                    if (validBenchUnits.includes('hq')) {
-                        console.warn(`🚫 Mazo rechazado: el HQ no puede estar en el banquillo`);
-                        socket.emit('deck_validation_error', {
-                            error: 'HQ_IN_BENCH',
-                            message: 'El HQ no puede estar en el banquillo'
-                        });
-                        return; // Rechazar el mazo
-                    }
+                    return;
                 }
                 
-                // 🆕 NUEVO: Validar disciplinas si se proporcionan
-                let validDisciplines = [];
-                if (disciplines && Array.isArray(disciplines)) {
-                    const { disciplineExists, getDiscipline } = await import('./config/disciplines.js');
-                    const maxDisciplines = GAME_CONFIG.disciplines.maxEquipped;
-                    
-                    // Validar cantidad máxima
-                    if (disciplines.length > maxDisciplines) {
-                        console.warn(`🚫 Mazo rechazado: ${disciplines.length} disciplinas excede máximo de ${maxDisciplines}`);
-                        socket.emit('deck_validation_error', {
-                            error: 'TOO_MANY_DISCIPLINES',
-                            message: `Solo puedes tener ${maxDisciplines} disciplinas en el mazo`,
-                            disciplineCount: disciplines.length,
-                            maxDisciplines: maxDisciplines
-                        });
-                        return; // Rechazar el mazo
-                    }
-                    
-                    // Validar que no haya duplicados
-                    const uniqueDisciplines = [...new Set(disciplines)];
-                    if (uniqueDisciplines.length !== disciplines.length) {
-                        console.warn(`🚫 Mazo rechazado: disciplinas duplicadas`);
-                        socket.emit('deck_validation_error', {
-                            error: 'DUPLICATE_DISCIPLINES',
-                            message: 'No puedes tener disciplinas duplicadas'
-                        });
-                        return; // Rechazar el mazo
-                    }
-                    
-                    // Validar que todas existan y estén habilitadas
-                    for (const disciplineId of disciplines) {
-                        if (!disciplineExists(disciplineId)) {
-                            console.warn(`🚫 Mazo rechazado: disciplina no existe: ${disciplineId}`);
-                            socket.emit('deck_validation_error', {
-                                error: 'INVALID_DISCIPLINE',
-                                message: `La disciplina "${disciplineId}" no existe`,
-                                disciplineId: disciplineId
-                            });
-                            return; // Rechazar el mazo
-                        }
-                        
-                        const discipline = getDiscipline(disciplineId);
-                        if (discipline.enabled === false) {
-                            console.warn(`🚫 Mazo rechazado: disciplina deshabilitada: ${disciplineId}`);
-                            socket.emit('deck_validation_error', {
-                                error: 'DISABLED_DISCIPLINE',
-                                message: `La disciplina "${disciplineId}" está deshabilitada`,
-                                disciplineId: disciplineId
-                            });
-                            return; // Rechazar el mazo
-                        }
-                    }
-                    
-                    validDisciplines = [...disciplines];
-                    console.log(`✅ Disciplinas validadas: ${validDisciplines.length} (${validDisciplines.join(', ')})`);
+                // Verificar que el HQ no esté en el banquillo
+                if (validBenchUnits.includes('hq')) {
+                    console.warn(`🚫 Mazo rechazado: el HQ no puede estar en el banquillo`);
+                    socket.emit('deck_validation_error', {
+                        error: 'HQ_IN_BENCH',
+                        message: 'El HQ no puede estar en el banquillo'
+                    });
+                    return;
                 }
-                
-                console.log(`✅ Mazo validado: ${validUnits.length} unidades (${deckCost}/${deckPointLimit} puntos), banquillo: ${validBenchUnits.length} unidades (${benchCost}/${benchPointLimit} puntos)`);
-                
-                // ❌ CÓDIGO VIEJO - YA NO SE USA
-                validatedDeck = {
-                    id: raceId, // El deckId del cliente
-                    name: `Mazo del jugador ${player.name}`,
-                    units: validUnits,
-                    bench: validBenchUnits, // 🆕 NUEVO: Incluir banquillo
-                    disciplines: validDisciplines // 🆕 NUEVO: Incluir disciplinas
-                };
-            } else {
-                // ❌ CÓDIGO VIEJO - YA NO SE USA
-                const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
-                validatedDeck = {
-                    id: 'default',
-                    name: 'Mazo Predeterminado',
-                    units: DEFAULT_DECK.units,
-                    bench: DEFAULT_DECK.bench || [], // 🆕 NUEVO: Incluir banquillo
-                    disciplines: DEFAULT_DECK.disciplines || [] // 🆕 NUEVO: Incluir disciplinas
-                };
             }
-            */
+            
+            // 🆕 NUEVO: Validar disciplinas
+            let validDisciplines = [];
+            if (deck.disciplines && Array.isArray(deck.disciplines)) {
+                const { disciplineExists, getDiscipline } = await import('./config/disciplines.js');
+                const maxDisciplines = GAME_CONFIG.disciplines.maxEquipped;
+                
+                if (deck.disciplines.length > maxDisciplines) {
+                    console.warn(`🚫 Mazo rechazado: ${deck.disciplines.length} disciplinas excede máximo de ${maxDisciplines}`);
+                    socket.emit('deck_validation_error', {
+                        error: 'TOO_MANY_DISCIPLINES',
+                        message: `Solo puedes tener ${maxDisciplines} disciplinas en el mazo`,
+                        disciplineCount: deck.disciplines.length,
+                        maxDisciplines: maxDisciplines
+                    });
+                    return;
+                }
+                
+                const uniqueDisciplines = [...new Set(deck.disciplines)];
+                if (uniqueDisciplines.length !== deck.disciplines.length) {
+                    console.warn(`🚫 Mazo rechazado: disciplinas duplicadas`);
+                    socket.emit('deck_validation_error', {
+                        error: 'DUPLICATE_DISCIPLINES',
+                        message: 'No puedes tener disciplinas duplicadas'
+                    });
+                    return;
+                }
+                
+                for (const disciplineId of deck.disciplines) {
+                    if (!disciplineExists(disciplineId)) {
+                        console.warn(`🚫 Mazo rechazado: disciplina no existe: ${disciplineId}`);
+                        socket.emit('deck_validation_error', {
+                            error: 'INVALID_DISCIPLINE',
+                            message: `La disciplina "${disciplineId}" no existe`,
+                            disciplineId: disciplineId
+                        });
+                        return;
+                    }
+                    
+                    const discipline = getDiscipline(disciplineId);
+                    if (discipline.enabled === false) {
+                        console.warn(`🚫 Mazo rechazado: disciplina deshabilitada: ${disciplineId}`);
+                        socket.emit('deck_validation_error', {
+                            error: 'DISABLED_DISCIPLINE',
+                            message: `La disciplina "${disciplineId}" está deshabilitada`,
+                            disciplineId: disciplineId
+                        });
+                        return;
+                    }
+                }
+                
+                validDisciplines = [...deck.disciplines];
+                console.log(`✅ Disciplinas validadas: ${validDisciplines.length} (${validDisciplines.join(', ')})`);
+            }
+            
+            console.log(`✅ Mazo validado: ${validUnits.length} unidades (${deckCost}/${deckPointLimit} puntos), banquillo: ${validBenchUnits.length} unidades (${benchCost}/${benchPointLimit} puntos)`);
+            
+            const validatedDeck = {
+                id: deck.id,
+                name: deck.name || `Mazo del jugador ${player.name}`,
+                units: validUnits,
+                bench: validBenchUnits,
+                disciplines: validDisciplines
+            };
             
             // Almacenar el mazo en el jugador
             player.selectedRace = validatedDeck.id; // Mantener compatibilidad con nombre anterior

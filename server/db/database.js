@@ -85,14 +85,20 @@ let supabase = null;
 
 function initSupabase() {
     const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_ANON_KEY;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
     
     if (!url || !key) {
-        throw new Error('❌ SUPABASE_URL y SUPABASE_ANON_KEY son requeridas en producción');
+        throw new Error('❌ SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY son requeridas en producción');
     }
     
-    supabase = createClient(url, key);
-    console.log('✅ Supabase inicializado');
+    supabase = createClient(url, key, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+            detectSessionInUrl: false
+        }
+    });
+    console.log(`✅ Supabase inicializado (${process.env.SUPABASE_SERVICE_ROLE_KEY ? 'service role' : 'anon key'})`);
 }
 
 // ============================================================

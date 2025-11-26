@@ -66,17 +66,14 @@ export class ClientSender {
     // ========== SELECCIÓN DE RAZA/MAZO ==========
 
     /**
-     * Seleccionar raza y mazo
-     */
-    /**
-     * ✅ REFACTORIZADO: Solo envía el deckId, el servidor obtiene el mazo de la BD
+     * Seleccionar raza y mazo (solo deckId, el servidor carga el mazo desde la BD)
      */
     selectRace(roomId, deckId) {
-        console.log('📤 [CLIENT_SENDER] Enviando select_race con deckId:', deckId);
+        console.log('📤 [SELECT_RACE] Enviando deckId al servidor:', deckId);
         
         this.socket.emit('select_race', {
             roomId,
-            deckId
+            deckId // 🆕 REFACTOR: Solo el ID, el servidor carga el mazo completo desde la BD
         });
     }
 

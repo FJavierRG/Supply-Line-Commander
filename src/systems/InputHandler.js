@@ -230,6 +230,18 @@ export class InputHandler {
             }
         });
         
+        // Botón de cerrar sesión
+        this.setupButton('logout-btn', () => {
+            if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+                // Importar authService dinámicamente para evitar dependencia circular
+                import('../services/AuthService.js').then(({ authService }) => {
+                    authService.logout();
+                    // Recargar la página para mostrar el overlay de autenticación
+                    window.location.reload();
+                });
+            }
+        });
+        
         this.setupButton('pause-options-btn', () => {
             this.game.options.toggleOptions();
         });

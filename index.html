@@ -6,8 +6,53 @@
     <title>Supply Line Commander - Logística Militar</title>
     <link rel="icon" type="image/png" href="assets/sprites/ui/resources.png">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="src/styles/auth.css">
+    <script>
+        // Configurar URL base de la API (servidor Node.js)
+        // El servidor corre en el mismo puerto que el cliente (8000)
+        window.__API_BASE_URL__ = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:8000'
+            : '';
+    </script>
 </head>
 <body>
+    <div id="auth-overlay" class="auth-overlay hidden">
+        <div class="auth-modal">
+            <div class="auth-header">
+                <h1>Supply Line Commander</h1>
+            </div>
+            <div class="auth-tabs">
+                <button class="auth-tab-button active" data-auth-tab="login">Iniciar sesión</button>
+                <button class="auth-tab-button" data-auth-tab="register">Crear cuenta</button>
+            </div>
+            <form id="auth-login-form" class="auth-form">
+                <div class="auth-field">
+                    <label for="auth-login-username">Nombre de usuario</label>
+                    <input id="auth-login-username" name="username" type="text" autocomplete="username" placeholder="tu_usuario" required>
+                </div>
+                <div class="auth-field">
+                    <label for="auth-login-password">Contraseña</label>
+                    <input id="auth-login-password" name="password" type="password" autocomplete="current-password" placeholder="••••••" required>
+                </div>
+                <button type="submit" class="auth-submit">Entrar</button>
+            </form>
+            <form id="auth-register-form" class="auth-form hidden">
+                <div class="auth-field">
+                    <label for="auth-register-username">Nombre de usuario</label>
+                    <input id="auth-register-username" name="username" type="text" autocomplete="username" placeholder="elige_un_nombre" required>
+                </div>
+                <div class="auth-field">
+                    <label for="auth-register-password">Contraseña</label>
+                    <input id="auth-register-password" name="password" type="password" autocomplete="new-password" placeholder="mínimo 6 caracteres" required>
+                </div>
+                <div class="auth-field">
+                    <label for="auth-register-confirm">Confirmar contraseña</label>
+                    <input id="auth-register-confirm" name="confirmPassword" type="password" autocomplete="new-password" placeholder="repite tu contraseña" required>
+                </div>
+                <button type="submit" class="auth-submit">Crear cuenta</button>
+            </form>
+        </div>
+    </div>
     <div id="game-container">
         <div id="main-game">
             <canvas id="game-canvas"></canvas>
@@ -135,6 +180,10 @@
                 <div class="main-menu-container">
                     <div class="menu-header">
                         <h1 class="menu-title">Supply Line Commander</h1>
+                        <div id="user-info" class="user-info" style="display: none;">
+                            <span id="username-display" class="username-display"></span>
+                            <button id="logout-btn" class="logout-btn">Cerrar Sesión</button>
+                        </div>
                     </div>
                     
                     <div class="menu-actions">

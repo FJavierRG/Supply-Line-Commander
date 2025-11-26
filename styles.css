@@ -342,6 +342,9 @@ body.menu-open #game-canvas {
     margin-bottom: 80px;
     border-bottom: 1px solid rgba(78, 204, 163, 0.2);
     padding-bottom: 20px;
+    position: relative;
+    width: 100%;
+    gap: 20px;
 }
 
 .menu-title {
@@ -352,6 +355,47 @@ body.menu-open #game-canvas {
     letter-spacing: 0.5px;
     text-transform: none;
     text-shadow: none;
+    flex: 1;
+    min-width: 0; /* Permite que el texto se trunque si es necesario */
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.username-display {
+    color: #9db3c7;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.logout-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #9db3c7;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: 'Courier New', monospace;
+    white-space: nowrap;
+}
+
+.logout-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 137, 137, 0.4);
+    color: #ff8989;
+    transform: translateY(-1px);
 }
 
 #medals-display-mini {

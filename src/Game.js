@@ -99,13 +99,6 @@ export class Game {
         
         this.options = new OptionsManager(this.audio);
         this.deckManager = new DeckManager(this);
-        
-        // ✅ NUEVO: El DeckManager ahora ejecuta la migración automáticamente en su inicialización
-        // No necesitamos hacer nada adicional aquí, pero si quieres puedes escuchar el resultado:
-        this.deckManager.waitForDefaultDeck().then(() => {
-            console.log('✅ DeckManager inicializado y migración completada (si era necesaria)');
-        });
-        
         this.arsenal = new ArsenalManager(this.assetManager, this);
         this.convoyManager = new ConvoyManager(this);
         this.trainSystem = new TrainSystem(this);
@@ -181,6 +174,13 @@ export class Game {
             player2: { equipped: [], active: null, timeRemaining: 0, cooldownRemaining: 0 }
         };
         
+        // Asegurar que el sistema de mazos está listo
+        if (this.deckManager && this.deckManager.ensureReady) {
+            this.deckManager.ensureReady().catch((err) => {
+                console.error('❌ Error esperando a DeckManager.ensureReady():', err);
+            });
+        }
+
         // Configurar canvas
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
@@ -843,6 +843,8 @@ export class Game {
     renderCurrencyOnCanvas(ctx) {
         // 🔧 DEPRECATED: Ya no hace nada, TopBarManager maneja currency
         return;
+        // Código inalcanzable - mantenido por compatibilidad pero nunca se ejecuta
+        /*
         const currency = Math.floor(this.currency.get());
         
         // Calcular rate: base desde configuración del servidor + bonus de plantas nucleares
@@ -904,6 +906,7 @@ export class Game {
         ctx.fillText(`(+${rate}/s)`, frameX + 55, frameY + (frameHeight / 2) + 16);
         
         ctx.restore();
+        */
     }
     
     /**
@@ -1397,6 +1400,33 @@ export class Game {
         
         // Reset flag de playtest
         this.isPlaytesting = false;
+        
+        // Actualizar información de usuario en el menú
+        this.updateMenuUserInfo();
+    }
+    
+    /**
+     * Actualiza la información del usuario en el menú principal
+     */
+    updateMenuUserInfo() {
+        import('./services/AuthService.js').then(({ authService }) => {
+            const userInfo = document.getElementById('user-info');
+            const usernameDisplay = document.getElementById('username-display');
+            
+            if (authService.isAuthenticated() && authService.getUser()) {
+                const user = authService.getUser();
+                if (userInfo && usernameDisplay) {
+                    userInfo.style.display = 'flex';
+                    usernameDisplay.textContent = user.username || 'Usuario';
+                }
+            } else {
+                if (userInfo) {
+                    userInfo.style.display = 'none';
+                }
+            }
+        }).catch(error => {
+            console.warn('No se pudo actualizar la información del usuario:', error);
+        });
     }
     
     /**

@@ -1,8 +1,6 @@
 // ===== GESTOR DE LOBBY Y UI PRE-JUEGO =====
 // Responsabilidad: Gestión de la interfaz y estado del lobby (sala de espera)
 
-import { DEFAULT_DECK_UUID } from '../../config/deckConstants.js';
-
 export class LobbyHandler {
     constructor(networkManager, game) {
         this.networkManager = networkManager;
@@ -385,12 +383,12 @@ export class LobbyHandler {
      */
     generateDeckOptions(selectedDeckId) {
         if (!this.game || !this.game.deckManager) {
-            return `<option value="${DEFAULT_DECK_UUID}">Mazo Predeterminado</option>`;
+            return '<option value="default">Mazo Predeterminado</option>';
         }
         
         const allDecks = this.game.deckManager.getAllDecks();
-        const defaultDeck = allDecks.find(d => d.isDefault === true || d.is_default === true);
-        const playerDecks = allDecks.filter(d => !d.isDefault && !d.is_default);
+        const defaultDeck = allDecks.find(d => d.isDefault === true);
+        const playerDecks = allDecks.filter(d => d.isDefault === false);
         
         let optionsHTML = '';
         
@@ -410,7 +408,7 @@ export class LobbyHandler {
         
         // Si no hay mazos guardados, mostrar solo el predeterminado
         if (playerDecks.length === 0 && !defaultDeck) {
-            optionsHTML = `<option value="${DEFAULT_DECK_UUID}">Mazo Predeterminado</option>`;
+            optionsHTML = '<option value="default">Mazo Predeterminado</option>';
         }
         
         return optionsHTML;
@@ -467,27 +465,11 @@ export class LobbyHandler {
     }
 
     /**
-     * Enviar selección de mazo al servidor
+     * Enviar selección de mazo al servidor (solo deckId)
      */
     _sendDeckSelection(deckId) {
-        let deckUnits = null;
-        let benchUnits = null;
-        
-        if (this.game && this.game.deckManager) {
-            const deck = this.game.deckManager.getDeck(deckId);
-            if (deck) {
-                deckUnits = deck.units;
-                benchUnits = deck.bench || [];
-            } else if (deckId === DEFAULT_DECK_UUID || deckId === 'default') {
-                const defaultDeck = this.game.deckManager.getDefaultDeck();
-                if (defaultDeck) {
-                    deckUnits = defaultDeck.units;
-                    benchUnits = defaultDeck.bench || [];
-                }
-            }
-        }
-        
-        this.networkManager.clientSender.selectRace(this.networkManager.roomId, deckId, deckUnits, benchUnits);
+        // 🆕 REFACTOR: Solo enviar el deckId, el servidor cargará el mazo desde la BD
+        this.networkManager.clientSender.selectRace(this.networkManager.roomId, deckId);
     }
 
     // ========== GESTIÓN DE BOTONES ==========

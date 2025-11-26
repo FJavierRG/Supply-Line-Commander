@@ -7,15 +7,16 @@ import { randomUUID } from 'crypto';
 import { GAME_CONFIG } from '../config/gameConfig.js';
 import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
 import { validateDisciplineList } from '../config/disciplines.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 
 // ============================================================
-// GET /api/decks/:userId - Obtener mazos de un usuario
+// GET /api/decks - Obtener mazos del usuario autenticado
 // ============================================================
-router.get('/:userId', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
     try {
-        const { userId } = req.params;
+        const userId = req.user.id;
         const decks = await db.getUserDecks(userId);
         
         res.json({
@@ -62,15 +63,16 @@ router.get('/default/get', async (req, res) => {
 // ============================================================
 // POST /api/decks - Crear nuevo mazo
 // ============================================================
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
     try {
-        const { userId, name, units, bench = [], disciplines = [] } = req.body;
+        const userId = req.user.id;
+        const { name, units, bench = [], disciplines = [] } = req.body;
         
         // Validaciones
-        if (!userId || !name || !units) {
+        if (!name || !units) {
             return res.status(400).json({
                 success: false,
-                error: 'userId, name y units son requeridos'
+                error: 'name y units son requeridos'
             });
         }
         
@@ -177,9 +179,47 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================================
+// GET /api/decks/:deckId - Obtener un mazo por ID
+// ============================================================
+router.get('/:deckId', requireAuth, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { deckId } = req.params;
+        
+        const deck = await db.getDeck(deckId);
+        
+        if (!deck) {
+            return res.status(404).json({
+                success: false,
+                error: 'Mazo no encontrado'
+            });
+        }
+        
+        // Verificar ownership (excepto para el mazo por defecto)
+        if (!deck.is_default && deck.user_id !== userId) {
+            return res.status(403).json({
+                success: false,
+                error: 'No tienes permiso para acceder a este mazo'
+            });
+        }
+        
+        res.json({
+            success: true,
+            deck: deck
+        });
+    } catch (error) {
+        console.error('Error obteniendo mazo:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al obtener mazo'
+        });
+    }
+});
+
+// ============================================================
 // PUT /api/decks/:deckId - Actualizar mazo existente
 // ============================================================
-router.put('/:deckId', async (req, res) => {
+router.put('/:deckId', requireAuth, async (req, res) => {
     try {
         const { deckId } = req.params;
         const { name, units, bench, disciplines } = req.body;
@@ -190,6 +230,14 @@ router.put('/:deckId', async (req, res) => {
             return res.status(404).json({
                 success: false,
                 error: 'Mazo no encontrado'
+            });
+        }
+        
+        // Verificar propiedad del mazo
+        if (existingDeck.user_id !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                error: 'No tienes permiso para modificar este mazo'
             });
         }
         
@@ -246,7 +294,7 @@ router.put('/:deckId', async (req, res) => {
 // ============================================================
 // DELETE /api/decks/:deckId - Eliminar mazo
 // ============================================================
-router.delete('/:deckId', async (req, res) => {
+router.delete('/:deckId', requireAuth, async (req, res) => {
     try {
         const { deckId } = req.params;
         
@@ -256,6 +304,14 @@ router.delete('/:deckId', async (req, res) => {
             return res.status(404).json({
                 success: false,
                 error: 'Mazo no encontrado'
+            });
+        }
+        
+        // Verificar propiedad del mazo
+        if (existingDeck.user_id !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                error: 'No tienes permiso para eliminar este mazo'
             });
         }
         

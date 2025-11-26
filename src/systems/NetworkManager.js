@@ -8,7 +8,6 @@ import { ClientSender } from './network/ClientSender.js';
 import { LobbyHandler } from './network/LobbyHandler.js';
 import { NetworkEventHandler } from './network/NetworkEventHandler.js';
 import { GameStateSync } from './network/GameStateSync.js';
-import { DEFAULT_DECK_UUID } from '../config/deckConstants.js';
 
 export class NetworkManager {
     constructor(game) {
@@ -25,13 +24,13 @@ export class NetworkManager {
         
         // Auto-detectar URL del servidor
         // Si se accede vía ngrok/producción, usar la misma URL
-        // Si es localhost, usar localhost:3000
+        // Si es localhost, usar localhost:8000 (mismo puerto que el servidor)
         const isLocalhost = window.location.hostname === 'localhost' || 
                            window.location.hostname === '127.0.0.1' ||
                            window.location.hostname === '';
         
         if (isLocalhost) {
-            this.serverUrl = 'http://localhost:3000';
+            this.serverUrl = 'http://localhost:8000';
         } else {
             // Usar el mismo servidor desde donde se cargó la página
             this.serverUrl = window.location.origin;
@@ -209,10 +208,7 @@ export class NetworkManager {
                 if (config.benchPointLimit) {
                     this.game.deckManager.setBenchPointLimit(config.benchPointLimit);
                 }
-                // 🆕 NUEVO: Establecer mazo por defecto desde el servidor
-                if (config.defaultDeck) {
-                    this.game.deckManager.setDefaultDeckFromServer(config.defaultDeck);
-                }
+                // El mazo por defecto ahora se obtiene vía API en DeckManager (no desde game_config)
             }
         });
         
@@ -1450,19 +1446,36 @@ export class NetworkManager {
     
     /**
      * Seleccionar raza en multiplayer
-     * ✅ REFACTORIZADO: Solo envía el deckId, el servidor obtiene el mazo de la BD
      */
-    selectRace(deckId) {
+    selectRace(raceId) {
         
         if (!this.isMultiplayer || !this.roomId) {
             console.log('❌ selectRace bloqueado - isMultiplayer:', this.isMultiplayer, 'roomId:', this.roomId);
             return;
         }
         
-        console.log('📤 [SELECT_RACE] Enviando deckId al servidor:', deckId);
+        // 🆕 NUEVO: Obtener unidades del mazo, banquillo y disciplinas
+        let deckUnits = null;
+        let benchUnits = null;
+        let disciplines = null; // 🆕 NUEVO: Disciplinas
         
-        // ✅ NUEVO: Solo enviar el ID del mazo, el servidor lo obtiene de la BD
-        this.clientSender.selectRace(this.roomId, deckId);
+        if (this.game && this.game.deckManager) {
+            const deck = this.game.deckManager.getDeck(raceId);
+            if (deck) {
+                deckUnits = deck.units;
+                benchUnits = deck.bench || [];
+                disciplines = deck.disciplines || []; // 🆕 NUEVO: Disciplinas
+            } else if (raceId === 'default') {
+                const defaultDeck = this.game.deckManager.getDefaultDeck();
+                if (defaultDeck) {
+                    deckUnits = defaultDeck.units;
+                    benchUnits = defaultDeck.bench || [];
+                    disciplines = defaultDeck.disciplines || []; // 🆕 NUEVO: Disciplinas
+                }
+            }
+        }
+        
+        this.clientSender.selectRace(this.roomId, raceId, deckUnits, benchUnits, disciplines);
     }
     
     /**
@@ -2033,14 +2046,13 @@ export class NetworkManager {
      */
     generateDeckOptions(selectedDeckId) {
         if (!this.game || !this.game.deckManager) {
-            // ✅ Fallback con UUID correcto
-            return `<option value="${DEFAULT_DECK_UUID}">Mazo Predeterminado</option>`;
+            // Fallback si no hay DeckManager disponible
+            return '<option value="default">Mazo Predeterminado</option>';
         }
         
         const allDecks = this.game.deckManager.getAllDecks();
-        // ✅ Soportar ambos formatos: isDefault y is_default
-        const defaultDeck = allDecks.find(d => d.isDefault === true || d.is_default === true);
-        const playerDecks = allDecks.filter(d => !d.isDefault && !d.is_default);
+        const defaultDeck = allDecks.find(d => d.isDefault === true);
+        const playerDecks = allDecks.filter(d => d.isDefault === false);
         
         let optionsHTML = '';
         
@@ -2058,9 +2070,9 @@ export class NetworkManager {
             optionsHTML += `<option value="${deck.id}" ${isSelected ? 'selected' : ''}>${deck.name}</option>`;
         });
         
-        // Si no hay mazos guardados, mostrar solo el predeterminado con UUID correcto
+        // Si no hay mazos guardados, mostrar solo el predeterminado
         if (playerDecks.length === 0 && !defaultDeck) {
-            optionsHTML = `<option value="${DEFAULT_DECK_UUID}">Mazo Predeterminado</option>`;
+            optionsHTML = '<option value="default">Mazo Predeterminado</option>';
         }
         
         return optionsHTML;
@@ -2108,10 +2120,10 @@ export class NetworkManager {
                 
                 // Solo enviar si el jugador actual no tiene mazo seleccionado aún en el servidor
                 if (playerData && !playerData.selectedRace) {
+                    // 🆕 REFACTOR: Solo enviar el deckId, el servidor cargará el mazo desde la BD
                     const deckId = select.value;
                     console.log('📤 [AUTO-SELECT] Enviando deckId al servidor:', deckId);
                     
-                    // ✅ NUEVO: Solo enviar el ID del mazo, el servidor lo obtiene de la BD
                     this.clientSender.selectRace(this.roomId, deckId);
                 }
             }
@@ -2120,10 +2132,34 @@ export class NetworkManager {
             select.addEventListener('change', (e) => {
                 const deckId = e.target.value;
                 if (deckId) {
-                    console.log('📤 [MANUAL-SELECT] Enviando deckId al servidor:', deckId);
+                    // 🎯 NUEVO: Obtener las unidades del mazo seleccionado
+                    let deckUnits = null;
+                    let benchUnits = null; // 🆕 NUEVO: Banquillo
+                    let disciplines = null; // 🆕 NUEVO: Disciplinas
                     
-                    // ✅ NUEVO: Solo enviar el ID del mazo, el servidor lo obtiene de la BD
-                    this.clientSender.selectRace(this.roomId, deckId);
+                    if (this.game && this.game.deckManager) {
+                        const deck = this.game.deckManager.getDeck(deckId);
+                        console.log('🔍 [MANUAL-SELECT] Obteniendo mazo:', deckId, 'Resultado:', deck);
+                        if (deck) {
+                            deckUnits = deck.units;
+                            benchUnits = deck.bench || []; // 🆕 NUEVO: Obtener banquillo
+                            disciplines = deck.disciplines || []; // 🆕 NUEVO: Obtener disciplinas
+                            console.log('🔍 [MANUAL-SELECT] Disciplinas del mazo:', disciplines);
+                        } else if (deckId === 'default') {
+                            // Si es el mazo predeterminado, obtenerlo
+                            const defaultDeck = this.game.deckManager.getDefaultDeck();
+                            console.log('🔍 [MANUAL-SELECT] Usando default deck:', defaultDeck);
+                            if (defaultDeck) {
+                                deckUnits = defaultDeck.units;
+                                benchUnits = defaultDeck.bench || []; // 🆕 NUEVO: Obtener banquillo
+                                disciplines = defaultDeck.disciplines || []; // 🆕 NUEVO: Obtener disciplinas
+                                console.log('🔍 [MANUAL-SELECT] Disciplinas del default:', disciplines);
+                            }
+                        }
+                    }
+                    
+                    // Enviar al servidor con las unidades del mazo
+                    this.clientSender.selectRace(this.roomId, deckId, deckUnits, benchUnits, disciplines);
                 }
             });
         });
