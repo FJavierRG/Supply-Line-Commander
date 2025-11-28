@@ -35,13 +35,17 @@ export class CombatHandler {
         // ✅ Costo del sniper (lee de costs - fuente única de verdad)
         const sniperCost = SERVER_NODE_CONFIG.costs.sniperStrike;
         
-        // Verificar currency
-        if (this.gameState.currency[playerTeam] < sniperCost) {
-            return { success: false, reason: 'Currency insuficiente' };
+        // Verificar currency considerando disciplinas
+        const spendCheck = this.gameState.canSpendCurrency(playerTeam, sniperCost);
+        if (!spendCheck.canSpend) {
+            return { success: false, reason: spendCheck.reason };
         }
         
         // Descontar currency y emitir evento visual
-        this.gameState.spendCurrency(playerTeam, sniperCost, 'sniper_shot');
+        const spendResult = this.gameState.spendCurrency(playerTeam, sniperCost, 'sniper_shot');
+        if (!spendResult.success) {
+            return { success: false, reason: spendResult.reason };
+        }
         
         // 🆕 NUEVO: Lógica condicional según el tipo de objetivo
         if (targetNode.type === 'specopsCommando' || targetNode.type === 'truckAssault' || targetNode.type === 'cameraDrone') {
@@ -196,13 +200,17 @@ export class CombatHandler {
         // ✅ Costo del sabotaje (lee de costs - fuente única de verdad)
         const sabotageCost = SERVER_NODE_CONFIG.costs.fobSabotage;
         
-        // Verificar currency
-        if (this.gameState.currency[playerTeam] < sabotageCost) {
-            return { success: false, reason: 'Currency insuficiente' };
+        // Verificar currency (considerando disciplinas)
+        const sabotageSpendCheck = this.gameState.canSpendCurrency(playerTeam, sabotageCost);
+        if (!sabotageSpendCheck.canSpend) {
+            return { success: false, reason: sabotageSpendCheck.reason };
         }
         
         // Descontar currency y emitir evento visual
-        this.gameState.spendCurrency(playerTeam, sabotageCost, 'fob_sabotage');
+        const sabotageSpendResult = this.gameState.spendCurrency(playerTeam, sabotageCost, 'fob_sabotage');
+        if (!sabotageSpendResult.success) {
+            return { success: false, reason: sabotageSpendResult.reason };
+        }
         
         // Añadir efecto de sabotaje
         if (!targetNode.effects) targetNode.effects = [];
@@ -282,13 +290,17 @@ export class CombatHandler {
         const droneCostResult = this.gameState.droneWorkshopSystem.getDroneCost('drone', playerTeam);
         const droneCost = droneCostResult.cost;
         
-        // Verificar currency
-        if (this.gameState.currency[playerTeam] < droneCost) {
-            return { success: false, reason: 'Currency insuficiente' };
+        // Verificar currency (considerando disciplinas)
+        const droneSpendCheck = this.gameState.canSpendCurrency(playerTeam, droneCost);
+        if (!droneSpendCheck.canSpend) {
+            return { success: false, reason: droneSpendCheck.reason };
         }
         
         // Descontar currency y emitir evento visual
-        this.gameState.spendCurrency(playerTeam, droneCost, 'launch_drone');
+        const droneSpendResult = this.gameState.spendCurrency(playerTeam, droneCost, 'launch_drone');
+        if (!droneSpendResult.success) {
+            return { success: false, reason: droneSpendResult.reason };
+        }
         
         // 🆕 NUEVO: Incrementar contador de usos de la lanzadera
         launcher.uses++;
@@ -343,13 +355,17 @@ export class CombatHandler {
         // ✅ Costo del tanque (lee de costs - fuente única de verdad)
         const tankCost = SERVER_NODE_CONFIG.costs.tank;
         
-        // Verificar currency
-        if (this.gameState.currency[playerTeam] < tankCost) {
-            return { success: false, reason: 'Currency insuficiente' };
+        // Verificar currency (considerando disciplinas)
+        const tankSpendCheck = this.gameState.canSpendCurrency(playerTeam, tankCost);
+        if (!tankSpendCheck.canSpend) {
+            return { success: false, reason: tankSpendCheck.reason };
         }
         
         // Descontar currency y emitir evento visual
-        this.gameState.spendCurrency(playerTeam, tankCost, 'deploy_tank');
+        const tankSpendResult = this.gameState.spendCurrency(playerTeam, tankCost, 'deploy_tank');
+        if (!tankSpendResult.success) {
+            return { success: false, reason: tankSpendResult.reason };
+        }
         
         // Lanzar tanque desde el extremo del mapa
         const tank = this.gameState.tankSystem.launchTank(playerTeam, targetNode);
@@ -394,13 +410,17 @@ export class CombatHandler {
         // ✅ Costo del artillado ligero (lee de costs - fuente única de verdad)
         const lightVehicleCost = SERVER_NODE_CONFIG.costs.lightVehicle;
         
-        // Verificar currency
-        if (this.gameState.currency[playerTeam] < lightVehicleCost) {
-            return { success: false, reason: 'Currency insuficiente' };
+        // Verificar currency (considerando disciplinas)
+        const lightVehicleSpendCheck = this.gameState.canSpendCurrency(playerTeam, lightVehicleCost);
+        if (!lightVehicleSpendCheck.canSpend) {
+            return { success: false, reason: lightVehicleSpendCheck.reason };
         }
         
         // Descontar currency y emitir evento visual
-        this.gameState.spendCurrency(playerTeam, lightVehicleCost, 'deploy_light_vehicle');
+        const lightVehicleSpendResult = this.gameState.spendCurrency(playerTeam, lightVehicleCost, 'deploy_light_vehicle');
+        if (!lightVehicleSpendResult.success) {
+            return { success: false, reason: lightVehicleSpendResult.reason };
+        }
         
         // Lanzar artillado ligero desde el extremo del mapa
         const lightVehicle = this.gameState.lightVehicleSystem.launchLightVehicle(playerTeam, targetNode);
@@ -421,13 +441,17 @@ export class CombatHandler {
         // ✅ Costo de la artillería (lee de costs - fuente única de verdad)
         const artilleryCost = SERVER_NODE_CONFIG.costs.artillery;
         
-        // Verificar currency
-        if (this.gameState.currency[playerTeam] < artilleryCost) {
-            return { success: false, reason: 'Currency insuficiente' };
+        // Verificar currency (considerando disciplinas)
+        const artillerySpendCheck = this.gameState.canSpendCurrency(playerTeam, artilleryCost);
+        if (!artillerySpendCheck.canSpend) {
+            return { success: false, reason: artillerySpendCheck.reason };
         }
         
         // Descontar currency y emitir evento visual
-        this.gameState.spendCurrency(playerTeam, artilleryCost, 'artillery_strike');
+        const artillerySpendResult = this.gameState.spendCurrency(playerTeam, artilleryCost, 'artillery_strike');
+        if (!artillerySpendResult.success) {
+            return { success: false, reason: artillerySpendResult.reason };
+        }
         
         // Lanzar bombardeo de artillería
         const artillery = this.gameState.artillerySystem.launchArtillery(playerTeam, x, y);
@@ -448,9 +472,10 @@ export class CombatHandler {
         // ✅ Usar specialNodes como fuente única de verdad para detectionRadius funcional
         const commandoDetectionRadius = SERVER_NODE_CONFIG.specialNodes?.specopsCommando?.detectionRadius || 200;
         
-        // Verificar currency
-        if (this.gameState.currency[playerTeam] < commandoCost) {
-            return { success: false, reason: 'Currency insuficiente' };
+        // Verificar currency (considerando disciplinas)
+        const commandoSpendCheck = this.gameState.canSpendCurrency(playerTeam, commandoCost);
+        if (!commandoSpendCheck.canSpend) {
+            return { success: false, reason: commandoSpendCheck.reason };
         }
         
         // 🆕 FIX: Validar requisito de Centro de Inteligencia (antes faltaba esta validación)
@@ -500,7 +525,10 @@ export class CombatHandler {
         }
         
         // Descontar currency y emitir evento visual
-        this.gameState.spendCurrency(playerTeam, commandoCost, 'deploy_commando');
+        const commandoSpendResult = this.gameState.spendCurrency(playerTeam, commandoCost, 'deploy_commando');
+        if (!commandoSpendResult.success) {
+            return { success: false, reason: commandoSpendResult.reason };
+        }
         
         // Crear nodo del comando
         const commandoNode = this.gameState.buildHandler.createNode('specopsCommando', playerTeam, x, y);
@@ -537,9 +565,10 @@ export class CombatHandler {
         const truckAssaultCost = SERVER_NODE_CONFIG.costs.truckAssault;
         const truckAssaultDetectionRadius = SERVER_NODE_CONFIG.specialNodes?.truckAssault?.detectionRadius || 200;
         
-        // Verificar currency
-        if (this.gameState.currency[playerTeam] < truckAssaultCost) {
-            return { success: false, reason: 'Currency insuficiente' };
+        // Verificar currency (considerando disciplinas)
+        const truckAssaultSpendCheck = this.gameState.canSpendCurrency(playerTeam, truckAssaultCost);
+        if (!truckAssaultSpendCheck.canSpend) {
+            return { success: false, reason: truckAssaultSpendCheck.reason };
         }
         
         // 🆕 Validar requisito de Centro de Inteligencia
@@ -571,7 +600,10 @@ export class CombatHandler {
         }
         
         // Descontar currency y emitir evento visual
-        this.gameState.spendCurrency(playerTeam, truckAssaultCost, 'deploy_truck_assault');
+        const truckAssaultSpendResult = this.gameState.spendCurrency(playerTeam, truckAssaultCost, 'deploy_truck_assault');
+        if (!truckAssaultSpendResult.success) {
+            return { success: false, reason: truckAssaultSpendResult.reason };
+        }
         
         // Crear nodo del truck assault
         const truckAssaultNode = this.gameState.buildHandler.createNode('truckAssault', playerTeam, x, y);
@@ -608,9 +640,10 @@ export class CombatHandler {
         const cameraDroneConfig = SERVER_NODE_CONFIG.specialNodes?.cameraDrone || {};
         const detectionRadius = cameraDroneConfig.detectionRadius || 200;
         
-        // Verificar currency
-        if (this.gameState.currency[playerTeam] < cameraDroneCost) {
-            return { success: false, reason: 'Currency insuficiente' };
+        // Verificar currency (considerando disciplinas)
+        const cameraDroneSpendCheck = this.gameState.canSpendCurrency(playerTeam, cameraDroneCost);
+        if (!cameraDroneSpendCheck.canSpend) {
+            return { success: false, reason: cameraDroneSpendCheck.reason };
         }
         
         // 🆕 Validar requisito de Lanzadera de Drones
@@ -653,7 +686,10 @@ export class CombatHandler {
         }
         
         // Descontar currency y emitir evento visual
-        this.gameState.spendCurrency(playerTeam, cameraDroneCost, 'deploy_camera_drone');
+        const cameraDroneSpendResult = this.gameState.spendCurrency(playerTeam, cameraDroneCost, 'deploy_camera_drone');
+        if (!cameraDroneSpendResult.success) {
+            return { success: false, reason: cameraDroneSpendResult.reason };
+        }
         
         // 🆕 NUEVO: Incrementar contador de usos de la lanzadera
         launcher.uses++;
@@ -770,9 +806,10 @@ export class CombatHandler {
         // ✅ Costo del destructor (lee de costs - fuente única de verdad)
         const worldDestroyerCost = SERVER_NODE_CONFIG.costs.worldDestroyer;
         
-        // Verificar currency
-        if (this.gameState.currency[playerTeam] < worldDestroyerCost) {
-            return { success: false, reason: 'Currency insuficiente' };
+        // Verificar currency (considerando disciplinas)
+        const worldDestroyerSpendCheck = this.gameState.canSpendCurrency(playerTeam, worldDestroyerCost);
+        if (!worldDestroyerSpendCheck.canSpend) {
+            return { success: false, reason: worldDestroyerSpendCheck.reason };
         }
         
         // Verificar que el jugador tenga Construcción Prohibida construida
@@ -795,7 +832,10 @@ export class CombatHandler {
         }
         
         // Descontar currency y emitir evento visual
-        this.gameState.spendCurrency(playerTeam, worldDestroyerCost, 'world_destroyer');
+        const worldDestroyerSpendResult = this.gameState.spendCurrency(playerTeam, worldDestroyerCost, 'world_destroyer');
+        if (!worldDestroyerSpendResult.success) {
+            return { success: false, reason: worldDestroyerSpendResult.reason };
+        }
         
         // Iniciar el destructor
         const worldDestroyerConfig = SERVER_NODE_CONFIG.gameplay.worldDestroyer;

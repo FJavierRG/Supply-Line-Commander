@@ -33,26 +33,35 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // ============================================================
-// GET /api/decks/default - Obtener mazo por defecto
-// UUID especial: 00000000-0000-0000-0000-000000000001
+// GET /api/decks/default/get - Obtener mazo por defecto
+// ⚠️ IMPORTANTE: Siempre viene de config/defaultDeck.js (no de BD)
 // ============================================================
 router.get('/default/get', async (req, res) => {
     try {
-        const defaultDeck = await db.getDefaultDeck();
-        
-        if (!defaultDeck) {
-            return res.status(404).json({
+        const { DEFAULT_DECK } = await import('../config/defaultDeck.js');
+
+        if (!DEFAULT_DECK || !DEFAULT_DECK.units) {
+            return res.status(500).json({
                 success: false,
-                error: 'Mazo por defecto no encontrado'
+                error: 'Configuración de mazo por defecto inválida'
             });
         }
-        
+
+        const deck = {
+            id: DEFAULT_DECK.id || 'default',
+            name: DEFAULT_DECK.name || 'Mazo Predeterminado',
+            units: [...(DEFAULT_DECK.units || [])],
+            bench: [...(DEFAULT_DECK.bench || [])],
+            disciplines: [...(DEFAULT_DECK.disciplines || [])],
+            is_default: true
+        };
+
         res.json({
             success: true,
-            deck: defaultDeck
+            deck
         });
     } catch (error) {
-        console.error('Error obteniendo mazo por defecto:', error);
+        console.error('Error obteniendo mazo por defecto (config):', error);
         res.status(500).json({
             success: false,
             error: 'Error al obtener mazo por defecto'

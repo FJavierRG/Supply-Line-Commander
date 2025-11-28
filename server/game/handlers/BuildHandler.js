@@ -140,9 +140,10 @@ export class BuildHandler {
             return { success: false, reason: 'Tipo de edificio inválido' };
         }
         
-        // Verificar currency
-        if (this.gameState.currency[playerTeam] < cost) {
-            return { success: false, reason: 'Currency insuficiente' };
+        // Verificar currency (considerando disciplinas)
+        const spendCheck = this.gameState.canSpendCurrency(playerTeam, cost);
+        if (!spendCheck.canSpend) {
+            return { success: false, reason: spendCheck.reason };
         }
         
         // 🎯 NUEVO: Validar construcción según mazo del jugador
@@ -239,7 +240,10 @@ export class BuildHandler {
         }
         
         // Descontar currency y emitir evento visual
-        this.gameState.spendCurrency(playerTeam, cost, `build_${buildingType}`);
+        const spendResult = this.gameState.spendCurrency(playerTeam, cost, `build_${buildingType}`);
+        if (!spendResult.success) {
+            return { success: false, reason: spendResult.reason || 'Currency insuficiente' };
+        }
         
         // Crear nodo
         const node = this.createNode(buildingType, playerTeam, x, y);

@@ -441,13 +441,71 @@ export class GameStateManager {
     }
     
     /**
+     * Obtiene los modificadores económicos activos (disciplinas) de un equipo
+     * @param {string} team
+     * @returns {Object}
+     */
+    getEconomyModifiers(team) {
+        if (!this.disciplineManager) {
+            return {};
+        }
+        return this.disciplineManager.getModifiersForSystem(team, 'economy') || {};
+    }
+    
+    /**
+     * Verifica si un jugador puede gastar cierta cantidad de currency considerando disciplinas
+     * @param {string} team - 'player1' o 'player2'
+     * @param {number} amount - Cantidad a gastar
+     * @returns {{canSpend: boolean, reason: string}}
+     */
+    canSpendCurrency(team, amount) {
+        if (!team) {
+            return { canSpend: false, reason: 'Equipo inválido' };
+        }
+        
+        if (!amount || amount <= 0) {
+            return { canSpend: true, reason: '' };
+        }
+        
+        const currentCurrency = this.currency[team] ?? 0;
+        const modifiers = this.getEconomyModifiers(team);
+        const allowNegative = modifiers.allowNegativeCurrency === true;
+        const minCurrency = allowNegative
+            ? (typeof modifiers.minCurrency === 'number' ? modifiers.minCurrency : 0)
+            : 0;
+        const projectedBalance = currentCurrency - amount;
+        
+        if (allowNegative) {
+            if (projectedBalance < minCurrency) {
+                return { canSpend: false, reason: `Has alcanzado el límite de deuda (${minCurrency})` };
+            }
+            return { canSpend: true, reason: '' };
+        }
+        
+        if (projectedBalance < 0) {
+            return { canSpend: false, reason: 'Currency insuficiente' };
+        }
+        
+        return { canSpend: true, reason: '' };
+    }
+    
+    /**
      * 🆕 NUEVO: Gasta currency y emite evento visual automáticamente
      * @param {string} team - Equipo ('player1' o 'player2')
      * @param {number} amount - Cantidad a gastar (positivo)
      * @param {string} reason - Razón del gasto (para debugging)
+     * @returns {{success: boolean, reason?: string}}
      */
     spendCurrency(team, amount, reason = 'unknown') {
-        if (!this.currency[team]) return;
+        if (this.currency[team] === undefined) {
+            this.currency[team] = 0;
+        }
+        
+        const spendCheck = this.canSpendCurrency(team, amount);
+        if (!spendCheck.canSpend) {
+            console.warn(`❌ [Currency] ${team} no pudo gastar ${amount} (${reason}): ${spendCheck.reason}`);
+            return { success: false, reason: spendCheck.reason };
+        }
         
         this.currency[team] -= amount;
         
@@ -457,6 +515,8 @@ export class GameStateManager {
             amount: amount,
             reason: reason
         });
+        
+        return { success: true };
     }
     
     /**

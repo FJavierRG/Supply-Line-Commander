@@ -186,14 +186,18 @@ export class ConvoyHandler {
         // 🆕 NUEVO: Aplicar costo de despliegue de disciplinas (si hay alguna activa)
         const disciplineModifiers = this.gameState.disciplineManager.getModifiersForSystem(playerTeam, 'convoy');
         if (disciplineModifiers.deploymentCost && disciplineModifiers.deploymentCost > 0) {
-            // Verificar si hay suficiente currency
-            if (this.gameState.currency[playerTeam] < disciplineModifiers.deploymentCost) {
-                return { success: false, reason: 'Currency insuficiente para desplegar vehículo' };
+            const deploymentCost = disciplineModifiers.deploymentCost;
+            const deploymentSpendCheck = this.gameState.canSpendCurrency(playerTeam, deploymentCost);
+            if (!deploymentSpendCheck.canSpend) {
+                return { success: false, reason: deploymentSpendCheck.reason || 'Currency insuficiente para desplegar vehículo' };
             }
             
-            // Descontar currency y emitir evento visual
-            this.gameState.spendCurrency(playerTeam, disciplineModifiers.deploymentCost, 'vehicle_deployment_discipline');
-            console.log(`💰 Costo de despliegue de vehículo (disciplina): ${disciplineModifiers.deploymentCost} - ${playerTeam}`);
+            const deploymentSpendResult = this.gameState.spendCurrency(playerTeam, deploymentCost, 'vehicle_deployment_discipline');
+            if (!deploymentSpendResult.success) {
+                return { success: false, reason: deploymentSpendResult.reason || 'Currency insuficiente para desplegar vehículo' };
+            }
+            
+            console.log(`💰 Costo de despliegue de vehículo (disciplina): ${deploymentCost} - ${playerTeam}`);
         }
         
         // ✅ CRÍTICO: Aplicar sabotaje cuando el camión SALE (no cuando regresa)

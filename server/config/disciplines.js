@@ -87,8 +87,28 @@ export const DISCIPLINES = {
                 currencyPerSecondPerFront: 1     // +1 currency/segundo por cada frente en modo hold
             }
         }
-    }
+    },
     
+    // ============================================================
+    // ENDEUDAMIENTO
+    // ============================================================
+    'endeudamiento': {
+        id: 'endeudamiento',
+        name: 'Endeudamiento',
+        icon: 'assets/sprites/ui/Disciplines/endeudamiento2.png',
+        cost: 0,
+        duration: 120,
+        cooldown: 45,
+        enabled: true,
+
+        effects: {
+            economy: {
+                allowNegativeCurrency: true,
+                minCurrency: -150
+            }
+        }
+    }
+
     // 🔧 Más disciplinas se añadirán aquí
 };
 
@@ -168,6 +188,12 @@ export function getDisciplineDescription(disciplineId) {
             const consumeReduction = Math.abs(Math.round(effects.consumeMultiplierBonus * 100));
             const currencyPerFront = effects.currencyPerSecondPerFront;
             return `En modo Mantener: el gasto de suministros disminuye un ${consumeReduction}% adicional y otorga +${currencyPerFront} currency/segundo por frente.`;
+        }
+
+        case 'endeudamiento': {
+            const effects = discipline.effects.economy;
+            const cap = effects.minCurrency ?? -150;
+            return `Permite gastar currency por debajo de 0 hasta ${cap}. Ideal para inversiones agresivas durante la ventana activa.`;
         }
         
         // 🔧 Más disciplinas se añadirán aquí con su lógica de descripción
