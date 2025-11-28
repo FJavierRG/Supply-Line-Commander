@@ -107,6 +107,17 @@ export class CurrencyManager {
     }
     
     /**
+     * Obtiene el límite inferior de currency permitido según disciplinas activas
+     * @returns {number}
+     */
+    getMinCurrencyLimit() {
+        if (!this.game || typeof this.game.getEconomyMinCurrency !== 'function') {
+            return 0;
+        }
+        return this.game.getEconomyMinCurrency(this.game.myTeam || 'player1');
+    }
+    
+    /**
      * Gasta currency temporal de la misión
      * ⚠️ SOLO PARA VALIDACIÓN UI LOCAL: El servidor valida y ejecuta todos los gastos.
      * Este método solo se usa para validación previa en la UI.
@@ -115,7 +126,8 @@ export class CurrencyManager {
      */
     spend(amount) {
         // ⚠️ SOLO VALIDACIÓN UI: El servidor valida y ejecuta
-        if (this.missionCurrency >= amount) {
+        const minCurrency = this.getMinCurrencyLimit();
+        if ((this.missionCurrency - amount) >= minCurrency) {
             this.missionCurrency -= amount;
             return true;
         }
@@ -136,7 +148,8 @@ export class CurrencyManager {
      * @returns {boolean} true si hay suficiente (visual)
      */
     canAfford(amount) {
-        return this.missionCurrency >= amount;
+        const minCurrency = this.getMinCurrencyLimit();
+        return (this.missionCurrency - amount) >= minCurrency;
     }
     
     /**

@@ -1428,6 +1428,25 @@ export class Game {
             console.warn('No se pudo actualizar la información del usuario:', error);
         });
     }
+
+    /**
+     * Maneja el estado cuando el usuario pierde la sesión (token inválido/expirado)
+     */
+    handleUnauthenticatedState() {
+        try {
+            if (this.overlayManager) {
+                this.overlayManager.hideAllOverlays();
+            }
+            if (this.screenManager) {
+                this.screenManager.show('MAIN_MENU');
+            }
+            if (this.ui && this.ui.showMainMenu) {
+                this.ui.showMainMenu();
+            }
+        } catch (error) {
+            console.warn('Error aplicando estado no autenticado:', error);
+        }
+    }
     
     /**
      * === LEGACY REMOVED: initializeEnemyAI eliminado ===
@@ -2180,6 +2199,43 @@ export class Game {
                 }
             };
         });
+    }
+    
+    /**
+     * Obtiene los modificadores de disciplina activos para un sistema específico
+     * @param {string} team - Equipo ('player1' o 'player2')
+     * @param {string} systemName - Nombre del sistema (economy, convoy, etc.)
+     * @returns {Object|null}
+     */
+    getDisciplineModifiersForSystem(team, systemName) {
+        if (!team || !systemName || !this.disciplineStates || !this.serverDisciplineConfig) {
+            return null;
+        }
+        
+        const teamState = this.disciplineStates[team];
+        if (!teamState || !teamState.active) {
+            return null;
+        }
+        
+        const discipline = this.serverDisciplineConfig[teamState.active];
+        if (!discipline || !discipline.effects) {
+            return null;
+        }
+        
+        return discipline.effects[systemName] || null;
+    }
+    
+    /**
+     * Obtiene el límite mínimo de currency permitido para un equipo (disciplinas de deuda)
+     * @param {string} team
+     * @returns {number}
+     */
+    getEconomyMinCurrency(team = this.myTeam || 'player1') {
+        const modifiers = this.getDisciplineModifiersForSystem(team, 'economy');
+        if (modifiers && modifiers.allowNegativeCurrency) {
+            return typeof modifiers.minCurrency === 'number' ? modifiers.minCurrency : 0;
+        }
+        return 0;
     }
     
     /**

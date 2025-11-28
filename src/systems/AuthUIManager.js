@@ -102,11 +102,37 @@ export class AuthUIManager {
         const password = formData.get('password')?.toString() || '';
         const confirm = formData.get('confirmPassword')?.toString() || '';
 
+        // Validación de campos vacíos
         if (!username || !password || !confirm) {
             this.showError('register', 'Completa todos los campos.');
             return;
         }
 
+        // Validación de longitud del username
+        if (username.length < 3) {
+            this.showError('register', 'El nombre de usuario debe tener al menos 3 caracteres.');
+            return;
+        }
+
+        if (username.length > 20) {
+            this.showError('register', 'El nombre de usuario no puede exceder los 20 caracteres.');
+            return;
+        }
+
+        // Validación de caracteres válidos del username (solo letras, números, guiones y guiones bajos)
+        const usernameRegex = /^[a-zA-Z0-9_-]+$/;
+        if (!usernameRegex.test(username)) {
+            this.showError('register', 'El nombre de usuario solo puede contener letras, números, guiones (-) y guiones bajos (_).');
+            return;
+        }
+
+        // Validación de longitud de la contraseña
+        if (password.length < 6) {
+            this.showError('register', 'La contraseña debe tener al menos 6 caracteres.');
+            return;
+        }
+
+        // Validación de coincidencia de contraseñas
         if (password !== confirm) {
             this.showError('register', 'Las contraseñas no coinciden.');
             return;
@@ -116,7 +142,19 @@ export class AuthUIManager {
             this.setLoading('register', true);
             await authService.register(username, password);
         } catch (error) {
-            this.showError('register', error.message || 'No se pudo crear la cuenta.');
+            console.error('Error en registro:', error);
+            // Extraer mensaje de error de diferentes formatos
+            let errorMessage = 'No se pudo crear la cuenta.';
+            
+            if (error.message) {
+                errorMessage = error.message;
+            } else if (error.body?.error) {
+                errorMessage = error.body.error;
+            } else if (error.body && typeof error.body === 'string') {
+                errorMessage = error.body;
+            }
+            
+            this.showError('register', errorMessage);
         } finally {
             this.setLoading('register', false);
         }

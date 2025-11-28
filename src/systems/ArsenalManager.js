@@ -840,7 +840,8 @@ export class ArsenalManager {
             // 🆕 NUEVO: Si estamos editando el mazo default, siempre crear uno nuevo (nunca sobreescribir)
             console.log('🔍 Obteniendo mazo actual...');
             const currentDeck = this.currentDeckId ? this.deckManager.getDeck(this.currentDeckId) : null;
-            const isDefaultDeck = currentDeck && currentDeck.isDefault;
+            const isDefaultDeck = this.isEditingDefaultDeck(currentDeck);
+            const canUpdateExisting = this.currentDeckId && currentDeck && !isDefaultDeck;
             
             console.log('🔍 Estado del guardado:', {
                 currentDeckId: this.currentDeckId,
@@ -850,7 +851,7 @@ export class ArsenalManager {
             });
             
             // Si estamos editando un mazo existente Y no es el default, actualizarlo
-            if (this.currentDeckId && !isDefaultDeck) {
+            if (canUpdateExisting) {
                 console.log('🔍 Actualizando mazo existente:', this.currentDeckId);
                 const updated = await this.deckManager.updateDeck(this.currentDeckId, {
                     units: [...this.deck],
@@ -865,6 +866,10 @@ export class ArsenalManager {
                     this.showNotification('Error al guardar el mazo', 'error');
                 }
             } else {
+                if (this.currentDeckId && !currentDeck) {
+                    console.warn('⚠️ El mazo actual no se encuentra en DeckManager. Se creará una copia nueva.');
+                }
+                
                 // Crear nuevo mazo - pedir nombre con modal
                 // Esto incluye: mazo nuevo (currentDeckId === null) o mazo default (isDefaultDeck === true)
                 console.log('🔍 Creando nuevo mazo - mostrando modal');
@@ -873,6 +878,8 @@ export class ArsenalManager {
                     : 'Introduce un nombre para el nuevo mazo:';
                 
                 console.log('🔍 Llamando showDeckNameModal con mensaje:', promptMessage);
+                this.currentDeckId = null; // Forzar flujo de creación
+                
                 this.showDeckNameModal(async (name) => {
                     console.log('🔍 Callback del modal llamado con nombre:', name);
                     if (!name || name.trim() === '') {
@@ -925,6 +932,20 @@ export class ArsenalManager {
     }
     
     /**
+     * Determina si el mazo que se está editando es el default
+     * @param {Object|null} currentDeck - Opcionalmente pasar el mazo ya obtenido para evitar lookups extra
+     * @returns {boolean}
+     */
+    isEditingDefaultDeck(currentDeck = null) {
+        if (this.currentDeckId === 'default') {
+            return true;
+        }
+        
+        const deck = currentDeck || (this.currentDeckId ? this.deckManager.getDeck(this.currentDeckId) : null);
+        return !!deck?.isDefault;
+    }
+    
+    /**
      * Confirma el mazo y lo asigna al juego (ahora async)
      */
     async confirmDeck() {
@@ -953,8 +974,11 @@ export class ArsenalManager {
             return;
         }
         
+        const currentDeck = this.currentDeckId ? this.deckManager.getDeck(this.currentDeckId) : null;
+        const editingDefaultDeck = this.isEditingDefaultDeck(currentDeck) || !currentDeck;
+        
         // Guardar el mazo si hay cambios
-        if (this.currentDeckId) {
+        if (this.currentDeckId && !editingDefaultDeck) {
             try {
                 await this.deckManager.updateDeck(this.currentDeckId, {
                     units: [...this.deck],
@@ -967,7 +991,13 @@ export class ArsenalManager {
                 return;
             }
         } else {
-            // Si no hay mazo actual, pedir nombre antes de crear
+            if (editingDefaultDeck) {
+                this.currentDeckId = null;
+            }
+            if (this.currentDeckId && !currentDeck) {
+                console.warn('⚠️ El mazo actual no se encuentra en DeckManager. Se creará una copia nueva.');
+            }
+            // Si estamos editando el mazo default o no hay mazo actual, pedir nombre antes de crear
             this.showDeckNameModal(async (name) => {
                 if (!name || name.trim() === '') {
                     return;
