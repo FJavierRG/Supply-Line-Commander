@@ -387,6 +387,7 @@ export class LobbyHandler {
         }
         
         const allDecks = this.game.deckManager.getAllDecks();
+        console.log('🗂️ [LOBBY] Decks disponibles:', allDecks.map(d => ({ id: d.id, name: d.name })));
         const defaultDeck = allDecks.find(d => d.isDefault === true);
         const playerDecks = allDecks.filter(d => d.isDefault === false);
         

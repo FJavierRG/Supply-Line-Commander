@@ -1775,6 +1775,19 @@ export class InputHandler {
     // ===== FUNCIONES DE LOBBY UNIFICADO =====
     
     async showMultiplayerLobby() {
+        // Asegurarnos de que los mazos del jugador están cargados antes de mostrar el lobby
+        if (this.game.deckManager && this.game.deckManager.ensureReady) {
+            try {
+                await this.game.deckManager.ensureReady();
+                const { authService } = await import('../services/AuthService.js');
+                if (authService.isAuthenticated()) {
+                    await this.game.deckManager.refreshDecks();
+                }
+            } catch (error) {
+                console.warn('⚠️ No se pudieron refrescar los mazos antes de abrir el lobby:', error);
+            }
+        }
+        
         // 🆕 NUEVO: Usar ScreenManager para mostrar el lobby
         if (this.game.screenManager) {
             this.game.screenManager.show('MULTIPLAYER_LOBBY');

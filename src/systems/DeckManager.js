@@ -132,6 +132,11 @@ export class DeckManager {
             this.defaultDeckPromise = (async () => {
                 try {
                     this.defaultDeck = await this.deckService.getDefaultDeck();
+                    // Normalizar is_default -> isDefault
+                    if (this.defaultDeck.is_default !== undefined) {
+                        this.defaultDeck.isDefault = this.defaultDeck.is_default === true;
+                        delete this.defaultDeck.is_default;
+                    }
                     this.decks.set('default', this.defaultDeck);
                     this.defaultDeckReady = true;
                     
@@ -179,8 +184,13 @@ export class DeckManager {
             
             const userDecks = await this.deckService.getUserDecks();
             
-            // Actualizar caché
+            // Actualizar caché y normalizar propiedades
             userDecks.forEach(deck => {
+                // Normalizar is_default -> isDefault
+                if (deck.is_default !== undefined) {
+                    deck.isDefault = deck.is_default === true;
+                    delete deck.is_default;
+                }
                 this.decks.set(deck.id, deck);
             });
             
@@ -269,6 +279,12 @@ export class DeckManager {
         
         const created = await this.deckService.createDeck(deck);
         
+        // Normalizar is_default -> isDefault
+        if (created.is_default !== undefined) {
+            created.isDefault = created.is_default === true;
+            delete created.is_default;
+        }
+        
         // Actualizar caché
         this.decks.set(created.id, created);
         
@@ -289,6 +305,12 @@ export class DeckManager {
      */
     async updateDeck(deckId, updates) {
         const updated = await this.deckService.updateDeck(deckId, updates);
+        
+        // Normalizar is_default -> isDefault
+        if (updated.is_default !== undefined) {
+            updated.isDefault = updated.is_default === true;
+            delete updated.is_default;
+        }
         
         // Actualizar caché
         this.decks.set(deckId, updated);
@@ -331,20 +353,43 @@ export class DeckManager {
     }
 
     /**
-     * Calcular costo de un mazo
+     * Función genérica para calcular el costo de unidades
+     * @param {Array<string>} units - Array de IDs de unidades
+     * @param {Array<string>} excludeUnits - Array de IDs de unidades a excluir del cálculo (opcional)
+     * @returns {number} Costo total
      */
-    calculateDeckCost(units) {
+    calculateCost(units, excludeUnits = []) {
         if (!units || !Array.isArray(units)) return 0;
         
         let total = 0;
         units.forEach(unitId => {
-            if (unitId === 'hq' || unitId === 'fob') return; // HQ y FOB no cuentan
+            // Excluir unidades especificadas
+            if (excludeUnits.includes(unitId)) return;
+            
             const config = getNodeConfig(unitId);
             if (config && config.cost) {
                 total += config.cost;
             }
         });
         return total;
+    }
+    
+    /**
+     * Calcular costo de un mazo (excluye HQ y FOB)
+     * @param {Array<string>} units
+     * @returns {number}
+     */
+    calculateDeckCost(units) {
+        return this.calculateCost(units, ['hq', 'fob']);
+    }
+    
+    /**
+     * Calcula el costo del banquillo (todas las unidades cuentan)
+     * @param {Array<string>} benchUnits
+     * @returns {number}
+     */
+    calculateBenchCost(benchUnits) {
+        return this.calculateCost(benchUnits, []);
     }
 
     /**

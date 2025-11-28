@@ -44,9 +44,33 @@ async function request(method, url, { data, headers = {}, auth = true } = {}) {
     }
 
     if (!response.ok) {
-        const error = new Error(payload?.error || response.statusText);
+        // Extraer el mensaje de error de diferentes formatos posibles
+        let errorMessage = response.statusText;
+        
+        if (payload) {
+            if (typeof payload === 'string') {
+                errorMessage = payload;
+            } else if (payload.error) {
+                errorMessage = payload.error;
+            } else if (payload.message) {
+                errorMessage = payload.message;
+            } else if (typeof payload === 'object') {
+                // Intentar extraer cualquier mensaje útil del objeto
+                errorMessage = JSON.stringify(payload);
+            }
+        }
+        
+        const error = new Error(errorMessage);
         error.status = response.status;
         error.body = payload;
+        
+        // Log para depuración
+        console.error(`Error HTTP ${response.status} en ${url}:`, {
+            message: errorMessage,
+            body: payload,
+            status: response.status
+        });
+        
         throw error;
     }
 

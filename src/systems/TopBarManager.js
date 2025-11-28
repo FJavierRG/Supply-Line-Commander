@@ -411,7 +411,8 @@ export class TopBarManager {
         const textX = currencyIcon.x + currencyIcon.w + 5;
         const textY = currencyIcon.y + currencyIcon.h / 2 - 10; // Mover un poco arriba
         
-        ctx.fillStyle = '#ffd700'; // Dorado
+        // 🆕 NUEVO: Cambiar color a rojo si el currency es negativo (deuda)
+        ctx.fillStyle = currency < 0 ? '#ff4444' : '#ffd700'; // Rojo si negativo, dorado si positivo
         ctx.font = 'bold 24px Arial';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';

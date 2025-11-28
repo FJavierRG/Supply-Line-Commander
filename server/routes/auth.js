@@ -8,6 +8,7 @@ router.post('/register', async (req, res) => {
     try {
         const { username, password } = req.body;
 
+        // Validación básica
         if (!username || !password) {
             return res.status(400).json({
                 success: false,
@@ -15,8 +16,27 @@ router.post('/register', async (req, res) => {
             });
         }
 
+        // Validar que no sean solo espacios
+        if (typeof username === 'string' && username.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'El nombre de usuario no puede estar vacío'
+            });
+        }
+
+        if (typeof password === 'string' && password.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'La contraseña no puede estar vacía'
+            });
+        }
+
+        console.log(`[REGISTER] Intento de registro para usuario: ${username.substring(0, 3)}***`);
+
         const user = await authManager.register(username, password);
         const session = await authManager.login(username, password);
+
+        console.log(`[REGISTER] Usuario registrado exitosamente: ${user.id}`);
 
         res.json({
             success: true,
@@ -29,7 +49,12 @@ router.post('/register', async (req, res) => {
             expiresAt: session.expiresAt
         });
     } catch (error) {
-        console.error('Error en registro:', error);
+        console.error('[REGISTER] Error en registro:', {
+            message: error.message,
+            code: error.code,
+            stack: error.stack
+        });
+        
         const status = error.code === 'USERNAME_TAKEN' ? 409 : 400;
         res.status(status).json({
             success: false,
