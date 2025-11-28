@@ -440,7 +440,7 @@ export const SERVER_NODE_CONFIG = {
                     id: 'retreat',
                     name: 'Retroceder',
                     icon: 'ui-mode-retreat',
-                    consumeMultiplier: 1.0,    // Consumo normal (100%)
+                    consumeMultiplier: 0.75,    // Consumo normal (100%)
                     currencyMultiplier: 0.75,  // 75% de ganancia por pixel retrocedido
                     canAdvance: false,         // No avanza
                     canRetreat: true,          // Retrocede voluntariamente
@@ -451,7 +451,7 @@ export const SERVER_NODE_CONFIG = {
                     id: 'hold',
                     name: 'Mantener',
                     icon: 'ui-mode-hold',
-                    consumeMultiplier: 0.75,   // 75% de consumo
+                    consumeMultiplier: 0.60,   // 75% de consumo
                     currencyMultiplier: 0,     // No gana currency (no se mueve)
                     canAdvance: false,         // No avanza
                     canRetreat: false,         // No retrocede voluntariamente
@@ -459,7 +459,7 @@ export const SERVER_NODE_CONFIG = {
                 },
                 // Configuración general de modos
                 defaultMode: 'advance',        // Modo por defecto al inicio
-                cooldownDuration: 15           // Segundos de cooldown al cambiar de modo
+                cooldownDuration: 5           // Segundos de cooldown al cambiar de modo
             }
         },
         

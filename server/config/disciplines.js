@@ -32,7 +32,7 @@ export const DISCIPLINES = {
         icon: 'assets/sprites/ui/Disciplines/vehicle.png', // Sprite del vehículo
         cost: 0,             // Activación gratuita
         duration: 60,        // 1 minuto activa
-        cooldown: 0,         // Sin cooldown - puedes activar otra inmediatamente
+        cooldown: 15,         // Sin cooldown - puedes activar otra inmediatamente
         enabled: true,
         
         effects: {
@@ -57,13 +57,13 @@ export const DISCIPLINES = {
         icon: 'assets/sprites/ui/Disciplines/production_focus2.png', // Sprite de producción
         cost: 0,             // Activación gratuita
         duration: 60,        // 1 minuto activa
-        cooldown: 0,         // Sin cooldown - puedes activar otra inmediatamente
+        cooldown: 50,         // Sin cooldown - puedes activar otra inmediatamente
         enabled: true,
         
         effects: {
             factory: {
                 currencyPerDelivery: 3,    // +1 currency por cada paquete entregado al HQ
-                supplyPenalty: -2          // -2 suministros por tick de fábrica
+                supplyPenalty: -3          // -2 suministros por tick de fábrica
             }
         }
     },
@@ -77,13 +77,13 @@ export const DISCIPLINES = {
         icon: 'assets/sprites/ui/Disciplines/defense_focus.png', // Sprite de defensa
         cost: 0,             // Activación gratuita
         duration: 60,        // 1 minuto activa
-        cooldown: 0,         // Sin cooldown - puedes activar otra inmediatamente
+        cooldown: 20,         // Sin cooldown - puedes activar otra inmediatamente
         enabled: true,
         
         effects: {
             frontMode: {
                 targetMode: 'hold',              // Solo afecta cuando el frente está en modo "Mantener"
-                consumeMultiplierBonus: -0.25,   // -25% adicional (de 0.75 a 0.50)
+                consumeMultiplierBonus: -0.20,   // -25% adicional 
                 currencyPerSecondPerFront: 1     // +1 currency/segundo por cada frente en modo hold
             }
         }
@@ -98,7 +98,7 @@ export const DISCIPLINES = {
         icon: 'assets/sprites/ui/Disciplines/endeudamiento2.png',
         cost: 0,
         duration: 120,
-        cooldown: 45,
+        cooldown: 60,
         enabled: true,
 
         effects: {

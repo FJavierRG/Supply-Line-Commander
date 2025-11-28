@@ -64,8 +64,19 @@ export class TruckAssaultSystem {
         // ✅ FIX: Calcular posición ACTUAL del convoy basada en su progress
         // El progress va de 0.0 (origen) a 1.0 (destino)
         const progress = Math.max(0, Math.min(1, convoy.progress || 0));
-        const currentX = fromNode.x + (toNode.x - fromNode.x) * progress;
-        const currentY = fromNode.y + (toNode.y - fromNode.y) * progress;
+        
+        // ✅ FIX: Cuando returning === true, el convoy va de toNode (progress=0) a fromNode (progress=1)
+        // Cuando returning === false, el convoy va de fromNode (progress=0) a toNode (progress=1)
+        let currentX, currentY;
+        if (convoy.returning) {
+            // Modo regreso: va de toNode (progress=0) a fromNode (progress=1)
+            currentX = toNode.x + (fromNode.x - toNode.x) * progress;
+            currentY = toNode.y + (fromNode.y - toNode.y) * progress;
+        } else {
+            // Modo ida: va de fromNode (progress=0) a toNode (progress=1)
+            currentX = fromNode.x + (toNode.x - fromNode.x) * progress;
+            currentY = fromNode.y + (toNode.y - fromNode.y) * progress;
+        }
         
         // Buscar truck assaults enemigos activos
         const enemyTruckAssaults = this.gameState.nodes.filter(n => 
