@@ -1,7 +1,7 @@
 // ===== SISTEMA DE TANQUES (SERVIDOR) =====
 // Versión servidor del TankSystem - Simulación autoritativa
 
-import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 
 export class TankSystemServer {
     constructor(gameState) {

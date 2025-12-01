@@ -347,48 +347,6 @@ export class TerritorySystem {
             ctx.stroke();
         }
         
-        // === 🐛 DEBUG: LÍNEAS DE VICTORIA ===
-        const victoryLineLeft = worldWidth * 0.05;   // 8% del ancho (línea de victoria player2)
-        const victoryLineRight = worldWidth * 0.95;  // 92% del ancho (línea de victoria player1)
-        
-        // Línea izquierda (victoria player2)
-        ctx.beginPath();
-        ctx.moveTo(victoryLineLeft, 0);
-        ctx.lineTo(victoryLineLeft, worldHeight);
-        ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)'; // Amarillo semi-transparente
-        ctx.lineWidth = 3;
-        ctx.setLineDash([10, 5]); // Línea discontinua
-        ctx.stroke();
-        ctx.setLineDash([]); // Resetear
-        
-        // Línea derecha (victoria player1)
-        ctx.beginPath();
-        ctx.moveTo(victoryLineRight, 0);
-        ctx.lineTo(victoryLineRight, worldHeight);
-        ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)'; // Amarillo semi-transparente
-        ctx.lineWidth = 3;
-        ctx.setLineDash([10, 5]); // Línea discontinua
-        ctx.stroke();
-        ctx.setLineDash([]); // Resetear
-        
-        // Texto de las líneas
-        ctx.font = 'bold 14px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.lineWidth = 3;
-        
-        // Texto línea izquierda
-        const leftText = 'VICTORIA P2';
-        ctx.strokeText(leftText, victoryLineLeft, 20);
-        ctx.fillText(leftText, victoryLineLeft, 20);
-        
-        // Texto línea derecha
-        const rightText = 'VICTORIA P1';
-        ctx.strokeText(rightText, victoryLineRight, 20);
-        ctx.fillText(rightText, victoryLineRight, 20);
-        
         ctx.restore();
     }
 

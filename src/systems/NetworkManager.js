@@ -312,36 +312,29 @@ export class NetworkManager {
         });
         
         // 🆕 NUEVO: Eventos de permutación de cartas
+        // ✅ FIX: Los swaps durante la partida NO deben modificar el mazo original
+        // Solo actualizan una copia temporal para mostrar en la UI (no se guarda nada)
         this.socket.on('swap_card_success', (data) => {
-            // Actualizar el mazo local con el resultado de la permutación
-            if (this.game && this.game.deckManager) {
-                // Obtener el mazo actual del jugador
-                let currentDeck = this.game.deckManager.getSelectedDeck();
-                if (!currentDeck) {
-                    currentDeck = this.game.deckManager.getDefaultDeck();
+            // Actualizar solo la copia temporal del mazo en StoreUIManager
+            // NO modificar el mazo original, NO guardar en localStorage, NO guardar en BD
+            if (this.game && this.game.storeUI) {
+                // Si no existe la copia temporal, crearla (por si acaso)
+                if (!this.game.storeUI.gameDeckCopy) {
+                    this.game.storeUI.initializeGameDeckCopy();
                 }
                 
-                if (currentDeck) {
-                    // Actualizar unidades y banquillo
-                    currentDeck.units = data.newDeck;
-                    currentDeck.bench = data.newBench;
+                // Actualizar solo la copia temporal del mazo
+                if (this.game.storeUI.gameDeckCopy) {
+                    this.game.storeUI.gameDeckCopy.units = [...data.newDeck];
+                    this.game.storeUI.gameDeckCopy.bench = [...data.newBench];
                     
-                    // Guardar cambios en localStorage
-                    if (currentDeck.id !== 'default') {
-                        this.game.deckManager.updateDeck(currentDeck.id, {
-                            units: data.newDeck,
-                            bench: data.newBench
-                        });
-                    }
-                    
-                    // Actualizar la tienda para reflejar los cambios
-                    if (this.game.storeUI) {
-                        this.game.storeUI.setDeck(currentDeck.id);
-                        // Salir del modo permutación si está activo
-                        if (this.game.storeUI.swapMode) {
-                            this.game.storeUI.exitSwapMode();
-                        }
-                    }
+                    // ✅ FIX: Actualizar las categorías para reflejar los cambios en la tienda
+                    this.game.storeUI.updateCategories();
+                }
+                
+                // Salir del modo permutación si está activo
+                if (this.game.storeUI.swapMode) {
+                    this.game.storeUI.exitSwapMode();
                 }
             }
         });
@@ -439,6 +432,9 @@ export class NetworkManager {
                         this.game.storeUI.setDeck(deckToUse.id);
                     }
                 }
+                
+                // ✅ FIX: Inicializar copia temporal del mazo para la partida (NO modifica el original)
+                this.game.storeUI.initializeGameDeckCopy();
             }
             
             // CRÍTICO: Desactivar tutorial ANTES de cargar estado

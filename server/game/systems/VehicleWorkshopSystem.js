@@ -1,7 +1,7 @@
 // ===== SISTEMA DE TALLER DE VEHÍCULOS =====
 // Maneja el efecto de aumentar vehículos de FOBs en el área del taller
 
-import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 
 /**
  * Helper: Obtiene el radio de construcción de un edificio con fallback

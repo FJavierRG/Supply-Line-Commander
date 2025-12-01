@@ -1,7 +1,7 @@
 // ===== SISTEMA DE CAMERA DRONE =====
 // Maneja la detección de vehículos ligeros y otorgamiento de currency
 
-import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 
 export class CameraDroneSystem {
     constructor(gameState) {

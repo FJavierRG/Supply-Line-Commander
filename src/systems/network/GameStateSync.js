@@ -754,14 +754,14 @@ export class GameStateSync {
             equipped: [],
             active: null,
             timeRemaining: 0,
-            cooldownRemaining: 0
+            cooldowns: {}  // 🆕 NUEVO: Cooldowns individuales { disciplineId: secondsRemaining }
         };
         
         this.game.disciplineStates.player2 = gameState.disciplines.player2 || {
             equipped: [],
             active: null,
             timeRemaining: 0,
-            cooldownRemaining: 0
+            cooldowns: {}  // 🆕 NUEVO: Cooldowns individuales { disciplineId: secondsRemaining }
         };
     }
 

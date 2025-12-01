@@ -260,6 +260,14 @@ export const NODE_CONFIG = {
         isServers: true // Flag para identificación
     },
     
+    armoredFactory: {
+        id: 'armoredFactory',
+        spriteKey: 'armored_vehicles', // Sprite: @armored_vehicles.png
+        category: 'buildable',
+        
+        radius: 40
+    },
+    
     // ========== PROYECTILES ==========
     drone: {
         id: 'drone',
@@ -448,50 +456,41 @@ export function getNodeConfig(nodeId) {
 
 /**
  * Obtiene todos los nodos construibles (buildings) HABILITADOS
- * Compatible con servidor como autoridad: enabled puede venir del servidor
+ * ✅ SERVIDOR COMO AUTORIDAD: Solo muestra elementos explícitamente habilitados (misma lógica que servidor)
  */
 export function getBuildableNodes() {
     const allNodes = Object.values(NODE_CONFIG).filter(n => n.category === 'buildable');
     
-    // 🆕 NUEVO: Verificar enabled desde configuración del servidor si está disponible
+    // ✅ SERVIDOR COMO AUTORIDAD: Verificar enabled desde configuración del servidor si está disponible
     if (window.game?.serverBuildingConfig?.behavior?.enabled) {
         const serverEnabled = window.game.serverBuildingConfig.behavior.enabled;
         return allNodes.filter(n => {
-            // Si el servidor tiene configuración de enabled, usarla
-            if (serverEnabled.hasOwnProperty(n.id)) {
-                return serverEnabled[n.id] === true;
-            }
-            // Si no está en el servidor, usar configuración local
-            return (n.enabled === undefined || n.enabled !== false);
+            // Solo mostrar si está explícitamente habilitado (misma lógica estricta que el servidor)
+            return serverEnabled[n.id] === true;
         });
     }
     
-    // Fallback: usar configuración local
+    // Fallback: usar configuración local (solo para modo offline/single player inicial)
     return allNodes.filter(n => (n.enabled === undefined || n.enabled !== false));
 }
 
 /**
  * Obtiene todos los proyectiles HABILITADOS
- * Compatible con servidor como autoridad: enabled puede venir del servidor
+ * ✅ SERVIDOR COMO AUTORIDAD: Solo muestra elementos explícitamente habilitados (misma lógica que servidor)
  */
 export function getProjectiles() {
     const allNodes = Object.values(NODE_CONFIG).filter(n => n.category === 'projectile');
     
-    // 🆕 NUEVO: Verificar enabled desde configuración del servidor si está disponible
+    // ✅ SERVIDOR COMO AUTORIDAD: Verificar enabled desde configuración del servidor si está disponible
     if (window.game?.serverBuildingConfig?.behavior?.enabled) {
         const serverEnabled = window.game.serverBuildingConfig.behavior.enabled;
         return allNodes.filter(n => {
-            // Si el servidor tiene configuración de enabled para este nodo, usarla
-            if (serverEnabled.hasOwnProperty(n.id)) {
-                return serverEnabled[n.id] === true;
-            }
-            // 🎯 CORREGIDO: Si NO está en el servidor, usar configuración local (permitir por defecto)
-            // Esto es importante porque los consumibles pueden no estar en la lista de enabled del servidor
-            return (n.enabled === undefined || n.enabled !== false);
+            // Solo mostrar si está explícitamente habilitado (misma lógica estricta que el servidor)
+            return serverEnabled[n.id] === true;
         });
     }
     
-    // Fallback: usar configuración local
+    // Fallback: usar configuración local (solo para modo offline/single player inicial)
     return allNodes.filter(n => (n.enabled === undefined || n.enabled !== false));
 }
 
@@ -504,27 +503,23 @@ export function getMapNodes() {
 
 /**
  * Obtiene todos los nodos aliados HABILITADOS (para el Arsenal)
- * Compatible con servidor como autoridad: enabled puede venir del servidor
+ * ✅ SERVIDOR COMO AUTORIDAD: Solo muestra elementos explícitamente habilitados (misma lógica que servidor)
  */
 export function getAllyNodes() {
     const allNodes = Object.values(NODE_CONFIG).filter(n => 
         n.category === 'map_node' || n.category === 'buildable'
     );
     
-    // Verificar enabled desde configuración del servidor si está disponible
+    // ✅ SERVIDOR COMO AUTORIDAD: Verificar enabled desde configuración del servidor si está disponible
     if (window.game?.serverBuildingConfig?.behavior?.enabled) {
         const serverEnabled = window.game.serverBuildingConfig.behavior.enabled;
         return allNodes.filter(n => {
-            // Si el servidor tiene configuración de enabled, usarla
-            if (serverEnabled.hasOwnProperty(n.id)) {
-                return serverEnabled[n.id] === true;
-            }
-            // Si no está en el servidor, usar configuración local
-            return (n.enabled === undefined || n.enabled !== false);
+            // Solo mostrar si está explícitamente habilitado (misma lógica estricta que el servidor)
+            return serverEnabled[n.id] === true;
         });
     }
     
-    // Fallback: usar configuración local
+    // Fallback: usar configuración local (solo para modo offline/single player inicial)
     return allNodes.filter(n => (n.enabled === undefined || n.enabled !== false));
 }
 

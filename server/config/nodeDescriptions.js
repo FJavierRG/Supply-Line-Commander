@@ -116,6 +116,11 @@ export const NODE_DESCRIPTIONS = {
         description: 'Aplica Vigor a tus soldados, aumentando en +1 la ganancia por tomar territorio.',
         details: 'Campo de entrenamiento que aplica el efecto "Vigor" (trained) a todos tus frentes. Cada frente con este efecto obtiene +{currencyBonus} currency adicional por cada avance de territorio.'
     },
+    armoredFactory: {
+        name: 'Fábrica de Vehículos Artillados',
+        description: 'Desbloquea tanques, vehículos artillados ligeros y artillería.',
+        details: 'Instalación militar especializada en vehículos blindados. Mientras esté construida y operativa, desbloquea el uso de Tanque, Artillado Ligero y Artillería en la tienda. Coste: {cost}$.'
+    },
     deadlyBuild: {
         name: 'Construcción Prohibida',
         description: 'Requiere Planta Nuclear, Laboratorio Secreto y Estudios de Física en mesa. Desbloquea "Destructor de mundos".',

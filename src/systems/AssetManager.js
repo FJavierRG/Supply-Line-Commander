@@ -42,6 +42,7 @@ export class AssetManager {
             'building-training-camp': 'assets/sprites/buildings/training_camp.png', // 🆕 Campo de Entrenamiento
             'building-deadly-build': 'assets/sprites/buildings/deadlyBuild.png', // 🆕 Construcción Prohibida
             'building-servers': 'assets/sprites/buildings/server.png', // 🆕 Servidores
+            'armored_vehicles': 'assets/sprites/buildings/armored_vehicles.png', // 🆕 Fábrica de Vehículos Artillados
             
             // 🆕 NUEVO: Sprites del Destructor de mundos
             'world-destroyer': 'assets/sprites/vehicles/worldDestroyer.png',

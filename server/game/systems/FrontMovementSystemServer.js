@@ -2,8 +2,8 @@
 // Este sistema se ejecuta SOLO en el servidor
 // El cliente solo renderiza las posiciones que el servidor envía
 
-import { GAME_CONFIG } from '../config/gameConfig.js';
-import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
+import { GAME_CONFIG } from '../../config/gameConfig.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 
 // Configuración específica del sistema (no duplicada con gameConfig.js)
 const SYSTEM_CONFIG = {
@@ -128,7 +128,32 @@ export class FrontMovementSystemServer {
                 const enemyModeConfig = this.getFrontModeConfig(nearestEnemy);
                 const enemyIsAnchor = enemyModeConfig.isAnchor && nearestEnemy.supplies > 0;
                 
-                if (enemyIsAnchor) {
+                // 🆕 FIX: PRIORIDAD - Retroceso automático cuando hay 0 recursos
+                // Si este frente tiene 0 recursos, debe retroceder automáticamente
+                // EXCEPTO si está siendo empujado activamente por un enemigo en modo ADVANCE
+                if (front.supplies === 0) {
+                    // Verificar si el enemigo está empujando activamente
+                    // El enemigo solo empuja activamente si está en modo ADVANCE y tiene más recursos
+                    const enemyIsActivelyPushing = enemyModeConfig.canAdvance && nearestEnemy.supplies > 0;
+                    
+                    if (!enemyIsActivelyPushing) {
+                        // No está siendo empujado activamente → retrocede automáticamente
+                        movement = -this.retreatSpeed * dt * direction;
+                        reason = `RETROCEDE-AUTO (0 supplies, enemigo no empuja activamente)`;
+                        
+                        if (!this.noAmmoSoundPlayed.has(front.id)) {
+                            this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
+                            this.noAmmoSoundPlayed.add(front.id);
+                        }
+                    } else {
+                        // Está siendo empujado activamente → continuar con lógica de empuje
+                        const pushSpeed = this.advanceSpeed;
+                        movement = -pushSpeed * dt * direction;
+                        reason = `EMPUJADO-ACTIVO (0 supplies, enemigo empuja)`;
+                    }
+                }
+                // Si este frente NO tiene 0 recursos, aplicar lógica normal de empuje
+                else if (enemyIsAnchor) {
                     // 🆕 El enemigo es un ANCLA - no se puede empujar, quedarse bloqueado
                     movement = 0;
                     reason = `BLOQUEADO POR ANCLA (enemigo en HOLD con ${nearestEnemy.supplies.toFixed(0)} supplies)`;
@@ -146,16 +171,33 @@ export class FrontMovementSystemServer {
                         reason = `RETREAT-COLISION (${front.supplies.toFixed(0)})`;
                     }
                 } else if (front.supplies < nearestEnemy.supplies) {
-                    // Enemigo tiene más → ES EMPUJADO
-                    const pushSpeed = this.advanceSpeed;
-                    movement = -pushSpeed * dt * direction;
-                    reason = `EMPUJADO (${front.supplies.toFixed(0)} < ${nearestEnemy.supplies.toFixed(0)})`;
+                    // Enemigo tiene más → ES EMPUJADO (solo si el enemigo está empujando activamente)
+                    if (enemyModeConfig.canAdvance) {
+                        const pushSpeed = this.advanceSpeed;
+                        movement = -pushSpeed * dt * direction;
+                        reason = `EMPUJADO (${front.supplies.toFixed(0)} < ${nearestEnemy.supplies.toFixed(0)})`;
+                    } else {
+                        // Enemigo tiene más recursos pero NO está empujando activamente (está en HOLD/RETREAT)
+                        // Mantener posición según nuestro modo
+                        if (modeConfig.canRetreat) {
+                            movement = -this.retreatSpeed * dt * direction;
+                            reason = `RETREAT-COLISION (enemigo no empuja)`;
+                        } else {
+                            movement = 0;
+                            reason = `MANTIENE (enemigo no empuja activamente)`;
+                        }
+                    }
                 } else {
                     // Recursos IGUALES
-                    if (front.supplies === 0 && nearestEnemy.supplies === 0) {
+                    if (nearestEnemy.supplies === 0) {
                         // AMBOS sin recursos → AMBOS retroceden
                         movement = -this.retreatSpeed * dt * direction;
                         reason = `AMBOS SIN RECURSOS (retroceden)`;
+                        
+                        if (!this.noAmmoSoundPlayed.has(front.id)) {
+                            this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
+                            this.noAmmoSoundPlayed.add(front.id);
+                        }
                     } else {
                         // Recursos iguales pero > 0 → EMPATE
                         movement = 0;

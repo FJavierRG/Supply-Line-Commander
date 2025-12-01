@@ -2,7 +2,7 @@
 // Versión servidor del LightVehicleSystem - Simulación autoritativa
 // Similar al tanque pero aplica estado "broken" en vez de destruir
 
-import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 
 export class LightVehicleSystemServer {
     constructor(gameState) {

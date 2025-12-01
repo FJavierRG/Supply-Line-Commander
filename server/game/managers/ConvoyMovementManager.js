@@ -1,7 +1,7 @@
 // ===== MANAGER DE MOVIMIENTO DE CONVOYES =====
 import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 import { GAME_CONFIG } from '../../config/gameConfig.js';
-import { TruckAssaultSystem } from '../../systems/TruckAssaultSystem.js';
+import { TruckAssaultSystem } from '../systems/TruckAssaultSystem.js';
 
 export class ConvoyMovementManager {
     constructor(gameState) {

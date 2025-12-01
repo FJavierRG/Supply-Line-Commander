@@ -2,8 +2,8 @@
 // Este sistema se ejecuta SOLO en el servidor
 // Maneja abandono de FOBs fuera de territorio
 
-import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
-import { GAME_CONFIG } from '../config/gameConfig.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
+import { GAME_CONFIG } from '../../config/gameConfig.js';
 
 export class TerritorySystemServer {
     constructor(gameState) {

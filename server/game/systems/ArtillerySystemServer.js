@@ -1,7 +1,7 @@
 // ===== SISTEMA DE ARTILLERÍA (SERVIDOR) =====
 // Maneja bombardeos de artillería de área que causan estado "broken" a edificios enemigos
 
-import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 
 export class ArtillerySystemServer {
     constructor(gameState) {

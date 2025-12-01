@@ -1,7 +1,7 @@
 // ===== SISTEMA DE TRUCK ASSAULT =====
 // Maneja el efecto de ralentizar vehículos enemigos dentro del área del truck assault
 
-import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 
 export class TruckAssaultSystem {
     constructor(gameState) {

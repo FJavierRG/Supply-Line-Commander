@@ -596,7 +596,9 @@ export class TopBarManager {
         
         // Determinar estado visual
         const isActive = (state.active === disciplineId);
-        const isOnCooldown = (state.cooldownRemaining > 0);
+        // 🆕 NUEVO: Obtener cooldown individual de esta disciplina específica
+        const disciplineCooldown = state.cooldowns && state.cooldowns[disciplineId] ? state.cooldowns[disciplineId] : 0;
+        const isOnCooldown = (disciplineCooldown > 0);
         const canActivate = !isActive && !isOnCooldown && state.active === null;
         
         // Fondo del slot
@@ -678,12 +680,12 @@ export class TopBarManager {
             ctx.strokeText(secondsText, centerX, centerY);
             ctx.fillText(secondsText, centerX, centerY);
             
-        } else if (isOnCooldown && state.cooldownRemaining > 0) {
+        } else if (isOnCooldown && disciplineCooldown > 0) {
             // Anillo de cooldown
             const centerX = slot.x + slot.w / 2;
             const centerY = slot.y + slot.h / 2;
             const ringRadius = slot.w / 2 - 4;
-            const progress = state.cooldownRemaining / config.cooldown;
+            const progress = disciplineCooldown / config.cooldown;
             
             if (this.game.renderer && this.game.renderer.renderProgressRing) {
                 this.game.renderer.renderProgressRing(centerX, centerY, ringRadius, progress, {
@@ -703,7 +705,7 @@ export class TopBarManager {
             ctx.font = 'bold 16px Arial';
             ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-            const cooldownText = `${Math.ceil(state.cooldownRemaining)}`;
+            const cooldownText = `${Math.ceil(disciplineCooldown)}`;
             ctx.strokeText(cooldownText, centerX, centerY);
             ctx.fillText(cooldownText, centerX, centerY);
         }
@@ -851,9 +853,10 @@ export class TopBarManager {
             return false;
         }
         
-        // Verificar que no esté en cooldown
-        if (myState.cooldownRemaining > 0) {
-            console.log(`⚠️ Disciplinas en cooldown (${Math.ceil(myState.cooldownRemaining)}s restantes)`);
+        // 🆕 NUEVO: Verificar cooldown individual de esta disciplina específica
+        const disciplineCooldown = myState.cooldowns && myState.cooldowns[disciplineId] ? myState.cooldowns[disciplineId] : 0;
+        if (disciplineCooldown > 0) {
+            console.log(`⚠️ Disciplina ${disciplineId} en cooldown (${Math.ceil(disciplineCooldown)}s restantes)`);
             // TODO: Mostrar notificación visual al usuario
             return false;
         }

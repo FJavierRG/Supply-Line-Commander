@@ -409,6 +409,22 @@ export class BuildingSystem {
     }
     
     /**
+     * 🆕 NUEVO: Verifica si existe al menos una Fábrica de Vehículos Artillados construida
+     * Desbloquea tanque, artillado ligero y artillería
+     */
+    hasArmoredFactory() {
+        const myTeam = this.game.myTeam || 'ally';
+        
+        return this.game.nodes.some(n =>
+            n.type === 'armoredFactory' &&
+            n.constructed &&
+            !n.isAbandoning &&
+            !n.disabled &&
+            n.team === myTeam
+        );
+    }
+    
+    /**
      * Verifica si existe al menos una construcción prohibida construida
      * 🆕 NUEVO: Usado para desbloquear el consumible "Destructor de mundos"
      */
@@ -489,6 +505,12 @@ export class BuildingSystem {
      * 🆕 NUEVO: Similar al modo dron pero para tanques
      */
     toggleTankMode() {
+        // 🆕 Requisito: Fábrica de Vehículos Artillados
+        if (!this.hasArmoredFactory()) {
+            console.log('⚠️ Necesitas construir una Fábrica de Vehículos Artillados primero');
+            return;
+        }
+        
         if (!this.canAffordTank()) {
             console.log(`⚠️ No tienes suficiente currency para tanque (Necesitas: ${this.getTankCost()})`);
             return;
@@ -586,6 +608,12 @@ export class BuildingSystem {
      * Similar al modo tanque pero aplica broken en vez de destruir
      */
     toggleLightVehicleMode() {
+        // 🆕 Requisito: Fábrica de Vehículos Artillados
+        if (!this.hasArmoredFactory()) {
+            console.log('⚠️ Necesitas construir una Fábrica de Vehículos Artillados primero');
+            return;
+        }
+        
         if (!this.canAffordLightVehicle()) {
             console.log(`⚠️ No tienes suficiente currency para artillado ligero (Necesitas: ${this.getLightVehicleCost()})`);
             return;
@@ -703,6 +731,12 @@ export class BuildingSystem {
      * Activa el modo francotirador
      */
     activateSniperMode() {
+        // 🆕 FIX: Requisito de Centro de Inteligencia (edificio de operaciones especiales)
+        if (!this.hasIntelCenter()) {
+            console.log('⚠️ Necesitas construir un Centro de Inteligencia primero');
+            return;
+        }
+        
         // Verificar currency
         const sniperConfig = getNodeConfig('sniperStrike');
         if (!this.canAffordBuilding('sniperStrike')) {
@@ -779,6 +813,12 @@ export class BuildingSystem {
      * Activa el modo fobSabotage
      */
     activateFobSabotageMode() {
+        // 🆕 FIX: Requisito de Centro de Inteligencia (edificio de operaciones especiales)
+        if (!this.hasIntelCenter()) {
+            console.log('⚠️ Necesitas construir un Centro de Inteligencia primero');
+            return;
+        }
+        
         // Verificar currency
         const fobSabotageConfig = getNodeConfig('fobSabotage');
         if (!this.canAffordBuilding('fobSabotage')) {
@@ -1080,6 +1120,12 @@ export class BuildingSystem {
      * 🆕 NUEVO
      */
     activateArtilleryMode() {
+        // 🆕 Requisito: Fábrica de Vehículos Artillados
+        if (!this.hasArmoredFactory()) {
+            console.log('⚠️ Necesitas construir una Fábrica de Vehículos Artillados primero');
+            return;
+        }
+        
         // Verificar currency
         if (!this.canAffordBuilding('artillery')) {
             const artilleryCost = this.getBuildingCost('artillery');

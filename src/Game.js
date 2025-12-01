@@ -170,8 +170,8 @@ export class Game {
         
         // 🆕 NUEVO: Estado de disciplinas (inicializado vacío, se sincroniza con servidor)
         this.disciplineStates = {
-            player1: { equipped: [], active: null, timeRemaining: 0, cooldownRemaining: 0 },
-            player2: { equipped: [], active: null, timeRemaining: 0, cooldownRemaining: 0 }
+            player1: { equipped: [], active: null, timeRemaining: 0, cooldowns: {} },
+            player2: { equipped: [], active: null, timeRemaining: 0, cooldowns: {} }
         };
         
         // Asegurar que el sistema de mazos está listo
@@ -1324,6 +1324,11 @@ export class Game {
         this.audio.resetEventFlags();
         this.camera.reset();
         
+        // ✅ FIX: Limpiar copia temporal del mazo (los cambios durante la partida no deben persistir)
+        if (this.storeUI) {
+            this.storeUI.clearGameDeckCopy();
+        }
+        
         // Limpiar background tiles
         this.backgroundTiles = null;
         
@@ -2121,6 +2126,7 @@ export class Game {
                 temporaryEffects: SERVER_NODE_CONFIG.temporaryEffects || {}, // 🆕 NUEVO: Efectos temporales (trained, wounded)
                 vehicleTypes: SERVER_NODE_CONFIG.vehicleTypes || {}, // 🆕 NUEVO: Tipos de vehículos
                 vehicleSystems: SERVER_NODE_CONFIG.vehicleSystems || {}, // 🆕 NUEVO: Sistemas de vehículos por tipo de nodo
+                buildRequirements: SERVER_NODE_CONFIG.buildRequirements || {}, // ✅ Requisitos de construcción y acciones
                 security: SERVER_NODE_CONFIG.security,
                 abandonment: GAME_CONFIG.abandonment, // 🆕 NUEVO: Configuración de abandono (tiempos de fases)
                 behavior: {

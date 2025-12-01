@@ -2,7 +2,7 @@
 // Este sistema se ejecuta SOLO en el servidor
 // El cliente solo renderiza las emergencias que el servidor envía
 
-import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 
 export class MedicalSystemServer {
     constructor(gameState) {

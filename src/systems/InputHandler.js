@@ -1973,7 +1973,21 @@ export class InputHandler {
     }
     
     async createMultiplayerRoom() {
-        const playerName = prompt('Tu nombre:', 'Jugador 1') || 'Jugador 1';
+        // 🆕 FIX: Obtener username del usuario autenticado en lugar de usar prompt()
+        let playerName = 'Jugador 1';
+        
+        try {
+            const { authService } = await import('../services/AuthService.js');
+            if (authService.isAuthenticated()) {
+                const user = authService.getUser();
+                if (user && user.username) {
+                    playerName = user.username;
+                }
+            }
+        } catch (error) {
+            console.warn('No se pudo obtener el nombre de usuario:', error);
+        }
+        
         await this.game.network.createRoom(playerName);
         // La UI se actualiza automáticamente con room_created
     }
@@ -1992,7 +2006,21 @@ export class InputHandler {
             return;
         }
         
-        const playerName = prompt('Tu nombre:', 'Jugador 2') || 'Jugador 2';
+        // 🆕 FIX: Obtener username del usuario autenticado en lugar de usar prompt()
+        let playerName = 'Jugador 2';
+        
+        try {
+            const { authService } = await import('../services/AuthService.js');
+            if (authService.isAuthenticated()) {
+                const user = authService.getUser();
+                if (user && user.username) {
+                    playerName = user.username;
+                }
+            }
+        } catch (error) {
+            console.warn('No se pudo obtener el nombre de usuario:', error);
+        }
+        
         await this.game.network.joinRoom(roomCode, playerName);
     }
 }

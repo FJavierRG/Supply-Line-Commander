@@ -14,6 +14,7 @@ export class StoreUIManager {
         this.selectedCategory = null; // Sin categoría seleccionada por defecto
         this.currentRace = getDefaultRace(); // Raza actual (por defecto 'default') - DEPRECATED: Mantener para compatibilidad
         this.currentDeckId = null; // 🆕 NUEVO: ID del mazo actualmente seleccionado
+        this.gameDeckCopy = null; // ✅ Copia temporal del mazo durante la partida (NO modifica el original)
         
         // 🆕 NUEVO: Estado del banquillo ingame
         this.benchExpanded = false; // Panel de banquillo colapsado por defecto
@@ -49,26 +50,15 @@ export class StoreUIManager {
     
     /**
      * Actualiza las categorías dinámicamente desde el mazo seleccionado
+     * ✅ FIX: Usa getCurrentDeck() para obtener la copia temporal durante la partida
      * 🎯 NUEVO: Usa el mazo seleccionado en lugar de la configuración de raza
      */
     updateCategories() {
         let buildableNodes = [];
         let projectileNodes = [];
         
-        // 🎯 NUEVO: Obtener mazo seleccionado
-        let selectedDeck = null;
-        
-        if (this.currentDeckId && this.game && this.game.deckManager) {
-            // Usar el mazo especificado por currentDeckId
-            selectedDeck = this.game.deckManager.getDeck(this.currentDeckId);
-        } else if (this.game && this.game.deckManager) {
-            // Si no hay mazo específico, usar el mazo seleccionado o el predeterminado
-            selectedDeck = this.game.deckManager.getSelectedDeck();
-            if (!selectedDeck) {
-                // Si no hay mazo seleccionado del jugador, usar el predeterminado
-                selectedDeck = this.game.deckManager.getDefaultDeck();
-            }
-        }
+        // ✅ FIX: Usar getCurrentDeck() que devuelve la copia temporal si existe
+        const selectedDeck = this.getCurrentDeck();
         
         if (selectedDeck && selectedDeck.units) {
             // 🎯 NUEVO: Filtrar unidades del mazo por tipo (edificios vs consumibles)
@@ -388,14 +378,89 @@ export class StoreUIManager {
                 return true; // Click manejado por el banquillo (puede cambiar la carta seleccionada)
             }
             
-            // Si se clickeó fuera del panel de cartas del mazo y del banquillo, salir del modo permutación
-            this.exitSwapMode();
-            return false; // No consumir el click, dejar que se procese normalmente
+            // 🆕 FIX: Verificar si el click está fuera del bench panel y del deck cards panel
+            // Si está fuera de ambos, cerrar el modo swap (igual que la tienda)
+            const bench = this.getBench();
+            const topBarHeight = this.layout.topBarHeight;
+            const benchX = benchIconX || this.layout.benchPanel.x;
+            
+            const benchPanel = {
+                x: benchX,
+                y: topBarHeight,
+                w: 292,
+                h: this.benchExpanded ? this.calculateBenchPanelHeight(bench) : 0
+            };
+            
+            // Calcular posición del panel de cartas del deck
+            const currentDeck = this.getCurrentDeck();
+            const deckCardsToShow = currentDeck && currentDeck.units ? 
+                currentDeck.units.filter(unitId => unitId !== 'hq' && unitId !== 'fob') : [];
+            
+            let deckPanelX = 0, deckPanelY = 0, deckPanelW = 0, deckPanelH = 0;
+            if (deckCardsToShow.length > 0) {
+                const itemSize = 60;
+                const padding = 10;
+                const gap = 8;
+                const cols = 4;
+                const rows = Math.ceil(deckCardsToShow.length / cols);
+                deckPanelW = (cols * itemSize) + ((cols - 1) * gap) + (padding * 2);
+                const fullHeight = (rows * itemSize) + ((rows - 1) * gap) + (padding * 2) + 40;
+                deckPanelH = Math.min(fullHeight, 600);
+                
+                if (benchPanel.x - deckPanelW - 20 > 0) {
+                    deckPanelX = benchPanel.x - deckPanelW - 20;
+                    deckPanelY = benchPanel.y;
+                } else {
+                    deckPanelX = benchPanel.x;
+                    deckPanelY = benchPanel.y + benchPanel.h + 10;
+                }
+            }
+            
+            // Verificar si el click está dentro del bench panel
+            const isInBenchPanel = mouseX >= benchPanel.x && mouseX <= benchPanel.x + benchPanel.w &&
+                                   mouseY >= benchPanel.y && mouseY <= benchPanel.y + benchPanel.h;
+            
+            // Verificar si el click está dentro del deck cards panel
+            const isInDeckPanel = deckPanelW > 0 && 
+                                  mouseX >= deckPanelX && mouseX <= deckPanelX + deckPanelW &&
+                                  mouseY >= deckPanelY && mouseY <= deckPanelY + deckPanelH;
+            
+            // Si el click está fuera de ambos paneles, cerrar el modo swap
+            if (!isInBenchPanel && !isInDeckPanel) {
+                this.exitSwapMode();
+                return false; // No consumir el click, dejar que se procese normalmente
+            }
+            
+            return false; // Click está dentro de algún panel pero no en una carta específica
         }
         
         // 🆕 NUEVO: Manejar clicks en el panel de banquillo (cuando NO está en modo permutación)
         if (this.handleBenchClick(mouseX, mouseY, benchIconX)) {
             return true;
+        }
+        
+        // 🆕 FIX: Si el bench está expandido pero no en modo swap, cerrar si se clickea fuera
+        if (this.benchExpanded && !this.swapMode) {
+            const bench = this.getBench();
+            const topBarHeight = this.layout.topBarHeight;
+            const benchX = benchIconX || this.layout.benchPanel.x;
+            
+            const benchPanel = {
+                x: benchX,
+                y: topBarHeight,
+                w: 292,
+                h: this.calculateBenchPanelHeight(bench)
+            };
+            
+            // Verificar si el click está fuera del bench panel
+            const isInBenchPanel = mouseX >= benchPanel.x && mouseX <= benchPanel.x + benchPanel.w &&
+                                   mouseY >= benchPanel.y && mouseY <= benchPanel.y + benchPanel.h;
+            
+            if (!isInBenchPanel) {
+                // Cerrar el bench panel (igual que la tienda)
+                this.benchExpanded = false;
+                // No retornar true aquí - permitir que otros sistemas manejen el click
+            }
         }
         
         // Buscar hitbox clickeada en items del desplegable
@@ -465,8 +530,20 @@ export class StoreUIManager {
     
     /**
      * 🆕 NUEVO: Obtiene el mazo actual
+     * ✅ FIX: Si hay una copia temporal del mazo (durante la partida), la usa
+     * Los cambios durante la partida NO afectan el mazo original
      */
     getCurrentDeck() {
+        // ✅ Si hay copia temporal (durante partida), usar esa
+        if (this.gameDeckCopy) {
+            return {
+                units: [...this.gameDeckCopy.units],
+                bench: [...(this.gameDeckCopy.bench || [])],
+                id: this.currentDeckId
+            };
+        }
+        
+        // Si no hay copia temporal, usar el mazo original
         if (!this.game || !this.game.deckManager) return null;
         
         if (this.currentDeckId) {
@@ -478,6 +555,39 @@ export class StoreUIManager {
             }
             return selectedDeck;
         }
+    }
+    
+    /**
+     * ✅ Inicializa la copia temporal del mazo al iniciar la partida
+     * Esta copia se usa durante la partida, NO modifica el mazo original
+     */
+    initializeGameDeckCopy() {
+        // ✅ Obtener el mazo original directamente (sin usar getCurrentDeck que podría devolver la copia)
+        if (!this.game || !this.game.deckManager) return;
+        
+        let originalDeck = null;
+        if (this.currentDeckId) {
+            originalDeck = this.game.deckManager.getDeck(this.currentDeckId);
+        } else {
+            originalDeck = this.game.deckManager.getSelectedDeck();
+            if (!originalDeck) {
+                originalDeck = this.game.deckManager.getDefaultDeck();
+            }
+        }
+        
+        if (originalDeck) {
+            this.gameDeckCopy = {
+                units: [...originalDeck.units],
+                bench: [...(originalDeck.bench || [])]
+            };
+        }
+    }
+    
+    /**
+     * ✅ Limpia la copia temporal del mazo (al terminar la partida)
+     */
+    clearGameDeckCopy() {
+        this.gameDeckCopy = null;
     }
     
     /**
@@ -698,25 +808,72 @@ export class StoreUIManager {
     }
     
     /**
+     * ✅ Helper genérico: Verifica si un item está bloqueado por requisitos
+     * Usa buildRequirements del servidor como fuente única de verdad
+     * @param {string} itemId - ID del item a verificar
+     * @returns {{ isLocked: boolean, missingRequirements: Array<string>, lockMessage: string|null }}
+     */
+    checkItemRequirements(itemId) {
+        // Obtener buildRequirements del servidor
+        const serverConfig = this.game?.serverBuildingConfig;
+        if (!serverConfig || !serverConfig.buildRequirements) {
+            return { isLocked: false, missingRequirements: [], lockMessage: null };
+        }
+        
+        const reqConfig = serverConfig.buildRequirements[itemId];
+        if (!reqConfig || !reqConfig.required || !Array.isArray(reqConfig.required)) {
+            return { isLocked: false, missingRequirements: [], lockMessage: null };
+        }
+        
+        const myTeam = this.game?.myTeam || 'ally';
+        const missingRequirements = [];
+        
+        // Verificar cada requisito
+        for (const requiredType of reqConfig.required) {
+            const hasRequired = this.game?.nodes?.some(n =>
+                n.type === requiredType &&
+                n.team === myTeam &&
+                n.constructed &&
+                !n.isAbandoning &&
+                !n.disabled &&
+                n.active
+            );
+            
+            if (!hasRequired) {
+                missingRequirements.push(requiredType);
+            }
+        }
+        
+        if (missingRequirements.length === 0) {
+            return { isLocked: false, missingRequirements: [], lockMessage: null };
+        }
+        
+        // Generar mensaje de bloqueo basado en los nombres de los edificios faltantes
+        const descriptions = serverConfig.descriptions || {};
+        const missingNames = missingRequirements.map(t =>
+            descriptions[t]?.name || t
+        );
+        
+        // Mensaje corto: solo el nombre del primer edificio que falta (sin prefijo)
+        let lockMessage = null;
+        if (missingNames.length >= 1) {
+            lockMessage = `${missingNames[0]}`;
+        }
+        
+        return {
+            isLocked: true,
+            missingRequirements,
+            lockMessage
+        };
+    }
+    
+    /**
      * Renderiza un item individual
      */
     renderItem(ctx, itemId, x, y, size) {
-        // Verificar si el dron está bloqueado (requiere lanzadera)
-        const isDroneLocked = itemId === 'drone' && !this.buildSystem.hasDroneLauncher();
-        
-        // Verificar si el comando está bloqueado (requiere centro de inteligencia)
-        const isCommandoLocked = itemId === 'specopsCommando' && !this.buildSystem.hasIntelCenter();
-        
-        // Verificar si el truck assault está bloqueado (requiere centro de inteligencia)
-        const isTruckAssaultLocked = itemId === 'truckAssault' && !this.buildSystem.hasIntelCenter();
-        
-        // Verificar si el camera drone está bloqueado (requiere lanzadera de drones)
-        const isCameraDroneLocked = itemId === 'cameraDrone' && !this.buildSystem.hasDroneLauncher();
-        
-        // 🆕 NUEVO: Verificar si el destructor de mundos está bloqueado (requiere Construcción Prohibida)
-        const isWorldDestroyerLocked = itemId === 'worldDestroyer' && !this.buildSystem.hasDeadlyBuild();
-        
-        const isLocked = isDroneLocked || isCommandoLocked || isTruckAssaultLocked || isCameraDroneLocked || isWorldDestroyerLocked;
+        // ✅ SISTEMA GENÉRICO: Verificar requisitos usando buildRequirements del servidor
+        const requirementCheck = this.checkItemRequirements(itemId);
+        const isLocked = requirementCheck.isLocked;
         
         // Fondo del botón usando el sprite bton_background
         const buttonBg = this.assetManager.getSprite('ui-button-background');
@@ -795,8 +952,8 @@ export class StoreUIManager {
         ctx.strokeText(`${displayCost}`, priceX, priceY);
         ctx.fillText(`${displayCost}`, priceX, priceY);
         
-        // Si está bloqueado, mostrar mensaje
-        if (isDroneLocked) {
+        // ✅ SISTEMA GENÉRICO: Mostrar mensaje de bloqueo si está bloqueado
+        if (isLocked && requirementCheck.lockMessage) {
             ctx.fillStyle = '#ff6666';
             ctx.font = 'bold 9px Arial';
             ctx.textAlign = 'center';
@@ -804,68 +961,7 @@ export class StoreUIManager {
             ctx.strokeStyle = '#000000';
             ctx.lineWidth = 2;
             
-            const lockText = 'Necesita lanzadera';
-            const lockY = y + size + 2;
-            
-            ctx.strokeText(lockText, priceX, lockY);
-            ctx.fillText(lockText, priceX, lockY);
-        }
-        
-        if (isCommandoLocked) {
-            ctx.fillStyle = '#ff6666';
-            ctx.font = 'bold 9px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 2;
-            
-            const lockText = 'Necesita centro';
-            const lockY = y + size + 2;
-            
-            ctx.strokeText(lockText, priceX, lockY);
-            ctx.fillText(lockText, priceX, lockY);
-        }
-        
-        if (isTruckAssaultLocked) {
-            ctx.fillStyle = '#ff6666';
-            ctx.font = 'bold 9px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 2;
-            
-            const lockText = 'Necesita centro';
-            const lockY = y + size + 2;
-            
-            ctx.strokeText(lockText, priceX, lockY);
-            ctx.fillText(lockText, priceX, lockY);
-        }
-        
-        if (isCameraDroneLocked) {
-            ctx.fillStyle = '#ff6666';
-            ctx.font = 'bold 9px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 2;
-            
-            const lockText = 'Necesita lanzadera';
-            const lockY = y + size + 2;
-            
-            ctx.strokeText(lockText, priceX, lockY);
-            ctx.fillText(lockText, priceX, lockY);
-        }
-        
-        // 🆕 NUEVO: Mensaje de bloqueo para Destructor de mundos
-        if (isWorldDestroyerLocked) {
-            ctx.fillStyle = '#ff6666';
-            ctx.font = 'bold 9px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 2;
-            
-            const lockText = 'Requiere Const. Prohibida';
+            const lockText = requirementCheck.lockMessage;
             const lockY = y + size + 2;
             
             ctx.strokeText(lockText, priceX, lockY);
@@ -948,22 +1044,12 @@ export class StoreUIManager {
     
     /**
      * 🆕 NUEVO: Obtiene el banquillo del mazo actual
+     * ✅ FIX: Usa getCurrentDeck() para obtener la copia temporal durante la partida
      * @returns {Array<string>} Array de IDs de unidades del banquillo
      */
     getBench() {
-        if (!this.game || !this.game.deckManager) return [];
-        
-        let selectedDeck = null;
-        if (this.currentDeckId) {
-            selectedDeck = this.game.deckManager.getDeck(this.currentDeckId);
-        } else {
-            selectedDeck = this.game.deckManager.getSelectedDeck();
-            if (!selectedDeck) {
-                selectedDeck = this.game.deckManager.getDefaultDeck();
-            }
-        }
-        
-        return selectedDeck?.bench || [];
+        const currentDeck = this.getCurrentDeck();
+        return currentDeck?.bench || [];
     }
     
     /**
@@ -1520,21 +1606,17 @@ export class StoreUIManager {
     
     /**
      * 🆕 NUEVO: Realiza permutación local (sin servidor)
+     * ✅ FIX: Usa la copia temporal del mazo (NO modifica el original)
      */
     performLocalSwap(deckUnitId, benchUnitId) {
-        if (!this.game || !this.game.deckManager) return false;
-        
-        let selectedDeck = null;
-        if (this.currentDeckId) {
-            selectedDeck = this.game.deckManager.getDeck(this.currentDeckId);
-        } else {
-            selectedDeck = this.game.deckManager.getSelectedDeck();
-            if (!selectedDeck) {
-                selectedDeck = this.game.deckManager.getDefaultDeck();
-            }
+        // ✅ Usar copia temporal si existe, si no, crear una
+        if (!this.gameDeckCopy) {
+            this.initializeGameDeckCopy();
         }
         
-        if (!selectedDeck || !selectedDeck.units || !selectedDeck.bench) return false;
+        if (!this.gameDeckCopy || !this.gameDeckCopy.units || !this.gameDeckCopy.bench) return false;
+        
+        const selectedDeck = this.gameDeckCopy;
         
         // 🆕 NUEVO: NO validar límites de puntos durante la permutación ingame
         // Los límites solo se aplican en el editor. Durante la partida, se puede permutar libremente.

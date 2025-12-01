@@ -2,7 +2,7 @@
 // Maneja la lógica autoritativa de trenes: creación automática, movimiento y entrega
 
 import { v4 as uuidv4 } from 'uuid';
-import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 
 export class TrainSystemServer {
     constructor(gameState) {

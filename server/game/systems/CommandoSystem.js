@@ -1,7 +1,7 @@
 // ===== SISTEMA DE COMANDO ESPECIAL OPERATIVO =====
 // Maneja el efecto de deshabilitar edificios enemigos dentro del área del comando
 
-import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 
 export class CommandoSystem {
     constructor(gameState) {

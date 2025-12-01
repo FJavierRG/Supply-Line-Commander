@@ -1,15 +1,15 @@
 // ===== GESTOR DE ESTADO DEL JUEGO =====
 import { v4 as uuidv4 } from 'uuid';
-import { MedicalSystemServer } from '../systems/MedicalSystemServer.js';
-import { FrontMovementSystemServer } from '../systems/FrontMovementSystemServer.js';
-import { TerritorySystemServer } from '../systems/TerritorySystemServer.js';
-import { DroneSystemServer } from '../systems/DroneSystemServer.js';
-import { DroneWorkshopSystem } from '../systems/DroneWorkshopSystem.js';
-import { TankSystemServer } from '../systems/TankSystemServer.js';
-import { LightVehicleSystemServer } from '../systems/LightVehicleSystemServer.js'; // 🆕 NUEVO: Sistema de artillado ligero
-import { ArtillerySystemServer } from '../systems/ArtillerySystemServer.js'; // 🆕 NUEVO: Sistema de artillería
-import { TrainSystemServer } from '../systems/TrainSystemServer.js';
-import { FactorySupplySystem } from '../systems/FactorySupplySystem.js';
+import { MedicalSystemServer } from './systems/MedicalSystemServer.js';
+import { FrontMovementSystemServer } from './systems/FrontMovementSystemServer.js';
+import { TerritorySystemServer } from './systems/TerritorySystemServer.js';
+import { DroneSystemServer } from './systems/DroneSystemServer.js';
+import { DroneWorkshopSystem } from './systems/DroneWorkshopSystem.js';
+import { TankSystemServer } from './systems/TankSystemServer.js';
+import { LightVehicleSystemServer } from './systems/LightVehicleSystemServer.js'; // 🆕 NUEVO: Sistema de artillado ligero
+import { ArtillerySystemServer } from './systems/ArtillerySystemServer.js'; // 🆕 NUEVO: Sistema de artillería
+import { TrainSystemServer } from './systems/TrainSystemServer.js';
+import { FactorySupplySystem } from './systems/FactorySupplySystem.js';
 import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
 import { GAME_CONFIG } from '../config/gameConfig.js';
 import { BuildHandler } from './handlers/BuildHandler.js';
@@ -27,11 +27,11 @@ import { AISystem } from './managers/AISystem.js';
 import { CurrencySystem } from './systems/CurrencySystem.js';
 import { ConstructionSystem } from './systems/ConstructionSystem.js';
 import { EffectsSystem } from './systems/EffectsSystem.js';
-import { AbandonmentSystem } from '../systems/AbandonmentSystem.js';
-import { CommandoSystem } from '../systems/CommandoSystem.js';
-import { TruckAssaultSystem } from '../systems/TruckAssaultSystem.js';
-import { VehicleWorkshopSystem } from '../systems/VehicleWorkshopSystem.js';
-import { CameraDroneSystem } from '../systems/CameraDroneSystem.js';
+import { AbandonmentSystem } from './systems/AbandonmentSystem.js';
+import { CommandoSystem } from './systems/CommandoSystem.js';
+import { TruckAssaultSystem } from './systems/TruckAssaultSystem.js';
+import { VehicleWorkshopSystem } from './systems/VehicleWorkshopSystem.js';
+import { CameraDroneSystem } from './systems/CameraDroneSystem.js';
 import { DisciplineManager } from './managers/DisciplineManager.js'; // 🆕 NUEVO: Sistema de disciplinas
 import { MAP_CONFIG, calculateAbsolutePosition } from '../utils/mapGenerator.js';
 
@@ -282,6 +282,7 @@ export class GameStateManager {
                 specialNodes: this.buildHandler.getSpecialNodes(), // 🆕 Configuración de nodos especiales (comando, truck assault)
                 vehicleTypes: this.buildHandler.getVehicleTypes(), // 🆕 NUEVO: Tipos de vehículos
                 vehicleSystems: this.buildHandler.getVehicleSystems(), // 🆕 NUEVO: Sistemas de vehículos por tipo de nodo
+                buildRequirements: this.buildHandler.getBuildRequirements(), // ✅ Requisitos de construcción y acciones
                 currency: { ...GAME_CONFIG.currency } // 🆕 NUEVO: Configuración de currency (passiveRate, etc.)
             };
             console.log(`✅ [getInitialState] Configuración de edificios obtenida`);

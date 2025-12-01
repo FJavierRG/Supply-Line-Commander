@@ -2,7 +2,7 @@
 // Maneja la lógica autoritativa de envíos de suministros desde fábricas al HQ
 
 import { v4 as uuidv4 } from 'uuid';
-import { SERVER_NODE_CONFIG } from '../config/serverNodes.js';
+import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 
 export class FactorySupplySystem {
     constructor(gameState) {

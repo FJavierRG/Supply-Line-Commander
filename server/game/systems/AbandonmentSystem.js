@@ -1,7 +1,7 @@
 // ===== SISTEMA DE ABANDONO =====
 // Inicia abandono -> fases -> eliminación
 
-import { GAME_CONFIG } from '../config/gameConfig.js';
+import { GAME_CONFIG } from '../../config/gameConfig.js';
 
 export class AbandonmentSystem {
     constructor(gameState) {
