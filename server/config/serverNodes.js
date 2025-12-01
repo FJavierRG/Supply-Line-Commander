@@ -32,14 +32,14 @@ export const SERVER_NODE_CONFIG = {
         servers: 40,
         // 🆕 CONSUMIBLES/PROYECTILES
         drone: 170,
-        sniperStrike: 120,
-        fobSabotage: 120,
-        specopsCommando: 130,  
-        tank: 170,
+        sniperStrike: 70,
+        fobSabotage: 90,
+        specopsCommando: 90,  
+        tank: 120,
         lightVehicle: 100, 
-        truckAssault: 120,
+        truckAssault: 90,
         cameraDrone: 80,
-        artillery: 120, 
+        artillery: 90, 
         worldDestroyer: 300
     },
 

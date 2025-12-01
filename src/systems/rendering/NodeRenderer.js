@@ -611,6 +611,11 @@ export class NodeRenderer {
             this.renderIntelRadioInvestmentRing(node, game);
         }
         
+        // ✅ NUEVO: Anillo de temporizador de reparación
+        if (node.broken && game) {
+            this.renderRepairTimerRing(node, game);
+        }
+        
         // 🆕 NUEVO: Anillo de efecto residual del comando eliminado
         // La función renderCommandoResidualRing ya verifica correctamente el efecto activo
         if (node.effects && node.effects.some(e => e.type === 'commandoResidual')) {
@@ -2014,6 +2019,73 @@ export class NodeRenderer {
             pulseRange: 0.15,
             backgroundAlpha: 0.3
         });
+    }
+    
+    /**
+     * ✅ NUEVO: Renderiza el anillo de temporizador de reparación
+     * Muestra el progreso cuando un camión de reparación está reparando este edificio
+     */
+    renderRepairTimerRing(node, game) {
+        if (!game || !game.convoyManager) return;
+        
+        // Buscar convoy de reparación que esté reparando este edificio
+        // El convoy tiene toBase (objeto nodo) que apunta al nodo destino
+        const repairingConvoy = game.convoyManager.convoys.find(convoy => {
+            if (!convoy.isRepair || !convoy.repairing) return false;
+            
+            // Verificar si el convoy está reparando este nodo
+            // El convoy tiene toBase (objeto nodo) o puede tener toId (string ID)
+            const toNodeId = convoy.toBase?.id || convoy.toId;
+            return toNodeId === node.id;
+        });
+        
+        if (!repairingConvoy || !repairingConvoy.repairStartTime || !repairingConvoy.repairDuration) {
+            return; // No hay convoy reparando este edificio
+        }
+        
+        // ✅ Obtener gameTime del servidor (a través de network.gameStateSync.lastGameState)
+        const gameTime = game?.network?.gameStateSync?.lastGameState?.gameTime || 0;
+        if (!gameTime) return; // No hay tiempo disponible
+        
+        // Calcular tiempo transcurrido y progreso (0 a 1, donde 1 = recién iniciado, 0 = a punto de completar)
+        const elapsed = Math.max(0, gameTime - repairingConvoy.repairStartTime);
+        const progress = Math.max(0, Math.min(1, 1 - (elapsed / repairingConvoy.repairDuration)));
+        
+        // Radio del anillo (alrededor del edificio completo)
+        const nodeRadius = node.radius || 30;
+        const ringRadius = nodeRadius + 8; // 8px de padding alrededor del edificio
+        
+        // Usar función genérica de anillo de progreso
+        // El progreso muestra el tiempo restante (de 1 a 0)
+        this.renderProgressRing(node.x, node.y, ringRadius, progress, {
+            width: 4,
+            colorStart: { r: 78, g: 204, b: 163 },  // Verde (color del juego)
+            colorEnd: { r: 78, g: 204, b: 163 },
+            pulse: true,
+            pulseSpeed: 400,
+            pulseRange: 0.2,
+            backgroundAlpha: 0.4
+        });
+        
+        // ✅ NUEVO: Mostrar tiempo restante en segundos sobre el edificio
+        const timeRemaining = Math.max(0, Math.ceil(repairingConvoy.repairDuration - elapsed));
+        if (timeRemaining > 0) {
+            this.ctx.save();
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.strokeStyle = '#000000';
+            this.ctx.lineWidth = 3;
+            this.ctx.font = 'bold 20px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            
+            // Posición: arriba del edificio
+            const textY = node.y - nodeRadius - 25;
+            
+            // Sombra/contorno para mejor legibilidad
+            this.ctx.strokeText(`${timeRemaining}`, node.x, textY);
+            this.ctx.fillText(`${timeRemaining}`, node.x, textY);
+            this.ctx.restore();
+        }
     }
     
     /**
