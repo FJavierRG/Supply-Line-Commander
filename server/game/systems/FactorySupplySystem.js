@@ -185,7 +185,8 @@ export class FactorySupplySystem {
         
         this.gameState.factorySupplyDeliveries.push(delivery);
         
-        console.log(`🏭 Fábrica ${factory.id} envió ${effectiveCargo} suministros al HQ (distancia: ${Math.round(distance)}px, velocidad: ${Math.round(speed)}px/s)`);
+        // Log silenciado para optimización de rendimiento
+        // console.log(`🏭 Fábrica ${factory.id} envió ${effectiveCargo} suministros al HQ`);
     }
     
     /**
@@ -266,10 +267,12 @@ export class FactorySupplySystem {
                             });
                         }
                         
-                        console.log(`💰 Disciplina activa: +${currencyBonus} currency por entrega de fábrica - ${delivery.team} (nuevo total: ${Math.floor(this.gameState.currency[delivery.team])})`);
+                        // Log silenciado para optimización
+                        // console.log(`💰 Disciplina activa: +${currencyBonus} currency`);
                     }
                     
-                    console.log(`🏭 Envío ${delivery.id} entregó ${delivery.cargo} suministros al HQ ${hq.id}: ${oldSupplies} → ${hq.supplies}/${hq.maxSupplies}`);
+                    // Log silenciado para optimización de rendimiento
+                    // console.log(`🏭 Envío entregó suministros al HQ`);
                 }
                 
                 // Eliminar envío después de entregar

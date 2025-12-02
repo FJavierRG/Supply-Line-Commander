@@ -52,6 +52,23 @@ export class GameStateManager {
             player1: GAME_CONFIG.currency.initial,
             player2: GAME_CONFIG.currency.initial
         };
+        // 🆕 NUEVO: Tracking de estadísticas mejoradas
+        this.currencySpent = {
+            player1: 0,
+            player2: 0
+        };
+        this.trucksDispatched = {
+            player1: { light: 0, heavy: 0, total: 0 },
+            player2: { light: 0, heavy: 0, total: 0 }
+        };
+        this.buildingsDestroyed = {
+            player1: 0, // Edificios que player1 ha destruido al enemigo
+            player2: 0
+        };
+        // 🆕 NUEVO: Historial temporal para gráficos (snapshots cada 10s)
+        this.statsHistory = [];
+        this.lastSnapshotTime = 0;
+        this.snapshotInterval = 10; // segundos entre snapshots (10s para más detalle)
         // 🆕 NUEVO: Razas seleccionadas por equipo
         this.playerRaces = {
             player1: null,
@@ -510,6 +527,11 @@ export class GameStateManager {
         
         this.currency[team] -= amount;
         
+        // 🆕 NUEVO: Trackear currency gastado
+        if (this.currencySpent[team] !== undefined) {
+            this.currencySpent[team] += amount;
+        }
+        
         // Emitir evento visual para mostrar "-n" en el UI
         this.addVisualEvent('currency_spent', {
             team: team,
@@ -825,6 +847,18 @@ export class GameStateManager {
         
         // Actualizar tiempo (solo después del countdown)
         this.gameTime += dt;
+        
+        // 🔍 MONITOREO: Logear uso de recursos cada 30 segundos
+        if (!this._lastResourceLog) this._lastResourceLog = 0;
+        if (this.gameTime - this._lastResourceLog >= 30) {
+            this._lastResourceLog = this.gameTime;
+            const mem = process.memoryUsage();
+            const cpu = process.cpuUsage();
+            console.log(`📊 [${Math.floor(this.gameTime)}s] RAM: ${Math.round(mem.heapUsed / 1024 / 1024)}MB / ${Math.round(mem.heapTotal / 1024 / 1024)}MB | CPU: ${Math.round(cpu.user / 1000)}ms user, ${Math.round(cpu.system / 1000)}ms system`);
+        }
+        
+        // 🆕 NUEVO: Tomar snapshot para historial de gráficos (cada 30s)
+        this.takeStatsSnapshot();
         
         // 🆕 NUEVO: Limpiar cooldowns de cartas que ya no están en el banquillo
         if (this.raceManager) {
@@ -1240,6 +1274,10 @@ export class GameStateManager {
             // 12. Limpiar objetos de configuración
             this.currency = null;
             this.currencyGenerated = null;
+            this.currencySpent = null;
+            this.trucksDispatched = null;
+            this.buildingsDestroyed = null;
+            this.statsHistory = null;
             this.playerRaces = null;
             this.benchCooldowns = null;
             this.lastCurrencySnapshot = null;
@@ -1289,15 +1327,60 @@ export class GameStateManager {
                 buildings: player1Buildings,
                 maxAdvance: player1MaxX,
                 finalCurrency: Math.floor(this.currency.player1),
-                totalCurrency: Math.floor(this.currencyGenerated.player1)
+                totalCurrency: Math.floor(this.currencyGenerated.player1),
+                // 🆕 NUEVO: Estadísticas mejoradas
+                currencySpent: Math.floor(this.currencySpent?.player1 || 0),
+                trucksDispatched: this.trucksDispatched?.player1 || { light: 0, heavy: 0, total: 0 },
+                buildingsDestroyed: this.buildingsDestroyed?.player1 || 0
             },
             player2: {
                 buildings: player2Buildings,
                 maxAdvance: player2MinX,
                 finalCurrency: Math.floor(this.currency.player2),
-                totalCurrency: Math.floor(this.currencyGenerated.player2)
+                totalCurrency: Math.floor(this.currencyGenerated.player2),
+                // 🆕 NUEVO: Estadísticas mejoradas
+                currencySpent: Math.floor(this.currencySpent?.player2 || 0),
+                trucksDispatched: this.trucksDispatched?.player2 || { light: 0, heavy: 0, total: 0 },
+                buildingsDestroyed: this.buildingsDestroyed?.player2 || 0
+            },
+            // 🆕 NUEVO: Historial para gráficos
+            history: this.statsHistory || []
+        };
+    }
+    
+    /**
+     * 🆕 NUEVO: Toma un snapshot del estado actual para el historial de gráficos
+     * Se llama cada 30 segundos durante la partida
+     */
+    takeStatsSnapshot() {
+        const currentTime = Math.floor(this.gameTime);
+        
+        // Tomar snapshot inicial inmediatamente, luego cada X segundos
+        if (this.statsHistory.length > 0 && currentTime - this.lastSnapshotTime < this.snapshotInterval) {
+            return;
+        }
+        
+        this.lastSnapshotTime = currentTime;
+        
+        // Crear snapshot ligero (solo datos necesarios para gráficos)
+        const snapshot = {
+            time: currentTime,
+            player1: {
+                currency: Math.floor(this.currency?.player1 || 0), // 🔧 FIX: Usar currency actual, no generado
+                trucks: this.trucksDispatched?.player1?.total || 0
+            },
+            player2: {
+                currency: Math.floor(this.currency?.player2 || 0), // 🔧 FIX: Usar currency actual, no generado
+                trucks: this.trucksDispatched?.player2?.total || 0
             }
         };
+        
+        this.statsHistory.push(snapshot);
+        
+        // Limitar historial a 60 puntos máximo (10 minutos de partida con snapshots cada 10s)
+        if (this.statsHistory.length > 60) {
+            this.statsHistory.shift();
+        }
     }
     
     // ===== MÉTODOS DELEGADOS A MANAGERS =====

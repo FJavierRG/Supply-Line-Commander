@@ -96,7 +96,7 @@ export class TrainSystemServer {
             this.createTrain(station, fob);
         }
         
-        console.log(`🚂 Estación ${station.id} envió ${fobs.length} trenes`);
+        // Log removido - demasiado spam
     }
     
     /**
@@ -212,7 +212,7 @@ export class TrainSystemServer {
                     const newSupplies = Math.min(currentSupplies + train.cargo, maxSupplies);
                     fob.supplies = newSupplies;
                     
-                    console.log(`🚂 Tren ${train.id} entregó ${train.cargo} suministros a FOB ${fob.id}`);
+                    // Log removido - demasiado spam
                 }
                 
                 // Eliminar tren después de entregar (los trenes no vuelven)

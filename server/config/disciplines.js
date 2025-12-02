@@ -29,21 +29,22 @@ export const DISCIPLINES = {
     'motorized_industry': {
         id: 'motorized_industry',
         name: 'Industria Motorizada',
-        icon: 'assets/sprites/ui/Disciplines/vehicle.png', // Sprite del vehículo
-        cost: 0,             // Activación gratuita
-        duration: 60,        // 1 minuto activa
-        cooldown: 15,         // Sin cooldown - puedes activar otra inmediatamente
+        description: 'Aumenta la velocidad: camiones ligeros +50%, camiones pesados +25%, trenes +10%. Enviar un vehículo cuesta 2 currency.',
+        icon: 'assets/sprites/ui/Disciplines/vehicle.png',
+        cost: 0,
+        duration: 60,
+        cooldown: 15,
         enabled: true,
         
         effects: {
             convoy: {
                 speedMultipliers: {
-                    truck: 1.5,         // Camiones ligeros: +50%
-                    heavy_truck: 1.25,  // Camiones pesados: +25%
-                    train: 1.1,         // Trenes: +10%
-                    default: 1.0        // Otros vehículos: sin bonus
+                    truck: 1.5,
+                    heavy_truck: 1.25,
+                    train: 1.1,
+                    default: 1.0
                 },
-                deploymentCost: 2       // Coste de 1 currency al enviar vehículo
+                deploymentCost: 2
             }
         }
     },
@@ -54,16 +55,17 @@ export const DISCIPLINES = {
     'improved_infrastructure': {
         id: 'improved_infrastructure',
         name: 'Infraestructuras Mejoradas',
-        icon: 'assets/sprites/ui/Disciplines/production_focus2.png', // Sprite de producción
-        cost: 0,             // Activación gratuita
-        duration: 60,        // 1 minuto activa
-        cooldown: 50,         // Sin cooldown - puedes activar otra inmediatamente
+        description: 'Por cada paquete que una fábrica entrega al HQ genera +3 currency. Los suministros de las fábricas disminuyen en -3.',
+        icon: 'assets/sprites/ui/Disciplines/production_focus2.png',
+        cost: 0,
+        duration: 60,
+        cooldown: 50,
         enabled: true,
         
         effects: {
             factory: {
-                currencyPerDelivery: 3,    // +1 currency por cada paquete entregado al HQ
-                supplyPenalty: -3          // -2 suministros por tick de fábrica
+                currencyPerDelivery: 3,
+                supplyPenalty: -3
             }
         }
     },
@@ -74,17 +76,18 @@ export const DISCIPLINES = {
     'defensive_combat': {
         id: 'defensive_combat',
         name: 'Combate Defensivo',
-        icon: 'assets/sprites/ui/Disciplines/defense_focus.png', // Sprite de defensa
-        cost: 0,             // Activación gratuita
-        duration: 60,        // 1 minuto activa
-        cooldown: 20,         // Sin cooldown - puedes activar otra inmediatamente
+        description: 'En modo Mantener: el gasto de suministros disminuye un 20% adicional y otorga +1 currency/segundo por frente.',
+        icon: 'assets/sprites/ui/Disciplines/defense_focus.png',
+        cost: 0,
+        duration: 60,
+        cooldown: 20,
         enabled: true,
         
         effects: {
             frontMode: {
-                targetMode: 'hold',              // Solo afecta cuando el frente está en modo "Mantener"
-                consumeMultiplierBonus: -0.20,   // -25% adicional 
-                currencyPerSecondPerFront: 1     // +1 currency/segundo por cada frente en modo hold
+                targetMode: 'hold',
+                consumeMultiplierBonus: -0.20,
+                currencyPerSecondPerFront: 1
             }
         }
     },
@@ -95,6 +98,7 @@ export const DISCIPLINES = {
     'endeudamiento': {
         id: 'endeudamiento',
         name: 'Endeudamiento',
+        description: 'Permite gastar currency por debajo de 0 hasta -150. Ideal para inversiones agresivas durante la ventana activa.',
         icon: 'assets/sprites/ui/Disciplines/endeudamiento2.png',
         cost: 0,
         duration: 120,
@@ -109,7 +113,8 @@ export const DISCIPLINES = {
         }
     }
 
-    // 🔧 Más disciplinas se añadirán aquí
+    // ✅ Para añadir una nueva disciplina, simplemente copia el bloque anterior
+    // y rellena todos los campos incluyendo 'description'
 };
 
 // 🐛 DEBUG: Verificar que las disciplinas se cargan correctamente
@@ -154,53 +159,13 @@ export function getAllDisciplines() {
 }
 
 /**
- * 🆕 NUEVO: Genera la descripción dinámica de una disciplina desde sus efectos
+ * Obtiene la descripción de una disciplina
  * @param {string} disciplineId - ID de la disciplina
- * @returns {string} - Descripción generada dinámicamente
+ * @returns {string} - Descripción de la disciplina
  */
 export function getDisciplineDescription(disciplineId) {
     const discipline = getDiscipline(disciplineId);
-    if (!discipline) return '';
-    
-    // Generar descripción según los efectos de cada disciplina
-    switch (disciplineId) {
-        case 'motorized_industry': {
-            const effects = discipline.effects.convoy;
-            const multipliers = effects.speedMultipliers;
-            const cost = effects.deploymentCost;
-            
-            const truckBonus = Math.round((multipliers.truck - 1) * 100);
-            const heavyTruckBonus = Math.round((multipliers.heavy_truck - 1) * 100);
-            const trainBonus = Math.round((multipliers.train - 1) * 100);
-            
-            return `Aumenta la velocidad: camiones ligeros +${truckBonus}%, camiones pesados +${heavyTruckBonus}%, trenes +${trainBonus}%. Enviar un vehículo cuesta ${cost} currency.`;
-        }
-        
-        case 'improved_infrastructure': {
-            const effects = discipline.effects.factory;
-            const currencyBonus = effects.currencyPerDelivery;
-            const supplyPenalty = Math.abs(effects.supplyPenalty);
-            return `Por cada paquete que una fábrica entrega al HQ genera +${currencyBonus} currency. Los suministros de las fábricas disminuyen en -${supplyPenalty}.`;
-        }
-        
-        case 'defensive_combat': {
-            const effects = discipline.effects.frontMode;
-            const consumeReduction = Math.abs(Math.round(effects.consumeMultiplierBonus * 100));
-            const currencyPerFront = effects.currencyPerSecondPerFront;
-            return `En modo Mantener: el gasto de suministros disminuye un ${consumeReduction}% adicional y otorga +${currencyPerFront} currency/segundo por frente.`;
-        }
-
-        case 'endeudamiento': {
-            const effects = discipline.effects.economy;
-            const cap = effects.minCurrency ?? -150;
-            return `Permite gastar currency por debajo de 0 hasta ${cap}. Ideal para inversiones agresivas durante la ventana activa.`;
-        }
-        
-        // 🔧 Más disciplinas se añadirán aquí con su lógica de descripción
-        
-        default:
-            return 'Sin descripción disponible.';
-    }
+    return discipline?.description || 'Sin descripción disponible.';
 }
 
 /**
@@ -216,8 +181,10 @@ export function validateDisciplineList(disciplineIds) {
         return { valid: false, errors };
     }
     
-    if (disciplineIds.length > 2) {
-        errors.push('Solo se pueden equipar 2 disciplinas por mazo');
+    // 🔧 FIX: Requerir EXACTAMENTE 2 disciplinas
+    if (disciplineIds.length !== 2) {
+        errors.push('Debes equipar exactamente 2 disciplinas en tu mazo');
+        return { valid: false, errors };
     }
     
     // Verificar duplicados

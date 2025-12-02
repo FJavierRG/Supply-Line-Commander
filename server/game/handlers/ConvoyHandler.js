@@ -197,7 +197,8 @@ export class ConvoyHandler {
                 return { success: false, reason: deploymentSpendResult.reason || 'Currency insuficiente para desplegar vehículo' };
             }
             
-            console.log(`💰 Costo de despliegue de vehículo (disciplina): ${deploymentCost} - ${playerTeam}`);
+            // Log silenciado para optimización de rendimiento
+            // console.log(`💰 Costo de despliegue: ${deploymentCost}`);
         }
         
         // ✅ CRÍTICO: Aplicar sabotaje cuando el camión SALE (no cuando regresa)
@@ -245,6 +246,17 @@ export class ConvoyHandler {
         }
         
         this.gameState.convoys.push(convoy);
+        
+        // 🆕 NUEVO: Trackear camiones enviados por tipo
+        if (this.gameState.trucksDispatched && this.gameState.trucksDispatched[playerTeam]) {
+            const truckStats = this.gameState.trucksDispatched[playerTeam];
+            truckStats.total++;
+            if (vehicleType === 'heavy_truck') {
+                truckStats.heavy++;
+            } else if (vehicleType === 'truck') {
+                truckStats.light++;
+            }
+        }
         
         // SONIDOS: Truck sound (si es desde HQ) o dispatch sound
         if (fromNode.type === 'hq') {

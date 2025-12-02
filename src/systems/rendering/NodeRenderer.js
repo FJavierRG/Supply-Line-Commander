@@ -23,6 +23,30 @@ export class NodeRenderer {
     }
     
     /**
+     * 🆕 NUEVO: Helper centralizado para determinar si un sprite de frente debe voltearse
+     * Aplica la lógica de mirror view y orientación de equipos de forma consistente
+     * @param {Object} front - Nodo de frente
+     * @param {boolean} isEnemy - Si el frente es enemigo
+     * @returns {boolean} True si el sprite debe voltearse horizontalmente
+     */
+    shouldFlipFrontSprite(front, isEnemy) {
+        // 🎯 Lógica simple para frentes:
+        // - Frentes propios → miran hacia la derecha (no flip = false)
+        // - Frentes enemigos → miran hacia la izquierda (flip = true)
+        // 
+        // Con mirror view (player2): el mundo está volteado, así que:
+        // - Frentes propios → deben voltearse para verse mirando derecha después del volteo global
+        // - Frentes enemigos → NO deben voltearse para verse mirando izquierda después del volteo global
+        if (this.mirrorViewApplied) {
+            // Con mirror view: invertir la lógica
+            return !isEnemy; // Propios se voltean, enemigos no
+        } else {
+            // Sin mirror view: lógica normal
+            return isEnemy; // Enemigos se voltean, propios no
+        }
+    }
+    
+    /**
      * Helper: Determina si un nodo siempre debe mirar hacia el oponente
      * @param {Object} node - Nodo a verificar
      * @returns {boolean} True si el nodo siempre debe orientarse hacia el enemigo
@@ -156,22 +180,9 @@ export class NodeRenderer {
         
         // COMPENSAR MIRROR VIEW: Si la vista está mirroreada, invertir la lógica de orientación
         let shouldFlipBuilding = false;
-        // Los frentes tienen lógica simple: propios miran derecha, enemigos miran izquierda
+        // Los frentes usan lógica centralizada en shouldFlipFrontSprite()
         if (node.type === 'front') {
-            // 🎯 Lógica simple para frentes:
-            // - Frentes propios → miran hacia la derecha (no flip = false)
-            // - Frentes enemigos → miran hacia la izquierda (flip = true)
-            // 
-            // Con mirror view (player2): el mundo está volteado, así que:
-            // - Frentes propios → deben voltearse para verse mirando derecha después del volteo global
-            // - Frentes enemigos → NO deben voltearse para verse mirando izquierda después del volteo global
-            if (this.mirrorViewApplied) {
-                // Con mirror view: invertir la lógica
-                shouldFlipBuilding = !isEnemy; // Propios se voltean, enemigos no
-            } else {
-                // Sin mirror view: lógica normal
-                shouldFlipBuilding = isEnemy; // Enemigos se voltean, propios no
-            }
+            shouldFlipBuilding = this.shouldFlipFrontSprite(node, isEnemy);
         } else {
             // 🆕 GENERALIZADO: Edificios que siempre miran hacia el oponente
             if (this.shouldAlwaysFaceOpponent(node)) {
@@ -581,6 +592,11 @@ export class NodeRenderer {
         // 🆕 NUEVO: Selector de modos de frente (advance, retreat, hold)
         if ((isSelected || node === game?.hoveredNode) && node.type === 'front') {
             this.renderFrontModeSelector(node);
+        }
+        
+        // 🆕 NUEVO: Icono del modo actual en el centro del frente (siempre visible)
+        if (node.type === 'front') {
+            this.renderFrontModeIcon(node);
         }
         
         // 🆕 NUEVO: Anillo de duración del comando
@@ -1171,6 +1187,71 @@ export class NodeRenderer {
         } finally {
             this.restoreMirrorCompensation(wasCompensated);
         }
+    }
+    
+    /**
+     * 🆕 NUEVO: Renderiza el icono del modo de comportamiento en el centro del nodo Frente
+     * Muestra visualmente el modo actual (advance, retreat, hold) con un icono semi-transparente
+     * Utiliza la lógica centralizada de flip/mirror para mantener consistencia con el sprite del nodo
+     * @param {Object} front - Nodo de frente
+     */
+    renderFrontModeIcon(front) {
+        if (!this.game || !this.assetManager) return;
+        if (!front || front.type !== 'front') return;
+        if (!front.active) return;
+        
+        // Mapeo de modos a iconos
+        const modeIconMap = {
+            'advance': 'ui-mode-advance-icon',
+            'hold': 'ui-mode-hold-icon',
+            'retreat': 'ui-mode-retreat-icon'
+        };
+        
+        const currentMode = front.frontMode || 'advance';
+        const iconKey = modeIconMap[currentMode];
+        
+        if (!iconKey) return;
+        
+        const icon = this.assetManager.getSprite(iconKey);
+        if (!icon) return;
+        
+        // Tamaño del icono (proporcional al radio del frente)
+        const iconSize = front.radius * 1.2;
+        
+        // 🎯 Determinar si el frente es enemigo (reutilizar lógica del renderizado principal)
+        const myTeam = this.game.myTeam || 'player1';
+        let nodeTeamNormalized = front.team;
+        if (front.team === 'ally') {
+            nodeTeamNormalized = 'player1';
+        } else if (front.team === 'enemy') {
+            nodeTeamNormalized = 'player2';
+        }
+        const isEnemy = nodeTeamNormalized !== myTeam;
+        
+        // 🎯 Usar lógica centralizada para determinar si debe voltearse (consistente con el sprite del nodo)
+        const shouldFlip = this.shouldFlipFrontSprite(front, isEnemy);
+        
+        // Renderizar icono en el centro del nodo con alpha 0.5
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.5;
+        
+        if (shouldFlip) {
+            // Aplicar flip horizontal para que el icono mire en la misma dirección que el sprite
+            this.ctx.translate(front.x, front.y);
+            this.ctx.scale(-1, 1);
+            this.ctx.drawImage(icon, -iconSize/2, -iconSize/2, iconSize, iconSize);
+        } else {
+            // Sin flip
+            this.ctx.drawImage(
+                icon,
+                front.x - iconSize/2,
+                front.y - iconSize/2,
+                iconSize,
+                iconSize
+            );
+        }
+        
+        this.ctx.restore();
     }
     
     renderSupplyBar(base) {

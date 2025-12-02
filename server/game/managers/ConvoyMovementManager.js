@@ -36,7 +36,7 @@ export class ConvoyMovementManager {
                 // Destino no existe
                 if (isHeavyTruckFromHQ) {
                     // Heavy_truck del HQ con destino desaparecido: regresar inmediatamente al HQ
-                    console.warn(`⚠️ Heavy_truck ${convoy.id} tiene destino desaparecido (FOB ${convoy.toId} eliminado), regresando inmediatamente al HQ`);
+                    // Log removido - demasiado spam
                     
                     // Si ya está regresando, puede continuar normalmente (está viajando hacia el HQ)
                     if (convoy.returning) {
@@ -391,7 +391,6 @@ export class ConvoyMovementManager {
             // fromNode = nodo con ID convoy.fromId (origen original: HQ/FOB)
             // toNode = nodo con ID convoy.toId (destino original: front/edificio)
             // El convoy regresa al nodo origen original (fromNode), así que fromNode es correcto
-            console.log(`🔄 Convoy ${convoy.id} regresando: fromNode=${fromNode?.type} ${fromNode?.id}, toNode=${toNode?.type} ${toNode?.id}, returning=${convoy.returning}`);
             this.returnVehicle(convoy, fromNode, convoyIndex);
         }
     }

@@ -509,6 +509,129 @@ body.menu-open #game-canvas {
     display: block;
 }
 
+/* ===== PANTALLAS DE FIN DE JUEGO (VICTORIA/DERROTA) ===== */
+
+.game-end-container {
+    max-width: 700px;
+    width: 90%;
+    margin: 0 auto;
+    padding: 40px;
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+}
+
+.game-end-header {
+    text-align: center;
+    width: 100%;
+}
+
+.game-end-title {
+    font-size: 48px;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    text-shadow: 0 0 20px rgba(0, 0, 0, 0.8), 0 4px 8px rgba(0, 0, 0, 0.6);
+}
+
+.game-end-title.victory {
+    color: #4ecca3;
+    text-shadow: 0 0 20px rgba(78, 204, 163, 0.6), 0 4px 8px rgba(0, 0, 0, 0.6);
+}
+
+.game-end-title.defeat {
+    color: #e74c3c;
+    text-shadow: 0 0 20px rgba(231, 76, 60, 0.6), 0 4px 8px rgba(0, 0, 0, 0.6);
+}
+
+.game-end-graphics {
+    width: 100%;
+    max-width: 600px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 300px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px solid rgba(78, 204, 163, 0.3);
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.game-end-image {
+    max-width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 10px rgba(78, 204, 163, 0.3));
+}
+
+.game-end-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.game-end-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 300px;
+}
+
+.game-end-btn {
+    width: 100%;
+    padding: 16px 32px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(78, 204, 163, 0.2);
+    border: 2px solid #4ecca3;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.game-end-btn:hover {
+    background: rgba(78, 204, 163, 0.4);
+    border-color: #4ecca3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(78, 204, 163, 0.3);
+}
+
+.game-end-btn:active {
+    transform: translateY(0);
+}
+
+/* Responsive para pantallas pequeñas */
+@media (max-width: 768px) {
+    .game-end-container {
+        padding: 20px;
+        gap: 20px;
+    }
+    
+    .game-end-title {
+        font-size: 36px;
+        letter-spacing: 2px;
+    }
+    
+    .game-end-graphics {
+        min-height: 200px;
+    }
+    
+    .game-end-btn {
+        font-size: 16px;
+        padding: 14px 24px;
+    }
+}
+
 /* ===== PANTALLA DE MEJORAS - SISTEMA DE DISEÑO ===== */
 
 .upgrades-container {
@@ -3594,7 +3717,7 @@ body:has(#deck-selector-overlay:not(.hidden)) #arsenal-overlay {
     position: fixed;
     top: 20px;
     right: 20px;
-    z-index: var(--z-modals);
+    z-index: var(--z-notifications); /* 🆕 FIX: Usar z-notifications (1000) para estar siempre visible */
     display: flex;
     flex-direction: column;
     gap: 10px;

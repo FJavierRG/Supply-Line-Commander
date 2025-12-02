@@ -142,15 +142,7 @@ router.post('/', requireAuth, async (req, res) => {
             });
         }
         
-        // Validar disciplinas
-        const maxDisciplines = GAME_CONFIG.disciplines.maxEquipped;
-        if (disciplines.length > maxDisciplines) {
-            return res.status(400).json({
-                success: false,
-                error: `Máximo ${maxDisciplines} disciplinas permitidas`
-            });
-        }
-        
+        // Validar disciplinas (EXACTAMENTE 2 requeridas)
         const disciplineValidation = validateDisciplineList(disciplines);
         if (!disciplineValidation.valid) {
             return res.status(400).json({

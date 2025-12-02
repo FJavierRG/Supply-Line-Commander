@@ -128,6 +128,11 @@ export class DroneSystemServer {
                 target.active = false;
                 target.destroyed = true;
                 
+                // 🆕 NUEVO: Trackear edificios destruidos
+                if (this.gameState.buildingsDestroyed && this.gameState.buildingsDestroyed[drone.team] !== undefined) {
+                    this.gameState.buildingsDestroyed[drone.team]++;
+                }
+                
                 // Registrar impacto
                 impacts.push({
                     droneId: drone.id,

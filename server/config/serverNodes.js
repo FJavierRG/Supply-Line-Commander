@@ -36,10 +36,10 @@ export const SERVER_NODE_CONFIG = {
         fobSabotage: 90,
         specopsCommando: 90,  
         tank: 120,
-        lightVehicle: 100, 
+        lightVehicle: 90, 
         truckAssault: 90,
         cameraDrone: 80,
-        artillery: 90, 
+        artillery: 120,
         worldDestroyer: 300
     },
 

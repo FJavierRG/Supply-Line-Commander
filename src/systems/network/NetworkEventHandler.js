@@ -31,10 +31,18 @@ export class NetworkEventHandler {
                 this.game.audio.playRandomRadioEffect();
                 break;
                 
-            case 'man_down':
+            case 'man_down': {
                 // Emergencia médica generada
-                this.game.audio.playManDownSound(event.frontId);
+                // Solo reproducir el grito si la emergencia es de un frente propio
+                const front = this.game.nodes
+                    ? this.game.nodes.find(n => n.id === event.frontId)
+                    : null;
+                
+                if (front && front.team === this.networkManager.myTeam) {
+                    this.game.audio.playManDownSound(event.frontId);
+                }
                 break;
+            }
                 
             case 'no_ammo':
                 // Frente sin suministros
