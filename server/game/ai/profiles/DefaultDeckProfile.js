@@ -315,12 +315,6 @@ export class DefaultDeckProfile extends BaseProfile {
                 
                 const hasAdvantage = hasMuchMoney || hasPlantAdvantage2;
                 
-                // Log para debugging
-                if (hasAdvantage) {
-                    const reason = hasMuchMoney ? `mucho dinero (${currency})` : `ventaja de 2 plantas (${state.myPlants} vs ${state.playerPlants})`;
-                    console.log(`⚡ IA VENTAJA: Activada - ${reason} (minuto ${(elapsedTime / 60).toFixed(1)}) → Priorizando aggro sobre plantas nucleares`);
-                }
-                
                 return hasAdvantage;
                 
             case 'hasBigAdvantage':
@@ -337,11 +331,6 @@ export class DefaultDeckProfile extends BaseProfile {
                     : 0;
                 const hasBigPlantAdvantage = plantDifferenceBig >= 3; // 3+ plantas de ventaja
                 
-                // Log para debugging
-                if (hasBigPlantAdvantage) {
-                    console.log(`🚫 IA GRAN VENTAJA: Activada - ${state.myPlants} vs ${state.playerPlants} (diferencia: ${plantDifferenceBig}) (minuto ${(elapsedTimeBig / 60).toFixed(1)}) → BLOQUEANDO construcción de plantas nucleares`);
-                }
-                
                 return hasBigPlantAdvantage;
             case 'hasNuclearPlant':
                 // 🎯 NUEVO: Verificar si ya tiene una planta nuclear construida
@@ -354,10 +343,6 @@ export class DefaultDeckProfile extends BaseProfile {
                     n.constructed &&
                     !n.isAbandoning
                 );
-                
-                if (hasNuclearPlant) {
-                    console.log(`🚫 IA PLANTA NUCLEAR: Ya tiene una planta nuclear construida. Aplicando penalización enorme (limitado a 1 por bando).`);
-                }
                 
                 return hasNuclearPlant;
             case 'forHelicopters':

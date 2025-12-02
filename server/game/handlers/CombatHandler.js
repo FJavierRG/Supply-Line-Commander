@@ -7,6 +7,52 @@ export class CombatHandler {
     }
     
     /**
+     * ✅ Helper genérico: verifica requisitos de edificios para una acción/consumible
+     * Usa SERVER_NODE_CONFIG.buildRequirements[actionId].required como fuente única de verdad
+     * @param {string} playerTeam - Equipo del jugador
+     * @param {string} actionId - ID de la acción o carta (sniperStrike, fobSabotage, etc.)
+     * @returns {{ ok: boolean, reason?: string }}
+     */
+    checkActionRequirements(playerTeam, actionId) {
+        const reqConfig = SERVER_NODE_CONFIG.buildRequirements?.[actionId];
+        const requiredTypes = Array.isArray(reqConfig?.required) ? reqConfig.required : [];
+        
+        if (requiredTypes.length === 0) {
+            return { ok: true };
+        }
+        
+        const missing = [];
+        
+        for (const requiredType of requiredTypes) {
+            const hasRequired = this.gameState.nodes.some(n =>
+                n.type === requiredType &&
+                n.team === playerTeam &&
+                n.constructed &&
+                n.active &&
+                !n.isAbandoning &&
+                !n.disabled
+            );
+            
+            if (!hasRequired) {
+                missing.push(requiredType);
+            }
+        }
+        
+        if (missing.length === 0) {
+            return { ok: true };
+        }
+        
+        const missingNames = missing.map(t =>
+            SERVER_NODE_CONFIG.descriptions[t]?.name || t
+        ).join(', ');
+        
+        return {
+            ok: false,
+            reason: `Requiere: ${missingNames}`
+        };
+    }
+    
+    /**
      * Maneja disparo de francotirador
      * 🆕 NUEVO: Puede disparar a frentes (aplica efecto wounded) o comandos (los elimina)
      */
@@ -23,6 +69,12 @@ export class CombatHandler {
         
         if (!isValidTarget) {
             return { success: false, reason: 'Solo puedes disparar a frentes, comandos, truck assaults o camera drones enemigos' };
+        }
+        
+        // 🆕 NUEVO: Validar requisitos de edificios para sniperStrike (ej. Centro de Inteligencia)
+        const reqCheck = this.checkActionRequirements(playerTeam, 'sniperStrike');
+        if (!reqCheck.ok) {
+            return { success: false, reason: reqCheck.reason };
         }
         
         // Validar que el objetivo esté activo y construido (si es comando, truck assault o camera drone)
@@ -176,6 +228,12 @@ export class CombatHandler {
         // Validar que sea una FOB enemiga
         if (targetNode.type !== 'fob' || targetNode.team === playerTeam) {
             return { success: false, reason: 'Solo puedes sabotear FOBs enemigas' };
+        }
+        
+        // 🆕 NUEVO: Validar requisitos de edificios para fobSabotage (ej. Centro de Inteligencia)
+        const reqCheck = this.checkActionRequirements(playerTeam, 'fobSabotage');
+        if (!reqCheck.ok) {
+            return { success: false, reason: reqCheck.reason };
         }
         
         // 🆕 NUEVO: Validar que no haya torres de vigilancia enemigas protegiendo el FOB
@@ -336,6 +394,12 @@ export class CombatHandler {
             return { success: false, reason: 'Objetivo no encontrado' };
         }
         
+        // 🆕 Validar requisitos de edificios para tank (ej. Fábrica de Vehículos Artillados)
+        const reqCheck = this.checkActionRequirements(playerTeam, 'tank');
+        if (!reqCheck.ok) {
+            return { success: false, reason: reqCheck.reason };
+        }
+        
         // Validar que sea un edificio enemigo válido (NO FOBs ni HQs)
         const validTargetTypes = SERVER_NODE_CONFIG.actions.tankLaunch.validTargets;
         
@@ -383,6 +447,12 @@ export class CombatHandler {
         
         if (!targetNode) {
             return { success: false, reason: 'Objetivo no encontrado' };
+        }
+        
+        // 🆕 Validar requisitos de edificios para lightVehicle
+        const reqCheck = this.checkActionRequirements(playerTeam, 'lightVehicle');
+        if (!reqCheck.ok) {
+            return { success: false, reason: reqCheck.reason };
         }
         
         // Validar que sea un edificio enemigo válido (NO FOBs ni HQs)
@@ -438,6 +508,12 @@ export class CombatHandler {
      * @returns {Object} Resultado de la operación
      */
     handleArtilleryLaunch(playerTeam, x, y) {
+        // 🆕 Validar requisitos de edificios para artillery
+        const reqCheck = this.checkActionRequirements(playerTeam, 'artillery');
+        if (!reqCheck.ok) {
+            return { success: false, reason: reqCheck.reason };
+        }
+        
         // ✅ Costo de la artillería (lee de costs - fuente única de verdad)
         const artilleryCost = SERVER_NODE_CONFIG.costs.artillery;
         

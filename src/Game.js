@@ -1,42 +1,52 @@
 // ===== CONTROLADOR PRINCIPAL DEL JUEGO =====
 import { VisualNode } from './entities/visualNode.js';
 import { interpolatePosition, interpolateProgress, interpolateValue } from './utils/InterpolationUtils.js';
-import { RenderSystem } from './systems/RenderSystem.js';
-import { UIManager } from './systems/UIManager.js';
-import { AudioManager } from './systems/AudioManager.js';
-import { ParticleSystem } from './utils/ParticleSystem.js';
-import { AssetManager } from './systems/AssetManager.js';
-import { InputHandler } from './systems/InputHandler.js';
-import { BuildingSystem } from './systems/BuildingSystem.js';
-import { ConvoyManager } from './systems/ConvoyManager.js';
-import { MedicalEmergencySystem } from './systems/MedicalEmergencySystem.js';
-import { DroneSystem } from './systems/DroneSystem.js';
-import { TankSystem } from './systems/TankSystem.js';
-import { LightVehicleSystem } from './systems/LightVehicleSystem.js'; // 🆕 NUEVO: Sistema de artillado ligero
-import { AntiDroneSystem } from './systems/AntiDroneSystem.js';
-import { FrontMovementSystem } from './systems/FrontMovementSystem.js';
-import { TerritorySystem } from './systems/TerritorySystem.js';
-import { BackgroundTileSystem } from './systems/BackgroundTileSystem.js';
-import { CameraController } from './systems/CameraController.js';
-import { LoadingScreenManager } from './systems/LoadingScreenManager.js';
-import { CurrencyManager } from './systems/CurrencyManager.js';
-import { StoreUIManager } from './systems/StoreUIManager.js';
-import { TopBarManager } from './systems/TopBarManager.js'; // 🆕 NUEVO: Banner superior
 import { RoadSystem } from './utils/RoadSystem.js';
 import { RailSystem } from './utils/RailSystem.js';
-import { TrainSystem } from './systems/TrainSystem.js';
-import { OptionsManager } from './systems/OptionsManager.js';
-import { ArsenalManager } from './systems/ArsenalManager.js';
-import { DeckManager } from './systems/DeckManager.js';
-import { TutorialManager } from './systems/TutorialManager.js';
+import { ParticleSystem } from './utils/ParticleSystem.js';
+
+// === CORE ===
+import { AssetManager } from './systems/core/AssetManager.js';
+import { AudioManager } from './systems/core/AudioManager.js';
+import { CameraController } from './systems/core/CameraController.js';
+import { CanvasManager } from './systems/core/CanvasManager.js';
+import { GameStateManager } from './systems/core/GameStateManager.js';
+
+// === GAME SYSTEMS ===
+import { AntiDroneSystem } from './systems/game/AntiDroneSystem.js';
+import { BackgroundTileSystem } from './systems/game/BackgroundTileSystem.js';
+import { BuildingSystem } from './systems/game/BuildingSystem.js';
+import { ConvoyManager } from './systems/game/ConvoyManager.js';
+import { DroneSystem } from './systems/game/DroneSystem.js';
+import { FogOfWarSystem } from './systems/game/FogOfWarSystem.js';
+import { FrontMovementSystem } from './systems/game/FrontMovementSystem.js';
+import { LightVehicleSystem } from './systems/game/LightVehicleSystem.js';
+import { MedicalEmergencySystem } from './systems/game/MedicalEmergencySystem.js';
+import { TankSystem } from './systems/game/TankSystem.js';
+import { TerritorySystem } from './systems/game/TerritorySystem.js';
+import { TrainSystem } from './systems/game/TrainSystem.js';
+
+// === INPUT ===
+import { InputHandler } from './systems/input/InputHandler.js';
+import { InputRouter } from './systems/input/InputRouter.js';
+
+// === UI ===
+import { ArsenalManager } from './systems/ui/ArsenalManager.js';
+import { CurrencyManager } from './systems/ui/CurrencyManager.js';
+import { DeckManager } from './systems/ui/DeckManager.js';
+import { LoadingScreenManager } from './systems/ui/LoadingScreenManager.js';
+import { OptionsManager } from './systems/ui/OptionsManager.js';
+import { OverlayManager } from './systems/ui/OverlayManager.js';
+import { RaceSelectionManager } from './systems/ui/RaceSelectionManager.js';
+import { ScreenManager } from './systems/ui/ScreenManager.js';
+import { StoreUIManager } from './systems/ui/StoreUIManager.js';
+import { TopBarManager } from './systems/ui/TopBarManager.js';
+import { TutorialManager } from './systems/ui/TutorialManager.js';
+import { UIManager } from './systems/ui/UIManager.js';
+
+// === NETWORK & RENDERING (wrappers) ===
 import { NetworkManager } from './systems/NetworkManager.js';
-import { RaceSelectionManager } from './systems/RaceSelectionManager.js';
-import { OverlayManager } from './systems/OverlayManager.js';
-import { GameStateManager } from './systems/GameStateManager.js';
-import { InputRouter } from './systems/InputRouter.js';
-import { ScreenManager } from './systems/ScreenManager.js';
-import { CanvasManager } from './systems/CanvasManager.js';
-import { FogOfWarSystem } from './systems/FogOfWarSystem.js';
+import { RenderSystem } from './systems/RenderSystem.js';
 import { FogOfWarRenderer } from './systems/rendering/FogOfWarRenderer.js';
 import { GAME_CONFIG } from './config/constants.js';
 // ELIMINADO: MAP_CONFIG, calculateAbsolutePosition - Ya no se genera el mapa en el cliente
@@ -170,8 +180,8 @@ export class Game {
         
         // 🆕 NUEVO: Estado de disciplinas (inicializado vacío, se sincroniza con servidor)
         this.disciplineStates = {
-            player1: { equipped: [], active: null, timeRemaining: 0, cooldownRemaining: 0 },
-            player2: { equipped: [], active: null, timeRemaining: 0, cooldownRemaining: 0 }
+            player1: { equipped: [], active: null, timeRemaining: 0, cooldowns: {} },
+            player2: { equipped: [], active: null, timeRemaining: 0, cooldowns: {} }
         };
         
         // Asegurar que el sistema de mazos está listo
@@ -1324,6 +1334,11 @@ export class Game {
         this.audio.resetEventFlags();
         this.camera.reset();
         
+        // ✅ FIX: Limpiar copia temporal del mazo (los cambios durante la partida no deben persistir)
+        if (this.storeUI) {
+            this.storeUI.clearGameDeckCopy();
+        }
+        
         // Limpiar background tiles
         this.backgroundTiles = null;
         
@@ -1633,19 +1648,6 @@ export class Game {
         // TODO: Migrar toda esta lógica al servidor o eliminar completamente
         console.warn('⚠️ LEGACY: Ejecutando código legacy de construcción - esto debería estar en el servidor');
     }
-    /**
-     * Verifica si se puede pagar un edificio
-     */
-    canAffordBuilding(buildingId) {
-        // 🆕 NUEVO: Para drones, usar getDroneCost() que incluye el descuento del taller de drones
-        let cost;
-        if (this.buildSystem && this.buildSystem.isDroneWorkshopItem(buildingId)) {
-            cost = this.buildSystem.getDroneCost(buildingId);
-        } else {
-            cost = this.serverBuildingConfig?.costs?.[buildingId] || 0;
-        }
-        return this.getMissionCurrency() >= cost;
-    }
     
     /**
      * 🆕 SERVIDOR COMO AUTORIDAD: Maneja solicitud de drone
@@ -1661,7 +1663,7 @@ export class Game {
         // Validar currency
         // 🆕 NUEVO: Usar getDroneCost() que incluye el descuento del taller de drones
         const droneCost = this.buildSystem ? this.buildSystem.getDroneCost() : (this.serverBuildingConfig?.costs?.drone || 0);
-        if (!this.canAffordBuilding('drone')) {
+        if (!this.buildSystem.canAffordBuilding('drone', true)) {
             return;
         }
         
@@ -1700,7 +1702,7 @@ export class Game {
         
         // ⚠️ NO CONSUMIR DINERO AQUÍ - El servidor lo hace autoritativamente
         // Solo validar UI para feedback inmediato
-        if (!this.canAffordBuilding('tank')) {
+        if (!this.buildSystem.canAffordBuilding('tank', true)) {
             console.log('⚠️ No tienes suficiente currency para tanque');
             return;
         }
@@ -1733,7 +1735,7 @@ export class Game {
         
         // Validar currency
         const sniperCost = this.serverBuildingConfig?.costs?.sniperStrike || 0;
-        if (!this.canAffordBuilding('sniperStrike')) {
+        if (!this.buildSystem.canAffordBuilding('sniperStrike', true)) {
             return;
         }
         
@@ -1771,7 +1773,7 @@ export class Game {
         }
         
         // Validar currency
-        if (!this.canAffordBuilding('fobSabotage')) {
+        if (!this.buildSystem.canAffordBuilding('fobSabotage', true)) {
             return;
         }
         
@@ -1826,7 +1828,7 @@ export class Game {
     handleCommandoDeployRequest(x, y) {
         
         // Validar currency
-        if (!this.canAffordBuilding('specopsCommando')) {
+        if (!this.buildSystem.canAffordBuilding('specopsCommando', true)) {
             return;
         }
         
@@ -1939,19 +1941,20 @@ export class Game {
     }
     
     /**
-     * Muestra pantalla de victoria con estadísticas
+     * Muestra pantalla de victoria con estadísticas mejoradas
      */
     showVictoryStats() {
         const victoryOverlay = document.getElementById('victory-overlay');
         if (!victoryOverlay) return;
         
-        // Calcular duración de la partida
-        const duration = this.matchStats.endTime - this.matchStats.startTime;
-        const minutes = Math.floor(duration / 60000);
-        const seconds = Math.floor((duration % 60000) / 1000);
+        // Calcular duración
+        const durationMs = this.matchStats.endTime - this.matchStats.startTime;
+        const durationSec = Math.floor(durationMs / 1000);
+        const minutes = Math.floor(durationSec / 60);
+        const seconds = durationSec % 60;
         const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         
-        // Contar edificios finales
+        // Contar edificios
         const playerBuildings = this.nodes.filter(n => 
             n.category === 'buildable' && n.team === 'ally' && n.constructed
         ).length;
@@ -1959,48 +1962,68 @@ export class Game {
             n.category === 'buildable' && n.team === 'player2' && n.constructed
         ).length;
         
-        // Contar FOBs
-        const playerFOBs = this.nodes.filter(n => n.type === 'fob' && n.team === 'ally' && n.constructed).length;
-        const enemyFOBs = this.nodes.filter(n => n.type === 'enemy_fob' && n.constructed).length;
+        // Stats
+        const stats = this.matchStats;
+        const currency = this.getMissionCurrency();
         
-        // === LEGACY REMOVED: Stats de IA eliminadas ===
-        // Las stats del enemigo ahora vienen del servidor si están disponibles
-        
-        // Construir HTML con las stats
         const statsHTML = `
-            <div class="main-menu-container">
-                <div class="menu-header">
-                    <h1 class="menu-title" style="color: #4ecca3;">VICTORIA</h1>
+            <div class="game-end-container">
+                <div class="game-end-header">
+                    <h1 class="game-end-title victory">¡VICTORIA!</h1>
                 </div>
                 
-                <div class="stats-container" style="color: #ffffff; text-align: left; margin: 20px 0; padding: 20px; background: rgba(0,0,0,0.7); border-radius: 8px;">
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <div style="font-size: 24px; font-weight: bold;">Duración: ${timeStr}</div>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <div>
-                            <h3 style="color: #4ecca3; margin-bottom: 10px;">TU RENDIMIENTO</h3>
-                            <div>Currency final: ${this.getMissionCurrency()}$</div>
-                            <div>FOBs: ${playerFOBs}</div>
-                            <div>Edificios: ${playerBuildings}</div>
-                            <div>Drones: ${this.matchStats.dronesLaunched}</div>
-                            <div>Snipers: ${this.matchStats.snipersLaunched}</div>
-                            <div>Convoyes: ${this.matchStats.convoysDispatched}</div>
-                            <div>Emergencias: ${this.matchStats.emergenciesResolved}/${this.matchStats.emergenciesResolved + this.matchStats.emergenciesFailed}</div>
+                <div class="game-end-graphics">
+                    <div style="width: 100%; color: #ffffff;">
+                        <div style="text-align: center; margin-bottom: 25px;">
+                            <div style="font-size: 32px; font-weight: bold; color: #4ecca3;">⏱️ ${timeStr}</div>
+                            <div style="color: #888; font-size: 14px;">Duración de la partida</div>
                         </div>
                         
-                        <div>
-                            <h3 style="color: #e74c3c; margin-bottom: 10px;">ENEMIGO</h3>
-                            <div>FOBs: ${enemyFOBs}</div>
-                            <div>Edificios: ${enemyBuildings}</div>
-                            <div style="color: #888; font-size: 12px;">Stats del enemigo disponibles desde el servidor</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div style="background: rgba(78, 204, 163, 0.15); padding: 20px; border-radius: 8px; border: 2px solid rgba(78, 204, 163, 0.3);">
+                                <h3 style="color: #4ecca3; margin: 0 0 15px 0; text-align: center; font-size: 18px;">🎖️ TU RENDIMIENTO</h3>
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">💵 Currency:</span>
+                                        <span style="font-weight: bold; color: #ffd700;">${currency}$</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">🏗️ Edificios:</span>
+                                        <span style="font-weight: bold;">${playerBuildings}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">🚁 Drones:</span>
+                                        <span style="font-weight: bold;">${stats.dronesLaunched || 0}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">🚛 Convoyes:</span>
+                                        <span style="font-weight: bold;">${stats.convoysDispatched || 0}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">🚑 Emergencias:</span>
+                                        <span style="font-weight: bold;">${stats.emergenciesResolved || 0}/${(stats.emergenciesResolved || 0) + (stats.emergenciesFailed || 0)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div style="background: rgba(231, 76, 60, 0.15); padding: 20px; border-radius: 8px; border: 2px solid rgba(231, 76, 60, 0.3);">
+                                <h3 style="color: #e74c3c; margin: 0 0 15px 0; text-align: center; font-size: 18px;">⚔️ ENEMIGO</h3>
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">🏗️ Edificios:</span>
+                                        <span style="font-weight: bold;">${enemyBuildings}</span>
+                                    </div>
+                                    <div style="color: #666; font-size: 12px; margin-top: 10px; text-align: center;">
+                                        Stats detalladas en multijugador
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="menu-actions">
-                    <button id="victory-menu-btn" class="menu-btn primary">Volver al Menú</button>
+                <div class="game-end-actions">
+                    <button id="victory-menu-btn" class="game-end-btn">Volver al Menú</button>
                 </div>
             </div>
         `;
@@ -2008,7 +2031,6 @@ export class Game {
         victoryOverlay.innerHTML = statsHTML;
         this.overlayManager.showOverlay('victory-overlay');
         
-        // Reconectar el botón
         const btn = document.getElementById('victory-menu-btn');
         if (btn) {
             btn.onclick = () => this.returnToMenuFromGame();
@@ -2016,19 +2038,20 @@ export class Game {
     }
     
     /**
-     * Muestra pantalla de derrota con estadísticas
+     * Muestra pantalla de derrota con estadísticas mejoradas
      */
     showDefeatStats() {
         const defeatOverlay = document.getElementById('defeat-overlay');
         if (!defeatOverlay) return;
         
-        // Calcular duración de la partida
-        const duration = this.matchStats.endTime - this.matchStats.startTime;
-        const minutes = Math.floor(duration / 60000);
-        const seconds = Math.floor((duration % 60000) / 1000);
+        // Calcular duración
+        const durationMs = this.matchStats.endTime - this.matchStats.startTime;
+        const durationSec = Math.floor(durationMs / 1000);
+        const minutes = Math.floor(durationSec / 60);
+        const seconds = durationSec % 60;
         const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         
-        // Contar edificios finales
+        // Contar edificios
         const playerBuildings = this.nodes.filter(n => 
             n.category === 'buildable' && n.team === 'ally' && n.constructed
         ).length;
@@ -2036,48 +2059,68 @@ export class Game {
             n.category === 'buildable' && n.team === 'player2' && n.constructed
         ).length;
         
-        // Contar FOBs
-        const playerFOBs = this.nodes.filter(n => n.type === 'fob' && n.team === 'ally' && n.constructed).length;
-        const enemyFOBs = this.nodes.filter(n => n.type === 'enemy_fob' && n.constructed).length;
+        // Stats
+        const stats = this.matchStats;
+        const currency = this.getMissionCurrency();
         
-        // === LEGACY REMOVED: Stats de IA eliminadas ===
-        // Las stats del enemigo ahora vienen del servidor si están disponibles
-        
-        // Construir HTML con las stats
         const statsHTML = `
-            <div class="main-menu-container">
-                <div class="menu-header">
-                    <h1 class="menu-title" style="color: #e74c3c;">DERROTA</h1>
+            <div class="game-end-container">
+                <div class="game-end-header">
+                    <h1 class="game-end-title defeat">DERROTA</h1>
                 </div>
                 
-                <div class="stats-container" style="color: #ffffff; text-align: left; margin: 20px 0; padding: 20px; background: rgba(0,0,0,0.7); border-radius: 8px;">
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <div style="font-size: 24px; font-weight: bold;">Duración: ${timeStr}</div>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <div>
-                            <h3 style="color: #4ecca3; margin-bottom: 10px;">TU RENDIMIENTO</h3>
-                            <div>Currency final: ${this.getMissionCurrency()}$</div>
-                            <div>FOBs: ${playerFOBs}</div>
-                            <div>Edificios: ${playerBuildings}</div>
-                            <div>Drones: ${this.matchStats.dronesLaunched}</div>
-                            <div>Snipers: ${this.matchStats.snipersLaunched}</div>
-                            <div>Convoyes: ${this.matchStats.convoysDispatched}</div>
-                            <div>Emergencias: ${this.matchStats.emergenciesResolved}/${this.matchStats.emergenciesResolved + this.matchStats.emergenciesFailed}</div>
+                <div class="game-end-graphics">
+                    <div style="width: 100%; color: #ffffff;">
+                        <div style="text-align: center; margin-bottom: 25px;">
+                            <div style="font-size: 32px; font-weight: bold; color: #e74c3c;">⏱️ ${timeStr}</div>
+                            <div style="color: #888; font-size: 14px;">Duración de la partida</div>
                         </div>
                         
-                        <div>
-                            <h3 style="color: #e74c3c; margin-bottom: 10px;">ENEMIGO</h3>
-                            <div>FOBs: ${enemyFOBs}</div>
-                            <div>Edificios: ${enemyBuildings}</div>
-                            <div style="color: #888; font-size: 12px;">Stats del enemigo disponibles desde el servidor</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div style="background: rgba(78, 204, 163, 0.15); padding: 20px; border-radius: 8px; border: 2px solid rgba(78, 204, 163, 0.3);">
+                                <h3 style="color: #4ecca3; margin: 0 0 15px 0; text-align: center; font-size: 18px;">🎖️ TU RENDIMIENTO</h3>
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">💵 Currency:</span>
+                                        <span style="font-weight: bold; color: #ffd700;">${currency}$</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">🏗️ Edificios:</span>
+                                        <span style="font-weight: bold;">${playerBuildings}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">🚁 Drones:</span>
+                                        <span style="font-weight: bold;">${stats.dronesLaunched || 0}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">🚛 Convoyes:</span>
+                                        <span style="font-weight: bold;">${stats.convoysDispatched || 0}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">🚑 Emergencias:</span>
+                                        <span style="font-weight: bold;">${stats.emergenciesResolved || 0}/${(stats.emergenciesResolved || 0) + (stats.emergenciesFailed || 0)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div style="background: rgba(231, 76, 60, 0.15); padding: 20px; border-radius: 8px; border: 2px solid rgba(231, 76, 60, 0.3);">
+                                <h3 style="color: #e74c3c; margin: 0 0 15px 0; text-align: center; font-size: 18px;">⚔️ ENEMIGO</h3>
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: #aaa;">🏗️ Edificios:</span>
+                                        <span style="font-weight: bold;">${enemyBuildings}</span>
+                                    </div>
+                                    <div style="color: #666; font-size: 12px; margin-top: 10px; text-align: center;">
+                                        Stats detalladas en multijugador
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="menu-actions">
-                    <button id="defeat-menu-btn" class="menu-btn primary">Volver al Menú</button>
+                <div class="game-end-actions">
+                    <button id="defeat-menu-btn" class="game-end-btn">Volver al Menú</button>
                 </div>
             </div>
         `;
@@ -2085,7 +2128,6 @@ export class Game {
         defeatOverlay.innerHTML = statsHTML;
         this.overlayManager.showOverlay('defeat-overlay');
         
-        // Reconectar el botón
         const btn = document.getElementById('defeat-menu-btn');
         if (btn) {
             btn.onclick = () => this.returnToMenuFromGame();
@@ -2121,6 +2163,7 @@ export class Game {
                 temporaryEffects: SERVER_NODE_CONFIG.temporaryEffects || {}, // 🆕 NUEVO: Efectos temporales (trained, wounded)
                 vehicleTypes: SERVER_NODE_CONFIG.vehicleTypes || {}, // 🆕 NUEVO: Tipos de vehículos
                 vehicleSystems: SERVER_NODE_CONFIG.vehicleSystems || {}, // 🆕 NUEVO: Sistemas de vehículos por tipo de nodo
+                buildRequirements: SERVER_NODE_CONFIG.buildRequirements || {}, // ✅ Requisitos de construcción y acciones
                 security: SERVER_NODE_CONFIG.security,
                 abandonment: GAME_CONFIG.abandonment, // 🆕 NUEVO: Configuración de abandono (tiempos de fases)
                 behavior: {

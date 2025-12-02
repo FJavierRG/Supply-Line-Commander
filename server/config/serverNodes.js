@@ -24,6 +24,7 @@ export const SERVER_NODE_CONFIG = {
         trainStation: 150,
         droneWorkshop: 125,
         vehicleWorkshop: 90,
+        armoredFactory: 150,
         physicStudies: 80,
         secretLaboratory: 90,
         trainingCamp: 80,
@@ -31,14 +32,14 @@ export const SERVER_NODE_CONFIG = {
         servers: 40,
         // 🆕 CONSUMIBLES/PROYECTILES
         drone: 170,
-        sniperStrike: 120,
-        fobSabotage: 120,
-        specopsCommando: 130,  
-        tank: 170,
-        lightVehicle: 100, 
-        truckAssault: 120,
+        sniperStrike: 70,
+        fobSabotage: 90,
+        specopsCommando: 90,  
+        tank: 120,
+        lightVehicle: 90, 
+        truckAssault: 90,
         cameraDrone: 80,
-        artillery: 120, 
+        artillery: 120,
         worldDestroyer: 300
     },
 
@@ -61,6 +62,7 @@ export const SERVER_NODE_CONFIG = {
         trainStation: 7,
         droneWorkshop: 5,
         vehicleWorkshop: 5,
+        armoredFactory: 5,
         physicStudies: 5,
         secretLaboratory: 5,
         trainingCamp: 6,
@@ -216,6 +218,7 @@ export const SERVER_NODE_CONFIG = {
         trainStation: 130,
         droneWorkshop: 130,
         vehicleWorkshop: 130,
+        armoredFactory: 130,
         physicStudies: 130,
         secretLaboratory: 130,
         trainingCamp: 130,
@@ -252,6 +255,7 @@ export const SERVER_NODE_CONFIG = {
         trainStation: 40,
         droneWorkshop: 35,
         vehicleWorkshop: 35,
+        armoredFactory: 35,
         physicStudies: 35,
         secretLaboratory: 35,
         trainingCamp: 35,
@@ -440,7 +444,7 @@ export const SERVER_NODE_CONFIG = {
                     id: 'retreat',
                     name: 'Retroceder',
                     icon: 'ui-mode-retreat',
-                    consumeMultiplier: 1.0,    // Consumo normal (100%)
+                    consumeMultiplier: 0.75,    // Consumo normal (100%)
                     currencyMultiplier: 0.75,  // 75% de ganancia por pixel retrocedido
                     canAdvance: false,         // No avanza
                     canRetreat: true,          // Retrocede voluntariamente
@@ -451,7 +455,7 @@ export const SERVER_NODE_CONFIG = {
                     id: 'hold',
                     name: 'Mantener',
                     icon: 'ui-mode-hold',
-                    consumeMultiplier: 0.75,   // 75% de consumo
+                    consumeMultiplier: 0.60,   // 75% de consumo
                     currencyMultiplier: 0,     // No gana currency (no se mueve)
                     canAdvance: false,         // No avanza
                     canRetreat: false,         // No retrocede voluntariamente
@@ -459,7 +463,7 @@ export const SERVER_NODE_CONFIG = {
                 },
                 // Configuración general de modos
                 defaultMode: 'advance',        // Modo por defecto al inicio
-                cooldownDuration: 15           // Segundos de cooldown al cambiar de modo
+                cooldownDuration: 5           // Segundos de cooldown al cambiar de modo
             }
         },
         
@@ -551,6 +555,7 @@ export const SERVER_NODE_CONFIG = {
             trainingCamp: true,
             deadlyBuild: true,
             servers: true,
+            armoredFactory: true, // ✅ Fábrica de Vehículos Artillados
             // 🆕 CONSUMIBLES/PROYECTILES
             drone: true,
             sniperStrike: true,
@@ -632,12 +637,52 @@ export const SERVER_NODE_CONFIG = {
     },
     
     // ═══════════════════════════════════════════════════════════════
-    // REQUISITOS DE CONSTRUCCIÓN
+    // REQUISITOS DE CONSTRUCCIÓN Y ACCIONES
     // ═══════════════════════════════════════════════════════════════
-    // Edificios que requieren otros edificios para construirse
+    // Mapa genérico de requisitos:
+    // - Clave: ID de edificio o consumible/acción
+    // - Valor: { required: ['otroEdificio', ...] }
+    // Se usa tanto para construcción (BuildHandler) como para consumibles (AI, CombatHandler)
     buildRequirements: {
+        // Construcción Prohibida requiere nuclearPlant + secretLaboratory
         deadlyBuild: {
             required: ['nuclearPlant', 'secretLaboratory'] // Requiere tener al menos uno de cada tipo en mesa
+        },
+        
+        // Consumibles que dependen de edificios específicos
+        // Dron bomba y camera drone requieren Lanzadera de Drones
+        drone: {
+            required: ['droneLauncher']
+        },
+        cameraDrone: {
+            required: ['droneLauncher']
+        },
+        
+        // Operaciones especiales que requieren Centro de Inteligencia
+        specopsCommando: {
+            required: ['intelCenter']
+        },
+        truckAssault: {
+            required: ['intelCenter']
+        },
+        // 🆕 NUEVO: Sniper y sabotaje de FOBs también requieren Centro de Inteligencia
+        sniperStrike: {
+            required: ['intelCenter']
+        },
+        fobSabotage: {
+            required: ['intelCenter']
+        },
+        
+        // 🆕 NUEVO: Fábrica de Vehículos Artillados
+        // Desbloquea tanque, artillado ligero y artillería
+        tank: {
+            required: ['armoredFactory']
+        },
+        lightVehicle: {
+            required: ['armoredFactory']
+        },
+        artillery: {
+            required: ['armoredFactory']
         }
     },
 

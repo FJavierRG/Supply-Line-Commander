@@ -1,7 +1,7 @@
 // ===== MANAGER DE MOVIMIENTO DE CONVOYES =====
 import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 import { GAME_CONFIG } from '../../config/gameConfig.js';
-import { TruckAssaultSystem } from '../../systems/TruckAssaultSystem.js';
+import { TruckAssaultSystem } from '../systems/TruckAssaultSystem.js';
 
 export class ConvoyMovementManager {
     constructor(gameState) {
@@ -36,7 +36,7 @@ export class ConvoyMovementManager {
                 // Destino no existe
                 if (isHeavyTruckFromHQ) {
                     // Heavy_truck del HQ con destino desaparecido: regresar inmediatamente al HQ
-                    console.warn(`⚠️ Heavy_truck ${convoy.id} tiene destino desaparecido (FOB ${convoy.toId} eliminado), regresando inmediatamente al HQ`);
+                    // Log removido - demasiado spam
                     
                     // Si ya está regresando, puede continuar normalmente (está viajando hacia el HQ)
                     if (convoy.returning) {
@@ -95,6 +95,29 @@ export class ConvoyMovementManager {
                     this.gameState.convoys.splice(i, 1);
                     continue;
                 }
+            }
+            
+            // ✅ NUEVO: Si el convoy está reparando, manejar temporizador y no moverlo
+            if (convoy.isRepair && convoy.repairing && toNode) {
+                const elapsedRepairTime = this.gameState.gameTime - convoy.repairStartTime;
+                
+                // Si pasaron 4 segundos, reparar el edificio y hacer que regrese
+                if (elapsedRepairTime >= convoy.repairDuration) {
+                    if (toNode.broken) {
+                        toNode.broken = false;
+                        toNode.disabled = false; // También restaurar si estaba disabled
+                        console.log(`🔧 Edificio ${toNode.type} ${toNode.id} reparado por camión de reparación ${convoy.id}`);
+                    }
+                    
+                    // Regresar el camión al HQ
+                    convoy.repairing = false;
+                    convoy.returning = true;
+                    convoy.progress = 0; // RESETEAR progress para el viaje de vuelta
+                    continue; // No mover el convoy en este frame, el siguiente frame iniciará el regreso
+                }
+                
+                // Si aún está reparando, no mover el convoy
+                continue;
             }
             
             // ✅ FIX: Cuando toNode es null (heavy_truck regresando), usar fromNode como destino
@@ -300,15 +323,17 @@ export class ConvoyMovementManager {
         if (!convoy.returning) {
             // === CAMIÓN DE REPARACIÓN: Reparar edificio ===
             if (convoy.isRepair) {
-                // 🆕 NUEVO: Reparar el edificio roto
+                // ✅ NUEVO: Iniciar temporizador de reparación de 4 segundos
                 if (toNode && toNode.broken) {
-                    toNode.broken = false;
-                    toNode.disabled = false; // También restaurar si estaba disabled
-                    console.log(`🔧 Edificio ${toNode.type} ${toNode.id} reparado por camión de reparación ${convoy.id}`);
-                    
-                    // Regresar el camión al HQ (similar a ambulancia del HQ)
-                    convoy.returning = true;
-                    convoy.progress = 0; // RESETEAR progress para el viaje de vuelta
+                    // Si no está reparando aún, iniciar el temporizador
+                    if (!convoy.repairing) {
+                        convoy.repairing = true;
+                        convoy.repairStartTime = this.gameState.gameTime;
+                        convoy.repairDuration = 4; // 4 segundos de reparación
+                        console.log(`🔧 Camión de reparación ${convoy.id} iniciando reparación de ${toNode.type} ${toNode.id} (4s)`);
+                        return; // No mover el convoy, queda en el edificio
+                    }
+                    // Si ya está reparando, continuar (se maneja en el update)
                     return;
                 } else {
                     console.warn(`⚠️ Camión de reparación ${convoy.id} llegó a un edificio que no está roto: ${toNode?.type} ${toNode?.id}`);
@@ -366,7 +391,6 @@ export class ConvoyMovementManager {
             // fromNode = nodo con ID convoy.fromId (origen original: HQ/FOB)
             // toNode = nodo con ID convoy.toId (destino original: front/edificio)
             // El convoy regresa al nodo origen original (fromNode), así que fromNode es correcto
-            console.log(`🔄 Convoy ${convoy.id} regresando: fromNode=${fromNode?.type} ${fromNode?.id}, toNode=${toNode?.type} ${toNode?.id}, returning=${convoy.returning}`);
             this.returnVehicle(convoy, fromNode, convoyIndex);
         }
     }

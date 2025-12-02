@@ -10,9 +10,8 @@ export const GAME_CONFIG = {
         tickRate: 10,         // Ticks por segundo (TPS) - Optimización: reducido de 20 a 10
         worldWidth: 1920,     // Ancho del mundo (px)
         worldHeight: 1080,    // Alto del mundo (px)
-        // Líneas de victoria (8% y 92% del ancho de pantalla - cerca de los HQs)
-        victoryLineLeft: 0.05,    // 8% del ancho = 153.6px - línea de victoria para player2
-        victoryLineRight: 0.95     // 92% del ancho = 1766.4px - línea de victoria para player1
+        victoryLineLeft: 0.13,    // 10% del ancho línea de victoria para player2
+        victoryLineRight: 0.87     // 90% del ancho línea de victoria para player1
     },
 
     // ═══════════════════════════════════════════════════════════════

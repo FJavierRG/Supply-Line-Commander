@@ -235,7 +235,11 @@ export class StateSerializer {
                     progress: convoy.progress,
                     returning: convoy.returning,
                     isMedical: convoy.isMedical || false,
-                    targetFrontId: convoy.targetFrontId || null
+                    targetFrontId: convoy.targetFrontId || null,
+                    isRepair: convoy.isRepair || false, // ✅ NUEVO: Flag de camión de reparación
+                    repairing: convoy.repairing || false, // ✅ NUEVO: Si está reparando
+                    repairStartTime: convoy.repairStartTime || null, // ✅ NUEVO: Tiempo de inicio de reparación
+                    repairDuration: convoy.repairDuration || 4 // ✅ NUEVO: Duración de reparación (4 segundos)
                 };
             });
     }

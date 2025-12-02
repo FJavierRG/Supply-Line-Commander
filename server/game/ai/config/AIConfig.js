@@ -75,12 +75,13 @@ const AIConfig = {
     difficultyMultipliers: DIFFICULTY_MULTIPLIERS,
     
     // === DEBUGGING ===
+    // ⚠️ IMPORTANTE: Mantener en false para producción (causan lag severo al minuto 1)
     debug: {
-        logScoring: true,
-        logDecisions: true,
-        logThreats: true,
-        logActions: true,        // Logs de acciones (construcción, ataques)
-        logSupply: true          // Logs de reabastecimiento
+        logScoring: false,       // Logs de evaluación de cartas (MUY VERBOSE)
+        logDecisions: false,     // Logs de decisiones estratégicas
+        logThreats: false,       // Logs de detección de amenazas
+        logActions: false,       // Logs de acciones (construcción, ataques)
+        logSupply: false         // Logs de reabastecimiento
     },
 
     // === BUFFS ECONÓMICOS ===

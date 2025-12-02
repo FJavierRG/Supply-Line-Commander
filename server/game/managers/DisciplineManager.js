@@ -15,14 +15,14 @@ export class DisciplineManager {
                 active: null,        // ID de disciplina activa o null
                 activeStartTime: 0,  // Timestamp de cuando se activó
                 activeDuration: 0,   // Duración total en ms
-                cooldownUntil: 0     // Timestamp cuando termina el cooldown
+                cooldowns: {}        // 🆕 NUEVO: Cooldowns individuales por disciplina { disciplineId: cooldownUntil }
             },
             player2: {
                 equipped: [],
                 active: null,
                 activeStartTime: 0,
                 activeDuration: 0,
-                cooldownUntil: 0
+                cooldowns: {}        // 🆕 NUEVO: Cooldowns individuales por disciplina { disciplineId: cooldownUntil }
             }
         };
     }
@@ -99,9 +99,10 @@ export class DisciplineManager {
             };
         }
         
-        // Validar cooldown
-        if (currentTime < playerState.cooldownUntil) {
-            const remaining = Math.ceil((playerState.cooldownUntil - currentTime) / 1000);
+        // 🆕 NUEVO: Validar cooldown individual de esta disciplina específica
+        const disciplineCooldownUntil = playerState.cooldowns[disciplineId] || 0;
+        if (currentTime < disciplineCooldownUntil) {
+            const remaining = Math.ceil((disciplineCooldownUntil - currentTime) / 1000);
             return { 
                 success: false, 
                 reason: `Cooldown activo (${remaining}s restantes)` 
@@ -153,11 +154,12 @@ export class DisciplineManager {
                     
                     console.log(`⏱️ ${playerId} - Disciplina terminada: ${disciplineId}`);
                     
-                    // Establecer cooldown (si hay alguno)
+                    // 🆕 NUEVO: Establecer cooldown individual para esta disciplina específica
                     if (discipline.cooldown > 0) {
-                        playerState.cooldownUntil = currentTime + (discipline.cooldown * 1000);
+                        playerState.cooldowns[disciplineId] = currentTime + (discipline.cooldown * 1000);
                     } else {
-                        playerState.cooldownUntil = 0; // Sin cooldown - disponible inmediatamente
+                        // Sin cooldown - eliminar entrada si existe
+                        delete playerState.cooldowns[disciplineId];
                     }
                     
                     // Desactivar
@@ -174,14 +176,18 @@ export class DisciplineManager {
                 }
             }
             
-            // Verificar si el cooldown terminó (para notificar al cliente)
-            if (playerState.cooldownUntil > 0 && currentTime >= playerState.cooldownUntil) {
-                events.push({
-                    playerId,
-                    event: 'cooldown_ready'
-                });
-                // Resetear cooldownUntil para evitar notificar múltiples veces
-                playerState.cooldownUntil = 0;
+            // 🆕 NUEVO: Verificar cooldowns individuales de todas las disciplinas equipadas
+            for (const disciplineId of playerState.equipped) {
+                const cooldownUntil = playerState.cooldowns[disciplineId] || 0;
+                if (cooldownUntil > 0 && currentTime >= cooldownUntil) {
+                    // Cooldown terminó - eliminar entrada
+                    delete playerState.cooldowns[disciplineId];
+                    events.push({
+                        playerId,
+                        event: 'cooldown_ready',
+                        disciplineId
+                    });
+                }
             }
         }
         
@@ -222,13 +228,20 @@ export class DisciplineManager {
     getPlayerState(playerId, currentTime) {
         const state = this.playerDisciplines[playerId];
         
+        // 🆕 NUEVO: Calcular cooldowns individuales para cada disciplina equipada
+        const cooldowns = {};
+        for (const disciplineId of state.equipped) {
+            const cooldownUntil = state.cooldowns[disciplineId] || 0;
+            cooldowns[disciplineId] = Math.max(0, Math.ceil((cooldownUntil - currentTime) / 1000));
+        }
+        
         return {
             equipped: [...state.equipped],
             active: state.active,
             timeRemaining: state.active !== null 
                 ? Math.max(0, Math.ceil((state.activeStartTime + state.activeDuration - currentTime) / 1000))
                 : 0,
-            cooldownRemaining: Math.max(0, Math.ceil((state.cooldownUntil - currentTime) / 1000))
+            cooldowns: cooldowns  // 🆕 NUEVO: Cooldowns individuales { disciplineId: secondsRemaining }
         };
     }
     
@@ -250,8 +263,10 @@ export class DisciplineManager {
             return { canActivate: false, reason: 'Ya hay una disciplina activa' };
         }
         
-        if (currentTime < playerState.cooldownUntil) {
-            const remaining = Math.ceil((playerState.cooldownUntil - currentTime) / 1000);
+        // 🆕 NUEVO: Verificar cooldown individual de esta disciplina específica
+        const disciplineCooldownUntil = playerState.cooldowns[disciplineId] || 0;
+        if (currentTime < disciplineCooldownUntil) {
+            const remaining = Math.ceil((disciplineCooldownUntil - currentTime) / 1000);
             return { canActivate: false, reason: `Cooldown: ${remaining}s` };
         }
         
@@ -288,12 +303,17 @@ export class DisciplineManager {
     forceEndDiscipline(playerId) {
         const playerState = this.playerDisciplines[playerId];
         if (playerState.active !== null) {
-            const discipline = getDiscipline(playerState.active);
+            const disciplineId = playerState.active;
+            const discipline = getDiscipline(disciplineId);
+            const currentTime = Date.now();
+            
+            // 🆕 NUEVO: Establecer cooldown individual para esta disciplina específica
             if (discipline.cooldown > 0) {
-                playerState.cooldownUntil = Date.now() + (discipline.cooldown * 1000);
+                playerState.cooldowns[disciplineId] = currentTime + (discipline.cooldown * 1000);
             } else {
-                playerState.cooldownUntil = 0;
+                delete playerState.cooldowns[disciplineId];
             }
+            
             playerState.active = null;
             playerState.activeStartTime = 0;
             playerState.activeDuration = 0;

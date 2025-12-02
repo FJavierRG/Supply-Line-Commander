@@ -468,26 +468,37 @@
 
             <!-- Pantalla de Victoria -->
             <div id="victory-overlay" class="overlay hidden">
-                <div class="main-menu-container">
-                    <div class="menu-header">
-                        <h1 class="menu-title" style="color: #4ecca3;">¡VICTORIA!</h1>
+                <div class="game-end-container">
+                    <div class="game-end-header">
+                        <h1 class="game-end-title victory">¡VICTORIA!</h1>
                     </div>
                     
-                    <div class="menu-actions">
-                        <button id="victory-menu-btn" class="menu-btn primary">Volver al Menú</button>
+                    <div class="game-end-graphics">
+                        <img src="assets/sprites/ui/victoryLanes.png" alt="Victoria" class="game-end-image">
+                    </div>
+                    
+                    <div class="game-end-actions">
+                        <button id="victory-menu-btn" class="game-end-btn">Volver al Menú</button>
                     </div>
                 </div>
             </div>
 
             <!-- Pantalla de Derrota -->
             <div id="defeat-overlay" class="overlay hidden">
-                <div class="main-menu-container">
-                    <div class="menu-header">
-                        <h1 class="menu-title" style="color: #e74c3c;">DERROTA</h1>
+                <div class="game-end-container">
+                    <div class="game-end-header">
+                        <h1 class="game-end-title defeat">DERROTA</h1>
                     </div>
                     
-                    <div class="menu-actions">
-                        <button id="defeat-menu-btn" class="menu-btn primary">Volver al Menú</button>
+                    <div class="game-end-graphics">
+                        <!-- Aquí se podría poner una imagen de derrota cuando esté disponible -->
+                        <div class="game-end-placeholder">
+                            <p style="font-size: 48px; color: #e74c3c; text-shadow: 0 0 20px rgba(231, 76, 60, 0.5);">✕</p>
+                        </div>
+                    </div>
+                    
+                    <div class="game-end-actions">
+                        <button id="defeat-menu-btn" class="game-end-btn">Volver al Menú</button>
                     </div>
                 </div>
             </div>

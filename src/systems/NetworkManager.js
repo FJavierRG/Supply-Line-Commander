@@ -1,6 +1,6 @@
 // ===== GESTOR DE RED - Cliente Socket.IO =====
 // Responsabilidad: Coordinador principal de la red, delegando responsabilidades específicas a módulos especializados
-import { BackgroundTileSystem } from './BackgroundTileSystem.js';
+import { BackgroundTileSystem } from './game/BackgroundTileSystem.js';
 import { Convoy } from '../entities/Convoy.js';
 import { VisualNode } from '../entities/visualNode.js';
 import { getNodeConfig } from '../config/nodes.js';
@@ -21,6 +21,10 @@ export class NetworkManager {
         // Medición de latencia/ping
         this.lastPingTime = 0;
         this.ping = 0;
+        
+        // 🔍 MONITOREO: Detección de lag/freezes
+        this._lastFrameTime = Date.now();
+        this._lagDetectionEnabled = false;
         
         // Auto-detectar URL del servidor
         // Si se accede vía ngrok/producción, usar la misma URL
@@ -312,36 +316,29 @@ export class NetworkManager {
         });
         
         // 🆕 NUEVO: Eventos de permutación de cartas
+        // ✅ FIX: Los swaps durante la partida NO deben modificar el mazo original
+        // Solo actualizan una copia temporal para mostrar en la UI (no se guarda nada)
         this.socket.on('swap_card_success', (data) => {
-            // Actualizar el mazo local con el resultado de la permutación
-            if (this.game && this.game.deckManager) {
-                // Obtener el mazo actual del jugador
-                let currentDeck = this.game.deckManager.getSelectedDeck();
-                if (!currentDeck) {
-                    currentDeck = this.game.deckManager.getDefaultDeck();
+            // Actualizar solo la copia temporal del mazo en StoreUIManager
+            // NO modificar el mazo original, NO guardar en localStorage, NO guardar en BD
+            if (this.game && this.game.storeUI) {
+                // Si no existe la copia temporal, crearla (por si acaso)
+                if (!this.game.storeUI.gameDeckCopy) {
+                    this.game.storeUI.initializeGameDeckCopy();
                 }
                 
-                if (currentDeck) {
-                    // Actualizar unidades y banquillo
-                    currentDeck.units = data.newDeck;
-                    currentDeck.bench = data.newBench;
+                // Actualizar solo la copia temporal del mazo
+                if (this.game.storeUI.gameDeckCopy) {
+                    this.game.storeUI.gameDeckCopy.units = [...data.newDeck];
+                    this.game.storeUI.gameDeckCopy.bench = [...data.newBench];
                     
-                    // Guardar cambios en localStorage
-                    if (currentDeck.id !== 'default') {
-                        this.game.deckManager.updateDeck(currentDeck.id, {
-                            units: data.newDeck,
-                            bench: data.newBench
-                        });
-                    }
-                    
-                    // Actualizar la tienda para reflejar los cambios
-                    if (this.game.storeUI) {
-                        this.game.storeUI.setDeck(currentDeck.id);
-                        // Salir del modo permutación si está activo
-                        if (this.game.storeUI.swapMode) {
-                            this.game.storeUI.exitSwapMode();
-                        }
-                    }
+                    // ✅ FIX: Actualizar las categorías para reflejar los cambios en la tienda
+                    this.game.storeUI.updateCategories();
+                }
+                
+                // Salir del modo permutación si está activo
+                if (this.game.storeUI.swapMode) {
+                    this.game.storeUI.exitSwapMode();
                 }
             }
         });
@@ -439,6 +436,9 @@ export class NetworkManager {
                         this.game.storeUI.setDeck(deckToUse.id);
                     }
                 }
+                
+                // ✅ FIX: Inicializar copia temporal del mazo para la partida (NO modifica el original)
+                this.game.storeUI.initializeGameDeckCopy();
             }
             
             // CRÍTICO: Desactivar tutorial ANTES de cargar estado
@@ -2442,6 +2442,13 @@ export class NetworkManager {
     
     startActualGame() {
         
+        // 🔍 MONITOREO: Activar detección de lag después de 10 segundos del inicio
+        setTimeout(() => {
+            this._lagDetectionEnabled = true;
+            this._lastFrameTime = Date.now();
+            console.log('🔍 Detección de lag activada');
+        }, 10000);
+        
         // CRÍTICO: Detener cualquier sonido del countdown que siga sonando
         if (this.game.audio.sounds.countdown) {
             this.game.audio.sounds.countdown.pause();
@@ -2616,143 +2623,393 @@ export class NetworkManager {
     }
     
     /**
-     * Mostrar pantalla de victoria/derrota
+     * Mostrar pantalla de victoria/derrota mejorada con pestañas
      */
     showGameOverScreen(isWinner, reasonText, stats) {
         // AUDIO: Detener música de batalla solo si gané
         if (isWinner) {
-            // Victoria: detener batalla y reproducir Victory March
             this.game.audio.stopBattleMusic();
             this.game.audio.playVictoryMarch();
         }
-        // Derrota: MANTENER música de batalla (sonido ambiental continúa)
         
-        // Crear overlay usando las clases CSS del juego
+        // Datos calculados
+        const myTeam = this.game.myTeam;
+        const oppTeam = myTeam === 'player1' ? 'player2' : 'player1';
+        const myStats = stats?.[myTeam] || {};
+        const oppStats = stats?.[oppTeam] || {};
+        const duration = stats?.duration || 0;
+        const minutes = Math.floor(duration / 60);
+        const seconds = duration % 60;
+        const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        // Calcular estadísticas derivadas
+        const myGoldPerMin = duration > 0 ? Math.round((myStats.totalCurrency || 0) / (duration / 60)) : 0;
+        const oppGoldPerMin = duration > 0 ? Math.round((oppStats.totalCurrency || 0) / (duration / 60)) : 0;
+        
+        // Estadísticas del cliente
+        const clientStats = this.game.matchStats || {};
+        
+        // Colores
+        const winColor = '#4ecca3';
+        const loseColor = '#e74c3c';
+        const mainColor = isWinner ? winColor : loseColor;
+        
+        // Crear overlay con layout fijo
         const overlay = document.createElement('div');
         overlay.id = 'game-over-overlay';
         overlay.className = 'overlay';
         overlay.style.cssText = `
             display: flex;
             background: rgba(0, 0, 0, 0.95);
+            justify-content: center;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
         `;
         
-        // Contenedor principal
+        // Contenedor principal con tamaño fijo
         const container = document.createElement('div');
         container.className = 'main-menu-container';
-        container.style.maxWidth = '700px';
-        
-        // Header
-        const header = document.createElement('div');
-        header.className = 'menu-header';
-        
-        const title = document.createElement('h1');
-        title.className = 'menu-title';
-        title.textContent = isWinner ? 'VICTORIA' : 'DERROTA';
-        title.style.color = isWinner ? '#4ecca3' : '#e74c3c';
-        title.style.textShadow = `0 0 20px ${isWinner ? '#4ecca3' : '#e74c3c'}`;
-        header.appendChild(title);
-        container.appendChild(header);
-        
-        // Razón de victoria/derrota
-        const reasonDiv = document.createElement('div');
-        reasonDiv.style.cssText = `
-            color: #ffffff;
-            font-size: 18px;
-            margin: 20px 0;
-            text-align: center;
+        container.style.cssText = `
+            width: 700px;
+            max-width: 90vw;
+            max-height: 90vh;
+            box-sizing: border-box;
         `;
-        reasonDiv.textContent = reasonText;
-        container.appendChild(reasonDiv);
         
-        // Estadísticas (usando mismo estilo que singleplayer)
-        if (stats) {
-            const statsContainer = document.createElement('div');
-            statsContainer.className = 'stats-container';
-            statsContainer.style.cssText = `
-                color: #ffffff;
-                text-align: left;
-                margin: 20px 0;
-                padding: 20px;
+        // Header con título y razón
+        container.innerHTML = `
+            <div class="menu-header">
+                <h1 class="menu-title" style="color: ${mainColor}; text-shadow: 0 0 20px ${mainColor}; font-size: 36px;">
+                    ${isWinner ? 'VICTORIA' : 'DERROTA'}
+                </h1>
+                <div style="color: #888; font-size: 14px; margin-top: 8px;">${reasonText}</div>
+            </div>
+            
+            <!-- Pestañas -->
+            <div id="stats-tabs" style="display: flex; gap: 10px; margin: 20px 0; justify-content: center;">
+                <button class="stats-tab active" data-tab="resumen" style="
+                    padding: 10px 30px;
+                    background: ${mainColor};
+                    border: none;
+                    border-radius: 5px;
+                    color: #000;
+                    font-weight: bold;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    font-size: 14px;
+                ">Resumen</button>
+                <button class="stats-tab" data-tab="graficos" style="
+                    padding: 10px 30px;
+                    background: rgba(255,255,255,0.1);
+                    border: 1px solid ${mainColor};
+                    border-radius: 5px;
+                    color: ${mainColor};
+                    font-weight: bold;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    font-size: 14px;
+                ">Gráficos</button>
+            </div>
+            
+            <!-- Contenido de pestañas -->
+            <div id="stats-content" style="
                 background: rgba(0, 0, 0, 0.7);
                 border-radius: 8px;
-            `;
+                padding: 25px;
+                box-sizing: border-box;
+            ">
+                <!-- Pestaña Resumen -->
+                <div id="tab-resumen" class="tab-content">
+                    <div style="text-align: center; margin-bottom: 25px;">
+                        <div style="font-size: 28px; font-weight: bold; color: #fff;">${durationStr}</div>
+                        <div style="color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Duración</div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px;">
+                        <!-- Mi rendimiento -->
+                        <div style="background: rgba(78, 204, 163, 0.08); padding: 18px; border-radius: 6px; border-left: 3px solid ${winColor};">
+                            <h3 style="color: ${winColor}; margin: 0 0 14px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Tu rendimiento</h3>
+                            <div style="display: flex; flex-direction: column; gap: 10px; color: #fff; font-size: 13px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: #888;">Oro generado</span>
+                                    <span style="font-weight: bold; color: #4ecca3;">${myStats.totalCurrency || 0}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: #888;">Oro gastado</span>
+                                    <span style="font-weight: bold; color: #e74c3c;">${myStats.currencySpent || 0}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: #888;">Oro/min</span>
+                                    <span style="font-weight: bold;">${myGoldPerMin}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: #888;">Camiones</span>
+                                    <span style="font-weight: bold;">${myStats.trucksDispatched?.total || 0}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: #888;">Edificios</span>
+                                    <span style="font-weight: bold;">${myStats.buildings || 0}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Enemigo -->
+                        <div style="background: rgba(231, 76, 60, 0.08); padding: 18px; border-radius: 6px; border-left: 3px solid ${loseColor};">
+                            <h3 style="color: ${loseColor}; margin: 0 0 14px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Enemigo</h3>
+                            <div style="display: flex; flex-direction: column; gap: 10px; color: #fff; font-size: 13px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: #888;">Oro generado</span>
+                                    <span style="font-weight: bold; color: #4ecca3;">${oppStats.totalCurrency || 0}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: #888;">Oro gastado</span>
+                                    <span style="font-weight: bold; color: #e74c3c;">${oppStats.currencySpent || 0}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: #888;">Oro/min</span>
+                                    <span style="font-weight: bold;">${oppGoldPerMin}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: #888;">Camiones</span>
+                                    <span style="font-weight: bold;">${oppStats.trucksDispatched?.total || 0}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: #888;">Edificios</span>
+                                    <span style="font-weight: bold;">${oppStats.buildings || 0}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Pestaña Gráficos -->
+                <div id="tab-graficos" class="tab-content" style="display: none;">
+                    <div style="text-align: center; margin-bottom: 15px;">
+                        <div style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Evolución de la partida</div>
+                    </div>
+                    
+                    <!-- Gráfico de Oro Generado -->
+                    <div style="background: rgba(255, 255, 255, 0.03); padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+                        <div style="color: #888; margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Oro generado acumulado</div>
+                        <canvas id="chart-currency" width="620" height="140" style="width: 100%; background: rgba(0,0,0,0.2); border-radius: 4px;"></canvas>
+                        <div style="display: flex; justify-content: center; gap: 25px; margin-top: 8px; font-size: 11px; color: #666;">
+                            <div><span style="color: ${winColor};">■</span> Tú (${myStats.totalCurrency || 0})</div>
+                            <div><span style="color: ${loseColor};">■</span> Enemigo (${oppStats.totalCurrency || 0})</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Gráfico de Camiones -->
+                    <div style="background: rgba(255, 255, 255, 0.03); padding: 15px; border-radius: 6px;">
+                        <div style="color: #888; margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Camiones enviados acumulados</div>
+                        <canvas id="chart-trucks" width="620" height="140" style="width: 100%; background: rgba(0,0,0,0.2); border-radius: 4px;"></canvas>
+                        <div style="display: flex; justify-content: center; gap: 25px; margin-top: 8px; font-size: 11px; color: #666;">
+                            <div><span style="color: ${winColor};">■</span> Tú (${myStats.trucksDispatched?.total || 0})</div>
+                            <div><span style="color: ${loseColor};">■</span> Enemigo (${oppStats.trucksDispatched?.total || 0})</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             
-            // Duración
-            const duration = document.createElement('div');
-            duration.style.cssText = `
-                text-align: center;
-                margin-bottom: 20px;
-                font-size: 24px;
-                font-weight: bold;
-            `;
-            const minutes = Math.floor(stats.duration / 60);
-            const seconds = stats.duration % 60;
-            duration.textContent = `⏱️ Duración: ${minutes}:${seconds.toString().padStart(2, '0')}`;
-            statsContainer.appendChild(duration);
-            
-            // Grid de estadísticas
-            const grid = document.createElement('div');
-            grid.style.cssText = `
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 20px;
-            `;
-            
-            const myStats = stats[this.game.myTeam];
-            const oppTeam = this.game.myTeam === 'player1' ? 'player2' : 'player1';
-            const oppStats = stats[oppTeam];
-            
-            // Mis stats
-            const myStatsDiv = document.createElement('div');
-            myStatsDiv.innerHTML = `
-                <h3 style="color: #4ecca3; margin-bottom: 10px;">TU RENDIMIENTO</h3>
-                <div>💰 Currency total: ${myStats.totalCurrency}$</div>
-                <div>🏗️ Edificios: ${myStats.buildings}</div>
-                <div>⚔️ Avance máx: ${Math.floor(myStats.maxAdvance)} px</div>
-            `;
-            grid.appendChild(myStatsDiv);
-            
-            // Stats del enemigo
-            const oppStatsDiv = document.createElement('div');
-            oppStatsDiv.innerHTML = `
-                <h3 style="color: #e74c3c; margin-bottom: 10px;">ENEMIGO</h3>
-                <div>💰 Currency total: ${oppStats.totalCurrency}$</div>
-                <div>🏗️ Edificios: ${oppStats.buildings}</div>
-                <div>⚔️ Avance máx: ${Math.floor(oppStats.maxAdvance)} px</div>
-            `;
-            grid.appendChild(oppStatsDiv);
-            
-            statsContainer.appendChild(grid);
-            container.appendChild(statsContainer);
-        }
-        
-        // Acciones (botón volver al menú)
-        const actions = document.createElement('div');
-        actions.className = 'menu-actions';
-        
-        const menuBtn = document.createElement('button');
-        menuBtn.className = 'menu-btn primary';
-        menuBtn.textContent = 'Volver al Menú';
-        // NO sobrescribir background - usar UIFrame del CSS (medium_bton.png)
-        // Aplicar color como filtro si es derrota
-        if (!isWinner) {
-            menuBtn.style.filter = 'hue-rotate(180deg) saturate(1.5)'; // Rojo para derrota
-        }
-        menuBtn.onclick = () => {
-            // Detener música de victoria
-            this.game.audio.stopVictoryMarch();
-            // Detener música de batalla (por si perdió)
-            this.game.audio.stopBattleMusic();
-            // Desconectar del servidor
-            this.disconnect();
-            // Recargar página para volver al menú principal
-            window.location.reload();
-        };
-        actions.appendChild(menuBtn);
-        container.appendChild(actions);
+            <!-- Botón volver -->
+            <div style="margin-top: 25px; display: flex; justify-content: center;">
+                <button id="game-over-menu-btn" style="
+                    width: 100%;
+                    max-width: 300px;
+                    padding: 16px 32px;
+                    font-size: 18px;
+                    font-weight: 600;
+                    color: #fff;
+                    background: rgba(78, 204, 163, 0.2);
+                    border: 2px solid ${mainColor};
+                    border-radius: 8px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                ">
+                    Volver al Menú
+                </button>
+            </div>
+        `;
         
         overlay.appendChild(container);
         document.body.appendChild(overlay);
+        
+        // Función para dibujar gráfico de líneas
+        const drawLineChart = (canvasId, history, dataKey, myTeam) => {
+            const canvas = overlay.querySelector(`#${canvasId}`);
+            if (!canvas || !history || history.length < 2) {
+                console.warn(`⚠️ [drawLineChart] No se puede dibujar: canvas=${!!canvas}, history length=${history?.length || 0}`);
+                return;
+            }
+            
+            console.log(`📊 [drawLineChart] Dibujando ${dataKey}:`, {
+                puntos: history.length,
+                primerTiempo: history[0]?.time,
+                ultimoTiempo: history[history.length - 1]?.time,
+                primeraData: history[0]
+            });
+            
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            const padding = { top: 20, right: 20, bottom: 30, left: 50 };
+            const chartWidth = width - padding.left - padding.right;
+            const chartHeight = height - padding.top - padding.bottom;
+            
+            // Limpiar canvas
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Obtener datos
+            const oppTeam = myTeam === 'player1' ? 'player2' : 'player1';
+            const myData = history.map(h => h[myTeam]?.[dataKey] || 0);
+            const oppData = history.map(h => h[oppTeam]?.[dataKey] || 0);
+            const times = history.map(h => h.time || 0);
+            
+            console.log(`📊 [drawLineChart] Datos extraídos:`, {
+                myTeam,
+                oppTeam,
+                myData: myData.slice(0, 3),
+                oppData: oppData.slice(0, 3),
+                times: times.slice(0, 3)
+            });
+            
+            // Calcular escala
+            const maxValue = Math.max(...myData, ...oppData, 1);
+            const minTime = times[0] || 0;
+            const maxTime = times[times.length - 1] || 1;
+            
+            // Dibujar grid
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                const y = padding.top + (chartHeight * i / 4);
+                ctx.beginPath();
+                ctx.moveTo(padding.left, y);
+                ctx.lineTo(width - padding.right, y);
+                ctx.stroke();
+            }
+            
+            // Dibujar ejes
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.beginPath();
+            ctx.moveTo(padding.left, padding.top);
+            ctx.lineTo(padding.left, height - padding.bottom);
+            ctx.lineTo(width - padding.right, height - padding.bottom);
+            ctx.stroke();
+            
+            // Etiquetas del eje Y
+            ctx.fillStyle = '#888';
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= 4; i++) {
+                const value = Math.round(maxValue * (4 - i) / 4);
+                const y = padding.top + (chartHeight * i / 4);
+                ctx.fillText(value.toString(), padding.left - 5, y + 3);
+            }
+            
+            // Etiquetas del eje X (tiempo)
+            ctx.textAlign = 'center';
+            const timeLabels = [times[0], times[Math.floor(times.length/2)], times[times.length-1]];
+            timeLabels.forEach((t, i) => {
+                const x = padding.left + (chartWidth * i / 2);
+                const mins = Math.floor(t / 60);
+                const secs = t % 60;
+                ctx.fillText(mins + ':' + secs.toString().padStart(2, '0'), x, height - 10);
+            });
+            
+            // Función para dibujar línea
+            const drawLine = (data, color) => {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                data.forEach((value, i) => {
+                    const x = padding.left + (chartWidth * i / (data.length - 1));
+                    const y = padding.top + chartHeight - (chartHeight * value / maxValue);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+                
+                // Puntos
+                ctx.fillStyle = color;
+                data.forEach((value, i) => {
+                    const x = padding.left + (chartWidth * i / (data.length - 1));
+                    const y = padding.top + chartHeight - (chartHeight * value / maxValue);
+                    ctx.beginPath();
+                    ctx.arc(x, y, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            };
+            
+            // Dibujar líneas
+            drawLine(myData, '#4ecca3');
+            drawLine(oppData, '#e74c3c');
+        };
+        
+        // Lógica de pestañas
+        const tabs = overlay.querySelectorAll('.stats-tab');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabId = tab.dataset.tab;
+                
+                // Actualizar estado de pestañas
+                tabs.forEach(t => {
+                    t.classList.remove('active');
+                    t.style.background = 'rgba(255,255,255,0.1)';
+                    t.style.color = mainColor;
+                });
+                tab.classList.add('active');
+                tab.style.background = mainColor;
+                tab.style.color = '#000';
+                
+                // Mostrar/ocultar contenido
+                overlay.querySelectorAll('.tab-content').forEach(content => {
+                    content.style.display = 'none';
+                });
+                overlay.querySelector(`#tab-${tabId}`).style.display = 'block';
+                
+                // Dibujar gráficos cuando se selecciona la pestaña
+                if (tabId === 'graficos' && stats?.history) {
+                    setTimeout(() => {
+                        drawLineChart('chart-currency', stats.history, 'currency', myTeam);
+                        drawLineChart('chart-trucks', stats.history, 'trucks', myTeam);
+                    }, 50);
+                }
+            });
+        });
+        
+        // Botón volver al menú
+        const menuBtn = overlay.querySelector('#game-over-menu-btn');
+        menuBtn.onclick = () => {
+            this.game.audio.stopVictoryMarch();
+            this.game.audio.stopBattleMusic();
+            this.disconnect();
+            window.location.reload();
+        };
+        
+        // Efectos hover para el botón
+        menuBtn.addEventListener('mouseenter', () => {
+            menuBtn.style.background = 'rgba(78, 204, 163, 0.4)';
+            menuBtn.style.transform = 'translateY(-2px)';
+            menuBtn.style.boxShadow = `0 4px 12px rgba(${isWinner ? '78, 204, 163' : '231, 76, 60'}, 0.3)`;
+        });
+        
+        menuBtn.addEventListener('mouseleave', () => {
+            menuBtn.style.background = 'rgba(78, 204, 163, 0.2)';
+            menuBtn.style.transform = 'translateY(0)';
+            menuBtn.style.boxShadow = 'none';
+        });
+        
+        menuBtn.addEventListener('mousedown', () => {
+            menuBtn.style.transform = 'translateY(0)';
+        });
     }
     
     /**
@@ -2766,6 +3023,17 @@ export class NetworkManager {
         if (this.pingUpdateInterval >= 5.0) {
             this.pingUpdateInterval = 0;
             this.clientSender.sendPing(Date.now());
+        }
+        
+        // 🔍 MONITOREO: Detectar freezes/lag (solo después de activar)
+        if (this._lagDetectionEnabled) {
+            const now = Date.now();
+            const frameTime = now - this._lastFrameTime;
+            // Si un frame tardó más de 500ms, es un freeze significativo
+            if (frameTime > 500) {
+                console.warn(`⚠️ [LAG DETECTED] Frame tardó ${frameTime}ms (dt=${dt.toFixed(3)}s) en gameTime ~${this.gameStateSync?.lastGameState?.gameTime?.toFixed(1) || '?'}s`);
+            }
+            this._lastFrameTime = now;
         }
     }
     

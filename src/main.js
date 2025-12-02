@@ -1,7 +1,7 @@
 // ===== PUNTO DE ENTRADA =====
 import { Game } from './Game.js';
 import { authService } from './services/AuthService.js';
-import { AuthUIManager } from './systems/AuthUIManager.js';
+import { AuthUIManager } from './systems/ui/AuthUIManager.js';
 
 async function ensureAuthenticated(authUI) {
     if (authService.isAuthenticated()) {

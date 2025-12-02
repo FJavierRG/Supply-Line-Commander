@@ -602,7 +602,16 @@ io.on('connection', (socket) => {
                     selectedRace: p.selectedRace, // Mantener compatibilidad
                     selectedDeck: p.selectedDeck ? { id: p.selectedDeck.id, name: p.selectedDeck.name } : null, // 🆕 NUEVO: Enviar info del mazo
                     ready: p.ready
-                }))
+                })),
+                // 🐛 FIX: Incluir información de IA para que no desaparezca al cambiar mazo
+                aiPlayer: room.aiPlayer ? {
+                    isAI: true,
+                    name: room.aiPlayer.name,
+                    race: room.aiPlayer.race,
+                    difficulty: room.aiPlayer.difficulty,
+                    team: 'player2',
+                    ready: true
+                } : null
             });
             
             console.log(`✅ Jugador ${player.name} seleccionó mazo "${validatedDeck.name}" (${validatedDeck.units.length} unidades) en sala ${roomId}`);

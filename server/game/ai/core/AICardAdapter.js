@@ -39,36 +39,14 @@ export class AICardAdapter {
     
     /**
      * Obtiene requisitos indirectos de consumibles
-     * Estos son requisitos que no están en buildRequirements pero son necesarios para usar ciertos consumibles
+     * ⚠️ NOTA: Los requisitos principales deben venir de SERVER_NODE_CONFIG.buildRequirements
+     * Este método queda como extensión para reglas especiales que no encajen bien en configuración
      * @param {string} cardId - ID de la carta
      * @returns {Array<string>} Array de IDs de edificios requeridos
      */
     static getIndirectRequirements(cardId) {
-        // drone requiere droneLauncher
-        if (cardId === 'drone') {
-            return ['droneLauncher'];
-        }
-        
-        // specopsCommando requiere intelCenter
-        if (cardId === 'specopsCommando') {
-            return ['intelCenter'];
-        }
-        
-        // fobSabotage requiere intelCenter (verificar en código si es correcto)
-        if (cardId === 'fobSabotage') {
-            return ['intelCenter'];
-        }
-        
-        // cameraDrone requiere droneLauncher
-        if (cardId === 'cameraDrone') {
-            return ['droneLauncher'];
-        }
-        
-        // truckAssault requiere intelCenter
-        if (cardId === 'truckAssault') {
-            return ['intelCenter'];
-        }
-        
+        // Actualmente todos los requisitos están modelados en buildRequirements
+        // Se deja este hook para futura lógica especial si fuera necesaria
         return [];
     }
     

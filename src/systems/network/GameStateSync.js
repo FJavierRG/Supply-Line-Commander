@@ -447,6 +447,11 @@ export class GameStateSync {
                 }
                 convoy.isMedical = convoyData.isMedical || false;
                 convoy.targetFrontId = convoyData.targetFrontId || null;
+                // ✅ NUEVO: Sincronizar estado de reparación
+                convoy.isRepair = convoyData.isRepair || false;
+                convoy.repairing = convoyData.repairing || false;
+                convoy.repairStartTime = convoyData.repairStartTime || null;
+                convoy.repairDuration = convoyData.repairDuration || 4;
             }
             // Si no existe, será creado por el evento convoy_spawned o ambulance_spawned
         });
@@ -754,14 +759,14 @@ export class GameStateSync {
             equipped: [],
             active: null,
             timeRemaining: 0,
-            cooldownRemaining: 0
+            cooldowns: {}  // 🆕 NUEVO: Cooldowns individuales { disciplineId: secondsRemaining }
         };
         
         this.game.disciplineStates.player2 = gameState.disciplines.player2 || {
             equipped: [],
             active: null,
             timeRemaining: 0,
-            cooldownRemaining: 0
+            cooldowns: {}  // 🆕 NUEVO: Cooldowns individuales { disciplineId: secondsRemaining }
         };
     }
 

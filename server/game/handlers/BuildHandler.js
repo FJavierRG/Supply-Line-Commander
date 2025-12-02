@@ -117,6 +117,13 @@ export class BuildHandler {
     }
     
     /**
+     * ✅ SERVIDOR COMO AUTORIDAD: Obtiene requisitos de construcción y acciones
+     */
+    getBuildRequirements() {
+        return { ...SERVER_NODE_CONFIG.buildRequirements };
+    }
+    
+    /**
      * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene configuración de nodos especiales
      */
     getSpecialNodes() {
