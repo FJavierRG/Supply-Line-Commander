@@ -1126,9 +1126,12 @@ export class GameStateManager {
             }
         };
         
-        // Durante sync inicial, siempre enviar. Después, aplicar optimización
+        // 🔧 FIX APLICADO: OptimizationTracker mejorado para detectar cambios en:
+        // - gameTime (siempre envía si pasó ≥0.1s)
+        // - Progress de todos los vehículos (convoyes, trenes, helicópteros, deliveries)
+        // - Cambios en frontMode, posición de nodos, etc.
         if (!isInitialSync && !this.optimizationTracker.hasSignificantChanges(state)) {
-            return null; // Skip update - no envía nada
+            return null; // Skip update - no hay cambios significativos
         }
         
         // Guardar estado actual como referencia para próxima comparación

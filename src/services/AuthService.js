@@ -97,6 +97,10 @@ class AuthService {
         return this.token;
     }
 
+    getCurrentUserId() {
+        return this.user?.id || null;
+    }
+
     async register(username, password) {
         const response = await http.post('/api/auth/register', { username, password }, { auth: false });
         this.handleAuthSuccess(response);

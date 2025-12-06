@@ -260,7 +260,7 @@ export class BuildingSystem {
         this.buildMode = true;
         this.currentBuildingType = buildingId;
         this.game.selectedBase = null;
-        this.game.canvas.style.cursor = 'crosshair';
+        this.game.cursorManager.showCrosshair(); // 🆕 MODULARIZADO: Usar CursorManager
         
         console.log(`🔨 Modo construcción activado: ${building.name}`);
     }
@@ -271,7 +271,7 @@ export class BuildingSystem {
     deactivateBuildMode() {
         this.buildMode = false;
         this.currentBuildingType = null;
-        this.game.canvas.style.cursor = 'default';
+        this.game.cursorManager.reset(); // 🆕 MODULARIZADO: Usar CursorManager
     }
     
     /**
@@ -478,10 +478,10 @@ export class BuildingSystem {
         
         if (this.droneMode) {
             this.game.selectedBase = null;
-            this.game.canvas.style.cursor = 'crosshair';
+            this.game.cursorManager.showCrosshair(); // 🆕 MODULARIZADO: Usar CursorManager
             console.log('💣 Modo dron activado - Click en FOB enemigo');
         } else {
-            this.game.canvas.style.cursor = 'default';
+            this.game.cursorManager.reset(); // 🆕 MODULARIZADO: Usar CursorManager
             console.log('💣 Modo dron desactivado');
         }
     }
@@ -553,10 +553,10 @@ export class BuildingSystem {
         
         if (this.tankMode) {
             this.game.selectedBase = null;
-            this.game.canvas.style.cursor = 'crosshair';
+            this.game.cursorManager.showCrosshair(); // 🆕 MODULARIZADO: Usar CursorManager
             console.log('🛡️ Modo tanque activado - Click en edificio enemigo (NO FOBs ni HQs)');
         } else {
-            this.game.canvas.style.cursor = 'default';
+            this.game.cursorManager.reset(); // 🆕 MODULARIZADO: Usar CursorManager
             console.log('🛡️ Modo tanque desactivado');
         }
     }
@@ -594,7 +594,7 @@ export class BuildingSystem {
      */
     exitTankMode() {
         this.tankMode = false;
-        this.game.canvas.style.cursor = 'default';
+        this.game.cursorManager.reset(); // 🆕 MODULARIZADO: Usar CursorManager
     }
     
     /**
@@ -662,10 +662,10 @@ export class BuildingSystem {
         
         if (this.lightVehicleMode) {
             this.game.selectedBase = null;
-            this.game.canvas.style.cursor = 'crosshair';
+            this.game.cursorManager.showCrosshair(); // 🆕 MODULARIZADO: Usar CursorManager
             console.log('🚛 Modo artillado ligero activado - Click en edificio enemigo (NO FOBs ni HQs)');
         } else {
-            this.game.canvas.style.cursor = 'default';
+            this.game.cursorManager.reset(); // 🆕 MODULARIZADO: Usar CursorManager
             console.log('🚛 Modo artillado ligero desactivado');
         }
     }
@@ -703,7 +703,7 @@ export class BuildingSystem {
      */
     exitLightVehicleMode() {
         this.lightVehicleMode = false;
-        this.game.canvas.style.cursor = 'default';
+        this.game.cursorManager.reset(); // 🆕 MODULARIZADO: Usar CursorManager
     }
     
     /**
@@ -762,7 +762,7 @@ export class BuildingSystem {
         this.game.selectedBase = null;
         
         // Cursor personalizado con mira de sniper
-        this.game.canvas.style.cursor = 'none'; // Ocultar cursor default
+        this.game.cursorManager.showSniper(); // 🆕 MODULARIZADO: Usar CursorManager
         
         console.log('🎯 Modo francotirador activado - Selecciona un frente enemigo');
         
@@ -814,7 +814,7 @@ export class BuildingSystem {
      */
     exitSniperMode() {
         this.sniperMode = false;
-        this.game.canvas.style.cursor = 'default';
+        this.game.cursorManager.reset(); // 🆕 MODULARIZADO: Usar CursorManager
     }
     
     /**
@@ -843,7 +843,7 @@ export class BuildingSystem {
         this.game.selectedBase = null;
         
         // Cursor personalizado con specops_selector
-        this.game.canvas.style.cursor = 'none'; // Ocultar cursor default
+        this.game.cursorManager.showFobSabotage(); // 🆕 MODULARIZADO: Usar CursorManager
         
         // Reproducir sonido de whisper con cooldown de 3 segundos
         if (this.game.audio && this.game.audio.playWhisperSound) {
@@ -881,7 +881,7 @@ export class BuildingSystem {
      */
     exitFobSabotageMode() {
         this.fobSabotageMode = false;
-        this.game.canvas.style.cursor = 'default';
+        this.game.cursorManager.reset(); // 🆕 MODULARIZADO: Usar CursorManager
     }
     
     /**
@@ -928,7 +928,7 @@ export class BuildingSystem {
         this.game.selectedBase = null;
         
         // Usar cursor normal de construcción (no personalizado)
-        this.game.canvas.style.cursor = 'crosshair';
+        this.game.cursorManager.showCrosshair(); // 🆕 MODULARIZADO: Usar CursorManager
         
         console.log('🎖️ Modo comando especial operativo activado - Selecciona una posición en territorio enemigo para desplegar');
     }
@@ -956,7 +956,7 @@ export class BuildingSystem {
      */
     exitCommandoMode() {
         this.commandoMode = false;
-        this.game.canvas.style.cursor = 'default';
+        this.game.cursorManager.reset(); // 🆕 MODULARIZADO: Usar CursorManager
     }
     
     /**
@@ -1006,7 +1006,7 @@ export class BuildingSystem {
         this.game.selectedBase = null;
         
         // Usar cursor normal de construcción
-        this.game.canvas.style.cursor = 'crosshair';
+        this.game.cursorManager.showCrosshair(); // 🆕 MODULARIZADO: Usar CursorManager
         
         console.log('🚛 Modo truck assault activado - Selecciona una posición en territorio enemigo para desplegar');
     }
@@ -1064,7 +1064,7 @@ export class BuildingSystem {
         this.game.selectedBase = null;
         
         // Usar cursor normal de construcción
-        this.game.canvas.style.cursor = 'crosshair';
+        this.game.cursorManager.showCrosshair(); // 🆕 MODULARIZADO: Usar CursorManager
         
         console.log('📹 Modo camera drone activado - Selecciona una posición en territorio enemigo para desplegar');
     }
@@ -1092,7 +1092,7 @@ export class BuildingSystem {
      */
     exitCameraDroneMode() {
         this.cameraDroneMode = false;
-        this.game.canvas.style.cursor = 'default';
+        this.game.cursorManager.reset(); // 🆕 MODULARIZADO: Usar CursorManager
     }
     
     /**
@@ -1179,7 +1179,7 @@ export class BuildingSystem {
         this.game.selectedBase = null;
         
         // Ocultar cursor del navegador para mostrar sprite de artillery
-        this.game.canvas.style.cursor = 'none';
+        this.game.cursorManager.showArtillery(); // 🆕 MODULARIZADO: Usar CursorManager
         
         console.log('💣 Modo artillería activado - Selecciona un área en el mapa para bombardear');
     }
@@ -1207,7 +1207,7 @@ export class BuildingSystem {
      */
     exitArtilleryMode() {
         this.artilleryMode = false;
-        this.game.canvas.style.cursor = 'default';
+        this.game.cursorManager.reset(); // 🆕 MODULARIZADO: Usar CursorManager
     }
     
     /**
@@ -1233,7 +1233,7 @@ export class BuildingSystem {
      */
     exitTruckAssaultMode() {
         this.truckAssaultMode = false;
-        this.game.canvas.style.cursor = 'default';
+        this.game.cursorManager.reset(); // 🆕 MODULARIZADO: Usar CursorManager
     }
     
     /**

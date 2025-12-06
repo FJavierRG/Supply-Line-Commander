@@ -234,7 +234,7 @@ export class InputHandler {
         this.setupButton('logout-btn', () => {
             if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
                 // Importar authService dinámicamente para evitar dependencia circular
-                import('../services/AuthService.js').then(({ authService }) => {
+                import('../../services/AuthService.js').then(({ authService }) => {
                     authService.logout();
                     // Recargar la página para mostrar el overlay de autenticación
                     window.location.reload();
@@ -1231,6 +1231,11 @@ export class InputHandler {
         this.mouseX = transformed.x;
         this.mouseY = transformed.y;
         
+        // 🆕 NUEVO: Actualizar posición del cursor en CursorManager
+        if (this.game.cursorManager) {
+            this.game.cursorManager.updatePosition(this.mouseX, this.mouseY);
+        }
+        
         // Delegar hover a la tienda si está visible
         if (this.game.storeUI && this.game.storeUI.isVisible) {
             this.game.storeUI.handleMouseMove(this.mouseX, this.mouseY);
@@ -1782,7 +1787,7 @@ export class InputHandler {
         if (this.game.deckManager && this.game.deckManager.ensureReady) {
             try {
                 await this.game.deckManager.ensureReady();
-                const { authService } = await import('../services/AuthService.js');
+                const { authService } = await import('../../services/AuthService.js');
                 if (authService.isAuthenticated()) {
                     await this.game.deckManager.refreshDecks();
                 }
@@ -1980,7 +1985,7 @@ export class InputHandler {
         let playerName = 'Jugador 1';
         
         try {
-            const { authService } = await import('../services/AuthService.js');
+            const { authService } = await import('../../services/AuthService.js');
             if (authService.isAuthenticated()) {
                 const user = authService.getUser();
                 if (user && user.username) {
@@ -2013,7 +2018,7 @@ export class InputHandler {
         let playerName = 'Jugador 2';
         
         try {
-            const { authService } = await import('../services/AuthService.js');
+            const { authService } = await import('../../services/AuthService.js');
             if (authService.isAuthenticated()) {
                 const user = authService.getUser();
                 if (user && user.username) {

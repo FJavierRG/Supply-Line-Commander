@@ -128,7 +128,7 @@ body.menu-open #game-canvas {
 #game-canvas {
     /* Tamaño controlado por JavaScript para escalado correcto */
     display: block;
-    cursor: crosshair;
+    cursor: crosshair; /* 🆕 NOTA: El cursor real es gestionado por CursorManager.js */
     position: absolute;
     top: 0;
     left: 0;

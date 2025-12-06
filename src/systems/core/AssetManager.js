@@ -92,6 +92,8 @@ export class AssetManager {
             'ui-chopper-icon': 'assets/sprites/ui/chopper_icon.png',
             'ui-repair-vehicle-icon': 'assets/sprites/ui/vehicle_repair_icon.png', // 🆕 NUEVO: Camión mecánico
             'repairable': 'assets/sprites/ui/repairable.png', // 🆕 NUEVO: Overlay para edificios rotos
+            'node_hover': 'assets/sprites/ui/node_hover.png', // 🆕 NUEVO: Círculo de hover sobre nodos
+            'node_selection': 'assets/sprites/ui/node_selection.png', // 🆕 NUEVO: Círculo de selección sobre nodos
             
             // 🆕 NUEVO: Iconos de modos de comportamiento de frentes
             'ui-mode-advance-icon': 'assets/sprites/ui/advace_mode_idon.png',

@@ -42,6 +42,12 @@ export class OptimizationTracker {
             return true;
         }
         
+        // 🔧 FIX CRÍTICO: SIEMPRE enviar si gameTime cambió (≥0.1s)
+        // Esto asegura que el cliente reciba updates regulares para animaciones e interpolación
+        if (Math.abs(currentState.gameTime - this.lastSentState.gameTime) >= 0.1) {
+            return true;
+        }
+        
         // Verificar cambios en currency (solo si hay diferencia ≥ $5)
         const currencyChange = Math.abs(currentState.currency.player1 - this.lastSentState.currency.player1) +
                              Math.abs(currentState.currency.player2 - this.lastSentState.currency.player2);
@@ -49,42 +55,33 @@ export class OptimizationTracker {
             return true;
         }
         
-        // Verificar cambios en número de nodos
-        if (currentState.nodes.length !== this.lastSentState.nodes.length) {
+        // Verificar cambios en número de entidades
+        if (currentState.nodes.length !== this.lastSentState.nodes.length ||
+            currentState.convoys.length !== this.lastSentState.convoys.length ||
+            currentState.trains?.length !== this.lastSentState.trains?.length ||
+            currentState.helicopters?.length !== this.lastSentState.helicopters?.length ||
+            currentState.factorySupplyDeliveries?.length !== this.lastSentState.factorySupplyDeliveries?.length ||
+            currentState.drones.length !== this.lastSentState.drones.length ||
+            currentState.emergencies.length !== this.lastSentState.emergencies.length) {
             return true;
         }
         
-        // Verificar cambios en convoyes
-        if (currentState.convoys.length !== this.lastSentState.convoys.length) {
+        // Verificar eventos de sonido o visuales
+        if (currentState.soundEvents.length > 0 || currentState.visualEvents?.length > 0) {
             return true;
         }
         
-        // Verificar cambios en drones
-        if (currentState.drones.length !== this.lastSentState.drones.length) {
-            return true;
-        }
-        
-        // Verificar cambios en emergencias
-        if (currentState.emergencies.length !== this.lastSentState.emergencies.length) {
-            return true;
-        }
-        
-        // Verificar eventos de sonido
-        if (currentState.soundEvents.length > 0) {
-            return true;
-        }
-        
-        // Verificar cambios específicos en nodos (construction, supplies significativos)
-        for (let i = 0; i < currentState.nodes.length; i++) {
-            const currentNode = currentState.nodes[i];
-            const lastNode = this.lastSentState.nodes[i];
-            
+        // Verificar cambios específicos en nodos (construction, supplies, posición)
+        const lastNodesById = new Map(this.lastSentState.nodes.map(n => [n.id, n]));
+        for (const currentNode of currentState.nodes) {
+            const lastNode = lastNodesById.get(currentNode.id);
             if (!lastNode) continue; // Nuevo nodo
             
             // Cambios críticos que SIEMPRE requieren actualización
             if (currentNode.constructed !== lastNode.constructed ||
                 currentNode.isConstructing !== lastNode.isConstructing ||
-                currentNode.active !== lastNode.active) {
+                currentNode.active !== lastNode.active ||
+                currentNode.frontMode !== lastNode.frontMode) {
                 return true;
             }
             
@@ -97,21 +94,66 @@ export class OptimizationTracker {
             }
             
             // Cambios en posición (crítico para frentes)
-            if (currentNode.x !== lastNode.x || currentNode.y !== lastNode.y) {
+            if (Math.abs(currentNode.x - lastNode.x) >= 0.5 || 
+                Math.abs(currentNode.y - lastNode.y) >= 0.5) {
                 return true;
             }
         }
         
-        // Verificar cambios en convoyes (progress significativo)
-        for (let i = 0; i < currentState.convoys.length; i++) {
-            const currentConvoy = currentState.convoys[i];
-            const lastConvoy = this.lastSentState.convoys[i];
-            
+        // 🔧 FIX: Verificar cambios en vehículos móviles POR ID (no por índice)
+        // Esto detecta correctamente cambios en progress incluso si el orden cambia
+        
+        // Convoyes
+        const lastConvoysById = new Map(this.lastSentState.convoys.map(c => [c.id, c]));
+        for (const convoy of currentState.convoys) {
+            const lastConvoy = lastConvoysById.get(convoy.id);
             if (!lastConvoy) continue;
             
-            // Cambios significativos en progress (≥0.1)
-            if (Math.abs(currentConvoy.progress - lastConvoy.progress) >= 0.1) {
+            // Threshold de 0.05 (5%) para suavidad
+            if (Math.abs(convoy.progress - lastConvoy.progress) >= 0.05 ||
+                convoy.returning !== lastConvoy.returning) {
                 return true;
+            }
+        }
+        
+        // Trenes
+        if (currentState.trains && this.lastSentState.trains) {
+            const lastTrainsById = new Map(this.lastSentState.trains.map(t => [t.id, t]));
+            for (const train of currentState.trains) {
+                const lastTrain = lastTrainsById.get(train.id);
+                if (!lastTrain) continue;
+                
+                if (Math.abs(train.progress - lastTrain.progress) >= 0.05 ||
+                    train.returning !== lastTrain.returning) {
+                    return true;
+                }
+            }
+        }
+        
+        // Helicópteros
+        if (currentState.helicopters && this.lastSentState.helicopters) {
+            const lastHelisById = new Map(this.lastSentState.helicopters.map(h => [h.id, h]));
+            for (const heli of currentState.helicopters) {
+                const lastHeli = lastHelisById.get(heli.id);
+                if (!lastHeli) continue;
+                
+                if (heli.state !== lastHeli.state ||
+                    Math.abs(heli.progress - lastHeli.progress) >= 0.05) {
+                    return true;
+                }
+            }
+        }
+        
+        // Factory Supply Deliveries
+        if (currentState.factorySupplyDeliveries && this.lastSentState.factorySupplyDeliveries) {
+            const lastDeliveriesById = new Map(this.lastSentState.factorySupplyDeliveries.map(d => [d.id, d]));
+            for (const delivery of currentState.factorySupplyDeliveries) {
+                const lastDelivery = lastDeliveriesById.get(delivery.id);
+                if (!lastDelivery) continue;
+                
+                if (Math.abs(delivery.progress - lastDelivery.progress) >= 0.05) {
+                    return true;
+                }
             }
         }
         

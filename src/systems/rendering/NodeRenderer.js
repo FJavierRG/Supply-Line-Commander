@@ -462,11 +462,33 @@ export class NodeRenderer {
             
             // Aro de selección/hover (saltar si es camera drone volando)
             if (!shouldSkipBaseSprite && (isSelected || isHovered)) {
-                this.ctx.strokeStyle = isSelected ? '#f39c12' : '#fff';
-                this.ctx.lineWidth = isSelected ? 4 : 3;
-                this.ctx.beginPath();
-                this.ctx.arc(node.x, node.y, node.radius * 1.6, 0, Math.PI * 2);
-                this.ctx.stroke();
+                // 🆕 NUEVO: Usar sprites personalizados para hover y selección
+                const hoverSprite = this.assetManager?.getSprite('node_hover');
+                const selectionSprite = this.assetManager?.getSprite('node_selection');
+                
+                const ringSprite = isSelected ? selectionSprite : hoverSprite;
+                
+                if (ringSprite) {
+                    // Calcular tamaño del sprite (1.6x el radio del nodo, igual que antes)
+                    const ringSize = node.radius * 1.6 * 2;
+                    
+                    this.ctx.save();
+                    this.ctx.drawImage(
+                        ringSprite,
+                        node.x - ringSize / 2,
+                        node.y - ringSize / 2,
+                        ringSize,
+                        ringSize
+                    );
+                    this.ctx.restore();
+                } else {
+                    // Fallback al círculo anterior si no hay sprite
+                    this.ctx.strokeStyle = isSelected ? '#f39c12' : '#fff';
+                    this.ctx.lineWidth = isSelected ? 4 : 3;
+                    this.ctx.beginPath();
+                    this.ctx.arc(node.x, node.y, node.radius * 1.6, 0, Math.PI * 2);
+                    this.ctx.stroke();
+                }
             }
         } else if (!shouldSkipBaseSprite) {
             // Fallback si no hay sprite (solo si no es camera drone volando)

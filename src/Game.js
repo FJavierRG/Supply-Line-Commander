@@ -33,6 +33,7 @@ import { InputRouter } from './systems/input/InputRouter.js';
 // === UI ===
 import { ArsenalManager } from './systems/ui/ArsenalManager.js';
 import { CurrencyManager } from './systems/ui/CurrencyManager.js';
+import { CursorManager } from './systems/ui/CursorManager.js';
 import { DeckManager } from './systems/ui/DeckManager.js';
 import { LoadingScreenManager } from './systems/ui/LoadingScreenManager.js';
 import { OptionsManager } from './systems/ui/OptionsManager.js';
@@ -95,6 +96,7 @@ export class Game {
         this.audio = new AudioManager();
         this.loadingScreen = new LoadingScreenManager();
         this.currency = new CurrencyManager(this);
+        this.cursorManager = new CursorManager(this); // 🆕 NUEVO: Gestor centralizado de cursores
         this.particleSystem = new ParticleSystem(this);
         this.roadSystem = new RoadSystem(this);
         this.railSystem = new RailSystem(this);
@@ -1250,6 +1252,11 @@ export class Game {
         // Renderizar tooltip de hover prolongado (siempre encima de todo)
         if (this.hoverTooltip) {
             this.renderer.renderHoverTooltip(this.hoverTooltip);
+        }
+        
+        // 🆕 NUEVO: Renderizar cursor custom (ÚLTIMO - encima de absolutamente todo)
+        if (this.cursorManager && this.cursorManager.hasCustomCursor()) {
+            this.cursorManager.render();
         }
     }
     
