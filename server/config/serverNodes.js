@@ -86,10 +86,6 @@ export const SERVER_NODE_CONFIG = {
             speedMultiplier: 1.5,        // +50% velocidad para heavy_truck
             affectedVehicles: ['heavy_truck']
         },
-        aerialBase: { // En dev aún, probablemente a descartar
-            // ✅ maxSupplies movido a capacities.aerialBase (fuente única de verdad)
-            autoDestroy: true       // 🆕 Se autodestruye cuando se agota
-        },
         trainStation: {
             trainInterval: 15,      // 🆕 Segundos entre envíos de tren
             trainSpeed: 60,        // 🆕 Velocidad del tren (píxeles por segundo)
@@ -683,6 +679,11 @@ export const SERVER_NODE_CONFIG = {
         },
         artillery: {
             required: ['armoredFactory']
+        },
+        
+        // 🆕 NUEVO: Destructor de mundos requiere Construcción Prohibida
+        worldDestroyer: {
+            required: ['deadlyBuild']
         }
     },
 

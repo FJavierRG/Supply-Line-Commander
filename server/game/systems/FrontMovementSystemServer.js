@@ -75,6 +75,27 @@ export class FrontMovementSystemServer {
     }
 
     /**
+     * 🆕 Aplica modificadores de disciplinas activas a la velocidad de avance
+     * @param {Object} front - Frente
+     * @param {number} baseSpeed - Velocidad base de avance
+     * @returns {number} Velocidad con modificadores aplicados
+     */
+    applyDisciplineModifiers(front, baseSpeed) {
+        // Obtener modificadores de la disciplina activa del jugador
+        const modifiers = this.gameState.disciplineManager.getModifiersForSystem(front.team, 'frontMode');
+        
+        // Verificar si hay efectos de modo de frente y si el frente está en el modo correcto
+        if (modifiers.targetMode && modifiers.targetMode === front.frontMode) {
+            // Aplicar multiplicador de velocidad de avance (si existe)
+            if (modifiers.advanceSpeedMultiplier) {
+                baseSpeed *= modifiers.advanceSpeedMultiplier;
+            }
+        }
+        
+        return baseSpeed;
+    }
+
+    /**
      * Actualizar movimiento de un frente
      * @param {Object} front - Frente a actualizar
      * @param {Array} enemyFronts - Frentes del equipo opuesto
@@ -146,10 +167,12 @@ export class FrontMovementSystemServer {
                             this.noAmmoSoundPlayed.add(front.id);
                         }
                     } else {
-                        // Está siendo empujado activamente → continuar con lógica de empuje
-                        const pushSpeed = this.advanceSpeed;
-                        movement = -pushSpeed * dt * direction;
-                        reason = `EMPUJADO-ACTIVO (0 supplies, enemigo empuja)`;
+                        // Está siendo empujado activamente → usar velocidad del enemigo
+                        let enemyPushSpeed = this.advanceSpeed;
+                        // Aplicar modificadores de disciplina del ENEMIGO
+                        enemyPushSpeed = this.applyDisciplineModifiers(nearestEnemy, enemyPushSpeed);
+                        movement = -enemyPushSpeed * dt * direction;
+                        reason = `EMPUJADO-ACTIVO (0 supplies, enemigo empuja a ${enemyPushSpeed.toFixed(0)}px/s)`;
                     }
                 }
                 // Si este frente NO tiene 0 recursos, aplicar lógica normal de empuje
@@ -162,7 +185,9 @@ export class FrontMovementSystemServer {
                 else if (front.supplies > nearestEnemy.supplies) {
                     // Este frente tiene más → EMPUJA (si no está en modo retreat)
                     if (modeConfig.canAdvance) {
-                        const pushSpeed = this.advanceSpeed;
+                        let pushSpeed = this.advanceSpeed;
+                        // 🆕 Aplicar modificadores de disciplina (solo cuando avanza/empuja)
+                        pushSpeed = this.applyDisciplineModifiers(front, pushSpeed);
                         movement = pushSpeed * dt * direction;
                         reason = `EMPUJA (${front.supplies.toFixed(0)} > ${nearestEnemy.supplies.toFixed(0)})`;
                     } else {
@@ -173,9 +198,11 @@ export class FrontMovementSystemServer {
                 } else if (front.supplies < nearestEnemy.supplies) {
                     // Enemigo tiene más → ES EMPUJADO (solo si el enemigo está empujando activamente)
                     if (enemyModeConfig.canAdvance) {
-                        const pushSpeed = this.advanceSpeed;
-                        movement = -pushSpeed * dt * direction;
-                        reason = `EMPUJADO (${front.supplies.toFixed(0)} < ${nearestEnemy.supplies.toFixed(0)})`;
+                        // Usar velocidad del enemigo con SUS modificadores de disciplina
+                        let enemyPushSpeed = this.advanceSpeed;
+                        enemyPushSpeed = this.applyDisciplineModifiers(nearestEnemy, enemyPushSpeed);
+                        movement = -enemyPushSpeed * dt * direction;
+                        reason = `EMPUJADO (${front.supplies.toFixed(0)} < ${nearestEnemy.supplies.toFixed(0)}) a ${enemyPushSpeed.toFixed(0)}px/s`;
                     } else {
                         // Enemigo tiene más recursos pero NO está empujando activamente (está en HOLD/RETREAT)
                         // Mantener posición según nuestro modo
@@ -255,7 +282,10 @@ export class FrontMovementSystemServer {
             else if (modeConfig.canAdvance) {
                 if (front.supplies > 0) {
                     // Avanzar
-                    movement = this.advanceSpeed * dt * direction;
+                    let advanceSpeed = this.advanceSpeed;
+                    // 🆕 Aplicar modificadores de disciplina (solo cuando avanza libremente)
+                    advanceSpeed = this.applyDisciplineModifiers(front, advanceSpeed);
+                    movement = advanceSpeed * dt * direction;
                     reason = `AVANZA (supplies: ${front.supplies.toFixed(0)})`;
                     
                     if (this.noAmmoSoundPlayed.has(front.id)) {
