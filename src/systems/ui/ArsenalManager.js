@@ -1391,6 +1391,9 @@ export class ArsenalManager {
             const itemId = itemDiv.dataset.itemId;
             if (!itemId) return;
             
+            // Limpiar clases previas
+            itemDiv.classList.remove('in-deck', 'in-bench', 'disabled');
+            
             const isInDeck = this.deck.includes(itemId);
             const isInBench = this.bench.includes(itemId); // 🆕 NUEVO: Verificar banquillo
             
@@ -1400,11 +1403,10 @@ export class ArsenalManager {
                 itemDiv.style.cursor = 'not-allowed';
                 // NO poner pointerEvents: 'none' para permitir click derecho
             } else if (isInBench) {
-                // 🆕 NUEVO: Si está en el banquillo, marcarlo visualmente pero permitir añadir al mazo
+                // 🆕 NUEVO: Si está en el banquillo, marcarlo con tick amarillo
                 itemDiv.classList.add('in-bench');
-                itemDiv.style.opacity = '0.7';
-                itemDiv.style.cursor = 'pointer';
-                itemDiv.title = 'Esta unidad está en el banquillo. Click para añadir al mazo, click derecho para ver detalles.';
+                itemDiv.style.opacity = '0.6';
+                itemDiv.style.cursor = 'not-allowed';
             } else {
                 // 🆕 NUEVO: Verificar si se puede añadir sin exceder límite
                 const check = this.canAddToDestination(itemId);
@@ -1786,6 +1788,21 @@ export class ArsenalManager {
     }
     
     /**
+     * 🆕 NUEVO: Refresca el estado visual de las cartas de disciplinas (ticks, oscurecimiento)
+     */
+    refreshDisciplinesView() {
+        // Solo refrescar si estamos en la tab de disciplinas
+        if (this.activeTab !== 'disciplines') return;
+        
+        const container = document.getElementById('arsenal-content');
+        if (!container) return;
+        
+        // Limpiar y re-renderizar
+        container.innerHTML = '';
+        this.populateDisciplines(container);
+    }
+    
+    /**
      * 🆕 NUEVO: Muestra un placeholder cuando no hay disciplinas
      * @param {HTMLElement} container - Contenedor donde renderizar
      * @param {string} message - Mensaje a mostrar
@@ -1834,6 +1851,10 @@ export class ArsenalManager {
         card.className = 'arsenal-item discipline-card';
         card.dataset.disciplineId = discipline.id;
         
+        // 🆕 NUEVO: Verificar si ya está equipada
+        const isEquipped = this.disciplines.includes(discipline.id);
+        const isFull = this.disciplines.length >= 2;
+        
         // Estructura similar a las cartas de unidades (usando arsenal-item-icon como el resto)
         const icon = document.createElement('img');
         icon.className = 'arsenal-item-icon';
@@ -1857,6 +1878,19 @@ export class ArsenalManager {
         card.appendChild(icon);
         card.appendChild(info);
         
+        // 🆕 NUEVO: Estados visuales
+        if (isEquipped) {
+            // Ya está equipada - tick naranja
+            card.classList.add('in-discipline');
+            card.style.opacity = '0.6';
+            card.style.cursor = 'not-allowed';
+        } else if (isFull) {
+            // Ya hay 2 disciplinas equipadas - oscurecer
+            card.classList.add('disabled');
+            card.style.opacity = '0.4';
+            card.style.cursor = 'not-allowed';
+        }
+        
         // IMPORTANTE: Click derecho - usar método común showCardZoom
         card.addEventListener('contextmenu', (e) => {
             e.preventDefault();
@@ -1878,15 +1912,17 @@ export class ArsenalManager {
             return false;
         }, true);
         
-        // Click izquierdo: añadir al mazo
-        card.addEventListener('click', (e) => {
-            // Solo procesar si no es click derecho
-            if (e.button !== 0) return;
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('🖱️ Click izquierdo en disciplina:', discipline.id);
-            this.addDisciplineToDeck(discipline.id);
-        });
+        // Click izquierdo: añadir al mazo (solo si no está equipada y no está lleno)
+        if (!isEquipped && !isFull) {
+            card.addEventListener('click', (e) => {
+                // Solo procesar si no es click derecho
+                if (e.button !== 0) return;
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('🖱️ Click izquierdo en disciplina:', discipline.id);
+                this.addDisciplineToDeck(discipline.id);
+            });
+        }
         
         console.log('✅ Carta de disciplina creada:', discipline.id);
         
@@ -1923,6 +1959,7 @@ export class ArsenalManager {
         
         // Actualizar visualización
         this.updateDeckDisplay(); // Esto renderizará la disciplina en el panel derecho
+        this.refreshDisciplinesView(); // 🆕 NUEVO: Actualizar estado visual de disciplinas disponibles
     }
     
     /**
@@ -1940,6 +1977,7 @@ export class ArsenalManager {
             
             // Actualizar visualización
             this.updateDeckDisplay(); // Esto re-renderizará el deck sin la disciplina
+            this.refreshDisciplinesView(); // 🆕 NUEVO: Actualizar estado visual de disciplinas disponibles
         }
     }
     
@@ -1968,6 +2006,14 @@ export class ArsenalManager {
         const div = document.createElement('div');
         div.className = 'arsenal-item';
         div.dataset.itemId = item.id; // Añadir data attribute para identificar el item
+        
+        // 🆕 NUEVO: Verificar si esta carta requiere otro edificio para usarse
+        const hasBuildRequirement = this.game?.serverBuildingConfig?.buildRequirements?.[item.id];
+        
+        // 🆕 NUEVO: Cambiar el UIFrame si tiene requisitos
+        if (hasBuildRequirement) {
+            div.style.backgroundImage = "url('assets/sprites/ui/UIFrames/card_box_unlocker.png')";
+        }
         
         // Verificar si ya está en el mazo o banquillo
         const isInDeck = this.deck.includes(item.id);
@@ -2002,6 +2048,11 @@ export class ArsenalManager {
         if (isInDeck) {
             div.classList.add('in-deck');
             div.style.opacity = '0.5';
+            div.style.cursor = 'not-allowed';
+        } else if (isInBench) {
+            // 🆕 NUEVO: Carta en el banquillo - tick amarillo
+            div.classList.add('in-bench');
+            div.style.opacity = '0.6';
             div.style.cursor = 'not-allowed';
         } else if (cannotAdd || isLocked) {
             // No se puede añadir (excede límite, ya está, o está bloqueado)
@@ -2116,6 +2167,27 @@ export class ArsenalManager {
         }
         
         div.appendChild(info);
+        
+        // 🆕 NUEVO: Si tiene buildRequirement, añadir área de tooltip en esquina inferior derecha
+        if (hasBuildRequirement) {
+            const tooltipArea = document.createElement('div');
+            tooltipArea.style.position = 'absolute';
+            tooltipArea.style.bottom = '0';
+            tooltipArea.style.right = '0';
+            tooltipArea.style.width = '69px'; // 1/3 del ancho de la carta (207/3)
+            tooltipArea.style.height = '146px'; // 1/2 del alto de la carta (293/2)
+            tooltipArea.style.cursor = 'help';
+            
+            // 🆕 NUEVO: Obtener texto de requisitos dinámicamente
+            const requirementsText = this.getBuildRequirementsText(item.id);
+            tooltipArea.title = requirementsText || 'Esta carta requiere otra en mesa para poderse usar';
+            tooltipArea.style.zIndex = '10';
+            
+            div.appendChild(tooltipArea);
+            
+            // Asegurar que el div padre tenga position relative
+            div.style.position = 'relative';
+        }
         
         return div;
     }
@@ -2598,6 +2670,35 @@ export class ArsenalManager {
     }
     
     /**
+     * 🆕 NUEVO: Obtiene el texto de requisitos de construcción para una carta
+     * @param {string} itemId - ID del item
+     * @returns {string} Texto descriptivo de los requisitos, o cadena vacía si no tiene
+     */
+    getBuildRequirementsText(itemId) {
+        const buildReqs = this.game?.serverBuildingConfig?.buildRequirements?.[itemId];
+        if (!buildReqs || !buildReqs.required || buildReqs.required.length === 0) {
+            return '';
+        }
+        
+        // Obtener nombres de los edificios requeridos
+        const requiredNames = buildReqs.required.map(reqId => {
+            const config = getNodeConfig(reqId);
+            return config?.name || reqId;
+        });
+        
+        // Generar texto según la cantidad de requisitos
+        if (requiredNames.length === 1) {
+            return `Requiere ${requiredNames[0]} en mesa`;
+        } else if (requiredNames.length === 2) {
+            return `Requiere ${requiredNames[0]} y ${requiredNames[1]} en mesa`;
+        } else {
+            // Más de 2 requisitos (poco común)
+            const lastReq = requiredNames.pop();
+            return `Requiere ${requiredNames.join(', ')} y ${lastReq} en mesa`;
+        }
+    }
+    
+    /**
      * Muestra el modal de vista ampliada de carta
      * @param {Object} item - Configuración del item a mostrar
      */
@@ -2676,7 +2777,8 @@ export class ArsenalManager {
             // Aplicar tooltip para "wounded"
             const tip = 'Wounded: el frente consume +100% suministros';
             const safeDesc = descriptionText
-                .replace(/"wounded"|wounded/gi, (m) => `<span class="tooltip" data-tip="${tip}">${m}</span>`);
+                .replace(/"wounded"|wounded/gi, (m) => `<span class="tooltip" data-tip="${tip}">${m}</span>`)
+                .replace(/\n/g, '<br>'); // Convertir saltos de línea a <br>
             descEl.innerHTML = safeDesc;
         }
     }

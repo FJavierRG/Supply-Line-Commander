@@ -2630,7 +2630,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 .arsenal-help-text {
     padding: 8px 0;
     text-align: center;
-    font-size: 14.3px; /* Aumentado un 10% desde 13px */
+    font-size: 17px; 
     color: rgba(102, 187, 106, 0.8);
     font-family: 'Courier New', monospace;
     display: flex;
@@ -2668,7 +2668,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     grid-template-columns: repeat(auto-fill, 207px); /* Tamaño fijo: 207px de ancho */
     gap: 16px;
     padding-bottom: 80px; /* Espacio para paginación */
-    justify-content: start; /* Alinear a la izquierda */
+    justify-content: center; /* Centrar las cartas */
     width: 100%; /* Asegurar que ocupe todo el ancho disponible */
     max-width: 100%; /* No exceder el ancho del contenedor */
     box-sizing: border-box;
@@ -2818,6 +2818,54 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     top: 12px;
     right: 12px;
     background: rgba(76, 175, 80, 1.0); /* Verde más visible - alpha aumentado */
+    color: #000;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+}
+
+/* 🆕 NUEVO: Item añadido al banquillo */
+.arsenal-item.in-bench {
+    opacity: 0.6;
+    cursor: not-allowed;
+    position: relative;
+}
+
+.arsenal-item.in-bench::after {
+    content: '✓';
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255, 152, 0, 1.0); /* Naranja/amarillo para banquillo */
+    color: #000;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+}
+
+/* 🆕 NUEVO: Disciplina equipada */
+.arsenal-item.in-discipline {
+    opacity: 0.6;
+    cursor: not-allowed;
+    position: relative;
+}
+
+.arsenal-item.in-discipline::after {
+    content: '✓';
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255, 152, 0, 1.0); /* Naranja para disciplina equipada */
     color: #000;
     width: 28px;
     height: 28px;
