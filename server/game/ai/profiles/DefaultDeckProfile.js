@@ -4,15 +4,15 @@
 // NOTA: Este perfil usa el mazo definido en game/ai/config/AIDecks.js (AI_DEFAULT_DECK)
 // El mazo del jugador (DEFAULT_DECK en config/defaultDeck.js) es independiente
 //
-// MAZO DE IA: ['hq', 'fob', 'antiDrone', 'droneLauncher', 'truckFactory', 'engineerCenter', 'factory', 'nuclearPlant', 'intelRadio', 'drone', 'sniperStrike']
+// MAZO DE IA: ['hq', 'fob', 'antiDrone', 'droneLauncher', 'truckFactory', 'engineerCenter', 'factory', 'servers', 'intelRadio', 'drone', 'cameraDrone', 'sniperStrike']
 //
 // LÓGICA DEL PERFIL:
 // ==================
 // 1. EDIFICIOS (Buildings):
 //    - fob (140$): Base 40. +30 si <2 FOBs, +20 si early phase. Máx: 90. Ratio: 0.64
 //      → Prioridad alta en early game para expandir territorio
-//    - nuclearPlant (200$): Base 50. +30 por cada planta del jugador, -25 por cada planta propia. Ratio: 0.25 base
-//      → Prioridad media-alta en mid game. Penaliza spam para evitar sobre-construcción
+//    - servers (45$): Base 50. +30 por cada servidor del jugador, -25 por cada servidor propio. Ratio: 1.11 base
+//      → Prioridad media-alta en mid/late game. Penaliza spam, bloquea si tiene 2+ servidores más que jugador
 //    - droneLauncher (120$): Base 60. Sin bonuses. Ratio: 0.5
 //      → Prioridad alta en mid game. Requerido para usar drones
 //    - antiDrone (135$): Base 30. Sin bonuses. Ratio: 0.22
@@ -29,12 +29,14 @@
 // 2. CONSUMIBLES (Attacks):
 //    - drone (170$): Base 65. +40 si hay targets. Máx: 105. Ratio: 0.62
 //      → Prioridad alta en late game. Requiere droneLauncher construido
+//    - cameraDrone (60$): Base 5. +150 cuando debe intercalar con servers (economía)
+//      → Se lanza por scoring dinámico: servidores impares + launcher + espacio disponible
 //    - sniperStrike (40$): Base 30. +20 bonus base (siempre). Total: 50. Ratio: 1.25
 //      → Prioridad alta en late game. Muy eficiente, bajo coste
 //
 // 3. PRIORIDADES POR FASE (getPriorities):
 //    - earlyGame: ['fob', 'truckFactory', 'engineerCenter'] → Expansión y logística
-//    - midGame: ['nuclearPlant', 'droneLauncher', 'intelRadio'] → Economía y capacidad ofensiva
+//    - midGame: ['servers', 'droneLauncher', 'intelRadio'] → Economía y capacidad ofensiva
 //    - lateGame: ['antiDrone', 'drone', 'sniperStrike'] → Defensa y ataques
 //
 // NOTA: Las prioridades por fase están definidas pero NO se usan actualmente.
@@ -49,6 +51,12 @@ import { SERVER_NODE_CONFIG } from '../../../config/serverNodes.js';
 export class DefaultDeckProfile extends BaseProfile {
     constructor(deck) {
         super(deck);
+        
+        // 🎯 Sistema de tracking de servidores para camera drone
+        this.serverDronePattern = {
+            activeServers: 0,       // Servidores activos actuales
+            lastServerCount: 0      // Para detectar nueva construcción
+        };
     }
     
     /**
@@ -80,17 +88,16 @@ export class DefaultDeckProfile extends BaseProfile {
                     midPhaseAndHas2OrMore: -50  // Penalización en mid si tiene >=2 FOBs
                 }
             },
-            'nuclearPlant': {
+            'servers': {
                 base: 50,
                 bonuses: {
-                    perPlayerPlant: 30,  // +30 por cada planta del jugador
-                    perMyPlant: -25,     // -25 por cada planta propia (evitar spam)
+                    perPlayerServer: 30,  // +30 por cada servidor del jugador
+                    perMyServer: -25,     // -25 por cada servidor propio (evitar spam)
                     midPhase: 15,        // En mid, empujar a construir si es viable
                     latePhase: 25,       // En late, aún más peso si vamos por detrás
                     hasExcessCurrency: 20, // +30 si tiene mucho dinero (flexibilidad para construir antes de late)
-                    hasAdvantage: -50,   // 🎯 Penalización cuando tiene 2 plantas de ventaja (debe priorizar aggro)
-                    hasBigAdvantage: -100, // 🎯 NUEVO: Penalización mayor cuando tiene 3+ plantas de ventaja (bloquear construcción)
-                    hasNuclearPlant: -1000 // 🎯 NUEVO: Penalización enorme si ya tiene una planta nuclear (limitado a 1 por bando)
+                    hasServerAdvantage: -50,   // 🎯 Penalización cuando tiene 2 servidores de ventaja (debe priorizar aggro)
+                    hasServerBigAdvantage: -100 // 🎯 Penalización mayor cuando tiene 3+ servidores de ventaja (bloquear construcción)
                 }
             },
             'droneLauncher': {
@@ -146,6 +153,15 @@ export class DefaultDeckProfile extends BaseProfile {
                     hasAdvantage: 45  // 🎯 NUEVO: Bonus cuando tiene ventaja (priorizar aggro)
                 }
             },
+            'cameraDrone': {
+                // 🎯 Camera drone para economía
+                // Se intercala con servers usando bonuses dinámicos
+                base: 5,
+                bonuses: {
+                    shouldUseCameraDrone: 150,  // Mega bonus cuando debe intercalar con servidor
+                    latePhase: 10
+                }
+            },
             'sniperStrike': {
                 // 🎯 Harass eficiente sobre todo en mid/late
                 base: 10,
@@ -165,7 +181,7 @@ export class DefaultDeckProfile extends BaseProfile {
         return {
             earlyGame: ['factory', 'truckFactory', 'engineerCenter', 'sniperStrike', 'intelRadio'], // Factory primero (suministra HQ), luego talleres y pokeo
             midGame: ['factory', 'fob', 'droneLauncher', 'sniperStrike'], // Factory primero, luego FOBs para expansión, lanzadera, y pokeo continuo
-            lateGame: ['drone', 'nuclearPlant', 'intelRadio'] // Drones, economía (antiDrone solo reactivo, factory ya construida)
+            lateGame: ['drone', 'servers', 'intelRadio'] // Drones, economía (antiDrone solo reactivo, factory ya construida)
         };
     }
     
@@ -216,6 +232,24 @@ export class DefaultDeckProfile extends BaseProfile {
     }
     
     /**
+     * Actualiza el tracking de servidores para camera drone
+     * @param {Object} gameState - Estado del juego
+     */
+    updateServerDroneTracking(gameState) {
+        const currentServers = gameState.nodes.filter(n => 
+            n.team === 'player2' && 
+            n.type === 'servers' && 
+            n.active && 
+            n.constructed &&
+            !n.isAbandoning
+        ).length;
+        
+        this.serverDronePattern.activeServers = currentServers;
+        this.serverDronePattern.lastServerCount = currentServers;
+    }
+    
+    
+    /**
      * Evalúa acciones estratégicas disponibles
      * @param {Object} gameState - Estado del juego
      * @param {string} team - Equipo de la IA
@@ -251,16 +285,33 @@ export class DefaultDeckProfile extends BaseProfile {
             this // Pasar el perfil para condiciones personalizadas
         );
         
+        // 📊 LOG: Acciones evaluadas
+        if (actions.length > 0) {
+            const actionsList = actions.slice(0, 5)
+                .map(a => `${a.cardId}(${a.score.toFixed(0)})`)
+                .join(', ');
+            console.log(`📋 IA [${state.phase}]: Acciones evaluadas (${actions.length}): ${actionsList}`);
+        } else {
+            console.log(`⚠️ IA [${state.phase}]: No hay acciones disponibles después de evaluar el mazo`);
+        }
+        
         // 🎯 Aplicar reglas específicas del perfil (penalizaciones, etc.)
         const actionsWithProfileRules = this.applyProfileSpecificRules(actions, state, gameState, currency);
         
-        // 🎯 DEBUG: Log de acciones después de aplicar reglas del perfil
-        if (AIConfig?.debug?.logScoring && actionsWithProfileRules.length > 0) {
-            const summary = actionsWithProfileRules
-                .map(action => `${action.cardId}:${Number(action.score).toFixed(1)}`)
-                .join(', ');
-            console.log(`🔍 [IA][${state.phase}] Acciones después de reglas del perfil (${actionsWithProfileRules.length}): ${summary}`);
+        // 📊 LOG: Acciones después de reglas del perfil
+        if (actionsWithProfileRules.length !== actions.length || actions.length === 0) {
+            const filtered = actions.length - actionsWithProfileRules.length;
+            console.log(`🔍 IA [${state.phase}]: Reglas del perfil aplicadas - ${filtered} acciones filtradas`);
+            if (actionsWithProfileRules.length > 0) {
+                const summary = actionsWithProfileRules.slice(0, 5)
+                    .map(action => `${action.cardId}(${action.score.toFixed(0)})`)
+                    .join(', ');
+                console.log(`   Acciones restantes (${actionsWithProfileRules.length}): ${summary}`);
+            }
         }
+        
+        // 🎯 Actualizar tracking de servidores para camera drone
+        this.updateServerDroneTracking(gameState);
         
         return this.applyPhasePriorities(actionsWithProfileRules, state.phase);
     }
@@ -296,7 +347,7 @@ export class DefaultDeckProfile extends BaseProfile {
                 return state.phase === 'mid' && state.myFOBs !== undefined && state.myFOBs >= 2;
             case 'hasExcessCurrency':
                 // 🎯 NUEVO: Tiene mucho dinero (más de 400) - permite flexibilidad para construir antes de late
-                // Esto permite que la IA use drones y plantas nucleares en mid si tiene mucho dinero
+                // Esto permite que la IA use drones y servidores en mid si tiene mucho dinero
                 return currency >= 300;
             case 'hasAdvantage':
                 // 🎯 La IA tiene ventaja moderada (a partir del minuto 5)
@@ -332,19 +383,68 @@ export class DefaultDeckProfile extends BaseProfile {
                 const hasBigPlantAdvantage = plantDifferenceBig >= 3; // 3+ plantas de ventaja
                 
                 return hasBigPlantAdvantage;
-            case 'hasNuclearPlant':
-                // 🎯 NUEVO: Verificar si ya tiene una planta nuclear construida
-                // Las centrales nucleares están limitadas a 1 por bando
-                // Esta condición aplica una penalización enorme si ya existe una
-                const hasNuclearPlant = gameState.nodes.some(n => 
-                    n.team === team && 
-                    n.type === 'nuclearPlant' && 
-                    n.active &&
-                    n.constructed &&
-                    !n.isAbandoning
-                );
+            
+            case 'hasServerAdvantage':
+                // 🎯 La IA tiene ventaja moderada en servidores (a partir del minuto 5)
+                // Condición: tiene exactamente 2 servidores más que el jugador
+                const elapsedTimeServer = state.elapsedTime || 0;
+                if (elapsedTimeServer < 300) {
+                    return false; // Antes del minuto 5, no aplicar
+                }
                 
-                return hasNuclearPlant;
+                const serverDifference = (state.myServers !== undefined && state.playerServers !== undefined) 
+                    ? (state.myServers - state.playerServers) 
+                    : 0;
+                const hasServerAdvantage2 = serverDifference === 2; // Exactamente 2 servidores de ventaja
+                
+                return hasServerAdvantage2;
+                
+            case 'hasServerBigAdvantage':
+                // 🎯 La IA tiene ventaja grande en servidores (3+ servidores de ventaja)
+                // Penalización mayor para bloquear completamente la construcción de más servidores
+                const elapsedTimeBigServer = state.elapsedTime || 0;
+                if (elapsedTimeBigServer < 300) {
+                    return false; // Antes del minuto 5, no aplicar
+                }
+                
+                const serverDifferenceBig = (state.myServers !== undefined && state.playerServers !== undefined) 
+                    ? (state.myServers - state.playerServers) 
+                    : 0;
+                const hasBigServerAdvantage = serverDifferenceBig >= 3; // 3+ servidores de ventaja
+                
+                return hasBigServerAdvantage;
+            case 'shouldUseCameraDrone':
+                // 🎯 Condición para intercalar camera drone con servidores
+                // Verifica: servidores impares, tiene launcher, hay espacio
+                const pattern = this.serverDronePattern;
+                
+                // Contar camera drones activos y FOBs enemigos directamente del gameState
+                const activeCameraDrones = gameState.nodes.filter(n => 
+                    n.team === team && 
+                    n.type === 'cameraDrone' && 
+                    n.active
+                ).length;
+                
+                const enemyFOBs = gameState.nodes.filter(n => 
+                    n.team === 'player1' && 
+                    n.type === 'fob' && 
+                    n.active && 
+                    n.constructed
+                ).length;
+                
+                // Verificar condiciones
+                const oddServers = (pattern.activeServers % 2 === 1);
+                const hasLauncher = state.hasLauncher;
+                const hasSpace = (activeCameraDrones < enemyFOBs);
+                
+                const shouldUse = oddServers && hasLauncher && hasSpace;
+                
+                if (AIConfig.debug?.logScoring && shouldUse) {
+                    console.log(`🎯 IA CAMERA DRONE: Condiciones cumplidas (servidores:${pattern.activeServers}, drones:${activeCameraDrones}/${enemyFOBs})`);
+                }
+                
+                return shouldUse;
+            
             case 'forHelicopters':
                 // Verificar si necesita reabastecimiento con helicópteros
                 // Por ahora retornar false, se puede implementar después
@@ -438,11 +538,11 @@ export class DefaultDeckProfile extends BaseProfile {
             }
         }
         
-        // 🚫 BLOQUEO: No construir plantas nucleares si ya tenemos 2 más que el jugador
-        if (state?.myPlants !== undefined && state?.playerPlants !== undefined) {
-            const plantDifference = state.myPlants - state.playerPlants;
-            if (plantDifference >= 2) {
-                filteredActions = filteredActions.filter(action => action.cardId !== 'nuclearPlant');
+        // 🚫 BLOQUEO: No construir servidores si ya tenemos 2 más que el jugador
+        if (state?.myServers !== undefined && state?.playerServers !== undefined) {
+            const serverDifference = state.myServers - state.playerServers;
+            if (serverDifference >= 2) {
+                filteredActions = filteredActions.filter(action => action.cardId !== 'servers');
             }
         }
         
@@ -461,13 +561,13 @@ export class DefaultDeckProfile extends BaseProfile {
         // 1. Estamos en mid game
         // 2. Tenemos menos de 2 intel radios
         // 3. Tenemos suficiente currency (coste + margen de seguridad del 50%)
-        // 4. Tenemos al menos 1 planta nuclear (economía estable) O tenemos mucha currency
+        // 4. Tenemos al menos 1 servidor (economía estable) O tenemos mucha currency
         if (state.phase === 'mid') {
             const intelRadioAction = filteredActions.find(action => action.cardId === 'intelRadio');
             if (intelRadioAction) {
                 const intelRadioCost = intelRadioAction.cost || 50;
                 const hasEnoughCurrency = currency >= (intelRadioCost * 1.5); // Margen de seguridad 50%
-                const hasStableEconomy = (state.myPlants >= 1) || (currency >= intelRadioCost * 3); // Planta nuclear o mucha currency
+                const hasStableEconomy = (state.myPlants >= 1) || (currency >= intelRadioCost * 3); // Servidor o mucha currency
                 const hasLessThan2Radios = (state.myIntelRadios || 0) < 2;
                 
                 // Si no cumple las condiciones, eliminar intel radio de las opciones
@@ -535,45 +635,28 @@ export class DefaultDeckProfile extends BaseProfile {
             }
         }
         
-        // 🎯 Factory: solo una es suficiente (suministra al HQ)
+        // 🎯 Factory: máximo 2 por partida (suministra al HQ y nodos)
         // NOTA: La lógica de emergencia (si no hay fábrica) ya se maneja arriba, antes de esta sección
         const factoryAction = filteredActions.find(action => action.cardId === 'factory');
         if (factoryAction) {
-            // Verificar si tiene una fábrica activa (la verificación de emergencia ya se hizo arriba)
-            const hasFactory = gameState.nodes.some(n => 
+            // Contar cuántas fábricas activas tiene (la verificación de emergencia ya se hizo arriba)
+            const factoryCount = gameState.nodes.filter(n => 
                 n.team === 'player2' && 
                 n.type === 'factory' && 
                 n.active &&
                 n.constructed &&
                 !n.isAbandoning
-            );
-            if (hasFactory) {
-                // Eliminar factory de las opciones si ya tiene una
+            ).length;
+            
+            if (factoryCount >= 2) {
+                // Eliminar factory de las opciones si ya tiene 2 o más
                 filteredActions = filteredActions.filter(action => action.cardId !== 'factory');
             }
         }
         
-        // 🎯 NUEVO: Nuclear Plant: solo una es suficiente (limitado a 1 por bando)
-        // Bloquear completamente la construcción si ya existe una planta nuclear
-        const nuclearPlantAction = filteredActions.find(action => action.cardId === 'nuclearPlant');
-        if (nuclearPlantAction) {
-            const hasNuclearPlant = gameState.nodes.some(n => 
-                n.team === 'player2' && 
-                n.type === 'nuclearPlant' && 
-                n.active &&
-                n.constructed &&
-                !n.isAbandoning
-            );
-            if (hasNuclearPlant) {
-                // Eliminar nuclearPlant de las opciones si ya tiene una
-                // Las centrales nucleares están limitadas a 1 por bando
-                filteredActions = filteredActions.filter(action => action.cardId !== 'nuclearPlant');
-                
-                if (AIConfig.debug?.logActions) {
-                    console.log(`🚫 IA BLOQUEO PLANTA NUCLEAR: Ya tiene una planta nuclear construida. Bloqueando construcción adicional (limitado a 1 por bando).`);
-                }
-            }
-        }
+        // 🎯 Servers: Sin límite hard - se puede construir múltiples
+        // El control se hace por scoring (perMyPlant penaliza spam)
+        // Solo mantener el bloqueo de ventaja (2+ servidores más que jugador, manejado arriba)
         
         // 🎯 FIX: AntiDrone solo se construye de forma reactiva (cuando hay drones enemigos)
         // Bloquear completamente la construcción proactiva - solo se construye en handleDefensiveReaction
@@ -612,7 +695,7 @@ export class DefaultDeckProfile extends BaseProfile {
         // Si tiene los dos talleres y al menos 2 radios, y tiene mucho dinero, reducir scores para permitir ahorro
         if (currency >= 400 && hasTruckFactory && hasEngineerCenter && intelRadiosCount >= 2) {
             // Reducir scores de todas las acciones para que sea menos probable que gaste todo
-            // Esto permite que la IA ahorre dinero para usar drones y plantas nucleares
+            // Esto permite que la IA ahorre dinero para usar drones y servidores
             filteredActions = filteredActions.map(action => ({
                 ...action,
                 score: action.score * 0.7 // Reducir score en 30% para hacer menos probable el gasto

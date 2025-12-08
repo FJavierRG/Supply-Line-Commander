@@ -344,6 +344,9 @@ export class AISystem {
      * Evalúa TODAS las acciones juntas y ejecuta la mejor, evitando que decisiones separadas compitan por dinero
      */
     async handleUnifiedDecision(team, currency) {
+        const gameTime = this.gameState.gameTime || 0;
+        console.log(`\n🤖 IA [${gameTime.toFixed(0)}s]: CICLO ESTRATÉGICO - Evaluando acciones...`);
+        
         // Después de la primera decisión, usar intervalo normal ajustado
         if (this.firstStrategicDecision) {
             this.firstStrategicDecision = false;
@@ -370,6 +373,7 @@ export class AISystem {
         const allActions = this.profile.evaluateStrategicActions(this.gameState, team, currency, state);
         
         if (allActions.length === 0) {
+            console.log(`⚠️ IA [${state.phase}]: No hay acciones disponibles (currency: ${currency.toFixed(1)}, disponible: ${availableCurrency.toFixed(1)}, colchón: ${this.profile.getCurrencyBuffer().toFixed(1)})`);
             return;
         }
         
@@ -379,28 +383,40 @@ export class AISystem {
         const bestAction = sortedActions[0];
         
         if (!bestAction) {
+            console.log(`⚠️ IA [${state.phase}]: No se pudo seleccionar mejor acción`);
             return;
         }
+        
+        // 📊 LOG: Mostrar top 3 acciones para debugging
+        const top3 = sortedActions.slice(0, 3)
+            .map(a => `${a.cardId}(${a.score.toFixed(0)}, ${a.cost}$)`)
+            .join(', ');
+        console.log(`🎯 IA [${state.phase}]: Top acciones: ${top3} | Currency: ${currency.toFixed(0)}$ (disponible: ${availableCurrency.toFixed(0)}$, colchón: ${this.profile.getCurrencyBuffer().toFixed(0)}$)`);
         
         // 🎯 NUEVO: Verificar si la mejor acción tiene suficiente currency disponible
         // Si no la tiene, ESPERAR en lugar de ejecutar una acción de menor prioridad
         if (bestAction.cost > availableCurrency) {
-            if (AIConfig.debug?.logActions) {
-                console.log(`⏳ IA: Mejor acción ${bestAction.cardId} (score: ${bestAction.score.toFixed(1)}) requiere ${bestAction.cost}, tiene ${availableCurrency.toFixed(1)} → ESPERANDO`);
-            }
+            console.log(`⏳ IA [${state.phase}]: ESPERANDO - Mejor acción ${bestAction.cardId} requiere ${bestAction.cost}$, solo tiene ${availableCurrency.toFixed(1)}$ disponibles`);
             return; // Esperar a la siguiente evaluación
         }
         
         // Ejecutar la mejor acción (puede ser build o attack)
         if (bestAction.type === 'build') {
+            console.log(`🏗️ IA [${state.phase}]: CONSTRUYENDO ${bestAction.cardId} (coste: ${bestAction.cost}$, score: ${bestAction.score.toFixed(1)})`);
             const success = await this.aiActionHandler.executeBuild(team, bestAction.cardId);
-                        if (success) {
+            
+            if (success) {
+                console.log(`✅ IA [${state.phase}]: Construcción de ${bestAction.cardId} exitosa`);
                 this.lastBuildings.push(bestAction.cardId);
                 if (this.lastBuildings.length > 5) {
                     this.lastBuildings.shift();
                 }
+            } else {
+                console.log(`❌ IA [${state.phase}]: Construcción de ${bestAction.cardId} FALLÓ`);
             }
         } else if (bestAction.type === 'attack') {
+            console.log(`⚔️ IA [${state.phase}]: LANZANDO ${bestAction.cardId} (coste: ${bestAction.cost}$, score: ${bestAction.score.toFixed(1)})`);
+            
             // 🎯 Si es un drone, pasar historial y función de actualización
             if (bestAction.cardId === 'drone') {
                 // Función para actualizar el historial de objetivos atacados
@@ -412,14 +428,26 @@ export class AISystem {
                     }
                 };
                 
-                this.aiActionHandler.executeAttack(
+                const success = await this.aiActionHandler.executeAttack(
                     team, 
                     bestAction.cardId, 
                     this.lastDroneTargets, 
                     updateDroneTargets
                 );
+                
+                if (success) {
+                    console.log(`✅ IA [${state.phase}]: Lanzamiento de ${bestAction.cardId} exitoso`);
+                } else {
+                    console.log(`❌ IA [${state.phase}]: Lanzamiento de ${bestAction.cardId} FALLÓ`);
+                }
             } else {
-                this.aiActionHandler.executeAttack(team, bestAction.cardId);
+                const success = await this.aiActionHandler.executeAttack(team, bestAction.cardId);
+                
+                if (success) {
+                    console.log(`✅ IA [${state.phase}]: Lanzamiento de ${bestAction.cardId} exitoso`);
+                } else {
+                    console.log(`❌ IA [${state.phase}]: Lanzamiento de ${bestAction.cardId} FALLÓ`);
+                }
             }
             
             const now = this.gameState.gameTime || 0;
@@ -501,7 +529,10 @@ export class AISystem {
      * Maneja decisiones ofensivas (drones, snipers, etc)
      * 🎯 NUEVO: Usa sistema de perfiles
      */
-    handleOffensiveDecision(team, currency) {
+    async handleOffensiveDecision(team, currency) {
+        const gameTime = this.gameState.gameTime || 0;
+        console.log(`\n⚔️ IA [${gameTime.toFixed(0)}s]: CICLO OFENSIVO - Evaluando consumibles...`);
+        
         // 🎯 NOTA: Ya no se usa currencyThreshold - el sistema de colchón dinámico maneja el ahorro
         // Las acciones se evalúan con availableCurrency (currency - buffer), así que si no hay suficiente,
         // simplemente no se ejecutarán
@@ -569,13 +600,21 @@ export class AISystem {
         }
         
         if (consumableActions.length === 0) {
+            console.log(`⚠️ IA [${state.phase}] OFENSIVA: No hay consumibles disponibles (currency: ${currency.toFixed(1)}, disponible: ${availableCurrency.toFixed(1)}, presupuesto: ${maxConsumableBudget.toFixed(1)})`);
             return;
         }
+        
+        // 📊 LOG: Mostrar consumibles disponibles
+        const consumablesList = consumableActions.slice(0, 3)
+            .map(a => `${a.cardId}(${a.score.toFixed(0)}, ${a.cost}$)`)
+            .join(', ');
+        console.log(`🎯 IA [${state.phase}] OFENSIVA: Consumibles disponibles: ${consumablesList}`);
         
         // Seleccionar mejor acción usando availableCurrency (con colchón ya descontado)
         const bestAction = AIActionSelector.selectBestAction(consumableActions, availableCurrency);
         
         if (!bestAction) {
+            console.log(`⏳ IA [${state.phase}] OFENSIVA: ESPERANDO - No hay consumibles asequibles (mejor: ${consumableActions[0]?.cardId} ${consumableActions[0]?.cost}$, tiene: ${availableCurrency.toFixed(1)}$)`);
             return;
         }
         
@@ -586,6 +625,8 @@ export class AISystem {
         
         // Ejecutar acción
         if (bestAction.type === 'attack') {
+            console.log(`⚔️ IA [${state.phase}] OFENSIVA: LANZANDO ${bestAction.cardId} (coste: ${bestAction.cost}$, score: ${bestAction.score.toFixed(1)})`);
+            
             // 🎯 Si es un drone, pasar historial y función de actualización
             if (bestAction.cardId === 'drone') {
                 // Función para actualizar el historial de objetivos atacados
@@ -597,14 +638,26 @@ export class AISystem {
                     }
                 };
                 
-                this.aiActionHandler.executeAttack(
+                const success = await this.aiActionHandler.executeAttack(
                     team, 
                     bestAction.cardId, 
                     this.lastDroneTargets, 
                     updateDroneTargets
                 );
+                
+                if (success) {
+                    console.log(`✅ IA [${state.phase}] OFENSIVA: ${bestAction.cardId} lanzado exitosamente`);
+                } else {
+                    console.log(`❌ IA [${state.phase}] OFENSIVA: ${bestAction.cardId} FALLÓ`);
+                }
             } else {
-                this.aiActionHandler.executeAttack(team, bestAction.cardId);
+                const success = await this.aiActionHandler.executeAttack(team, bestAction.cardId);
+                
+                if (success) {
+                    console.log(`✅ IA [${state.phase}] OFENSIVA: ${bestAction.cardId} lanzado exitosamente`);
+                } else {
+                    console.log(`❌ IA [${state.phase}] OFENSIVA: ${bestAction.cardId} FALLÓ`);
+                }
             }
             // Registrar uso para cooldowns
             const now = this.gameState.gameTime || 0;

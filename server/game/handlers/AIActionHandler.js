@@ -426,24 +426,32 @@ export class AIActionHandler {
      * Ejecuta despliegue de camera drone
      */
     async executeCameraDrone(myNodes, team) {
-        // Encontrar posición en territorio enemigo
-        const position = this.findEnemyTerritoryPosition(team);
+        // Encontrar posición entre FOB enemigo y su frente más cercano
+        const position = this.findCameraDroneTargetPosition(team);
         
         if (!position) {
             return false;
         }
         
-        // Llamar al handler
+        // Llamar al handler del juego (igual que un jugador)
         const result = this.combatHandler.handleCameraDroneDeploy(team, position.x, position.y);
         
         if (result.success) {
-            // Broadcast
+            // Broadcast EXACTAMENTE igual que un jugador real (ver server.js líneas 1356-1370)
             this.io.to(this.roomId).emit('camera_drone_deployed', {
-                nodeId: result.cameraDrone.id,
-                x: position.x,
-                y: position.y,
-                team: team
+                cameraDroneId: result.cameraDrone.id,  // ✅ Mismo nombre que jugador real
+                team: team,
+                x: result.cameraDrone.x,  // ✅ Posición inicial (extremo del mapa)
+                y: result.cameraDrone.y,
+                targetX: result.cameraDrone.targetX,  // ✅ Posición objetivo
+                targetY: result.cameraDrone.targetY,
+                detectionRadius: result.cameraDrone.detectionRadius,  // ✅ Radio de detección
+                deployed: result.cameraDrone.deployed  // ✅ Estado de despliegue
             });
+            
+            if (AIConfig.debug.logActions) {
+                console.log(`📹 IA: Camera drone lanzado exitosamente → (${result.cameraDrone.targetX.toFixed(0)}, ${result.cameraDrone.targetY.toFixed(0)})`);
+            }
         }
         
         return result.success;
@@ -626,6 +634,98 @@ export class AIActionHandler {
     /**
      * Encuentra una posición en territorio enemigo para desplegar unidades especiales
      */
+    /**
+     * Encuentra posición óptima para camera drone
+     * Calcula el punto medio EXACTO entre un FOB enemigo y su frente más cercano
+     * Evita FOBs que ya tienen camera drones cerca
+     * @param {string} team - Equipo de la IA
+     * @returns {Object|null} { x, y } o null si no hay target válido
+     */
+    findCameraDroneTargetPosition(team) {
+        const enemyTeam = team === 'player1' ? 'player2' : 'player1';
+        const enemyNodes = this.gameState.nodes.filter(n => n.team === enemyTeam && n.active && n.constructed);
+        
+        // Buscar todos los FOBs enemigos
+        const enemyFOBs = enemyNodes.filter(n => n.type === 'fob');
+        
+        if (enemyFOBs.length === 0) {
+            console.log(`⚠️ IA CAMERA DRONE: No hay FOBs enemigos, no se puede lanzar`);
+            return null;
+        }
+        
+        // Buscar todos los frentes enemigos
+        const enemyFronts = enemyNodes.filter(n => n.type === 'front');
+        
+        if (enemyFronts.length === 0) {
+            console.log(`⚠️ IA CAMERA DRONE: No hay frentes enemigos, no se puede lanzar`);
+            return null;
+        }
+        
+        // Buscar camera drones activos de la IA
+        const myCameraDrones = this.gameState.nodes.filter(n => 
+            n.team === team && 
+            n.type === 'cameraDrone' && 
+            n.active
+        );
+        
+        // Radio para considerar que un FOB ya tiene camera drone (200px)
+        const PROXIMITY_RADIUS = 200;
+        
+        // Barajar FOBs para variar la selección
+        const shuffledFOBs = [...enemyFOBs].sort(() => Math.random() - 0.5);
+        
+        // Iterar sobre FOBs hasta encontrar uno sin camera drone cerca
+        for (const targetFOB of shuffledFOBs) {
+            // Encontrar el frente más cercano a este FOB
+            let closestFront = null;
+            let minDistance = Infinity;
+            
+            for (const front of enemyFronts) {
+                const dx = front.x - targetFOB.x;
+                const dy = front.y - targetFOB.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestFront = front;
+                }
+            }
+            
+            if (!closestFront) {
+                continue; // Este FOB no tiene frente cercano, probar siguiente
+            }
+            
+            // Calcular punto medio EXACTO entre FOB y frente
+            const midX = (targetFOB.x + closestFront.x) / 2;
+            const midY = (targetFOB.y + closestFront.y) / 2;
+            
+            // Verificar si ya hay un camera drone cerca de este punto
+            const hasCameraDroneNearby = myCameraDrones.some(drone => {
+                const dx = drone.x - midX;
+                const dy = drone.y - midY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                return distance < PROXIMITY_RADIUS;
+            });
+            
+            if (hasCameraDroneNearby) {
+                console.log(`⏭️ IA CAMERA DRONE: Ya hay camera drone cerca del FOB (${targetFOB.x.toFixed(0)}, ${targetFOB.y.toFixed(0)}), probando siguiente...`);
+                continue; // Ya hay camera drone cerca, probar siguiente FOB
+            }
+            
+            // ✅ Este FOB no tiene camera drone cerca, usar este target
+            console.log(`🎯 IA CAMERA DRONE: Target calculado entre FOB (${targetFOB.x.toFixed(0)}, ${targetFOB.y.toFixed(0)}) y frente (${closestFront.x.toFixed(0)}, ${closestFront.y.toFixed(0)}) → punto medio: (${midX.toFixed(0)}, ${midY.toFixed(0)})`);
+            
+            return {
+                x: midX,
+                y: midY
+            };
+        }
+        
+        // 🚫 Todos los FOBs ya tienen camera drones cerca
+        console.log(`⚠️ IA CAMERA DRONE: Todos los FOBs (${enemyFOBs.length}) ya tienen camera drones. No se lanzará.`);
+        return null; // No hay target válido
+    }
+    
     findEnemyTerritoryPosition(team) {
         const enemyTeam = team === 'player1' ? 'player2' : 'player1';
         const enemyNodes = this.gameState.nodes.filter(n => n.team === enemyTeam && n.active);

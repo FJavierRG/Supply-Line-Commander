@@ -93,14 +93,18 @@ export class BaseProfile {
         const increments = Math.floor(deltaTime / incrementInterval);
         if (increments <= 0) return;
 
-        let amountPerTick = buffer.hasAirThreat ? 80 : 35;
+        // 🎯 AJUSTADO: Colchón más moderado para no bloquear estrategias
+        let amountPerTick = buffer.hasAirThreat ? 50 : 20;  // Reducido de 80/35 a 50/20
 
-        // Si ya alcanzó 135, ralentizar (p.ej. subir de 5 en 60s)
-        if (buffer.current >= 135) {
-            amountPerTick = 5;
+        // 🎯 AJUSTADO: Tope más bajo (100$ en vez de 135$) - suficiente para antiDrone de emergencia
+        const maxBuffer = 100;
+        
+        // Si ya alcanzó el tope, no seguir aumentando
+        if (buffer.current >= maxBuffer) {
+            amountPerTick = 0;
         }
 
-        buffer.current = Math.min(135, buffer.current + amountPerTick * increments);
+        buffer.current = Math.min(maxBuffer, buffer.current + amountPerTick * increments);
         buffer.lastIncreaseTime = gameTime;
     }
 
@@ -109,7 +113,7 @@ export class BaseProfile {
      */
     getAvailableCurrency(gameState) {
         const rawCurrency = gameState.currency?.player2 ?? 0;
-        const buffer = Math.min(this.currencyBuffer.current || 0, 135);
+        const buffer = Math.min(this.currencyBuffer.current || 0, 100);  // 🎯 AJUSTADO: Tope 100$
         return Math.max(0, rawCurrency - buffer);
     }
 

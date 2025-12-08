@@ -81,6 +81,10 @@ export class AICardEvaluator {
                         score += bonusValue * state.playerPlants;
                     } else if (bonusName === 'perMyPlant' && state.myPlants) {
                         score += bonusValue * state.myPlants; // Valor negativo, así que resta
+                    } else if (bonusName === 'perPlayerServer' && state.playerServers) {
+                        score += bonusValue * state.playerServers;
+                    } else if (bonusName === 'perMyServer' && state.myServers) {
+                        score += bonusValue * state.myServers; // Valor negativo, así que resta
                     } else {
                         score += bonusValue;
                     }
@@ -227,6 +231,12 @@ export class AICardEvaluator {
             case 'perMyPlant':
                 // Penalización por cada planta propia
                 return state.myPlants !== undefined && state.myPlants > 0;
+            case 'perPlayerServer':
+                // Bonus por cada servidor del jugador
+                return state.playerServers !== undefined && state.playerServers > 0;
+            case 'perMyServer':
+                // Penalización por cada servidor propio
+                return state.myServers !== undefined && state.myServers > 0;
             case 'hasTargets':
                 // Verificar si hay objetivos disponibles (para drones, etc.)
                 return this.hasDroneTargets(gameState, team);

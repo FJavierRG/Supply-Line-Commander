@@ -29,7 +29,7 @@ export const SERVER_NODE_CONFIG = {
         secretLaboratory: 90,
         trainingCamp: 80,
         deadlyBuild: 140,
-        servers: 40,
+        servers: 45,
         // 🆕 CONSUMIBLES/PROYECTILES
         drone: 170,
         sniperStrike: 70,
@@ -38,7 +38,7 @@ export const SERVER_NODE_CONFIG = {
         tank: 120,
         lightVehicle: 90, 
         truckAssault: 90,
-        cameraDrone: 80,
+        cameraDrone: 60,
         artillery: 120,
         worldDestroyer: 300
     },
