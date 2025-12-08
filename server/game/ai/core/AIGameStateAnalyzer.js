@@ -15,12 +15,14 @@ export class AIGameStateAnalyzer {
         // Contar edificios propios
         const myFOBs = myNodes.filter(n => n.type === 'fob' && n.constructed).length;
         const myPlants = myNodes.filter(n => n.type === 'nuclearPlant' && n.constructed).length;
+        const myServers = myNodes.filter(n => n.type === 'servers' && n.constructed).length;
         const myAerialBases = myNodes.filter(n => (n.type === 'aerialBase' || n.isAerialBase) && n.constructed && n.active).length;
         const myIntelRadios = myNodes.filter(n => n.type === 'intelRadio' && n.constructed && n.active).length;
         const myHospitals = myNodes.filter(n => n.type === 'campaignHospital' && n.constructed && n.active).length;
         
         // Contar edificios del jugador
         const playerPlants = playerNodes.filter(n => n.type === 'nuclearPlant' && n.constructed).length;
+        const playerServers = playerNodes.filter(n => n.type === 'servers' && n.constructed).length;
         
         // Verificar si tiene lanzadera propia y enemiga
         const hasLauncher = myNodes.some(n => n.type === 'droneLauncher' && n.constructed && n.active);
@@ -66,7 +68,9 @@ export class AIGameStateAnalyzer {
             elapsedMinutes,
             myFOBs: myFOBs,
             myPlants: myPlants,
+            myServers: myServers,
             playerPlants: playerPlants,
+            playerServers: playerServers,
             hasLauncher: hasLauncher,
             enemyHasLauncher,
             hasAirThreat,

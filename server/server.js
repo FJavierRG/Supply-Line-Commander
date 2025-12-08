@@ -1776,10 +1776,19 @@ async function startGame(roomId) {
         
         try {
             if (hasAI) {
-                // IA en player2 - usar raza para compatibilidad con IA
+                // IA en player2 - usar mazo de IA
                 console.log(`🤖 [startGame] Configurando IA para player2: ${room.aiPlayer.race} (${room.aiPlayer.difficulty})`);
+                
+                // 🎯 NUEVO: Establecer mazo de IA
+                const { getDefaultAIDeck } = await import('./game/ai/config/AIDecks.js');
+                const aiDeck = getDefaultAIDeck();
+                gameState.setPlayerDeck('player2', aiDeck);
+                console.log(`✅ [startGame] Mazo de IA establecido para player2: "${aiDeck.name}" (${aiDeck.units.length} unidades)`);
+                
+                // Mantener raza por compatibilidad
                 gameState.setPlayerRace('player2', room.aiPlayer.race);
                 console.log(`✅ [startGame] Raza establecida para IA (player2): ${room.aiPlayer.race} (${room.aiPlayer.difficulty})`);
+                
                 room.hasAI = true;
                 room.aiDifficulty = room.aiPlayer.difficulty;
             } else if (player2 && player2.selectedDeck) {

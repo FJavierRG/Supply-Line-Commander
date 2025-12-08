@@ -1,6 +1,79 @@
+// ═══════════════════════════════════════════════════════════════════════════
 // ===== SISTEMA DE MOVIMIENTO DE FRENTES (SERVIDOR) =====
-// Este sistema se ejecuta SOLO en el servidor
-// El cliente solo renderiza las posiciones que el servidor envía
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Este sistema se ejecuta SOLO en el servidor.
+// El cliente solo renderiza las posiciones que el servidor envía.
+//
+// ───────────────────────────────────────────────────────────────────────────
+// 📋 REGLAS DE COMPORTAMIENTO POR MODO
+// ───────────────────────────────────────────────────────────────────────────
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ MODO ADVANCE (Avanzar) - Comportamiento ofensivo                        │
+// └─────────────────────────────────────────────────────────────────────────┘
+//   Sin colisión:
+//     • Con supplies > 0  → Avanza hacia adelante
+//     • Sin supplies (=0) → Retrocede automáticamente
+//
+//   Con colisión:
+//     • Más supplies que enemigo     → Empuja al enemigo
+//     • Menos supplies que enemigo   → Es empujado por el enemigo
+//     • Supplies iguales (>0)        → Empate (ambos quietos)
+//     • Ambos sin supplies           → Ambos retroceden
+//     • Enemigo es ancla (HOLD)      → Bloqueado (no puede empujar)
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ MODO RETREAT (Retroceder) - Retroceso estratégico                       │
+// └─────────────────────────────────────────────────────────────────────────┘
+//   Sin colisión:
+//     • SIEMPRE retrocede (con o sin supplies)
+//     • Gana currency por retroceso voluntario (75% del valor de avance)
+//
+//   Con colisión:
+//     • SIEMPRE retrocede (ignora comparación de supplies)
+//     • Excepción: Si el enemigo lo empuja MÁS RÁPIDO hacia atrás,
+//                  usa la velocidad del enemigo
+//
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ MODO HOLD (Mantener) - Defensa estática / Ancla                         │
+// └─────────────────────────────────────────────────────────────────────────┘
+//   Sin colisión:
+//     • Con supplies > 0  → Inmóvil (ancla)
+//     • Sin supplies (=0) → Pierde ancla, retrocede
+//
+//   Con colisión:
+//     • Con supplies > 0  → ANCLA INMÓVIL (no puede ser empujado)
+//     • Sin supplies (=0) → Pierde ancla, es empujado/retrocede
+//
+// ───────────────────────────────────────────────────────────────────────────
+// 🏗️ ARQUITECTURA DEL SISTEMA
+// ───────────────────────────────────────────────────────────────────────────
+//
+// El sistema está diseñado con arquitectura de "Intención + Fuerzas Externas":
+//
+//   1. INTENCIÓN: Cada frente tiene una "voluntad" según su modo
+//      → getIntendedMovement(front, direction, dt)
+//
+//   2. FUERZAS EXTERNAS: Las colisiones pueden anular la intención
+//      → canFrontPush(pusher, pushed)
+//      → calculateCollisionForce(pusher, pushed, direction, dt)
+//
+//   3. RESOLUCIÓN: Se combina intención + fuerzas para movimiento final
+//      → updateFrontMovement(front, enemyFronts, direction, dt)
+//
+// Esta arquitectura facilita extender el sistema con nuevos modos o
+// modificadores (disciplinas, efectos temporales, etc.).
+//
+// ───────────────────────────────────────────────────────────────────────────
+// 🎯 CONDICIONES DE VICTORIA
+// ───────────────────────────────────────────────────────────────────────────
+//
+// Un equipo gana cuando:
+//   • Uno de sus frentes alcanza el HQ enemigo (empuja hasta la base)
+//   • El frente enemigo retrocede más allá de su HQ
+//
+// ═══════════════════════════════════════════════════════════════════════════
 
 import { GAME_CONFIG } from '../../config/gameConfig.js';
 import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
@@ -95,8 +168,148 @@ export class FrontMovementSystemServer {
         return baseSpeed;
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // 🏗️ FUNCIONES BASE DEL SISTEMA
+    // ═══════════════════════════════════════════════════════════════
+    // Estas funciones implementan la arquitectura de "Intención + Fuerzas"
+    // y facilitan la extensibilidad del sistema.
+    // ═══════════════════════════════════════════════════════════════
+
     /**
-     * Actualizar movimiento de un frente
+     * ✅ FASE 1.4: Verifica si un frente es un ancla inmóvil
+     * Un frente es ancla si está en modo HOLD y tiene supplies > 0
+     * @param {Object} front - Frente a verificar
+     * @returns {boolean} True si es ancla
+     */
+    isAnchor(front) {
+        const modeConfig = this.getFrontModeConfig(front);
+        return modeConfig.isAnchor && front.supplies > 0;
+    }
+
+    /**
+     * 🔊 Helper: Maneja el sonido de "no ammo" para un frente
+     * Solo se reproduce una vez por frente hasta que recupere supplies
+     * @param {Object} front - Frente sin supplies
+     */
+    handleNoAmmoSound(front) {
+        if (!this.noAmmoSoundPlayed.has(front.id)) {
+            this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
+            this.noAmmoSoundPlayed.add(front.id);
+        }
+    }
+
+    /**
+     * ✅ FASE 1.1: Calcula el movimiento que QUIERE hacer el frente (sin considerar colisiones)
+     * Esta es la "intención" del frente según su modo
+     * @param {Object} front - Frente
+     * @param {number} direction - Dirección de avance (+1 derecha, -1 izquierda)
+     * @param {number} dt - Delta time en segundos
+     * @returns {Object} { movement: number, reason: string, isVoluntaryRetreat: boolean }
+     */
+    getIntendedMovement(front, direction, dt) {
+        const modeConfig = this.getFrontModeConfig(front);
+        let movement = 0;
+        let reason = '';
+        let isVoluntaryRetreat = false;
+
+        // MODO HOLD: Ancla defensiva
+        if (modeConfig.isAnchor) {
+            if (front.supplies > 0) {
+                // Con supplies: quieto (ancla)
+                movement = 0;
+                reason = `HOLD (supplies: ${front.supplies.toFixed(0)})`;
+            } else {
+                // Sin supplies: pierde ancla y retrocede
+                movement = -this.retreatSpeed * dt * direction;
+                reason = `HOLD-SIN-SUMINISTROS (retrocede)`;
+            }
+        }
+        // MODO RETREAT: Retroceso voluntario
+        else if (modeConfig.canRetreat) {
+            // Retrocede SIEMPRE (con o sin supplies)
+            movement = -this.retreatSpeed * dt * direction;
+            if (front.supplies > 0) {
+                reason = `RETREAT (supplies: ${front.supplies.toFixed(0)})`;
+                isVoluntaryRetreat = true; // Marca para ganar currency
+            } else {
+                reason = `RETREAT-SIN-SUMINISTROS (retrocede)`;
+            }
+        }
+        // MODO ADVANCE: Comportamiento por defecto
+        else if (modeConfig.canAdvance) {
+            if (front.supplies > 0) {
+                // Con supplies: avanza
+                let advanceSpeed = this.advanceSpeed;
+                advanceSpeed = this.applyDisciplineModifiers(front, advanceSpeed);
+                movement = advanceSpeed * dt * direction;
+                reason = `AVANZA (supplies: ${front.supplies.toFixed(0)})`;
+            } else {
+                // Sin supplies: retrocede
+                movement = -this.retreatSpeed * dt * direction;
+                reason = `RETROCEDE (sin supplies)`;
+            }
+        }
+
+        return { movement, reason, isVoluntaryRetreat };
+    }
+
+    /**
+     * ✅ FASE 1.2: Verifica si un frente PUEDE empujar a otro
+     * Solo puede empujar si:
+     * 1. Está en modo ADVANCE
+     * 2. Tiene más supplies que el enemigo
+     * 3. El enemigo NO es un ancla con supplies
+     * @param {Object} pusher - Frente que intenta empujar
+     * @param {Object} pushed - Frente que podría ser empujado
+     * @returns {boolean} True si puede empujar
+     */
+    canFrontPush(pusher, pushed) {
+        const pusherMode = this.getFrontModeConfig(pusher);
+        
+        // Solo puede empujar en modo ADVANCE
+        if (!pusherMode.canAdvance) {
+            return false;
+        }
+        
+        // No puede empujar si el enemigo es un ancla con supplies
+        if (this.isAnchor(pushed)) {
+            return false;
+        }
+        
+        // Debe tener más supplies que el enemigo
+        return pusher.supplies > pushed.supplies;
+    }
+
+    /**
+     * ✅ FASE 1.3: Calcula la fuerza de empuje que ejerce un frente sobre otro
+     * Retorna la velocidad de movimiento resultante (puede ser 0)
+     * @param {Object} pusher - Frente que empuja
+     * @param {Object} pushed - Frente empujado
+     * @param {number} direction - Dirección del frente empujado (+1 derecha, -1 izquierda)
+     * @param {number} dt - Delta time en segundos
+     * @returns {number} Velocidad de movimiento (positiva = avanza, negativa = retrocede)
+     */
+    calculateCollisionForce(pusher, pushed, direction, dt) {
+        // Si el empujador puede empujar al empujado
+        if (this.canFrontPush(pusher, pushed)) {
+            // Usar velocidad del empujador (con sus modificadores)
+            let pushSpeed = this.advanceSpeed;
+            pushSpeed = this.applyDisciplineModifiers(pusher, pushSpeed);
+            // El empujado retrocede (signo negativo)
+            return -pushSpeed * dt * direction;
+        }
+        
+        // No hay fuerza de empuje
+        return 0;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🎮 LÓGICA PRINCIPAL DE MOVIMIENTO
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * ✅ REFACTORIZADO: Actualizar movimiento de un frente
+     * Nueva arquitectura: Intención + Fuerzas Externas + Resolución
      * @param {Object} front - Frente a actualizar
      * @param {Array} enemyFronts - Frentes del equipo opuesto
      * @param {number} direction - Dirección de avance (+1 derecha, -1 izquierda)
@@ -105,201 +318,129 @@ export class FrontMovementSystemServer {
     updateFrontMovement(front, enemyFronts, direction, dt) {
         // Buscar frente enemigo más cercano verticalmente
         const nearestEnemy = this.findNearestEnemyFrontVertical(front, enemyFronts);
-        
-        // 🆕 SISTEMA DE MODOS: Obtener configuración del modo actual
         const modeConfig = this.getFrontModeConfig(front);
         
         let movement = 0;
-        let inCollision = false;
         let reason = '';
-        let isVoluntaryRetreat = false; // Para tracking de currency por retroceso voluntario
+        let isVoluntaryRetreat = false;
         
-        // Verificar colisión con enemigo
-        if (nearestEnemy && this.areInCollisionRange(front, nearestEnemy, direction)) {
-            inCollision = true;
-            
+        // ═══════════════════════════════════════════════════════════════
+        // PASO 1: ¿HAY COLISIÓN CON ENEMIGO?
+        // ═══════════════════════════════════════════════════════════════
+        const inCollision = nearestEnemy && this.areInCollisionRange(front, nearestEnemy, direction);
+        
+        if (inCollision) {
             // SONIDO: Primer contacto enemigo (solo una vez global)
             if (!this.gameState.hasPlayedEnemyContact) {
                 this.gameState.addSoundEvent('enemy_contact');
                 this.gameState.hasPlayedEnemyContact = true;
             }
             
-            // 🆕 MODO HOLD (ANCLA): No puede ser empujado mientras tenga supplies > 0
-            if (modeConfig.isAnchor && front.supplies > 0) {
-                // HOLD con supplies: ancla inmóvil, no puede ser empujado
+            // ═══════════════════════════════════════════════════════════════
+            // PASO 2: RESOLVER COLISIÓN
+            // ═══════════════════════════════════════════════════════════════
+            
+            // CASO A: Este frente es ANCLA con supplies
+            if (this.isAnchor(front)) {
                 movement = 0;
                 reason = `HOLD-ANCLA (supplies: ${front.supplies.toFixed(0)})`;
-            } else if (modeConfig.isAnchor && front.supplies === 0) {
-                // HOLD SIN supplies: pierde ancla y retrocede
+            }
+            
+            // CASO B: Este frente es ANCLA SIN supplies (pierde ancla)
+            else if (modeConfig.isAnchor && front.supplies === 0) {
                 movement = -this.retreatSpeed * dt * direction;
                 reason = `HOLD-SIN-SUMINISTROS (retrocede)`;
+                this.handleNoAmmoSound(front);
+            }
+            
+            // CASO C: Este frente NO tiene supplies (retrocede automáticamente)
+            else if (front.supplies === 0) {
+                // Verificar si el enemigo lo está empujando activamente
+                const enemyPushForce = this.calculateCollisionForce(nearestEnemy, front, direction, dt);
                 
-                // SONIDO: No ammo
-                if (!this.noAmmoSoundPlayed.has(front.id)) {
-                    this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
-                    this.noAmmoSoundPlayed.add(front.id);
+                if (enemyPushForce !== 0) {
+                    // El enemigo lo empuja → usar su velocidad
+                    movement = enemyPushForce;
+                    reason = `EMPUJADO-SIN-SUPPLIES (0 supplies)`;
+                } else {
+                    // El enemigo NO empuja → retrocede automáticamente
+                    movement = -this.retreatSpeed * dt * direction;
+                    reason = `RETROCEDE-AUTO (0 supplies)`;
                 }
-            } else {
-                // Comportamiento normal de colisión (modos ADVANCE y RETREAT en colisión)
-                // Nota: RETREAT no puede colisionar normalmente porque va hacia atrás,
-                // pero si el enemigo lo alcanza, se aplica la lógica de empuje
+                this.handleNoAmmoSound(front);
+            }
+            
+            // CASO D: Este frente está en modo RETREAT 🔧 BUG FIX
+            else if (modeConfig.canRetreat) {
+                // ✅ RETREAT SIEMPRE retrocede, ignorando comparación de supplies
+                movement = -this.retreatSpeed * dt * direction;
+                reason = `RETREAT-COLISION (retrocede, supplies: ${front.supplies.toFixed(0)})`;
+                isVoluntaryRetreat = true;
                 
-                // 🆕 FIX: Verificar si el enemigo está en modo HOLD (ancla)
-                // Un ancla con supplies > 0 NO puede ser empujado, el atacante debe detenerse
-                const enemyModeConfig = this.getFrontModeConfig(nearestEnemy);
-                const enemyIsAnchor = enemyModeConfig.isAnchor && nearestEnemy.supplies > 0;
-                
-                // 🆕 FIX: PRIORIDAD - Retroceso automático cuando hay 0 recursos
-                // Si este frente tiene 0 recursos, debe retroceder automáticamente
-                // EXCEPTO si está siendo empujado activamente por un enemigo en modo ADVANCE
-                if (front.supplies === 0) {
-                    // Verificar si el enemigo está empujando activamente
-                    // El enemigo solo empuja activamente si está en modo ADVANCE y tiene más recursos
-                    const enemyIsActivelyPushing = enemyModeConfig.canAdvance && nearestEnemy.supplies > 0;
-                    
-                    if (!enemyIsActivelyPushing) {
-                        // No está siendo empujado activamente → retrocede automáticamente
-                        movement = -this.retreatSpeed * dt * direction;
-                        reason = `RETROCEDE-AUTO (0 supplies, enemigo no empuja activamente)`;
-                        
-                        if (!this.noAmmoSoundPlayed.has(front.id)) {
-                            this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
-                            this.noAmmoSoundPlayed.add(front.id);
-                        }
-                    } else {
-                        // Está siendo empujado activamente → usar velocidad del enemigo
-                        let enemyPushSpeed = this.advanceSpeed;
-                        // Aplicar modificadores de disciplina del ENEMIGO
-                        enemyPushSpeed = this.applyDisciplineModifiers(nearestEnemy, enemyPushSpeed);
-                        movement = -enemyPushSpeed * dt * direction;
-                        reason = `EMPUJADO-ACTIVO (0 supplies, enemigo empuja a ${enemyPushSpeed.toFixed(0)}px/s)`;
-                    }
+                // EXCEPCIÓN: Si el enemigo lo empuja MÁS RÁPIDO hacia atrás, usar esa velocidad
+                const enemyPushForce = this.calculateCollisionForce(nearestEnemy, front, direction, dt);
+                if (enemyPushForce < movement) { // Más negativo = más rápido hacia atrás
+                    movement = enemyPushForce;
+                    reason = `RETREAT-EMPUJADO (enemigo empuja más rápido)`;
                 }
-                // Si este frente NO tiene 0 recursos, aplicar lógica normal de empuje
-                else if (enemyIsAnchor) {
-                    // 🆕 El enemigo es un ANCLA - no se puede empujar, quedarse bloqueado
+            }
+            
+            // CASO E: El enemigo es ANCLA (no se puede empujar)
+            else if (this.isAnchor(nearestEnemy)) {
                     movement = 0;
-                    reason = `BLOQUEADO POR ANCLA (enemigo en HOLD con ${nearestEnemy.supplies.toFixed(0)} supplies)`;
-                }
-                // EMPUJE: Comparar suministros (solo si el enemigo NO es ancla)
-                else if (front.supplies > nearestEnemy.supplies) {
-                    // Este frente tiene más → EMPUJA (si no está en modo retreat)
-                    if (modeConfig.canAdvance) {
+                reason = `BLOQUEADO POR ANCLA (enemigo: ${nearestEnemy.supplies.toFixed(0)})`;
+            }
+            
+            // CASO F: Este frente PUEDE empujar al enemigo
+            else if (this.canFrontPush(front, nearestEnemy)) {
                         let pushSpeed = this.advanceSpeed;
-                        // 🆕 Aplicar modificadores de disciplina (solo cuando avanza/empuja)
                         pushSpeed = this.applyDisciplineModifiers(front, pushSpeed);
                         movement = pushSpeed * dt * direction;
                         reason = `EMPUJA (${front.supplies.toFixed(0)} > ${nearestEnemy.supplies.toFixed(0)})`;
-                    } else {
-                        // En RETREAT durante colisión: no empuja, mantiene posición
-                        movement = 0;
-                        reason = `RETREAT-COLISION (${front.supplies.toFixed(0)})`;
-                    }
-                } else if (front.supplies < nearestEnemy.supplies) {
-                    // Enemigo tiene más → ES EMPUJADO (solo si el enemigo está empujando activamente)
-                    if (enemyModeConfig.canAdvance) {
-                        // Usar velocidad del enemigo con SUS modificadores de disciplina
-                        let enemyPushSpeed = this.advanceSpeed;
-                        enemyPushSpeed = this.applyDisciplineModifiers(nearestEnemy, enemyPushSpeed);
-                        movement = -enemyPushSpeed * dt * direction;
-                        reason = `EMPUJADO (${front.supplies.toFixed(0)} < ${nearestEnemy.supplies.toFixed(0)}) a ${enemyPushSpeed.toFixed(0)}px/s`;
-                    } else {
-                        // Enemigo tiene más recursos pero NO está empujando activamente (está en HOLD/RETREAT)
-                        // Mantener posición según nuestro modo
-                        if (modeConfig.canRetreat) {
-                            movement = -this.retreatSpeed * dt * direction;
-                            reason = `RETREAT-COLISION (enemigo no empuja)`;
-                        } else {
-                            movement = 0;
-                            reason = `MANTIENE (enemigo no empuja activamente)`;
-                        }
-                    }
-                } else {
-                    // Recursos IGUALES
-                    if (nearestEnemy.supplies === 0) {
-                        // AMBOS sin recursos → AMBOS retroceden
-                        movement = -this.retreatSpeed * dt * direction;
-                        reason = `AMBOS SIN RECURSOS (retroceden)`;
-                        
-                        if (!this.noAmmoSoundPlayed.has(front.id)) {
-                            this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
-                            this.noAmmoSoundPlayed.add(front.id);
-                        }
-                    } else {
-                        // Recursos iguales pero > 0 → EMPATE
+            }
+            
+            // CASO G: El enemigo PUEDE empujar a este frente
+            else if (this.canFrontPush(nearestEnemy, front)) {
+                const enemyPushForce = this.calculateCollisionForce(nearestEnemy, front, direction, dt);
+                movement = enemyPushForce;
+                reason = `EMPUJADO (${front.supplies.toFixed(0)} < ${nearestEnemy.supplies.toFixed(0)})`;
+            }
+            
+            // CASO H: EMPATE (mismo supplies > 0)
+            else if (front.supplies === nearestEnemy.supplies && front.supplies > 0) {
                         movement = 0;
                         reason = `EMPATE (${front.supplies.toFixed(0)} = ${nearestEnemy.supplies.toFixed(0)})`;
-                    }
-                }
             }
-        } else {
-            // SIN COLISIÓN: Movimiento según modo
             
-            // 🆕 MODO HOLD (sin colisión)
-            if (modeConfig.isAnchor) {
-                if (front.supplies > 0) {
-                    // HOLD con supplies: inmóvil
-                    movement = 0;
-                    reason = `HOLD (supplies: ${front.supplies.toFixed(0)})`;
-                    
-                    if (this.noAmmoSoundPlayed.has(front.id)) {
-                        this.noAmmoSoundPlayed.delete(front.id);
-                    }
-                } else {
-                    // HOLD SIN supplies: pierde ancla y retrocede
+            // CASO I: AMBOS sin supplies
+            else if (front.supplies === 0 && nearestEnemy.supplies === 0) {
                     movement = -this.retreatSpeed * dt * direction;
-                    reason = `HOLD-SIN-SUMINISTROS (retrocede)`;
-                    
-                    if (!this.noAmmoSoundPlayed.has(front.id)) {
-                        this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
-                        this.noAmmoSoundPlayed.add(front.id);
-                    }
-                }
+                reason = `AMBOS SIN RECURSOS (retroceden)`;
+                this.handleNoAmmoSound(front);
             }
-            // 🆕 MODO RETREAT (sin colisión)
-            else if (modeConfig.canRetreat) {
-                if (front.supplies > 0) {
-                    // RETREAT con supplies: retrocede voluntariamente
-                    movement = -this.retreatSpeed * dt * direction;
-                    reason = `RETREAT (supplies: ${front.supplies.toFixed(0)})`;
-                    isVoluntaryRetreat = true; // Marca para ganar currency
-                    
-                    if (this.noAmmoSoundPlayed.has(front.id)) {
-                        this.noAmmoSoundPlayed.delete(front.id);
-                    }
-                } else {
-                    // RETREAT SIN supplies: retrocede igual
-                    movement = -this.retreatSpeed * dt * direction;
-                    reason = `RETREAT-SIN-SUMINISTROS (retrocede)`;
-                    
-                    if (!this.noAmmoSoundPlayed.has(front.id)) {
-                        this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
-                        this.noAmmoSoundPlayed.add(front.id);
-                    }
-                }
+            
+            // CASO J: Mantener posición (fallback)
+            else {
+                movement = 0;
+                reason = `MANTIENE (sin condiciones de movimiento)`;
             }
-            // 🆕 MODO ADVANCE (comportamiento original)
-            else if (modeConfig.canAdvance) {
-                if (front.supplies > 0) {
-                    // Avanzar
-                    let advanceSpeed = this.advanceSpeed;
-                    // 🆕 Aplicar modificadores de disciplina (solo cuando avanza libremente)
-                    advanceSpeed = this.applyDisciplineModifiers(front, advanceSpeed);
-                    movement = advanceSpeed * dt * direction;
-                    reason = `AVANZA (supplies: ${front.supplies.toFixed(0)})`;
-                    
+        } 
+        // ═══════════════════════════════════════════════════════════════
+        // PASO 3: SIN COLISIÓN - MOVIMIENTO LIBRE SEGÚN INTENCIÓN
+        // ═══════════════════════════════════════════════════════════════
+        else {
+            const intention = this.getIntendedMovement(front, direction, dt);
+            movement = intention.movement;
+            reason = intention.reason;
+            isVoluntaryRetreat = intention.isVoluntaryRetreat;
+            
+            // Manejar sonidos según el caso
+            if (front.supplies === 0) {
+                this.handleNoAmmoSound(front);
+            } else {
+                // Limpiar flag de sonido si tiene supplies
                     if (this.noAmmoSoundPlayed.has(front.id)) {
                         this.noAmmoSoundPlayed.delete(front.id);
-                    }
-                } else {
-                    // Sin recursos: retrocede
-                    movement = -this.retreatSpeed * dt * direction;
-                    reason = `RETROCEDE (sin supplies)`;
-                    
-                    if (!this.noAmmoSoundPlayed.has(front.id)) {
-                        this.gameState.addSoundEvent('no_ammo', { frontId: front.id });
-                        this.noAmmoSoundPlayed.add(front.id);
-                    }
                 }
             }
         }
@@ -307,7 +448,20 @@ export class FrontMovementSystemServer {
         // Aplicar movimiento
         front.x += movement;
         
-        // Trackear movimiento para currency
+        // Trackear movimiento para currency (delegado a función helper)
+        this.trackCurrencyForMovement(front, direction, isVoluntaryRetreat);
+    }
+
+    /**
+     * 📊 Helper: Trackea el movimiento del frente y otorga currency por avance/retroceso
+     * Centraliza la lógica de tracking que antes estaba duplicada
+     * @param {Object} front - Frente que se movió
+     * @param {number} direction - Dirección (+1 derecha, -1 izquierda)
+     * @param {boolean} isVoluntaryRetreat - Si es retroceso voluntario (para currency)
+     */
+    trackCurrencyForMovement(front, direction, isVoluntaryRetreat) {
+        const team = front.team;
+        
         if (direction === 1) {
             // Player1: avanza a la derecha (+X)
             if (!front.maxXReached) front.maxXReached = front.x;
@@ -315,16 +469,15 @@ export class FrontMovementSystemServer {
             if (front.x < front.maxXReached) {
                 // Retrocedió
                 if (isVoluntaryRetreat) {
-                    // 🆕 RETREAT: Ganar currency por retroceso voluntario
                     const pixelsRetreated = front.maxXReached - front.x;
-                    this.awardCurrencyForRetreat('player1', pixelsRetreated, front);
+                    this.awardCurrencyForRetreat(team, pixelsRetreated, front);
                 }
                 front.maxXReached = front.x;
             } else if (front.x > front.maxXReached) {
-                // Avanzó: otorgar currency
+                // Avanzó
                 const pixelsGained = front.x - front.maxXReached;
                 front.maxXReached = front.x;
-                this.awardCurrencyForAdvance('player1', pixelsGained, front);
+                this.awardCurrencyForAdvance(team, pixelsGained, front);
             }
         } else {
             // Player2: avanza a la izquierda (-X)
@@ -333,16 +486,15 @@ export class FrontMovementSystemServer {
             if (front.x > front.minXReached) {
                 // Retrocedió
                 if (isVoluntaryRetreat) {
-                    // 🆕 RETREAT: Ganar currency por retroceso voluntario
                     const pixelsRetreated = front.x - front.minXReached;
-                    this.awardCurrencyForRetreat('player2', pixelsRetreated, front);
+                    this.awardCurrencyForRetreat(team, pixelsRetreated, front);
                 }
                 front.minXReached = front.x;
             } else if (front.x < front.minXReached) {
-                // Avanzó: otorgar currency
+                // Avanzó
                 const pixelsGained = front.minXReached - front.x;
                 front.minXReached = front.x;
-                this.awardCurrencyForAdvance('player2', pixelsGained, front);
+                this.awardCurrencyForAdvance(team, pixelsGained, front);
             }
         }
     }
