@@ -225,7 +225,7 @@
                     <div id="lobby-room-view" style="display: none; padding: 20px; max-width: 1200px; margin: 0 auto;">
                         <!-- Código de sala -->
                         <div style="text-align: center; margin-bottom: 30px;">
-                            <p style="color: #888; font-size: 14px; margin-bottom: 5px;">CÓDIGO DE SALA</p>
+                            <p id="lobby-room-code-label" style="color: #888; font-size: 14px; margin-bottom: 5px;">CÓDIGO DE SALA</p>
                             <p id="room-code-display" style="font-size: 32px; font-weight: bold; color: #4ecca3; letter-spacing: 8px; text-shadow: 0 0 10px rgba(78, 204, 163, 0.5);"></p>
                         </div>
                         
@@ -235,7 +235,7 @@
                             <div style="flex: 1; min-width: 400px;">
                                 <!-- Lista de jugadores -->
                                 <div style="margin-bottom: 30px;">
-                                    <h3 style="color: #4ecca3; margin-bottom: 15px; font-size: 18px; text-transform: uppercase; letter-spacing: 2px;">JUGADORES</h3>
+                                    <h3 id="lobby-players-title" style="color: #4ecca3; margin-bottom: 15px; font-size: 18px; text-transform: uppercase; letter-spacing: 2px;">JUGADORES</h3>
                                     <div id="players-list">
                                         <!-- Se llenará dinámicamente -->
                                     </div>
@@ -249,7 +249,7 @@
                                         margin-top: 15px;
                                     ">
                                         <div id="ai-slot-empty" style="text-align: center;">
-                                            <p style="color: #888; margin-bottom: 10px;">Slot vacío</p>
+                                            <p id="lobby-ai-slot-empty-text" style="color: #888; margin-bottom: 10px;">Slot vacío</p>
                                             <button id="add-ai-btn" class="menu-btn secondary" style="padding: 8px 20px; font-size: 14px;">+ Añadir IA</button>
                                         </div>
                                         

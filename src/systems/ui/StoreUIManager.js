@@ -2,6 +2,7 @@
 
 import { getBuildableNodes, getProjectiles, getNodeConfig, getBuildableNodesByRace, getProjectilesByRace } from '../../config/nodes.js';
 import { getDefaultRace } from '../../config/races.js';
+import { i18n } from '../../services/I18nService.js';
 
 export class StoreUIManager {
     constructor(assetManager, buildSystem, game = null) {
@@ -92,12 +93,12 @@ export class StoreUIManager {
         
         this.categories = {
             buildings: {
-                name: 'Edificios',
+                get name() { return i18n.t('store.categories.buildings'); },
                 icon: 'hammer_wrench',
                 items: buildableNodes.map(n => n.id)
             },
             vehicles: {
-                name: 'Vehículos',
+                get name() { return i18n.t('store.categories.vehicles'); },
                 icon: 'wheel',
                 items: projectileNodes.map(n => n.id)
             }
@@ -249,7 +250,7 @@ export class StoreUIManager {
         const descWidth = ctx.measureText(item.description).width;
         
         ctx.font = `${costSize}px Arial`;
-        const costText = `Costo: ${item.cost}$`;
+        const costText = i18n.t('store.cost', { cost: item.cost });
         const costWidth = ctx.measureText(costText).width;
         
         // Calcular dimensiones del tooltip
@@ -307,10 +308,24 @@ export class StoreUIManager {
         
         if (hoveredRegion) {
             const itemId = hoveredRegion.itemId;
-            const nodeConfig = getNodeConfig(itemId);
+            let itemData;
             
-            if (nodeConfig && nodeConfig !== this.hoveredItem) {
-                this.hoveredItem = nodeConfig;
+            // 🌍 NUEVO: Usar descripciones traducidas del servidor si están disponibles
+            if (this.game?.serverBuildingConfig?.descriptions?.[itemId]) {
+                const translatedData = this.game.serverBuildingConfig.descriptions[itemId];
+                const nodeConfig = getNodeConfig(itemId);
+                itemData = {
+                    ...nodeConfig,
+                    name: translatedData.name,
+                    description: translatedData.description
+                };
+            } else {
+                // Fallback a config local
+                itemData = getNodeConfig(itemId);
+            }
+            
+            if (itemData && itemData !== this.hoveredItem) {
+                this.hoveredItem = itemData;
                 this.hoverStartTime = Date.now();
             }
         } else {
@@ -1085,7 +1100,7 @@ export class StoreUIManager {
         ctx.font = 'bold 16px Arial';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Banquillo', benchPanel.x + 10, benchPanel.y + 20);
+        ctx.fillText(i18n.t('store.bench'), benchPanel.x + 10, benchPanel.y + 20);
         
         // Renderizar contador de puntos
         const benchCost = this.calculateBenchCost();
@@ -1180,7 +1195,7 @@ export class StoreUIManager {
         ctx.font = 'bold 16px Arial';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Tu Mazo (permutar)', deckPanelX + 10, deckPanelY + 20);
+        ctx.fillText(i18n.t('store.your_deck_swap'), deckPanelX + 10, deckPanelY + 20);
         
         // Renderizar TODAS las cartas (sin límite de visibles)
         const startX = deckPanelX + padding;
@@ -1622,17 +1637,17 @@ export class StoreUIManager {
         // Los límites solo se aplican en el editor. Durante la partida, se puede permutar libremente.
         // Solo validar que las unidades existan y que no se intente intercambiar el HQ
         if (!selectedDeck.units.includes(deckUnitId)) {
-            console.error('La unidad no está en el mazo');
+            console.error(i18n.t('store.errors.unit_not_in_deck'));
             return false;
         }
         
         if (!selectedDeck.bench.includes(benchUnitId)) {
-            console.error('La unidad no está en el banquillo');
+            console.error(i18n.t('store.errors.unit_not_in_bench'));
             return false;
         }
         
         if (deckUnitId === 'hq' || deckUnitId === 'fob') {
-            console.error('No se puede intercambiar el HQ ni el FOB');
+            console.error(i18n.t('store.errors.cannot_swap_hq_fob'));
             return false;
         }
         

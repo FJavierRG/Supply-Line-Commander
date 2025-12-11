@@ -150,7 +150,113 @@
     "hover_card": "Pasa el ratón por un elemento",
     "add_card_left": "Click izq añadir carta",
     "view_card_right": "Click der ver info",
-    "cost": "Coste"
+    "cost": "Coste",
+    "notifications": {
+      "default_deck_error": "Error obteniendo el mazo predeterminado. Intenta de nuevo.",
+      "new_deck_created": "Nuevo mazo creado. Empieza añadiendo unidades.",
+      "deck_empty": "El mazo está vacío",
+      "waiting_server_config": "Esperando configuración del servidor...",
+      "deck_exceeds_limit": "El mazo excede el límite de puntos ({deckCost}/{pointLimit}). Elimina algunas unidades antes de guardar.",
+      "bench_exceeds_limit": "El banquillo excede el límite de puntos ({benchCost}/{benchPointLimit}). Elimina algunas unidades antes de guardar.",
+      "deck_saved": "Mazo \"{deckName}\" guardado correctamente",
+      "deck_save_error": "Error al guardar el mazo",
+      "deck_created": "Mazo \"{deckName}\" creado y guardado",
+      "deck_create_error": "Error al crear el mazo",
+      "deck_save_error_detailed": "Error al guardar el mazo: {error}",
+      "deck_create_error_detailed": "Error al crear el mazo: {error}",
+      "deck_empty_add_units": "El mazo está vacío. Añade unidades antes de confirmar.",
+      "deck_exceeds_limit_confirm": "El mazo excede el límite de puntos ({deckCost}/{pointLimit}). Elimina algunas unidades antes de confirmar.",
+      "bench_exceeds_limit_confirm": "El banquillo excede el límite de puntos ({benchCost}/{benchPointLimit}). Elimina algunas unidades antes de confirmar.",
+      "select_card_to_swap": "Selecciona una carta del mazo para permutar",
+      "swap_not_allowed": "No se puede realizar la permutación",
+      "swap_success": "Permutación realizada",
+      "item_added_to_bench": "{itemName} añadido al banquillo",
+      "discipline_limit_reached": "Ya tienes 2 disciplinas en el mazo (máximo permitido)",
+      "discipline_already_in_deck": "Esta disciplina ya está en el mazo",
+      "discipline_added": "Disciplina añadida al mazo",
+      "discipline_removed": "Disciplina quitada del mazo",
+      "deck_delete_error": "Error al borrar el mazo: {error}"
+    },
+    "confirm": {
+      "clear_deck": "¿Estás seguro de que quieres limpiar el mazo? (El HQ y FOB permanecerán)",
+      "delete_deck": "¿Estás seguro de que quieres borrar este mazo? Esta acción no se puede deshacer."
+    }
+  },
+  
+  "tutorial": {
+    "steps": [
+      {
+        "title": "Bienvenido, Comandante",
+        "text": "<p>Tu trabajo aquí es mantener vivo el <strong>frente de batalla</strong>.</p><p>Los soldados lucharán solos, pero <strong>tú controlas los suministros</strong>.</p>"
+      },
+      {
+        "title": "El Mapa",
+        "text": "<p>Este es el mapa de batalla. A la izquierda puedes ver tu base de operaciones (HQ) tus puestos de avanzada (FOBs) y tus frentes de batalla. En azul verás todo el área que controla tu equipo.</p><p>Al otro lado puedes ver a tu oponente jugando de forma simétrica</p>"
+      },
+      {
+        "title": "El Frente de Batalla",
+        "text": "<p>Este es tu <strong>frente de batalla</strong>. Los nodos de frente de batalla se moverán de forma automática en función de los suministros disponibles</p>"
+      },
+      {
+        "title": "Frente sin Recursos",
+        "text": "<p>La barra muestra los suministros del nodo. Cuando el frente se quede sin recursos, retrocederá automáticamente. Tu misión es evitar que esto suceda manteniendo una <strong>cadena de suministros</strong> activa.</p>"
+      },
+      {
+        "title": "Control del Territorio",
+        "text": "<p>El control del territorio repercute en la ganancia de oro. Por cada centímetro de tierra que tus soldados avanzan, obtienes riquezas. Además, obtienes una pequeña cantidad de forma pasiva. Este dinero te servirá para la tienda.</p>"
+      },
+      {
+        "title": "Barra de Suministros",
+        "text": "<p>Como vimos esta barra indica los suministros de tu frente de batalla. Para hacerle llegar nuevos suministros presta atención a los siguientes consejos.</p>"
+      },
+      {
+        "title": "Camiones Pesados del HQ",
+        "text": "<p>El HQ tiene a tu disposición camiones pesados de suministros. No es seguro ni eficiente enviarlos directamente al frente de combate. Deberás enviarlos haciendo Click a los puestos de avanzada (FOBs).</p>"
+      },
+      {
+        "title": "Camiones Ligeros de las FOBs",
+        "text": "<p>Desde las FOBs podrás enviar, haciendo Click, camiones ligeros que se desplazarán hasta el frente, entregarán los suministros y regresarán.</p>"
+      },
+      {
+        "title": "Indicadores de FOB",
+        "text": "<p>Ten en cuenta que las FOBs tienen indicador de suministros y de vehículos disponibles. De nada te servirá tener camiones si no hay suministros y tampoco podrás enviar ayuda por muchos suministros que tengas si tus camiones aún no han regresado.</p>"
+      },
+      {
+        "title": "La Tienda",
+        "text": "<p>Aquí puedes desplegar la tienda haciendo click.</p>"
+      },
+      {
+        "title": "Contenido de la Tienda",
+        "text": "<p>Dentro encontrarás toda una serie de edificios y recursos logísticos para ayudar a tu frente con el avance. Algunos te darán recompensas pasivas, otras fortalecerán tus cadenas de suministros, otros servirán para dificultar el desarrollo enemigo... Puedes revisar qué hacen en el Arsenal, desde el menú principal.</p>"
+      },
+      {
+        "title": "Objetivo del Juego",
+        "text": "<p>Tu objetivo es hacer retroceder la frontera enemiga hasta su HQ para ganar la partida.</p>"
+      },
+      {
+        "title": "Enfrentamiento de Frentes",
+        "text": "<p>Cuando ambos frentes se encuentren, el que tenga más suministros empujará al otro de forma automática.</p>"
+      },
+      {
+        "title": "¡A la Batalla!",
+        "text": "<p>Si quieres te puedes lanzar directamente a la batalla con el equipo por defecto o crear tu propio equipo desde el Arsenal. ¡Suerte!</p>"
+      }
+    ]
+  },
+
+  "store": {
+    "categories": {
+      "buildings": "Edificios",
+      "vehicles": "Vehículos"
+    },
+    "cost": "Costo: {cost}$",
+    "bench": "Banquillo",
+    "your_deck_swap": "Tu Mazo (permutar)",
+    "errors": {
+      "unit_not_in_deck": "La unidad no está en el mazo",
+      "unit_not_in_bench": "La unidad no está en el banquillo",
+      "cannot_swap_hq_fob": "No se puede intercambiar el HQ ni el FOB"
+    }
   },
   
   "placeholder": {

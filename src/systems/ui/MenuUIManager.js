@@ -91,16 +91,22 @@ export class MenuUIManager {
             roomCodeInput.placeholder = i18n.t('lobby.room_code_placeholder');
         }
 
+        // Label "CÓDIGO DE SALA"
+        const roomCodeLabel = document.getElementById('lobby-room-code-label');
+        if (roomCodeLabel) {
+            roomCodeLabel.textContent = i18n.t('lobby.room_code');
+        }
+
         // Título de jugadores
-        const playersTitle = document.querySelector('#lobby-room-view h3');
-        if (playersTitle && playersTitle.textContent.includes('JUGADORES')) {
+        const playersTitle = document.getElementById('lobby-players-title');
+        if (playersTitle) {
             playersTitle.textContent = i18n.t('lobby.players');
         }
 
-        // Slot de IA
-        const aiSlotEmpty = document.querySelector('#ai-slot-empty p');
-        if (aiSlotEmpty) {
-            aiSlotEmpty.textContent = i18n.t('lobby.ai_slot_empty');
+        // Slot de IA - texto "Slot vacío"
+        const aiSlotEmptyText = document.getElementById('lobby-ai-slot-empty-text');
+        if (aiSlotEmptyText) {
+            aiSlotEmptyText.textContent = i18n.t('lobby.ai_slot_empty');
         }
 
         this.updateButton('add-ai-btn', 'lobby.add_ai');
