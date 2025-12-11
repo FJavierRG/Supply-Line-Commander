@@ -1,0 +1,160 @@
+{
+  "meta": {
+    "language": "English",
+    "code": "en"
+  },
+  
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "✕ Close",
+    "save": "Save",
+    "delete": "Delete",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "yes": "Yes",
+    "no": "No",
+    "new": "New",
+    "load": "Load",
+    "clear": "Clear"
+  },
+  
+  "auth": {
+    "title": "Supply Line Commander",
+    "login": {
+      "tab": "Log in",
+      "username_label": "Username",
+      "username_placeholder": "your_username",
+      "password_label": "Password",
+      "password_placeholder": "••••••",
+      "submit": "Enter"
+    },
+    "register": {
+      "tab": "Create account",
+      "username_label": "Username",
+      "username_placeholder": "choose_a_name",
+      "password_label": "Password",
+      "password_placeholder": "minimum 6 characters",
+      "confirm_label": "Confirm password",
+      "confirm_placeholder": "repeat your password",
+      "submit": "Create account"
+    },
+    "logout": "Log out",
+    "errors": {
+      "invalid_credentials": "Invalid username or password",
+      "username_taken": "This username is already taken",
+      "password_mismatch": "Passwords do not match",
+      "connection_error": "Connection error with the server"
+    }
+  },
+  
+  "loading": {
+    "title": "Supply Line Commander",
+    "loading_resources": "Loading resources...",
+    "percentage": "{percent}%",
+    "press_to_continue": "Press to continue"
+  },
+  
+  "menu": {
+    "title": "Supply Line Commander",
+    "play": "Play",
+    "tutorial": "Tutorial",
+    "arsenal": "Arsenal",
+    "options": "Options",
+    "exit": "Exit",
+    "pause": "Pause",
+    "continue": "Continue",
+    "back_to_menu": "Back to menu",
+    "back": "← Back",
+    "start": "Start",
+    "start_game": "Start Game",
+    "ready": "Mark Ready",
+    "not_ready": "Not Ready",
+    "deck_builder": "Deck Builder"
+  },
+  
+  "lobby": {
+    "title": "Multiplayer Lobby",
+    "connecting": "Connecting to server...",
+    "create_room": "Create Room",
+    "join_room": "Join Room",
+    "room_code": "ROOM CODE",
+    "room_code_placeholder": "Room code (4 letters)",
+    "join_with_code": "Join",
+    "players": "PLAYERS",
+    "chat": "Chat",
+    "chat_placeholder": "Type a message...",
+    "send": "Send",
+    "ai_slot_empty": "Empty slot",
+    "add_ai": "+ Add AI",
+    "remove_ai": "Remove",
+    "ai_label": "🤖 AI",
+    "nation_label": "NATION",
+    "difficulty_label": "DIFFICULTY",
+    "difficulty_easy": "Easy",
+    "difficulty_medium": "Medium",
+    "difficulty_hard": "Hard",
+    "nation_unified": "Unified Forces"
+  },
+  
+  "game_end": {
+    "victory": "VICTORY!",
+    "defeat": "DEFEAT",
+    "back_to_menu": "Back to Menu",
+    "stats": {
+      "title": "Match Statistics",
+      "duration": "Duration",
+      "buildings_built": "Buildings built",
+      "units_deployed": "Units deployed",
+      "resources_spent": "Resources spent",
+      "territory_controlled": "Territory controlled"
+    }
+  },
+  
+  "pause": {
+    "title": "Pause",
+    "continue": "Continue",
+    "options": "Options",
+    "exit": "Back to menu"
+  },
+  
+  "options": {
+    "title": "Options",
+    "master_volume": "Master Volume:",
+    "music_volume": "Music Volume:",
+    "sfx_volume": "Effects Volume:",
+    "reset": "Restore defaults",
+    "close": "Close",
+    "language": "Language:",
+    "apply": "Apply",
+    "restart_required": "Restart required to apply language changes"
+  },
+  
+  "language": {
+    "select": "Language",
+    "es": "Español",
+    "en": "English"
+  },
+  
+  "arsenal": {
+    "units": "Units",
+    "disciplines": "Disciplines",
+    "your_deck": "Deck",
+    "bench": "Bench",
+    "deck_empty": "Your deck is empty. Click on available units to add them.",
+    "points": "points",
+    "hover_card": "Hover over an element",
+    "add_card_left": "Left click to add card",
+    "view_card_right": "Right click to view info",
+    "cost": "Cost"
+  },
+  
+  "placeholder": {
+    "description": "This key is used for texts that have not yet been migrated"
+  }
+}
+

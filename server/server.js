@@ -10,6 +10,7 @@ import decksRouter from './routes/decks.js';
 import authRouter from './routes/auth.js';
 import { preventEnvLeaks, securityHeaders, safeErrorHandler } from './middleware/security.js';
 import { db, DEFAULT_DECK_ID } from './db/database.js';
+import { i18nServer } from './services/I18nService.js'; // ✅ NUEVO: Servicio de i18n
 
 const app = express();
 const httpServer = createServer(app);
@@ -224,27 +225,43 @@ app.get('*', (req, res, next) => {
 io.on('connection', (socket) => {
     console.log(`✅ Cliente conectado: ${socket.id}`);
     
-    // 🎯 NUEVO: Enviar configuración del juego al cliente (incluyendo límite de mazo y mazo por defecto)
-    (async () => {
+    // ✅ NUEVO: Esperar a que el cliente envíe su idioma preferido
+    socket.on('client_language', async (data) => {
+        const { language } = data;
+        const clientLang = i18nServer.isLanguageAvailable(language) ? language : 'es';
+        
+        console.log(`🌐 Cliente ${socket.id} idioma: ${clientLang}`);
+        
+        // Guardar idioma del cliente en el socket
+        socket.clientLanguage = clientLang;
+        
+        // Enviar configuración del juego con descripciones traducidas
         const { GAME_CONFIG } = await import('./config/gameConfig.js');
         const { DEFAULT_DECK } = await import('./config/defaultDeck.js');
+        
+        // ✅ NUEVO: Obtener descripciones y disciplinas traducidas
+        const descriptions = i18nServer.getAllDescriptions(clientLang);
+        const disciplinesTranslated = i18nServer.getAllDisciplines(clientLang);
+        
         const gameConfig = {
             deckPointLimit: GAME_CONFIG.deck.pointLimit,
-            benchPointLimit: GAME_CONFIG.deck.benchPointLimit, // 🆕 NUEVO: Límite del banquillo
-            defaultDeck: { // 🆕 NUEVO: Mazo por defecto del servidor
+            benchPointLimit: GAME_CONFIG.deck.benchPointLimit,
+            defaultDeck: {
                 id: DEFAULT_DECK.id,
                 name: DEFAULT_DECK.name,
                 units: DEFAULT_DECK.units,
                 bench: DEFAULT_DECK.bench || [],
-                disciplines: DEFAULT_DECK.disciplines || [] // 🆕 NUEVO: Disciplinas del mazo default
-            }
+                disciplines: DEFAULT_DECK.disciplines || []
+            },
+            // ✅ NUEVO: Descripciones y disciplinas traducidas
+            descriptions: descriptions,
+            disciplinesTranslated: disciplinesTranslated
         };
         
-        // 🐛 DEBUG: Verificar que las disciplinas se están enviando
-        console.log('📤 [GAME_CONFIG] Enviando disciplinas al cliente:', gameConfig.defaultDeck.disciplines);
+        console.log(`📤 [GAME_CONFIG] Enviando configuración (idioma: ${clientLang}) a ${socket.id}`);
         
         socket.emit('game_config', gameConfig);
-    })();
+    });
     
     // === LOBBY ===
     
@@ -2009,6 +2026,10 @@ async function startGame(roomId) {
 app.use(safeErrorHandler);
 
 // ===== INICIO DEL SERVIDOR =====
+
+// ✅ NUEVO: Inicializar servicio de i18n antes de arrancar el servidor
+console.log('🚀 Inicializando servicios...');
+i18nServer.init();
 
 const server = httpServer.listen(PORT, '0.0.0.0', () => {
     console.log('=====================================');

@@ -1,0 +1,160 @@
+{
+  "meta": {
+    "language": "Español",
+    "code": "es"
+  },
+  
+  "common": {
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "close": "✕ Cerrar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "back": "Volver",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "yes": "Sí",
+    "no": "No",
+    "new": "Nuevo",
+    "load": "Cargar",
+    "clear": "Limpiar"
+  },
+  
+  "auth": {
+    "title": "Supply Line Commander",
+    "login": {
+      "tab": "Iniciar sesión",
+      "username_label": "Nombre de usuario",
+      "username_placeholder": "tu_usuario",
+      "password_label": "Contraseña",
+      "password_placeholder": "••••••",
+      "submit": "Entrar"
+    },
+    "register": {
+      "tab": "Crear cuenta",
+      "username_label": "Nombre de usuario",
+      "username_placeholder": "elige_un_nombre",
+      "password_label": "Contraseña",
+      "password_placeholder": "mínimo 6 caracteres",
+      "confirm_label": "Confirmar contraseña",
+      "confirm_placeholder": "repite tu contraseña",
+      "submit": "Crear cuenta"
+    },
+    "logout": "Cerrar Sesión",
+    "errors": {
+      "invalid_credentials": "Usuario o contraseña incorrectos",
+      "username_taken": "Este nombre de usuario ya está en uso",
+      "password_mismatch": "Las contraseñas no coinciden",
+      "connection_error": "Error de conexión con el servidor"
+    }
+  },
+  
+  "loading": {
+    "title": "Supply Line Commander",
+    "loading_resources": "Cargando recursos...",
+    "percentage": "{percent}%",
+    "press_to_continue": "Pulsa para continuar"
+  },
+  
+  "menu": {
+    "title": "Supply Line Commander",
+    "play": "Jugar",
+    "tutorial": "Tutorial",
+    "arsenal": "Arsenal",
+    "options": "Opciones",
+    "exit": "Salir",
+    "pause": "Pausa",
+    "continue": "Continuar",
+    "back_to_menu": "Volver al menú",
+    "back": "← Volver",
+    "start": "Comenzar",
+    "start_game": "Comenzar Partida",
+    "ready": "Marcar Listo",
+    "not_ready": "No Listo",
+    "deck_builder": "Constructor de Mazos"
+  },
+  
+  "lobby": {
+    "title": "Lobby Multijugador",
+    "connecting": "Conectando al servidor...",
+    "create_room": "Crear Sala",
+    "join_room": "Unirse a Sala",
+    "room_code": "CÓDIGO DE SALA",
+    "room_code_placeholder": "Código de sala (4 letras)",
+    "join_with_code": "Unirse",
+    "players": "JUGADORES",
+    "chat": "Chat",
+    "chat_placeholder": "Escribe un mensaje...",
+    "send": "Enviar",
+    "ai_slot_empty": "Slot vacío",
+    "add_ai": "+ Añadir IA",
+    "remove_ai": "Quitar",
+    "ai_label": "🤖 IA",
+    "nation_label": "NACIÓN",
+    "difficulty_label": "DIFICULTAD",
+    "difficulty_easy": "Fácil",
+    "difficulty_medium": "Medio",
+    "difficulty_hard": "Difícil",
+    "nation_unified": "Fuerzas Unificadas"
+  },
+  
+  "game_end": {
+    "victory": "¡VICTORIA!",
+    "defeat": "DERROTA",
+    "back_to_menu": "Volver al Menú",
+    "stats": {
+      "title": "Estadísticas de la Partida",
+      "duration": "Duración",
+      "buildings_built": "Edificios construidos",
+      "units_deployed": "Unidades desplegadas",
+      "resources_spent": "Recursos gastados",
+      "territory_controlled": "Territorio controlado"
+    }
+  },
+  
+  "pause": {
+    "title": "Pausa",
+    "continue": "Continuar",
+    "options": "Opciones",
+    "exit": "Volver al menú"
+  },
+  
+  "options": {
+    "title": "Opciones",
+    "master_volume": "Volumen Maestro:",
+    "music_volume": "Volumen Música:",
+    "sfx_volume": "Volumen Efectos:",
+    "reset": "Restaurar por defecto",
+    "close": "Cerrar",
+    "language": "Idioma:",
+    "apply": "Aplicar",
+    "restart_required": "Se requiere reiniciar para aplicar los cambios de idioma"
+  },
+  
+  "language": {
+    "select": "Idioma",
+    "es": "Español",
+    "en": "English"
+  },
+  
+  "arsenal": {
+    "units": "Unidades",
+    "disciplines": "Disciplinas",
+    "your_deck": "Mazo",
+    "bench": "Banquillo",
+    "deck_empty": "Tu mazo está vacío. Haz clic en las unidades disponibles para añadirlas.",
+    "points": "puntos",
+    "hover_card": "Pasa el ratón por un elemento",
+    "add_card_left": "Click izq añadir carta",
+    "view_card_right": "Click der ver info",
+    "cost": "Coste"
+  },
+  
+  "placeholder": {
+    "description": "Esta clave se usa para textos que aún no se han migrado"
+  }
+}
+

@@ -167,6 +167,17 @@ export class NetworkManager {
         this.socket.on('connect', () => {
             this.connected = true;
             console.log('✅ Socket conectado:', this.socket.id);
+            
+            // ✅ NUEVO: Enviar idioma preferido del cliente al servidor
+            import('../services/I18nService.js').then(({ i18n }) => {
+                const clientLanguage = i18n.getCurrentLanguage();
+                console.log(`🌐 Enviando idioma preferido al servidor: ${clientLanguage}`);
+                this.socket.emit('client_language', { language: clientLanguage });
+            }).catch(err => {
+                console.error('❌ Error al enviar idioma:', err);
+                // Fallback: enviar español por defecto
+                this.socket.emit('client_language', { language: 'es' });
+            });
         });
         
         this.socket.on('disconnect', () => {
@@ -198,6 +209,22 @@ export class NetworkManager {
         // 🎯 NUEVO: Recibir configuración del juego del servidor (incluyendo límite de mazo y mazo por defecto)
         this.socket.on('game_config', (config) => {
             console.log('⚙️ Configuración del juego recibida:', config);
+            
+            // ✅ NUEVO: Guardar descripciones traducidas del servidor
+            if (config.descriptions) {
+                console.log('🌐 Descripciones traducidas recibidas del servidor');
+                if (!this.game.serverBuildingConfig) {
+                    this.game.serverBuildingConfig = {};
+                }
+                this.game.serverBuildingConfig.descriptions = config.descriptions;
+            }
+            
+            // ✅ NUEVO: Guardar disciplinas traducidas del servidor
+            if (config.disciplinesTranslated) {
+                console.log('🌐 Disciplinas traducidas recibidas del servidor');
+                this.game.disciplinesTranslated = config.disciplinesTranslated;
+            }
+            
             // 🐛 DEBUG: Verificar disciplinas recibidas
             if (config.defaultDeck && config.defaultDeck.disciplines) {
                 console.log('📥 [GAME_CONFIG] Disciplinas recibidas del servidor:', config.defaultDeck.disciplines);

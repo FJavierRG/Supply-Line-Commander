@@ -1,5 +1,6 @@
 // ===== GESTOR DEL CONSTRUCTOR DE MAZOS (antes Arsenal) =====
 import { getAllyNodes, getProjectiles, getBuildableNodes, getNodeConfig } from '../../config/nodes.js';
+import { i18n } from '../../services/I18nService.js'; // ✅ NUEVO: Servicio de i18n
 
 export class ArsenalManager {
     constructor(assetManager, game) {
@@ -313,7 +314,7 @@ export class ArsenalManager {
             if (dest === 'deck') {
                 deckBtn.classList.add('active');
                 benchBtn.classList.remove('active');
-                if (panelTitle) panelTitle.textContent = 'Tu Mazo';
+                if (panelTitle) panelTitle.textContent = i18n.t('arsenal.your_deck');
                 if (deckLimit) {
                     const limit = this.deckManager.getDeckPointLimit();
                     deckLimit.textContent = limit !== null && limit !== undefined ? limit : '-';
@@ -321,7 +322,7 @@ export class ArsenalManager {
             } else {
                 deckBtn.classList.remove('active');
                 benchBtn.classList.add('active');
-                if (panelTitle) panelTitle.textContent = 'Banquillo';
+                if (panelTitle) panelTitle.textContent = i18n.t('arsenal.bench');
                 if (deckLimit) {
                     const limit = this.deckManager.getBenchPointLimit();
                     deckLimit.textContent = limit !== null && limit !== undefined ? limit : '-';
@@ -1757,7 +1758,7 @@ export class ArsenalManager {
         // Verificar que tengamos la configuración de disciplinas del servidor
         if (!this.game || !this.game.serverDisciplineConfig) {
             console.warn('⚠️ Configuración de disciplinas no disponible aún');
-            this.showDisciplinesPlaceholder(container, 'Cargando disciplinas...');
+            this.showDisciplinesPlaceholder(container, i18n.t('common.loading'));
             return;
         }
         
@@ -1771,6 +1772,17 @@ export class ArsenalManager {
         if (enabledDisciplines.length === 0) {
             this.showDisciplinesPlaceholder(container, 'No hay disciplinas disponibles');
             return;
+        }
+        
+        // ✅ NUEVO: Aplicar traducciones si están disponibles
+        if (this.game.disciplinesTranslated) {
+            enabledDisciplines.forEach(discipline => {
+                const translated = this.game.disciplinesTranslated[discipline.id];
+                if (translated) {
+                    discipline.name = translated.name;
+                    discipline.description = translated.description;
+                }
+            });
         }
         
         // Crear contenedor de items similar al de unidades
@@ -1827,7 +1839,7 @@ export class ArsenalManager {
                     color: #66bb6a;
                     margin-bottom: 12px;
                     font-weight: 600;
-                ">Sistema de Disciplinas</h3>
+                ">${i18n.t('arsenal.disciplines')}</h3>
                 <p style="
                     font-size: 14px;
                     line-height: 1.6;

@@ -1,0 +1,222 @@
+{
+  "meta": {
+    "language": "English",
+    "code": "en"
+  },
+  
+  "buildings": {
+    "hq": {
+      "name": "HQ (Headquarters)",
+      "description": "Main base: manages resources, vehicles and ambulances.",
+      "details": "Main base that manages resources, produces {maxVehicles} vehicles and has {maxAmbulances} ambulance to evacuate wounded from the front."
+    },
+    "fob": {
+      "name": "FOB (Forward Operating Base)",
+      "description": "Advanced base that stores supplies and allows sending them to the front.",
+      "details": "Advanced base that can store up to {maxSupplies} supplies and manages {maxVehicles} vehicles to send resources to the front."
+    },
+    "front": {
+      "name": "Front",
+      "description": "Front advance node. Consumes supplies to push. Make sure it has more resources than the enemy front.",
+      "details": "Front advance point. Automatically consumes supplies to push towards enemy territory. You win if you have more supplies than the enemy front."
+    },
+    "antiDrone": {
+      "name": "Anti-Drone",
+      "description": "Defense system that intercepts enemy drones, only has one projectile.",
+      "details": "Defense system that intercepts enemy drones at a distance of {detectionRange} pixels. Only has one projectile available."
+    },
+    "droneLauncher": {
+      "name": "Drone Launcher",
+      "description": "Unlocks the use of bomb drones in the store.",
+      "details": "Essential building that unlocks the ability to launch bomb drones from the store. Without this building you won't be able to use bomb drones in combat."
+    },
+    "razorNet": {
+      "name": "Razor Net",
+      "description": "Defensive system that slows down and damages enemy units passing through its area.",
+      "details": "Defensive system that slows down and damages all enemy units passing through its area of effect. Effective against convoys and enemy vehicles."
+    },
+    "truckFactory": {
+      "name": "Truck Factory",
+      "description": "Increases heavy truck cargo capacity and adds one additional vehicle to the HQ.",
+      "details": "Adds {vehicleBonus} additional vehicle to the HQ and increases heavy truck cargo capacity by {capacityBonus} units."
+    },
+    "factory": {
+      "name": "Factory",
+      "description": "Automatically generates supplies every 3 seconds and sends them to the HQ.",
+      "details": "Industrial factory that generates {amount} supplies every {interval} seconds and automatically sends them to the HQ."
+    },
+    "engineerCenter": {
+      "name": "Engineer Center",
+      "description": "Paves the road from HQ to FOBs, increasing heavy convoy speed.",
+      "details": "Paves the roads between HQ and FOBs, increasing heavy truck speed by {speedPercent}%."
+    },
+    "nuclearPlant": {
+      "name": "Nuclear Plant",
+      "description": "Generates additional passive currency per second.",
+      "details": "Generates {incomeBonus}$ per second passively. Each additional plant adds more income."
+    },
+    "machineNest": {
+      "name": "Machine Nest",
+      "description": "Automatic defensive system that attacks nearby enemy units.",
+      "details": "Automatic defensive turret that detects and attacks enemy units within its range. Excellent for defending strategic positions."
+    },
+    "campaignHospital": {
+      "name": "Field Hospital",
+      "description": "Allows sending ambulances to evacuate wounded from the front.",
+      "details": "Allows deploying ambulances up to {actionRange} pixels away to evacuate wounded from the front. Manages {maxVehicles} ambulance."
+    },
+    "intelRadio": {
+      "name": "Intelligence Radio",
+      "description": "Returns its initial price plus an additional profit.",
+      "details": "After {investmentTime} seconds on your side of the battlefield, it's automatically consumed and returns its cost ({cost}$) plus an additional profit of {investmentBonus}$."
+    },
+    "intelCenter": {
+      "name": "Intelligence Center",
+      "description": "Unlocks commando in the store.",
+      "details": "Essential building that unlocks special operations units: Special Commando and Truck Assault. Without this building you won't be able to use these units in combat."
+    },
+    "aerialBase": {
+      "name": "Aerial Base",
+      "description": "Allows helicopter deployment and refueling.",
+      "details": "Aerial base that can store up to {maxSupplies} supplies and allows helicopter deployment and refueling. Self-destructs when supplies are depleted."
+    },
+    "vigilanceTower": {
+      "name": "Vigilance Tower",
+      "description": "Prevents enemy commandos and sabotage in its area.",
+      "details": "Defensive tower that protects an area of {detectionRadius} pixels, preventing enemies from deploying special commandos or performing sabotage within its range."
+    },
+    "trainStation": {
+      "name": "Train Station",
+      "description": "Automatically sends extra supplies to FOBs periodically.",
+      "details": "Every {trainInterval} seconds, trains arrive from abroad with additional resources to allied FOBs, delivering {trainCargo} supplies per train."
+    },
+    "droneWorkshop": {
+      "name": "Drone Workshop",
+      "description": "Cheapens bomb drones in exchange for supplies from a nearby allied FOB.",
+      "details": "Must be built within the area of at least one FOB. If it has a FOB with at least {requiredSupplies} supplies in range, it allows launching bomb drones for {discountPercent} in exchange for consuming {suppliesCost} supplies from that FOB."
+    },
+    "vehicleWorkshop": {
+      "name": "Vehicle Workshop",
+      "description": "Increases maximum and available vehicles by +1 in all nearby FOBs. Improves light truck speed by +20 px/s.",
+      "details": "Increases maximum and available vehicles by {vehicleBonus} in all FOBs within its area of effect. Also improves light trucks (truck) from nearby FOBs, increasing their speed by +{speedBonus} px/s and updating their appearance."
+    },
+    "physicStudies": {
+      "name": "Physics Studies",
+      "description": "Improves nuclear plants by +1 currency/second.",
+      "details": "Improves all nuclear plants by +{nuclearPlantBonus} currency/second while there is at least one \"Physics Studies\" university on the field. The effect doesn't stack with other universities."
+    },
+    "secretLaboratory": {
+      "name": "Secret Laboratory",
+      "description": "Improves nuclear plants by +1 currency/second.",
+      "details": "Improves all nuclear plants by +{nuclearPlantBonus} currency/second while there is at least one secret laboratory on the field. The effect doesn't stack with other secret laboratories, but DOES stack with Physics Studies (you can have +1 from laboratory and +1 from physics studies at the same time)."
+    },
+    "trainingCamp": {
+      "name": "Training Camp",
+      "description": "Applies Vigor to your soldiers, increasing territory gain by +1.",
+      "details": "Training camp that applies the \"Vigor\" (trained) effect to all your fronts. Each front with this effect gains +{currencyBonus} currency for each territory advance."
+    },
+    "armoredFactory": {
+      "name": "Armored Vehicle Factory",
+      "description": "Unlocks tanks, light armored vehicles and artillery.",
+      "details": "Military facility specialized in armored vehicles. While built and operational, unlocks the use of Tank, Light Armored and Artillery in the store. Cost: {cost}$."
+    },
+    "deadlyBuild": {
+      "name": "Forbidden Construction",
+      "description": "Requires Nuclear Plant, Secret Laboratory and Physics Studies on field. Unlocks \"World Destroyer\".",
+      "details": "This highly classified construction requires having at least one Nuclear Plant, one Secret Laboratory and Physics Studies on the field to be built. Once built, it unlocks the \"World Destroyer\" consumable in the store."
+    },
+    "servers": {
+      "name": "Servers",
+      "description": "Increases passive currency generation by +0.5 per second.",
+      "details": "Computing center that increases passive currency generation by +{incomeBonus}$ per second. Adds to base generation."
+    }
+  },
+  
+  "consumables": {
+    "drone": {
+      "name": "Bomb Drone",
+      "description": "Destroys an enemy target. Requires having a launcher on the field.",
+      "details": "Consumable that destroys a selected enemy building. Cost: {cost}$. Can be intercepted by enemy Anti-Drones. Requires having a Drone Launcher built to use it."
+    },
+    "sniperStrike": {
+      "name": "Sniper Strike",
+      "description": "Applies \"wounded\" effect to an enemy front or eliminates an enemy shootable.",
+      "details": "Precise attack that can be applied to enemy fronts to cause them the \"wounded\" effect (doubles their supply consumption) or eliminate special commandos, truck assaults or enemy camera drones. Cost: {cost}$."
+    },
+    "fobSabotage": {
+      "name": "FOB Sabotage",
+      "description": "Slows down convoys leaving an enemy FOB for a time.",
+      "details": "Sabotage that is applied to an enemy FOB, slowing down all convoys leaving that FOB for a time. Cost: {cost}$."
+    },
+    "specopsCommando": {
+      "name": "Special Commando",
+      "description": "Disables enemy buildings within its area of effect. Requires Intelligence Center.",
+      "details": "Special unit deployed in enemy territory. Disables all enemy buildings within a radius of {detectionRadius} pixels. Can be eliminated by sniper attacks. Requires Intelligence Center. Cost: {cost}$."
+    },
+    "truckAssault": {
+      "name": "Truck Assault",
+      "description": "Slows down nearby enemy vehicles. Requires Intelligence Center.",
+      "details": "Special unit deployed in enemy territory. Slows down all enemy vehicles within a radius of {detectionRadius} pixels by 25%. Requires Intelligence Center. Cost: {cost}$."
+    },
+    "tank": {
+      "name": "Tank",
+      "description": "Armored unit that destroys enemy buildings. Cannot attack FOBs or HQs.",
+      "details": "Heavy armored unit that destroys selected enemy buildings. Can attack buildings but CANNOT attack FOBs or HQs. Cost: {cost}$."
+    },
+    "lightVehicle": {
+      "name": "Light Armored",
+      "description": "Light vehicle that causes breakage in enemy buildings. Cannot attack FOBs or HQs.",
+      "details": "Light combat vehicle that applies \"Broken\" status to selected enemy buildings, disabling them until repaired. Can attack buildings but CANNOT attack FOBs or HQs. Cost: {cost}$."
+    },
+    "artillery": {
+      "name": "Artillery",
+      "description": "Artillery bombardment that causes breakage to all enemy buildings in the selected area. Doesn't affect FOBs or HQs.",
+      "details": "Area artillery bombardment that applies \"Broken\" status to all enemy buildings within the area of effect. Artillery doesn't affect FOBs or HQs. Cost: {cost}$."
+    },
+    "cameraDrone": {
+      "name": "Camera Drone",
+      "description": "Grants currency for each detected enemy light truck. Requires drone launcher.",
+      "details": "Surveillance drone deployed in enemy territory. Detects light trucks within a radius of {detectionRadius} pixels, granting {currencyReward}$ per detection. Allows building structures in enemy territory within a radius of {buildRadius} pixels. Can be eliminated by sniper attacks. Requires Drone Launcher. Cost: {cost}$."
+    },
+    "worldDestroyer": {
+      "name": "World Destroyer",
+      "description": "Ultimate weapon that sows chaos on the battlefield. Requires Forbidden Construction.",
+      "details": "Weapon of mass destruction that activates after {countdownDuration} seconds. Destroys all enemy buildings on the field (except HQ and FOBs), empties all supplies from FOBs on the battlefield and empties all supplies from Front nodes. Requires having a Forbidden Construction built. Cost: {cost}$."
+    }
+  },
+  
+  "disciplines": {
+    "motorized_industry": {
+      "name": "Motorized Industry",
+      "description": "Increases speed: light trucks +50%, heavy trucks +25%, trains +10%. Sending a vehicle costs 2 currency."
+    },
+    "improved_infrastructure": {
+      "name": "Improved Infrastructure",
+      "description": "For each package a factory delivers to HQ, it generates +3 currency. Factory supplies decrease by -3."
+    },
+    "defensive_combat": {
+      "name": "Defensive Combat",
+      "description": "In Hold mode: supply consumption decreases by an additional 20% and grants +1 currency/second per front."
+    },
+    "endeudamiento": {
+      "name": "Debt",
+      "description": "Allows spending currency below 0 down to -150. Ideal for aggressive investments during the active window."
+    },
+    "aggressive_advance": {
+      "name": "Aggressive Advance",
+      "description": "Nodes in advance mode increase their advance speed x2 as well as their supply consumption x2.5."
+    }
+  },
+  
+  "system": {
+    "player_joined": "{playerName} joined the room",
+    "player_left": "{playerName} left the room",
+    "player_ready": "{playerName} is ready",
+    "player_not_ready": "{playerName} is not ready",
+    "game_starting": "⏱️ Game will start in {seconds} seconds...",
+    "game_start": "🎮 The game has started!",
+    "victory": "Victory",
+    "defeat": "Defeat"
+  }
+}
+
