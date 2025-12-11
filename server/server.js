@@ -285,9 +285,10 @@ io.on('connection', (socket) => {
             broadcastLobbyUpdate(room.id);
             
             // Mensaje de bienvenida en el chat
+            const hostLanguage = socket.clientLanguage || 'es';
             io.to(room.id).emit('lobby_chat_message', {
-                playerName: 'Sistema',
-                message: '¡Sala creada! Esperando a un oponente...',
+                playerName: i18nServer.t(hostLanguage, 'lobby.system_name'),
+                message: i18nServer.t(hostLanguage, 'lobby.room_created'),
                 timestamp: Date.now()
             });
             
@@ -331,9 +332,14 @@ io.on('connection', (socket) => {
             broadcastLobbyUpdate(roomId);
             
             // Mensaje de sistema: jugador se unió
+            // 🆕 NUEVO: Obtener idioma de la sala (del host)
+            const roomData = roomManager.getRoom(roomId);
+            const hostSocket = io.sockets.sockets.get(roomData.players[0].id);
+            const roomLanguage = hostSocket?.clientLanguage || 'es';
+            
             io.to(roomId).emit('lobby_chat_message', {
-                playerName: 'Sistema',
-                message: `${playerName || 'Jugador 2'} se unió a la sala`,
+                playerName: i18nServer.t(roomLanguage, 'lobby.system_name'),
+                message: i18nServer.t(roomLanguage, 'lobby.player_joined', { playerName: playerName || 'Jugador 2' }),
                 timestamp: Date.now()
             });
             
@@ -368,9 +374,16 @@ io.on('connection', (socket) => {
             // Mensaje del sistema
             const player = room.players.find(p => p.id === socket.id);
             if (player) {
+                // 🆕 NUEVO: Obtener idioma de la sala (del host)
+                const roomData2 = roomManager.getRoom(roomId);
+                const hostSocket2 = io.sockets.sockets.get(roomData2.players[0].id);
+                const roomLanguage2 = hostSocket2?.clientLanguage || 'es';
+                
                 io.to(roomId).emit('lobby_chat_message', {
-                    playerName: 'Sistema',
-                    message: `${player.name} está ${ready ? 'listo ✅' : 'no listo ❌'}`,
+                    playerName: i18nServer.t(roomLanguage2, 'lobby.system_name'),
+                    message: ready 
+                        ? i18nServer.t(roomLanguage2, 'lobby.player_ready', { playerName: player.name })
+                        : i18nServer.t(roomLanguage2, 'lobby.player_not_ready', { playerName: player.name }),
                     timestamp: Date.now()
                 });
             }
@@ -842,9 +855,14 @@ io.on('connection', (socket) => {
             broadcastLobbyUpdate(roomId);
             
             // Mensaje del sistema
+            // 🆕 NUEVO: Obtener idioma de la sala (del host)
+            const roomData3 = roomManager.getRoom(roomId);
+            const hostSocket3 = io.sockets.sockets.get(roomData3.players[0].id);
+            const roomLanguage3 = hostSocket3?.clientLanguage || 'es';
+            
             io.to(roomId).emit('lobby_chat_message', {
-                playerName: 'Sistema',
-                message: `${kickedName} fue expulsado de la sala`,
+                playerName: i18nServer.t(roomLanguage3, 'lobby.system_name'),
+                message: i18nServer.t(roomLanguage3, 'lobby.player_kicked', { playerName: kickedName }),
                 timestamp: Date.now()
             });
             
@@ -1701,18 +1719,23 @@ function startGameCountdown(roomId) {
     
     let countdown = 3;
     
+    // 🆕 NUEVO: Obtener idioma de la sala (del host)
+    const roomData4 = roomManager.getRoom(roomId);
+    const hostSocket4 = io.sockets.sockets.get(roomData4.players[0].id);
+    const roomLanguage4 = hostSocket4?.clientLanguage || 'es';
+    
     // Mensaje inicial en el chat
     io.to(roomId).emit('lobby_chat_message', {
-        playerName: 'Sistema',
-        message: '⏱️ La partida comenzará en 3 segundos...',
+        playerName: i18nServer.t(roomLanguage4, 'lobby.system_name'),
+        message: i18nServer.t(roomLanguage4, 'lobby.game_starting'),
         timestamp: Date.now()
     });
     
     // Enviar el primer número inmediatamente (3)
     io.to(roomId).emit('countdown', { seconds: countdown });
     io.to(roomId).emit('lobby_chat_message', {
-        playerName: 'Sistema',
-        message: `⏱️ ${countdown}...`,
+        playerName: i18nServer.t(roomLanguage4, 'lobby.system_name'),
+        message: i18nServer.t(roomLanguage4, 'lobby.countdown', { seconds: countdown }),
         timestamp: Date.now()
     });
     
@@ -1724,16 +1747,16 @@ function startGameCountdown(roomId) {
         if (countdown > 0) {
             // Enviar mensaje de cuenta atrás al chat
             io.to(roomId).emit('lobby_chat_message', {
-                playerName: 'Sistema',
-                message: `⏱️ ${countdown}...`,
+                playerName: i18nServer.t(roomLanguage4, 'lobby.system_name'),
+                message: i18nServer.t(roomLanguage4, 'lobby.countdown', { seconds: countdown }),
                 timestamp: Date.now()
             });
         } else {
             // Cuando llega a 0, mostrar mensaje final y comenzar
             clearInterval(interval);
             io.to(roomId).emit('lobby_chat_message', {
-                playerName: 'Sistema',
-                message: '🚀 ¡Comienza la partida!',
+                playerName: i18nServer.t(roomLanguage4, 'lobby.system_name'),
+                message: i18nServer.t(roomLanguage4, 'lobby.game_start'),
                 timestamp: Date.now()
             });
             startGame(roomId);

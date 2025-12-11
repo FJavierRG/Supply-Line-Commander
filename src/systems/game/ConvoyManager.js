@@ -5,11 +5,21 @@
 import { Convoy } from '../../entities/Convoy.js';
 import { VEHICLE_TYPES } from '../../config/constants.js';
 import { getRaceConfig } from '../../config/races.js';
+import { ObjectPool } from '../../utils/ObjectPool.js';
 
 export class ConvoyManager {
     constructor(game) {
         this.game = game;
         this.convoys = [];
+        
+        // ⚡ OPTIMIZACIÓN: Object Pool para convoys (prevenir GC)
+        // Nota: Pool empieza vacío porque Convoy requiere parámetros válidos en constructor
+        // Los convoys se crean on-demand y se reutilizan después
+        this.convoyPool = new ObjectPool(
+            () => this._createDummyConvoy(game),
+            0,   // Inicial: 0 (creación on-demand)
+            30   // Máximo: 30 convoys simultáneos
+        );
     }
     
     /**
@@ -238,6 +248,73 @@ export class ConvoyManager {
         } else {
             return 'truck';
         }
+    }
+    
+    /**
+     * ⚡ OPTIMIZACIÓN: Crear convoy dummy para el pool
+     * @private
+     */
+    _createDummyConvoy(game) {
+        // Crear un objeto base que se inicializará cuando se use
+        const dummyFrom = { x: 0, y: 0 };
+        const dummyTo = { x: 100, y: 100 };
+        return new Convoy(dummyFrom, dummyTo, {}, 'truck', 0, game);
+    }
+    
+    /**
+     * ⚡ OPTIMIZACIÓN: Obtener convoy del pool y reinicializarlo
+     * @param {Object} from - Nodo origen
+     * @param {Object} to - Nodo destino
+     * @param {Object} vehicle - Tipo de vehículo
+     * @param {string} vehicleType - Nombre del tipo de vehículo
+     * @param {number} cargo - Cantidad de carga
+     * @returns {Convoy} Convoy listo para usar
+     */
+    acquireConvoy(from, to, vehicle, vehicleType, cargo) {
+        const convoy = this.convoyPool.acquire();
+        if (!convoy) {
+            // Pool lleno - crear convoy normalmente como fallback
+            console.warn('⚠️ ConvoyPool lleno, creando convoy nuevo');
+            return new Convoy(from, to, vehicle, vehicleType, cargo, this.game);
+        }
+        
+        // Reinicializar convoy con nuevos datos
+        convoy.x = from.x;
+        convoy.y = from.y;
+        convoy.from = from;
+        convoy.fromBase = from;
+        convoy.to = to;
+        convoy.toBase = to;
+        convoy.vehicle = vehicle;
+        convoy.vehicleType = vehicleType;
+        convoy.cargo = cargo;
+        convoy.progress = 0;
+        convoy.serverProgress = 0;
+        convoy.targetProgress = 0;
+        convoy.returning = false;
+        convoy.delivered = false;
+        convoy.arrived = false;
+        convoy.isMoving = true;
+        convoy.isMedical = false;
+        convoy.targetFrontId = null;
+        convoy.isRepair = false;
+        convoy.repairing = false;
+        convoy.repairStartTime = null;
+        convoy.repairDuration = 4;
+        convoy.hasVehicleWorkshopBonus = false;
+        convoy.team = null;
+        convoy.id = null;
+        
+        return convoy;
+    }
+    
+    /**
+     * ⚡ OPTIMIZACIÓN: Devolver convoy al pool
+     * @param {Convoy} convoy - Convoy a devolver
+     */
+    releaseConvoy(convoy) {
+        if (!convoy) return;
+        this.convoyPool.release(convoy);
     }
 }
 

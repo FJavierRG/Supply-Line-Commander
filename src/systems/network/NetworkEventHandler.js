@@ -174,6 +174,31 @@ export class NetworkEventHandler {
                     }
                 }
                 break;
+            
+            case 'front_currency_gained':
+                // 🎖️ NUEVO: Currency ganado por movimiento de frente (advance/retreat/hold)
+                // Mostrar para AMBOS equipos (aliado y enemigo)
+                // 🆕 NUEVO: Respetar preferencia del usuario
+                if (this.game.particleSystem && this.game.particleSystem.createFloatingText) {
+                    // Verificar si el usuario quiere ver el contador de dinero en frentes
+                    const shouldShow = this.game.options?.shouldShowFrontCurrency?.() ?? true;
+                    
+                    if (shouldShow) {
+                        // Usar el mismo color dorado del contador de currency (#ffd700)
+                        const color = '#ffd700';
+                        
+                        // Mostrar texto flotante sobre el frente
+                        this.game.particleSystem.createFloatingText(
+                            event.x,
+                            event.y - 40, // Posición encima del frente
+                            `+${event.amount}$`,
+                            color,
+                            event.frontId, // BaseId para acumulación (evita spam visual)
+                            'up' // Dirección hacia arriba
+                        );
+                    }
+                }
+                break;
                 
             default:
                 console.warn(`⚠️ Evento visual desconocido: ${event.type}`);

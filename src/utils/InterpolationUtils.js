@@ -1,5 +1,6 @@
 // ===== SISTEMA CENTRALIZADO DE INTERPOLACIÓN =====
 // Interpolación suave para posiciones desde el servidor (autoritativo)
+// 🔧 v2.0: Interpolación basada en velocidad del servidor para movimiento fluido
 
 /**
  * Interpola una posición 2D hacia un objetivo del servidor
@@ -10,10 +11,10 @@
  */
 export function interpolatePosition(obj, dt, options = {}) {
     const {
-        speed = 8.0,              // Velocidad de interpolación (por defecto 8.0)
-        threshold = 0.5,          // Distancia mínima para interpolar (default 0.5)
+        speed = 8.0,              // Velocidad de interpolación (lerp factor)
         snapThreshold = 0.1,      // Distancia para snap directo (default 0.1)
-        logMovement = false      // Debug: logear movimientos
+        logMovement = false       // Debug: logear movimientos
+        // 🔧 ELIMINADO: threshold - causaba "zona muerta" donde no se interpolaba
     } = options;
     
     // Verificar que hay posición objetivo del servidor
@@ -33,19 +34,82 @@ export function interpolatePosition(obj, dt, options = {}) {
         return false;
     }
     
-    // Si hay diferencia significativa, interpolar
-    if (distance > threshold) {
-        const moveX = dx * speed * dt;
-        const moveY = dy * speed * dt;
-        
-        obj.x += moveX;
-        obj.y += moveY;
-        
-        if (logMovement) console.log(`🎯 Moving: ${distance.toFixed(2)} at speed ${speed}`);
+    // 🔧 FIX: Siempre interpolar si hay diferencia (sin zona muerta)
+    // Usar interpolación exponencial suave para movimiento fluido
+    const lerpFactor = 1 - Math.exp(-speed * dt);
+    
+    obj.x += dx * lerpFactor;
+    obj.y += dy * lerpFactor;
+    
+    if (logMovement) console.log(`🎯 Moving: ${distance.toFixed(2)} lerp: ${lerpFactor.toFixed(3)}`);
+    return true;
+}
+
+/**
+ * 🆕 Interpola una posición usando la velocidad real del servidor
+ * Ideal para entidades que se mueven a velocidad constante (como nodos de frente)
+ * @param {Object} obj - Objeto con propiedades {x, y, serverX, serverY, lastServerUpdate}
+ * @param {number} dt - Delta time en segundos
+ * @param {Object} options - Opciones de interpolación
+ * @returns {boolean} - true si se movió
+ */
+export function interpolateWithVelocity(obj, dt, options = {}) {
+    const {
+        serverSpeed = 4.0,        // Velocidad del servidor en px/s (sincronizada con gameConfig)
+        snapThreshold = 0.5,      // Distancia para snap directo
+        catchUpSpeed = 12.0,      // Velocidad para "alcanzar" si está muy atrás
+        catchUpThreshold = 10.0,  // Distancia a partir de la cual acelerar para alcanzar
+        logMovement = false
+    } = options;
+    
+    // Verificar que hay posición objetivo del servidor
+    if (obj.serverX === undefined || obj.serverY === undefined) {
+        return false;
+    }
+    
+    const dx = obj.serverX - obj.x;
+    const dy = obj.serverY - obj.y;
+    const distance = Math.hypot(dx, dy);
+    
+    // Si está muy cerca, snap directo
+    if (distance < snapThreshold) {
+        obj.x = obj.serverX;
+        obj.y = obj.serverY;
+        return false;
+    }
+    
+    // Calcular dirección normalizada
+    const dirX = dx / distance;
+    const dirY = dy / distance;
+    
+    // Determinar velocidad: usar catchUpSpeed si está muy atrás, sino serverSpeed
+    let moveSpeed = serverSpeed;
+    if (distance > catchUpThreshold) {
+        // Interpolar entre serverSpeed y catchUpSpeed basado en cuánto atrás está
+        const catchUpFactor = Math.min((distance - catchUpThreshold) / catchUpThreshold, 1.0);
+        moveSpeed = serverSpeed + (catchUpSpeed - serverSpeed) * catchUpFactor;
+    }
+    
+    // Calcular movimiento
+    const moveDistance = moveSpeed * dt;
+    
+    // No pasarse del objetivo
+    if (moveDistance >= distance) {
+        obj.x = obj.serverX;
+        obj.y = obj.serverY;
+        if (logMovement) console.log(`📌 Reached target: ${distance.toFixed(2)}`);
         return true;
     }
     
-    return false;
+    // Mover hacia el objetivo
+    obj.x += dirX * moveDistance;
+    obj.y += dirY * moveDistance;
+    
+    if (logMovement) {
+        console.log(`🎯 Velocity move: dist=${distance.toFixed(2)} speed=${moveSpeed.toFixed(1)} moved=${moveDistance.toFixed(2)}`);
+    }
+    
+    return true;
 }
 
 /**

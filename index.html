@@ -719,27 +719,47 @@
         <div class="options-content">
             <h2>Opciones</h2>
             
-            <div class="volume-control">
-                <label for="master-volume-slider">Volumen Maestro:</label>
-                <div class="slider-container">
-                    <input type="range" id="master-volume-slider" min="0" max="100" value="100" class="volume-slider">
-                    <span id="master-volume-label" class="volume-label">100%</span>
+            <!-- Pestañas de opciones -->
+            <div class="options-tabs">
+                <button class="options-tab active" data-tab="audio">Audio</button>
+                <button class="options-tab" data-tab="ui">Interfaz</button>
+            </div>
+            
+            <!-- Contenido de Audio -->
+            <div class="options-tab-content" id="options-audio-content">
+                <div class="volume-control">
+                    <label for="master-volume-slider">Volumen Maestro:</label>
+                    <div class="slider-container">
+                        <input type="range" id="master-volume-slider" min="0" max="100" value="100" class="volume-slider">
+                        <span id="master-volume-label" class="volume-label">100%</span>
+                    </div>
+                </div>
+                
+                <div class="volume-control">
+                    <label for="music-volume-slider">Volumen Música:</label>
+                    <div class="slider-container">
+                        <input type="range" id="music-volume-slider" min="0" max="100" value="100" class="volume-slider">
+                        <span id="music-volume-label" class="volume-label">100%</span>
+                    </div>
+                </div>
+                
+                <div class="volume-control">
+                    <label for="sfx-volume-slider">Volumen Efectos:</label>
+                    <div class="slider-container">
+                        <input type="range" id="sfx-volume-slider" min="0" max="100" value="100" class="volume-slider">
+                        <span id="sfx-volume-label" class="volume-label">100%</span>
+                    </div>
                 </div>
             </div>
             
-            <div class="volume-control">
-                <label for="music-volume-slider">Volumen Música:</label>
-                <div class="slider-container">
-                    <input type="range" id="music-volume-slider" min="0" max="100" value="100" class="volume-slider">
-                    <span id="music-volume-label" class="volume-label">100%</span>
-                </div>
-            </div>
-            
-            <div class="volume-control">
-                <label for="sfx-volume-slider">Volumen Efectos:</label>
-                <div class="slider-container">
-                    <input type="range" id="sfx-volume-slider" min="0" max="100" value="100" class="volume-slider">
-                    <span id="sfx-volume-label" class="volume-label">100%</span>
+            <!-- Contenido de Interfaz -->
+            <div class="options-tab-content" id="options-ui-content" style="display: none;">
+                <div class="ui-option">
+                    <label class="ui-option-label">
+                        <input type="checkbox" id="show-front-currency-checkbox" checked>
+                        <span>Mostrar contador de dinero en frentes</span>
+                    </label>
+                    <p class="ui-option-description">Muestra textos flotantes con el dinero ganado cuando los frentes avanzan o retroceden</p>
                 </div>
             </div>
             

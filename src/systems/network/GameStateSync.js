@@ -456,10 +456,13 @@ export class GameStateSync {
             // Si no existe, será creado por el evento convoy_spawned o ambulance_spawned
         });
         
-        // Eliminar convoyes que ya no existen en el servidor
+        // ⚡ OPTIMIZACIÓN: Devolver convoys al pool en lugar de destruirlos
         const serverConvoyIds = gameState.convoys.map(c => c.id);
         for (let i = this.game.convoyManager.convoys.length - 1; i >= 0; i--) {
-            if (!serverConvoyIds.includes(this.game.convoyManager.convoys[i].id)) {
+            const convoy = this.game.convoyManager.convoys[i];
+            if (!serverConvoyIds.includes(convoy.id)) {
+                // Convoy ya no existe en servidor - devolverlo al pool
+                this.game.convoyManager.releaseConvoy(convoy);
                 this.game.convoyManager.convoys.splice(i, 1);
             }
         }
@@ -558,36 +561,40 @@ export class GameStateSync {
                     const dy = hq.y - factory.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
                     
-                    effectRenderer.factorySupplyIcons.push({
-                        deliveryId: deliveryData.id,
-                        factoryId: deliveryData.factoryId,
-                        hqId: deliveryData.hqId,
-                        team: factory.team, // 🆕 FOG OF WAR: Incluir equipo de la fábrica
-                        startX: factory.x,
-                        startY: factory.y,
-                        targetX: hq.x,
-                        targetY: hq.y,
-                        currentX: factory.x,
-                        currentY: factory.y,
-                        distance: distance,
-                        progress: deliveryData.progress, // Progress local (se interpolará)
-                        serverProgress: deliveryData.progress, // Progress objetivo del servidor
-                        speed: deliveryData.speed, // Velocidad viene del servidor (configurada en serverNodes.js)
-                        active: deliveryData.progress < 1.0
-                    });
+                    // ⚡ OPTIMIZACIÓN: Obtener icono del pool
+                    const icon = effectRenderer.factorySupplyIconPool.acquire();
+                    if (icon) {
+                        icon.deliveryId = deliveryData.id;
+                        icon.factoryId = deliveryData.factoryId;
+                        icon.hqId = deliveryData.hqId;
+                        icon.team = factory.team; // 🆕 FOG OF WAR: Incluir equipo de la fábrica
+                        icon.startX = factory.x;
+                        icon.startY = factory.y;
+                        icon.targetX = hq.x;
+                        icon.targetY = hq.y;
+                        icon.currentX = factory.x;
+                        icon.currentY = factory.y;
+                        icon.distance = distance;
+                        icon.progress = deliveryData.progress; // Progress local (se interpolará)
+                        icon.serverProgress = deliveryData.progress; // Progress objetivo del servidor
+                        icon.speed = deliveryData.speed; // Velocidad viene del servidor (configurada en serverNodes.js)
+                        icon.active = deliveryData.progress < 1.0;
+                        effectRenderer.factorySupplyIcons.push(icon);
+                    }
                 }
             }
         });
         
-        // Eliminar iconos de envíos que ya no existen en el servidor
+        // ⚡ OPTIMIZACIÓN: Devolver iconos al pool en lugar de destruirlos
         const serverDeliveryIds = new Set(gameState.factorySupplyDeliveries.map(d => d.id));
-        effectRenderer.factorySupplyIcons = effectRenderer.factorySupplyIcons.filter(icon => {
+        for (let i = effectRenderer.factorySupplyIcons.length - 1; i >= 0; i--) {
+            const icon = effectRenderer.factorySupplyIcons[i];
             if (icon.deliveryId && !serverDeliveryIds.has(icon.deliveryId)) {
-                return false; // Eliminar si el envío ya no existe en el servidor
+                // Envío ya no existe - devolver icono al pool
+                effectRenderer.factorySupplyIconPool.release(icon);
+                effectRenderer.factorySupplyIcons.splice(i, 1);
             }
-            // Mantener iconos sin deliveryId (legacy) o que aún existen
-            return true;
-        });
+        }
     }
 
     // ========== SINCRONIZACIÓN DE DRONES ==========

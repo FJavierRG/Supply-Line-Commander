@@ -1381,6 +1381,24 @@ export class NodeRenderer {
         this.ctx.fillStyle = barColor;
         this.ctx.fillRect(barX, barY, fillWidth, barHeight);
         
+        // 🆕 NUEVO: Renderizar porcentaje de suministros para nodos tipo "front"
+        if (base.type === 'front') {
+            const percentage = Math.round((base.supplies / base.maxSupplies) * 100);
+            
+            // Posición del texto: a la derecha de la barra
+            const textX = barX + barWidth + 8; // 8px de margen desde el final de la barra
+            const textY = barY + barHeight / 2;
+            
+            // Configurar estilo del texto
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.font = 'bold 11px Arial';
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'middle';
+            
+            // Dibujar el porcentaje
+            this.ctx.fillText(`${percentage}%`, textX, textY);
+        }
+        
         // Los contadores de vehículos se renderizan en renderVehicleUI() para evitar duplicación
         
         // 🆕 NUEVO: Restaurar Mirror View usando método unificado

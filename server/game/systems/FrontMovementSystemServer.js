@@ -592,6 +592,20 @@ export class FrontMovementSystemServer {
             this.gameState.currency[team] += finalCurrencyToAward;
             this.pendingCurrencyPixels[team] -= currencyToAward * GAME_CONFIG.currency.pixelsPerCurrency;
             
+            // 🆕 NUEVO: Emitir evento al cliente para mostrar texto flotante
+            if (front && finalCurrencyToAward > 0) {
+                if (this.gameState.addVisualEvent) {
+                    this.gameState.addVisualEvent('front_currency_gained', {
+                        frontId: front.id,
+                        team: team,
+                        amount: finalCurrencyToAward,
+                        x: front.x,
+                        y: front.y,
+                        mode: front.frontMode || 'advance'
+                    });
+                }
+            }
+            
             // Log solo cada 50$ para no spamear (o si hay bonus de trained)
             if (finalCurrencyToAward >= 50 || (front && front.effects?.some(e => e.type === 'trained'))) {
                 console.log(`📈 ${team}: +${finalCurrencyToAward}$ por avance de frente (total: ${this.gameState.currency[team]}$)`);
@@ -633,6 +647,20 @@ export class FrontMovementSystemServer {
             if (currencyToAward > 0) {
                 this.gameState.currency[team] += currencyToAward;
                 this.pendingRetreatPixels[team] -= baseCurrency * GAME_CONFIG.currency.pixelsPerCurrency;
+                
+                // 🆕 NUEVO: Emitir evento al cliente para mostrar texto flotante
+                if (front && currencyToAward > 0) {
+                    if (this.gameState.addVisualEvent) {
+                        this.gameState.addVisualEvent('front_currency_gained', {
+                            frontId: front.id,
+                            team: team,
+                            amount: currencyToAward,
+                            x: front.x,
+                            y: front.y,
+                            mode: front.frontMode || 'retreat'
+                        });
+                    }
+                }
                 
                 // Log para retrocesos significativos
                 if (currencyToAward >= 10) {

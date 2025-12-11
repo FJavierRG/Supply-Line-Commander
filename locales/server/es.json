@@ -3,6 +3,17 @@
     "language": "Español",
     "code": "es"
   },
+  "lobby": {
+    "system_name": "Sistema",
+    "room_created": "¡Sala creada! Esperando a un oponente...",
+    "player_joined": "{playerName} se unió a la sala",
+    "player_ready": "{playerName} está listo ✅",
+    "player_not_ready": "{playerName} está no listo ❌",
+    "player_kicked": "{playerName} fue expulsado de la sala",
+    "game_starting": "⏱️ La partida comenzará en 3 segundos...",
+    "countdown": "⏱️ {seconds}...",
+    "game_start": "🚀 ¡Comienza la partida!"
+  },
   
   "buildings": {
     "hq": {

@@ -1,5 +1,6 @@
 // ===== GESTOR DE LOBBY Y UI PRE-JUEGO =====
 // Responsabilidad: Gestión de la interfaz y estado del lobby (sala de espera)
+import { i18n } from '../../services/I18nService.js'; // ✅ NUEVO: Servicio de i18n
 
 export class LobbyHandler {
     constructor(networkManager, game) {
@@ -157,7 +158,7 @@ export class LobbyHandler {
         const startBtn = document.getElementById('start-multiplayer-game-btn');
         if (startBtn) {
             startBtn.disabled = false;
-            startBtn.textContent = 'Comenzar Partida';
+            startBtn.textContent = i18n.t('lobby.start_game_button');
             startBtn.style.display = 'none';
         }
     }
@@ -214,7 +215,7 @@ export class LobbyHandler {
             // Actualizar botón de ready
             const readyBtn = document.getElementById('ready-toggle-btn');
             if (readyBtn) {
-                readyBtn.textContent = this.isReady ? 'Cancelar' : 'Marcar Listo';
+                readyBtn.textContent = this.isReady ? i18n.t('lobby.cancel_button') : i18n.t('lobby.ready_button');
             }
         }
         
@@ -365,14 +366,14 @@ export class LobbyHandler {
             
             // 🆕 FIX: Restaurar botón antes de mostrar/ocultar
             startBtn.disabled = false;
-            startBtn.textContent = 'Comenzar Partida';
+            startBtn.textContent = i18n.t('lobby.start_game_button');
             
             startBtn.style.display = (hasOpponent && allReady && allHaveRace) ? 'block' : 'none';
         } else if (startBtn) {
             // Si no soy host, ocultar y restaurar el botón
             startBtn.style.display = 'none';
             startBtn.disabled = false;
-            startBtn.textContent = 'Comenzar Partida';
+            startBtn.textContent = i18n.t('lobby.start_game_button');
         }
     }
 
@@ -494,7 +495,7 @@ export class LobbyHandler {
                 
                 this.isReady = !this.isReady;
                 this.networkManager.clientSender.setPlayerReady(this.networkManager.roomId, this.isReady);
-                readyBtn.textContent = this.isReady ? 'Cancelar' : 'Marcar Listo';
+                readyBtn.textContent = this.isReady ? i18n.t('lobby.cancel_button') : i18n.t('lobby.ready_button');
                 readyBtn.className = 'menu-btn primary';
             };
         }

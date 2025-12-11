@@ -2,6 +2,7 @@
 // Maneja efectos visuales especiales como artillería y el destructor de mundos
 
 import { interpolateProgress } from '../../utils/InterpolationUtils.js';
+import { ObjectPool } from '../../utils/ObjectPool.js';
 
 /**
  * EffectRenderer - Renderiza efectos visuales especiales
@@ -33,6 +34,29 @@ export class EffectRenderer {
         // 🆕 NUEVO: Sistema de visualización de fábricas
         this.factorySupplyIcons = []; // Array de iconos de suministros viajando desde fábricas a HQs
         this.factoryTimers = new Map(); // Map: factoryId -> { lastGeneration, interval }
+        
+        // ⚡ OPTIMIZACIÓN: Object Pool para iconos de suministros (prevenir GC)
+        this.factorySupplyIconPool = new ObjectPool(
+            () => ({
+                deliveryId: null,
+                factoryId: null,
+                hqId: null,
+                team: null,
+                startX: 0,
+                startY: 0,
+                targetX: 0,
+                targetY: 0,
+                currentX: 0,
+                currentY: 0,
+                distance: 0,
+                progress: 0,
+                serverProgress: 0,
+                speed: 120,
+                active: false
+            }),
+            20,  // Inicial: 20 iconos pre-creados
+            40   // Máximo: 40 iconos simultáneos
+        );
     }
     
     /**

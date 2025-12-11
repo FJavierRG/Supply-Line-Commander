@@ -98,20 +98,38 @@
     "difficulty_easy": "Fácil",
     "difficulty_medium": "Medio",
     "difficulty_hard": "Difícil",
-    "nation_unified": "Fuerzas Unificadas"
+    "nation_unified": "Fuerzas Unificadas",
+    "ready_button": "Marcar Listo",
+    "cancel_button": "Cancelar",
+    "start_game_button": "Comenzar Partida",
+    "starting_button": "Iniciando..."
   },
   
   "game_end": {
     "victory": "¡VICTORIA!",
     "defeat": "DERROTA",
     "back_to_menu": "Volver al Menú",
+    "tabs": {
+      "summary": "Resumen",
+      "graphs": "Gráficos"
+    },
     "stats": {
-      "title": "Estadísticas de la Partida",
       "duration": "Duración",
-      "buildings_built": "Edificios construidos",
-      "units_deployed": "Unidades desplegadas",
-      "resources_spent": "Recursos gastados",
-      "territory_controlled": "Territorio controlado"
+      "duration_of_match": "Duración de la partida",
+      "your_performance": "TU RENDIMIENTO",
+      "enemy_performance": "ENEMIGO",
+      "currency": "Currency",
+      "gold_generated": "Oro generado",
+      "gold_spent": "Oro gastado",
+      "gold_per_min": "Oro/min",
+      "trucks": "Camiones",
+      "buildings": "Edificios",
+      "drones": "Drones",
+      "match_evolution": "Evolución de la partida",
+      "accumulated_gold": "Oro generado acumulado",
+      "accumulated_trucks": "Camiones enviados acumulados",
+      "you": "Tú",
+      "enemy": "Enemigo"
     }
   },
   

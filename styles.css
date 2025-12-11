@@ -2430,6 +2430,73 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     border: 1px solid #4a5d23;
 }
 
+.options-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    justify-content: center;
+}
+
+.options-tab {
+    padding: 10px 20px;
+    background: rgba(74, 93, 35, 0.3);
+    color: #aaa;
+    border: 2px solid rgba(74, 93, 35, 0.5);
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+
+.options-tab:hover {
+    background: rgba(74, 93, 35, 0.5);
+    color: #fff;
+}
+
+.options-tab.active {
+    background: #4a5d23;
+    color: #fff;
+    border-color: #5a6d33;
+}
+
+.options-tab-content {
+    margin-top: 20px;
+}
+
+.ui-option {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    border: 1px solid rgba(74, 93, 35, 0.3);
+}
+
+.ui-option-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+}
+
+.ui-option-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: #4a5d23;
+}
+
+.ui-option-description {
+    margin-top: 8px;
+    margin-left: 32px;
+    color: #aaa;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
 .options-buttons {
     display: flex;
     gap: 15px;

@@ -219,7 +219,9 @@ export class ParticleRenderer {
             this.ctx.fillStyle = color;
             
             for (const text of colorTexts) {
-                this.ctx.globalAlpha = text.alpha;
+                // 🆕 NUEVO: Alpha más suave para textos de currency (multiplicar por 0.5 = 50% más transparente)
+                const textAlpha = isCurrencyText ? (text.alpha * 0.5) : text.alpha;
+                this.ctx.globalAlpha = textAlpha;
                 
                 // 🆕 Compensar Mirror View para textos "Disabled" (no deben verse volteados)
                 if (isDisabledText && this.renderContext && this.renderContext.mirrorViewApplied) {
@@ -244,6 +246,7 @@ export class ParticleRenderer {
                     this.ctx.fillText(text.text, text.x, text.y);
                     this.ctx.restore();
                 } else {
+                    // Textos normales (incluye currency) sin contorno
                     this.ctx.fillText(text.text, text.x, text.y);
                 }
             }
