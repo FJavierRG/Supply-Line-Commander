@@ -24,7 +24,7 @@ window.addEventListener('load', () => {
             }
 
             const authUI = new AuthUIManager();
-            authUI.init();
+            await authUI.init(); // ✅ IMPORTANTE: await para que i18n se inicialice primero
             window.authUI = authUI;
 
             let game = null;

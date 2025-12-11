@@ -1312,20 +1312,37 @@ export class InputHandler {
         if (isBase) {
             // Bases: hq, fob, front (diferenciados por team)
             const type = target.type;
-            const config = getNodeConfig(type);
             
-            if (config) {
-                name = config.name;
-                description = config.description;
+            // 🌍 NUEVO: Usar descripciones traducidas del servidor si están disponibles
+            if (this.game.serverBuildingConfig?.descriptions?.[type]) {
+                const translatedData = this.game.serverBuildingConfig.descriptions[type];
+                name = translatedData.name;
+                description = translatedData.description;
             } else {
-                name = 'Nodo';
-                description = 'Nodo del mapa.';
+                // Fallback a config local
+                const config = getNodeConfig(type);
+                if (config) {
+                    name = config.name;
+                    description = config.description;
+                } else {
+                    name = 'Nodo';
+                    description = 'Nodo del mapa.';
+                }
             }
         } else {
             // Edificios construidos
             const config = getNodeConfig(target.type);
-            name = config?.name || target.type;
-            description = config?.description || 'Edificio.';
+            
+            // 🌍 NUEVO: Usar descripciones traducidas del servidor si están disponibles
+            if (this.game.serverBuildingConfig?.descriptions?.[target.type]) {
+                const translatedData = this.game.serverBuildingConfig.descriptions[target.type];
+                name = translatedData.name;
+                description = translatedData.description;
+            } else {
+                // Fallback a config local
+                name = config?.name || target.type;
+                description = config?.description || 'Edificio.';
+            }
             
             // Rango de acción/alerta/detección si aplica
             // 🎯 NUEVO: Para anti-drone, NO mostrar el rango en hover (solo se muestra cuando se selecciona)

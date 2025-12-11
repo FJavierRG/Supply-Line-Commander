@@ -1,3 +1,4 @@
+
 // ===== CONTROLADOR PRINCIPAL DEL JUEGO =====
 import { VisualNode } from './entities/visualNode.js';
 import { interpolatePosition, interpolateProgress, interpolateValue } from './utils/InterpolationUtils.js';
@@ -36,6 +37,7 @@ import { CurrencyManager } from './systems/ui/CurrencyManager.js';
 import { CursorManager } from './systems/ui/CursorManager.js';
 import { DeckManager } from './systems/ui/DeckManager.js';
 import { LoadingScreenManager } from './systems/ui/LoadingScreenManager.js';
+import { MenuUIManager } from './systems/ui/MenuUIManager.js'; // ✅ NUEVO: Gestor de textos del menú
 import { OptionsManager } from './systems/ui/OptionsManager.js';
 import { OverlayManager } from './systems/ui/OverlayManager.js';
 import { RaceSelectionManager } from './systems/ui/RaceSelectionManager.js';
@@ -95,6 +97,8 @@ export class Game {
         this.ui = new UIManager(this);
         this.audio = new AudioManager();
         this.loadingScreen = new LoadingScreenManager();
+        this.menuUI = new MenuUIManager(); // ✅ NUEVO: Gestor de textos del menú
+        this.menuUI.init(); // Inicializar para que escuche cambios de idioma
         this.currency = new CurrencyManager(this);
         this.cursorManager = new CursorManager(this); // 🆕 NUEVO: Gestor centralizado de cursores
         this.particleSystem = new ParticleSystem(this);

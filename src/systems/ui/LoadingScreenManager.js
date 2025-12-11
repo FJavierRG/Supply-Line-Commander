@@ -1,5 +1,7 @@
 // ===== GESTOR DE PANTALLA DE CARGA =====
 
+import { i18n } from '../../services/I18nService.js';
+
 export class LoadingScreenManager {
     constructor() {
         this.loadingScreen = document.getElementById('loading-screen');
@@ -7,6 +9,11 @@ export class LoadingScreenManager {
         this.percentage = document.getElementById('loading-percentage');
         this.loadingText = document.getElementById('loading-text');
         this.pressToContinue = document.getElementById('press-to-continue-screen');
+        
+        // ✅ NUEVO: Listener para cambios de idioma
+        window.addEventListener('languageChanged', () => {
+            this.updateTexts();
+        });
     }
     
     /**
@@ -60,21 +67,54 @@ export class LoadingScreenManager {
         }
         
         if (this.percentage) {
-            this.percentage.textContent = `${Math.round(progress)}%`;
+            const percent = Math.round(progress);
+            this.percentage.textContent = i18n.initialized 
+                ? i18n.t('loading.percentage', { percent }) 
+                : `${percent}%`;
         }
         
+        // El texto se actualiza automáticamente según el progreso
+        // NOTA: El texto también puede ser establecido manualmente desde Game.init()
+        if (this.loadingText && !this._manualTextOverride && i18n.initialized) {
+            this.loadingText.textContent = i18n.t('loading.loading_resources');
+        }
+        
+        // Resetear override después de cada actualización
+        this._manualTextOverride = false;
+    }
+    
+    /**
+     * 🆕 NUEVO: Establece un texto de carga manual (anula el texto automático temporalmente)
+     * @param {string} text - Texto a mostrar
+     */
+    setLoadingText(text) {
         if (this.loadingText) {
-            if (progress < 10) {
-                this.loadingText.textContent = 'Conectando al servidor...';
-            } else if (progress < 30) {
-                this.loadingText.textContent = 'Cargando sprites...';
-            } else if (progress < 60) {
-                this.loadingText.textContent = 'Cargando vehículos...';
-            } else if (progress < 90) {
-                this.loadingText.textContent = 'Cargando mapas...';
-            } else {
-                this.loadingText.textContent = 'Preparando el campo de batalla...';
-            }
+            this.loadingText.textContent = text;
+            this._manualTextOverride = true;
+        }
+    }
+    
+    /**
+     * ✅ NUEVO: Actualiza todos los textos de la pantalla de carga
+     */
+    updateTexts() {
+        if (!i18n.initialized) return;
+        
+        // Título de la pantalla de carga
+        const loadingTitle = this.loadingScreen?.querySelector('.loading-title');
+        if (loadingTitle) {
+            loadingTitle.textContent = i18n.t('loading.title');
+        }
+        
+        // Texto de "Cargando recursos..."
+        if (this.loadingText && !this._manualTextOverride) {
+            this.loadingText.textContent = i18n.t('loading.loading_resources');
+        }
+        
+        // Texto de "Pulsa para continuar"
+        const pressToContinueText = this.pressToContinue?.querySelector('.press-to-continue-text');
+        if (pressToContinueText) {
+            pressToContinueText.textContent = i18n.t('loading.press_to_continue');
         }
     }
 }

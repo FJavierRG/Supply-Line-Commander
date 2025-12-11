@@ -1,0 +1,266 @@
+{
+  "meta": {
+    "language": "English",
+    "code": "en"
+  },
+  
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "✕ Close",
+    "save": "Save",
+    "delete": "Delete",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "yes": "Yes",
+    "no": "No",
+    "new": "New",
+    "load": "Load",
+    "clear": "Clear"
+  },
+  
+  "auth": {
+    "title": "Supply Line Commander",
+    "login": {
+      "tab": "Log in",
+      "username_label": "Username",
+      "username_placeholder": "your_username",
+      "password_label": "Password",
+      "password_placeholder": "••••••",
+      "submit": "Enter"
+    },
+    "register": {
+      "tab": "Create account",
+      "username_label": "Username",
+      "username_placeholder": "choose_a_name",
+      "password_label": "Password",
+      "password_placeholder": "minimum 6 characters",
+      "confirm_label": "Confirm password",
+      "confirm_placeholder": "repeat your password",
+      "submit": "Create account"
+    },
+    "logout": "Log out",
+    "errors": {
+      "invalid_credentials": "Invalid username or password",
+      "username_taken": "This username is already taken",
+      "password_mismatch": "Passwords do not match",
+      "connection_error": "Connection error with the server"
+    }
+  },
+  
+  "loading": {
+    "title": "Supply Line Commander",
+    "loading_resources": "Loading resources...",
+    "percentage": "{percent}%",
+    "press_to_continue": "Press to continue"
+  },
+  
+  "menu": {
+    "title": "Supply Line Commander",
+    "play": "Play",
+    "tutorial": "Tutorial",
+    "arsenal": "Arsenal",
+    "options": "Options",
+    "exit": "Exit",
+    "pause": "Pause",
+    "continue": "Continue",
+    "back_to_menu": "Back to menu",
+    "back": "← Back",
+    "start": "Start",
+    "start_game": "Start Game",
+    "ready": "Mark Ready",
+    "not_ready": "Not Ready",
+    "deck_builder": "Deck Builder"
+  },
+  
+  "lobby": {
+    "title": "Multiplayer Lobby",
+    "connecting": "Connecting to server...",
+    "create_room": "Create Room",
+    "join_room": "Join Room",
+    "room_code": "ROOM CODE",
+    "room_code_placeholder": "Room code (4 letters)",
+    "join_with_code": "Join",
+    "players": "PLAYERS",
+    "chat": "Chat",
+    "chat_placeholder": "Type a message...",
+    "send": "Send",
+    "ai_slot_empty": "Empty slot",
+    "add_ai": "+ Add AI",
+    "remove_ai": "Remove",
+    "ai_label": "🤖 AI",
+    "nation_label": "NATION",
+    "difficulty_label": "DIFFICULTY",
+    "difficulty_easy": "Easy",
+    "difficulty_medium": "Medium",
+    "difficulty_hard": "Hard",
+    "nation_unified": "Unified Forces"
+  },
+  
+  "game_end": {
+    "victory": "VICTORY!",
+    "defeat": "DEFEAT",
+    "back_to_menu": "Back to Menu",
+    "stats": {
+      "title": "Match Statistics",
+      "duration": "Duration",
+      "buildings_built": "Buildings built",
+      "units_deployed": "Units deployed",
+      "resources_spent": "Resources spent",
+      "territory_controlled": "Territory controlled"
+    }
+  },
+  
+  "pause": {
+    "title": "Pause",
+    "continue": "Continue",
+    "options": "Options",
+    "exit": "Back to menu"
+  },
+  
+  "options": {
+    "title": "Options",
+    "master_volume": "Master Volume:",
+    "music_volume": "Music Volume:",
+    "sfx_volume": "Effects Volume:",
+    "reset": "Restore defaults",
+    "close": "Close",
+    "language": "Language:",
+    "apply": "Apply",
+    "restart_required": "Restart required to apply language changes"
+  },
+  
+  "language": {
+    "select": "Language",
+    "es": "Español",
+    "en": "English"
+  },
+  
+  "arsenal": {
+    "units": "Units",
+    "disciplines": "Disciplines",
+    "your_deck": "Deck",
+    "bench": "Bench",
+    "deck_empty": "Your deck is empty. Click on available units to add them.",
+    "points": "points",
+    "hover_card": "Hover over an element",
+    "add_card_left": "Left click to add card",
+    "view_card_right": "Right click to view info",
+    "cost": "Cost",
+    "notifications": {
+      "default_deck_error": "Error getting default deck. Try again.",
+      "new_deck_created": "New deck created. Start adding units.",
+      "deck_empty": "The deck is empty",
+      "waiting_server_config": "Waiting for server configuration...",
+      "deck_exceeds_limit": "Deck exceeds point limit ({deckCost}/{pointLimit}). Remove some units before saving.",
+      "bench_exceeds_limit": "Bench exceeds point limit ({benchCost}/{benchPointLimit}). Remove some units before saving.",
+      "deck_saved": "Deck \"{deckName}\" saved successfully",
+      "deck_save_error": "Error saving deck",
+      "deck_created": "Deck \"{deckName}\" created and saved",
+      "deck_create_error": "Error creating deck",
+      "deck_save_error_detailed": "Error saving deck: {error}",
+      "deck_create_error_detailed": "Error creating deck: {error}",
+      "deck_empty_add_units": "Deck is empty. Add units before confirming.",
+      "deck_exceeds_limit_confirm": "Deck exceeds point limit ({deckCost}/{pointLimit}). Remove some units before confirming.",
+      "bench_exceeds_limit_confirm": "Bench exceeds point limit ({benchCost}/{benchPointLimit}). Remove some units before confirming.",
+      "select_card_to_swap": "Select a card from the deck to swap",
+      "swap_not_allowed": "Swap not allowed",
+      "swap_success": "Swap completed",
+      "item_added_to_bench": "{itemName} added to bench",
+      "discipline_limit_reached": "You already have 2 disciplines in the deck (maximum allowed)",
+      "discipline_already_in_deck": "This discipline is already in the deck",
+      "discipline_added": "Discipline added to deck",
+      "discipline_removed": "Discipline removed from deck",
+      "deck_delete_error": "Error deleting deck: {error}"
+    },
+    "confirm": {
+      "clear_deck": "Are you sure you want to clear the deck? (HQ and FOB will remain)",
+      "delete_deck": "Are you sure you want to delete this deck? This action cannot be undone."
+    }
+  },
+  
+  "tutorial": {
+    "steps": [
+      {
+        "title": "Welcome, Commander",
+        "text": "<p>Your job here is to keep the <strong>battle front</strong> alive.</p><p>The soldiers will fight on their own, but <strong>you control the supplies</strong>.</p>"
+      },
+      {
+        "title": "The Map",
+        "text": "<p>This is the battle map. On the left you can see your headquarters (HQ), your forward operating bases (FOBs), and your battle fronts. In blue you'll see the entire area your team controls.</p><p>On the other side you can see your opponent playing symmetrically</p>"
+      },
+      {
+        "title": "The Battle Front",
+        "text": "<p>This is your <strong>battle front</strong>. Battle front nodes will move automatically based on available supplies</p>"
+      },
+      {
+        "title": "Front without Resources",
+        "text": "<p>The bar shows the node's supplies. When the front runs out of resources, it will automatically retreat. Your mission is to prevent this by maintaining an active <strong>supply chain</strong>.</p>"
+      },
+      {
+        "title": "Territory Control",
+        "text": "<p>Territory control affects gold income. For every inch of ground your soldiers advance, you gain riches. Additionally, you earn a small amount passively. This money will be used for the store.</p>"
+      },
+      {
+        "title": "Supply Bar",
+        "text": "<p>As we saw, this bar indicates your battle front's supplies. To get new supplies to it, pay attention to the following tips.</p>"
+      },
+      {
+        "title": "HQ Heavy Trucks",
+        "text": "<p>The HQ has heavy supply trucks at your disposal. It's not safe or efficient to send them directly to the combat front. You should send them by clicking on the forward operating bases (FOBs).</p>"
+      },
+      {
+        "title": "FOB Light Trucks",
+        "text": "<p>From the FOBs you can send light trucks by clicking, which will travel to the front, deliver the supplies, and return.</p>"
+      },
+      {
+        "title": "FOB Indicators",
+        "text": "<p>Keep in mind that FOBs have supply and vehicle availability indicators. Trucks are useless without supplies, and you can't send help no matter how many supplies you have if your trucks haven't returned.</p>"
+      },
+      {
+        "title": "The Store",
+        "text": "<p>Here you can deploy the store by clicking.</p>"
+      },
+      {
+        "title": "Store Contents",
+        "text": "<p>Inside you'll find a whole series of buildings and logistical resources to help your front advance. Some will give you passive rewards, others will strengthen your supply chains, others will hinder enemy development... You can review what they do in the Arsenal, from the main menu.</p>"
+      },
+      {
+        "title": "Game Objective",
+        "text": "<p>Your objective is to push the enemy border back to their HQ to win the match.</p>"
+      },
+      {
+        "title": "Front Clash",
+        "text": "<p>When both fronts meet, the one with more supplies will automatically push the other.</p>"
+      },
+      {
+        "title": "Into Battle!",
+        "text": "<p>If you want, you can jump straight into battle with the default team or create your own team from the Arsenal. Good luck!</p>"
+      }
+    ]
+  },
+
+  "store": {
+    "categories": {
+      "buildings": "Buildings",
+      "vehicles": "Vehicles"
+    },
+    "cost": "Cost: {cost}$",
+    "bench": "Bench",
+    "your_deck_swap": "Your Deck (swap)",
+    "errors": {
+      "unit_not_in_deck": "Unit not in deck",
+      "unit_not_in_bench": "Unit not in bench",
+      "cannot_swap_hq_fob": "Cannot swap HQ or FOB"
+    }
+  },
+  
+  "placeholder": {
+    "description": "This key is used for texts that have not yet been migrated"
+  }
+}
+

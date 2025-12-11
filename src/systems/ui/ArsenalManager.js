@@ -1,5 +1,6 @@
 // ===== GESTOR DEL CONSTRUCTOR DE MAZOS (antes Arsenal) =====
 import { getAllyNodes, getProjectiles, getBuildableNodes, getNodeConfig } from '../../config/nodes.js';
+import { i18n } from '../../services/I18nService.js'; // ✅ NUEVO: Servicio de i18n
 
 export class ArsenalManager {
     constructor(assetManager, game) {
@@ -313,7 +314,7 @@ export class ArsenalManager {
             if (dest === 'deck') {
                 deckBtn.classList.add('active');
                 benchBtn.classList.remove('active');
-                if (panelTitle) panelTitle.textContent = 'Tu Mazo';
+                if (panelTitle) panelTitle.textContent = i18n.t('arsenal.your_deck');
                 if (deckLimit) {
                     const limit = this.deckManager.getDeckPointLimit();
                     deckLimit.textContent = limit !== null && limit !== undefined ? limit : '-';
@@ -321,7 +322,7 @@ export class ArsenalManager {
             } else {
                 deckBtn.classList.remove('active');
                 benchBtn.classList.add('active');
-                if (panelTitle) panelTitle.textContent = 'Banquillo';
+                if (panelTitle) panelTitle.textContent = i18n.t('arsenal.bench');
                 if (deckLimit) {
                     const limit = this.deckManager.getBenchPointLimit();
                     deckLimit.textContent = limit !== null && limit !== undefined ? limit : '-';
@@ -392,7 +393,7 @@ export class ArsenalManager {
             await this.deckManager.ensureDefaultDeckReady();
         } catch (error) {
             console.error('❌ Error esperando el mazo por defecto:', error);
-            this.showNotification('Error obteniendo el mazo predeterminado. Intenta de nuevo.', 'error');
+            this.showNotification(i18n.t('arsenal.notifications.default_deck_error'), 'error');
             // Continuar con fallback para no bloquear el arsenal
         }
         
@@ -504,7 +505,7 @@ export class ArsenalManager {
         this.updateAvailableItemsState();
         
         // Mostrar notificación
-        this.showNotification('Nuevo mazo creado. Empieza añadiendo unidades.', 'info');
+        this.showNotification(i18n.t('arsenal.notifications.new_deck_created'), 'info');
         
         console.log('📝 Nuevo mazo creado (vacío)');
     }
@@ -753,7 +754,7 @@ export class ArsenalManager {
         
         if (nonEssentialItems.length === 0 && !hasBench && !hasDisciplines) return;
         
-        if (confirm('¿Estás seguro de que quieres limpiar el mazo? (El HQ y FOB permanecerán)')) {
+        if (confirm(i18n.t('arsenal.confirm.clear_deck'))) {
             this.deck = ['hq', 'fob']; // Mantener solo el HQ y FOB
             this.bench = []; // 🆕 NUEVO: Limpiar banquillo
             this.disciplines = []; // 🆕 NUEVO: Limpiar disciplinas
@@ -800,7 +801,7 @@ export class ArsenalManager {
         try {
             if (this.deck.length === 0) {
                 console.log('🔍 Mazo vacío');
-                this.showNotification('El mazo está vacío', 'error');
+                this.showNotification(i18n.t('arsenal.notifications.deck_empty'), 'error');
                 return;
             }
             console.log('🔍 Mazo no vacío, continuando...');
@@ -813,12 +814,12 @@ export class ArsenalManager {
             console.log('🔍 Límite de puntos:', pointLimit);
             if (pointLimit === null || pointLimit === undefined) {
                 console.log('🔍 Límite no disponible');
-                this.showNotification('Esperando configuración del servidor...', 'error');
+                this.showNotification(i18n.t('arsenal.notifications.waiting_server_config'), 'error');
                 return;
             }
             if (deckCost > pointLimit) {
                 console.log('🔍 Mazo excede límite');
-                this.showNotification(`El mazo excede el límite de puntos (${deckCost}/${pointLimit}). Elimina algunas unidades antes de guardar.`, 'error');
+                this.showNotification(i18n.t('arsenal.notifications.deck_exceeds_limit', { deckCost, pointLimit }), 'error');
                 return;
             }
             console.log('🔍 Validación de límite del mazo OK');
@@ -832,7 +833,7 @@ export class ArsenalManager {
             console.log('🔍 Comparación:', { benchCost, benchPointLimit, condition: benchCost > benchPointLimit });
             if (benchPointLimit !== null && benchPointLimit !== undefined && benchCost > benchPointLimit) {
                 console.log('🔍 Banquillo excede límite');
-                this.showNotification(`El banquillo excede el límite de puntos (${benchCost}/${benchPointLimit}). Elimina algunas unidades antes de guardar.`, 'error');
+                this.showNotification(i18n.t('arsenal.notifications.bench_exceeds_limit', { benchCost, benchPointLimit }), 'error');
                 return;
             }
             console.log('🔍 Validación de banquillo OK');
@@ -861,9 +862,9 @@ export class ArsenalManager {
                 
                 if (updated) {
                     console.log('Mazo actualizado:', updated.name);
-                    this.showNotification(`Mazo "${updated.name}" guardado correctamente`, 'success');
+                    this.showNotification(i18n.t('arsenal.notifications.deck_saved', { deckName: updated.name }), 'success');
                 } else {
-                    this.showNotification('Error al guardar el mazo', 'error');
+                    this.showNotification(i18n.t('arsenal.notifications.deck_save_error'), 'error');
                 }
             } else {
                 if (this.currentDeckId && !currentDeck) {
@@ -892,19 +893,19 @@ export class ArsenalManager {
                             this.currentDeckId = newDeck.id; // 🆕 NUEVO: Actualizar currentDeckId al nuevo mazo
                             this.deckManager.selectDeck(newDeck.id);
                             console.log('Nuevo mazo creado:', newDeck.name, isDefaultDeck ? '(basado en default)' : '');
-                            this.showNotification(`Mazo "${newDeck.name}" creado y guardado`, 'success');
+                            this.showNotification(i18n.t('arsenal.notifications.deck_created', { deckName: newDeck.name }), 'success');
                         } else {
-                            this.showNotification('Error al crear el mazo', 'error');
+                            this.showNotification(i18n.t('arsenal.notifications.deck_create_error'), 'error');
                         }
                     } catch (error) {
                         console.error('❌ Error creando mazo:', error);
-                        this.showNotification('Error al crear el mazo: ' + error.message, 'error');
+                        this.showNotification(i18n.t('arsenal.notifications.deck_create_error_detailed', { error: error.message }), 'error');
                     }
                 }, promptMessage);
             }
         } catch (error) {
             console.error('❌ Error en saveDeck():', error);
-            this.showNotification('Error al guardar el mazo: ' + error.message, 'error');
+            this.showNotification(i18n.t('arsenal.notifications.deck_save_error_detailed', { error: error.message }), 'error');
         }
     }
     
@@ -950,7 +951,7 @@ export class ArsenalManager {
      */
     async confirmDeck() {
         if (this.deck.length === 0) {
-            this.showNotification('El mazo está vacío. Añade unidades antes de confirmar.', 'error');
+            this.showNotification(i18n.t('arsenal.notifications.deck_empty_add_units'), 'error');
             return;
         }
         
@@ -958,11 +959,11 @@ export class ArsenalManager {
         const deckCost = this.getDeckCost();
         const pointLimit = this.deckManager.getDeckPointLimit();
         if (pointLimit === null || pointLimit === undefined) {
-            this.showNotification('Esperando configuración del servidor...', 'error');
+            this.showNotification(i18n.t('arsenal.notifications.waiting_server_config'), 'error');
             return;
         }
         if (deckCost > pointLimit) {
-            this.showNotification(`El mazo excede el límite de puntos (${deckCost}/${pointLimit}). Elimina algunas unidades antes de confirmar.`, 'error');
+            this.showNotification(i18n.t('arsenal.notifications.deck_exceeds_limit_confirm', { deckCost, pointLimit }), 'error');
             return;
         }
         
@@ -970,7 +971,7 @@ export class ArsenalManager {
         const benchCost = this.getBenchCost();
         const benchPointLimit = this.deckManager.getBenchPointLimit();
         if (benchPointLimit !== null && benchPointLimit !== undefined && benchCost > benchPointLimit) {
-            this.showNotification(`El banquillo excede el límite de puntos (${benchCost}/${benchPointLimit}). Elimina algunas unidades antes de confirmar.`, 'error');
+            this.showNotification(i18n.t('arsenal.notifications.bench_exceeds_limit_confirm', { benchCost, benchPointLimit }), 'error');
             return;
         }
         
@@ -987,7 +988,7 @@ export class ArsenalManager {
                 });
             } catch (error) {
                 console.error('❌ Error guardando mazo antes de confirmar:', error);
-                this.showNotification('Error al guardar el mazo: ' + error.message, 'error');
+                this.showNotification(i18n.t('arsenal.notifications.deck_save_error_detailed', { error: error.message }), 'error');
                 return;
             }
         } else {
@@ -1019,7 +1020,7 @@ export class ArsenalManager {
                     this.hide();
                 } catch (error) {
                     console.error('❌ Error creando mazo antes de confirmar:', error);
-                    this.showNotification('Error al crear el mazo: ' + error.message, 'error');
+                    this.showNotification(i18n.t('arsenal.notifications.deck_create_error_detailed', { error: error.message }), 'error');
                 }
             });
             return; // Salir aquí porque el modal manejará el flujo
@@ -1309,7 +1310,7 @@ export class ArsenalManager {
             }
         });
         
-        this.showNotification('Selecciona una carta del mazo para permutar', 'info');
+        this.showNotification(i18n.t('arsenal.notifications.select_card_to_swap'), 'info');
     }
     
     /**
@@ -1331,7 +1332,7 @@ export class ArsenalManager {
         
         const validation = this.deckManager.validateSwap(currentDeck, deckUnitId, benchUnitId);
         if (!validation.valid) {
-            this.showNotification(validation.errors[0] || 'No se puede realizar la permutación', 'error');
+            this.showNotification(validation.errors[0] || i18n.t('arsenal.notifications.swap_not_allowed'), 'error');
             this.exitSwapMode();
             return false;
         }
@@ -1348,7 +1349,7 @@ export class ArsenalManager {
             this.updateAvailableItemsState();
             this.exitSwapMode();
             
-            this.showNotification('Permutación realizada', 'success');
+            this.showNotification(i18n.t('arsenal.notifications.swap_success'), 'success');
             return true;
         }
         
@@ -1456,7 +1457,8 @@ export class ArsenalManager {
                             newDiv.addEventListener('click', () => {
                                 if (this.destination === 'bench') {
                                     if (this.addToBench(itemId)) {
-                                        this.showNotification(`${itemId} añadido al banquillo`, 'success');
+                                        const itemConfig = this.getItemConfig(itemId);
+                                        this.showNotification(i18n.t('arsenal.notifications.item_added_to_bench', { itemName: itemConfig?.name || itemId }), 'success');
                                         // Feedback visual
                                         newDiv.style.transform = 'scale(0.95)';
                                         setTimeout(() => {
@@ -1757,7 +1759,7 @@ export class ArsenalManager {
         // Verificar que tengamos la configuración de disciplinas del servidor
         if (!this.game || !this.game.serverDisciplineConfig) {
             console.warn('⚠️ Configuración de disciplinas no disponible aún');
-            this.showDisciplinesPlaceholder(container, 'Cargando disciplinas...');
+            this.showDisciplinesPlaceholder(container, i18n.t('common.loading'));
             return;
         }
         
@@ -1771,6 +1773,17 @@ export class ArsenalManager {
         if (enabledDisciplines.length === 0) {
             this.showDisciplinesPlaceholder(container, 'No hay disciplinas disponibles');
             return;
+        }
+        
+        // ✅ NUEVO: Aplicar traducciones si están disponibles
+        if (this.game.disciplinesTranslated) {
+            enabledDisciplines.forEach(discipline => {
+                const translated = this.game.disciplinesTranslated[discipline.id];
+                if (translated) {
+                    discipline.name = translated.name;
+                    discipline.description = translated.description;
+                }
+            });
         }
         
         // Crear contenedor de items similar al de unidades
@@ -1827,7 +1840,7 @@ export class ArsenalManager {
                     color: #66bb6a;
                     margin-bottom: 12px;
                     font-weight: 600;
-                ">Sistema de Disciplinas</h3>
+                ">${i18n.t('arsenal.disciplines')}</h3>
                 <p style="
                     font-size: 14px;
                     line-height: 1.6;
@@ -1937,14 +1950,14 @@ export class ArsenalManager {
         // Verificar que no tengamos ya 2 disciplinas
         if (this.disciplines && this.disciplines.length >= 2) {
             console.warn('⚠️ Ya tienes 2 disciplinas en el mazo');
-            this.showNotification('Ya tienes 2 disciplinas en el mazo (máximo permitido)', 'error');
+            this.showNotification(i18n.t('arsenal.notifications.discipline_limit_reached'), 'error');
             return;
         }
         
         // Verificar que no esté duplicada
         if (this.disciplines && this.disciplines.includes(disciplineId)) {
             console.warn('⚠️ Esta disciplina ya está en el mazo');
-            this.showNotification('Esta disciplina ya está en el mazo', 'error');
+            this.showNotification(i18n.t('arsenal.notifications.discipline_already_in_deck'), 'error');
             return;
         }
         
@@ -1955,7 +1968,7 @@ export class ArsenalManager {
         this.disciplines.push(disciplineId);
         
         console.log('✅ Disciplina añadida:', disciplineId);
-        this.showNotification('Disciplina añadida al mazo', 'success');
+        this.showNotification(i18n.t('arsenal.notifications.discipline_added'), 'success');
         
         // Actualizar visualización
         this.updateDeckDisplay(); // Esto renderizará la disciplina en el panel derecho
@@ -1973,7 +1986,7 @@ export class ArsenalManager {
         if (index > -1) {
             this.disciplines.splice(index, 1);
             console.log('✅ Disciplina quitada:', disciplineId);
-            this.showNotification('Disciplina quitada del mazo', 'info');
+            this.showNotification(i18n.t('arsenal.notifications.discipline_removed'), 'info');
             
             // Actualizar visualización
             this.updateDeckDisplay(); // Esto re-renderizará el deck sin la disciplina
@@ -2081,7 +2094,7 @@ export class ArsenalManager {
                 // 🆕 NUEVO: Añadir al destino seleccionado (mazo o banquillo)
                 if (this.destination === 'bench') {
                     if (this.addToBench(item.id)) {
-                        this.showNotification(`${item.name} añadido al banquillo`, 'success');
+                        this.showNotification(i18n.t('arsenal.notifications.item_added_to_bench', { itemName: item.name }), 'success');
                         // Feedback visual
                         div.style.transform = 'scale(0.95)';
                         setTimeout(() => {
@@ -2448,7 +2461,7 @@ export class ArsenalManager {
      * @param {string} deckId - ID del mazo a borrar
      */
     async deleteDeckFromSelector(deckId) {
-        if (!confirm('¿Estás seguro de que quieres borrar este mazo? Esta acción no se puede deshacer.')) {
+        if (!confirm(i18n.t('arsenal.confirm.delete_deck'))) {
             return;
         }
         
@@ -2467,7 +2480,7 @@ export class ArsenalManager {
             this.populateDeckSelector();
         } catch (error) {
             console.error('❌ Error borrando mazo:', error);
-            this.showNotification('Error al borrar el mazo: ' + error.message, 'error');
+            this.showNotification(i18n.t('arsenal.notifications.deck_delete_error', { error: error.message }), 'error');
         }
     }
     
