@@ -281,12 +281,18 @@ export class AuthUIManager {
             transition: border-color 0.2s;
         `;
 
-        // Añadir opciones de idiomas
+        // Añadir opciones de idiomas con banderitas
         const languages = i18n.getAvailableLanguages();
+        const flagEmojis = {
+            'es': '🇪🇸',
+            'en': '🇬🇧'
+        };
+        
         languages.forEach(lang => {
             const option = document.createElement('option');
             option.value = lang.code;
-            option.textContent = lang.name;
+            const flag = flagEmojis[lang.code] || '🌐';
+            option.textContent = `${flag} ${lang.name}`;
             if (lang.code === i18n.getCurrentLanguage()) {
                 option.selected = true;
             }

@@ -46,6 +46,7 @@ import { StoreUIManager } from './systems/ui/StoreUIManager.js';
 import { TopBarManager } from './systems/ui/TopBarManager.js';
 import { TutorialManager } from './systems/ui/TutorialManager.js';
 import { UIManager } from './systems/ui/UIManager.js';
+import { i18n } from './services/I18nService.js'; // ✅ NUEVO: Servicio de i18n
 
 // === NETWORK & RENDERING (wrappers) ===
 import { NetworkManager } from './systems/NetworkManager.js';
@@ -981,6 +982,19 @@ export class Game {
             this._renderLoggedOnce = true;
         }
         
+        // ⚡ OPTIMIZACIÓN: Cachear arrays de entidades para evitar llamadas repetidas a getters
+        const convoys = this.convoyManager.getConvoys();
+        const drones = this.droneSystem.getDrones();
+        const tanks = this.tankSystem.getTanks();
+        const lightVehicles = this.lightVehicleSystem.getLightVehicles();
+        const particles = this.particleSystem.getParticles();
+        const explosionSprites = this.particleSystem.getExplosionSprites();
+        const droneExplosionSprites = this.particleSystem.getDroneExplosionSprites ? this.particleSystem.getDroneExplosionSprites() : [];
+        const impactMarks = this.particleSystem.getImpactMarks();
+        const floatingTexts = this.particleSystem.getFloatingTexts();
+        const floatingSprites = this.particleSystem.getFloatingSprites();
+        const fallingSprites = this.particleSystem.getFallingSprites ? this.particleSystem.getFallingSprites() : [];
+        
         // Aplicar cámara (siempre activa)
         this.camera.applyToContext(this.renderer.ctx);
         
@@ -1023,39 +1037,50 @@ export class Game {
         }
         
         // Renderizar marcas de impacto permanentes (debajo de los nodos)
-        this.particleSystem.getImpactMarks().forEach(mark => this.renderer.renderImpactMark(mark));
+        impactMarks.forEach(mark => this.renderer.renderImpactMark(mark));
         
-        // Renderizar todos los nodos EXCEPTO fronts (primero)
-        this.nodes.forEach(node => {
-            if (node.type !== 'front') {
-                this.renderer.renderNode(
-                    node,
-                    node === this.selectedNode,
-                    node === this.hoveredNode,
-                    this
-                );
-            }
-        });
+        // ⚡ OPTIMIZACIÓN: Un solo bucle para renderizar nodos en lugar de 3 iteraciones
+        // Separamos en arrays temporales para mantener el z-order correcto
+        const nonFrontNodes = [];
+        const frontNodes = [];
         
-        // Renderizar fronts (por encima del resto de nodos)
-        this.nodes.forEach(node => {
+        for (let i = 0; i < this.nodes.length; i++) {
+            const node = this.nodes[i];
             if (node.type === 'front') {
-                this.renderer.renderNode(
-                    node,
-                    node === this.selectedNode,
-                    node === this.hoveredNode,
-                    this
-                );
+                frontNodes.push(node);
+            } else {
+                nonFrontNodes.push(node);
             }
-        });
+        }
         
-        // Renderizar UI de vehículos e iconos del HQ encima de todo
-        this.nodes.forEach(node => {
-            this.renderer.renderVehicleUI(node, this);
-        });
+        // Renderizar nodos no-front primero (más atrás)
+        for (let i = 0; i < nonFrontNodes.length; i++) {
+            const node = nonFrontNodes[i];
+            this.renderer.renderNode(
+                node,
+                node === this.selectedNode,
+                node === this.hoveredNode,
+                this
+            );
+        }
+        
+        // Renderizar fronts encima
+        for (let i = 0; i < frontNodes.length; i++) {
+            const node = frontNodes[i];
+            this.renderer.renderNode(
+                node,
+                node === this.selectedNode,
+                node === this.hoveredNode,
+                this
+            );
+        }
+        
+        // Renderizar UI de vehículos encima de todo (de todos los nodos)
+        for (let i = 0; i < this.nodes.length; i++) {
+            this.renderer.renderVehicleUI(this.nodes[i], this);
+        }
         
         // Renderizar convoyes
-        const convoys = this.convoyManager.getConvoys();
         if (convoys.length > 0 && !this._convoyRenderLogged) {
             this._convoyRenderLogged = true;
         }
@@ -1079,21 +1104,19 @@ export class Game {
         this.renderAntiDroneDetectionLines();
         
         // Renderizar drones
-        this.droneSystem.getDrones().forEach(drone => this.renderer.renderDrone(drone));
+        drones.forEach(drone => this.renderer.renderDrone(drone));
         
         // Renderizar tanques
-        this.tankSystem.getTanks().forEach(tank => this.renderer.renderTank(tank));
+        tanks.forEach(tank => this.renderer.renderTank(tank));
         
         // 🆕 NUEVO: Renderizar artillados ligeros
-        this.lightVehicleSystem.getLightVehicles().forEach(lightVehicle => this.renderer.renderLightVehicle(lightVehicle));
+        lightVehicles.forEach(lightVehicle => this.renderer.renderLightVehicle(lightVehicle));
         
         // Renderizar partículas
-        this.particleSystem.getParticles().forEach(p => this.renderer.renderParticle(p));
-        this.particleSystem.getExplosionSprites().forEach(e => this.renderer.renderExplosionSprite(e));
+        particles.forEach(p => this.renderer.renderParticle(p));
+        explosionSprites.forEach(e => this.renderer.renderExplosionSprite(e));
         // 🆕 NUEVO: Renderizar explosiones de drones
-        if (this.particleSystem.getDroneExplosionSprites) {
-            this.particleSystem.getDroneExplosionSprites().forEach(e => this.renderer.renderDroneExplosionSprite(e));
-        }
+        droneExplosionSprites.forEach(e => this.renderer.renderDroneExplosionSprite(e));
         
         // Renderizar debug del sistema anti-drones
         if (this.debugMode) {
@@ -1236,21 +1259,16 @@ export class Game {
         
         // 🆕 NUEVO: Renderizar textos flotantes, sprites flotantes y sprites que caen ENCIMA del TopBar
         // (movido desde línea ~1030 para que aparezcan sobre la UI)
-        const floatingTexts = this.particleSystem.getFloatingTexts();
         if (floatingTexts.length > 0) {
             this.renderer.renderFloatingTextsBatch(floatingTexts);
         }
         
-        const floatingSprites = this.particleSystem.getFloatingSprites();
         if (floatingSprites.length > 0) {
             this.renderer.renderFloatingSprites(floatingSprites);
         }
         
-        if (this.particleSystem.getFallingSprites && this.renderer.renderFallingSprites) {
-            const fallingSprites = this.particleSystem.getFallingSprites();
-            if (fallingSprites.length > 0) {
-                this.renderer.renderFallingSprites(fallingSprites);
-            }
+        if (fallingSprites.length > 0) {
+            this.renderer.renderFallingSprites(fallingSprites);
         }
         
         // Renderizar tooltip de hover prolongado (siempre encima de todo)
@@ -1980,30 +1998,30 @@ export class Game {
         const statsHTML = `
             <div class="game-end-container">
                 <div class="game-end-header">
-                    <h1 class="game-end-title victory">¡VICTORIA!</h1>
+                    <h1 class="game-end-title victory">${i18n.t('game_end.victory')}</h1>
                 </div>
                 
                 <div class="game-end-graphics">
                     <div style="width: 100%; color: #ffffff;">
                         <div style="text-align: center; margin-bottom: 25px;">
                             <div style="font-size: 32px; font-weight: bold; color: #4ecca3;">⏱️ ${timeStr}</div>
-                            <div style="color: #888; font-size: 14px;">Duración de la partida</div>
+                            <div style="color: #888; font-size: 14px;">${i18n.t('game_end.stats.duration_of_match')}</div>
                         </div>
                         
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                             <div style="background: rgba(78, 204, 163, 0.15); padding: 20px; border-radius: 8px; border: 2px solid rgba(78, 204, 163, 0.3);">
-                                <h3 style="color: #4ecca3; margin: 0 0 15px 0; text-align: center; font-size: 18px;">🎖️ TU RENDIMIENTO</h3>
+                                <h3 style="color: #4ecca3; margin: 0 0 15px 0; text-align: center; font-size: 18px;">🎖️ ${i18n.t('game_end.stats.your_performance')}</h3>
                                 <div style="display: flex; flex-direction: column; gap: 10px;">
                                     <div style="display: flex; justify-content: space-between;">
-                                        <span style="color: #aaa;">💵 Currency:</span>
+                                        <span style="color: #aaa;">💵 ${i18n.t('game_end.stats.currency')}:</span>
                                         <span style="font-weight: bold; color: #ffd700;">${currency}$</span>
                                     </div>
                                     <div style="display: flex; justify-content: space-between;">
-                                        <span style="color: #aaa;">🏗️ Edificios:</span>
+                                        <span style="color: #aaa;">🏗️ ${i18n.t('game_end.stats.buildings')}:</span>
                                         <span style="font-weight: bold;">${playerBuildings}</span>
                                     </div>
                                     <div style="display: flex; justify-content: space-between;">
-                                        <span style="color: #aaa;">🚁 Drones:</span>
+                                        <span style="color: #aaa;">🚁 ${i18n.t('game_end.stats.drones')}:</span>
                                         <span style="font-weight: bold;">${stats.dronesLaunched || 0}</span>
                                     </div>
                                     <div style="display: flex; justify-content: space-between;">
@@ -2034,7 +2052,7 @@ export class Game {
                 </div>
                 
                 <div class="game-end-actions">
-                    <button id="victory-menu-btn" class="game-end-btn">Volver al Menú</button>
+                    <button id="victory-menu-btn" class="game-end-btn">${i18n.t('game_end.back_to_menu')}</button>
                 </div>
             </div>
         `;
@@ -2077,30 +2095,30 @@ export class Game {
         const statsHTML = `
             <div class="game-end-container">
                 <div class="game-end-header">
-                    <h1 class="game-end-title defeat">DERROTA</h1>
+                    <h1 class="game-end-title defeat">${i18n.t('game_end.defeat')}</h1>
                 </div>
                 
                 <div class="game-end-graphics">
                     <div style="width: 100%; color: #ffffff;">
                         <div style="text-align: center; margin-bottom: 25px;">
                             <div style="font-size: 32px; font-weight: bold; color: #e74c3c;">⏱️ ${timeStr}</div>
-                            <div style="color: #888; font-size: 14px;">Duración de la partida</div>
+                            <div style="color: #888; font-size: 14px;">${i18n.t('game_end.stats.duration_of_match')}</div>
                         </div>
                         
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                             <div style="background: rgba(78, 204, 163, 0.15); padding: 20px; border-radius: 8px; border: 2px solid rgba(78, 204, 163, 0.3);">
-                                <h3 style="color: #4ecca3; margin: 0 0 15px 0; text-align: center; font-size: 18px;">🎖️ TU RENDIMIENTO</h3>
+                                <h3 style="color: #4ecca3; margin: 0 0 15px 0; text-align: center; font-size: 18px;">🎖️ ${i18n.t('game_end.stats.your_performance')}</h3>
                                 <div style="display: flex; flex-direction: column; gap: 10px;">
                                     <div style="display: flex; justify-content: space-between;">
-                                        <span style="color: #aaa;">💵 Currency:</span>
+                                        <span style="color: #aaa;">💵 ${i18n.t('game_end.stats.currency')}:</span>
                                         <span style="font-weight: bold; color: #ffd700;">${currency}$</span>
                                     </div>
                                     <div style="display: flex; justify-content: space-between;">
-                                        <span style="color: #aaa;">🏗️ Edificios:</span>
+                                        <span style="color: #aaa;">🏗️ ${i18n.t('game_end.stats.buildings')}:</span>
                                         <span style="font-weight: bold;">${playerBuildings}</span>
                                     </div>
                                     <div style="display: flex; justify-content: space-between;">
-                                        <span style="color: #aaa;">🚁 Drones:</span>
+                                        <span style="color: #aaa;">🚁 ${i18n.t('game_end.stats.drones')}:</span>
                                         <span style="font-weight: bold;">${stats.dronesLaunched || 0}</span>
                                     </div>
                                     <div style="display: flex; justify-content: space-between;">
@@ -2131,7 +2149,7 @@ export class Game {
                 </div>
                 
                 <div class="game-end-actions">
-                    <button id="defeat-menu-btn" class="game-end-btn">Volver al Menú</button>
+                    <button id="defeat-menu-btn" class="game-end-btn">${i18n.t('game_end.back_to_menu')}</button>
                 </div>
             </div>
         `;
@@ -2181,32 +2199,12 @@ export class Game {
                     enabled: SERVER_NODE_CONFIG.gameplay.enabled,
                     behavior: SERVER_NODE_CONFIG.gameplay.behavior
                 },
-                // 🆕 AGREGAR: Configuración de rutas y currency desde gameConfig
-                routes: {
-                    valid: {
-                        'hq': ['fob'],
-                        'fob': ['front', 'fob'],
-                        'front': []
-                    },
-                    raceSpecial: {}
-                },
-                currency: {
-                    passiveRate: 1,
-                    pixelsPerCurrency: 1,
-                    currencyName: 'Terreno Ganado'
-                },
-                frontMovement: {
-                    advanceSpeed: 3,
-                    retreatSpeed: 3
-                },
-                vehicles: {
-                    // ⚠️ LEGACY: speed no se usa en multijugador (servidor autoritativo)
-                    // Solo se mantiene para compatibilidad con código legacy
-                    heavy_truck: { capacity: 15 },
-                    truck: { capacity: 15 },
-                    helicopter: { capacity: 100 },
-                    ambulance: { capacity: 0 }
-                }
+                // 🔧 FIX: Usar valores de GAME_CONFIG (fuente única de verdad)
+                routes: GAME_CONFIG.routes,
+                currency: GAME_CONFIG.currency,
+                frontMovement: GAME_CONFIG.frontMovement,
+                vehicles: GAME_CONFIG.vehicles,
+                convoy: GAME_CONFIG.convoy
             };
             
             // 🆕 NUEVO: Cargar configuración de disciplinas
@@ -2236,18 +2234,17 @@ export class Game {
                 },
                 currency: {
                     passiveRate: 1,
-                    pixelsPerCurrency: 1,
+                    pixelsPerCurrency: 2,
                     currencyName: 'Terreno Ganado'
                 },
+                // 🔧 FIX: Valores de fallback deben coincidir con gameConfig.js
                 frontMovement: {
-                    advanceSpeed: 3,
-                    retreatSpeed: 3
+                    advanceSpeed: 4,  // Debe coincidir con gameConfig.frontMovement.advanceSpeed
+                    retreatSpeed: 4   // Debe coincidir con gameConfig.frontMovement.retreatSpeed
                 },
                 vehicles: {
-                    // ⚠️ LEGACY: speed no se usa en multijugador (servidor autoritativo)
-                    // Solo se mantiene para compatibilidad con código legacy
                     heavy_truck: { capacity: 15 },
-                    truck: { capacity: 15 },
+                    truck: { capacity: 20 },
                     helicopter: { capacity: 100 },
                     ambulance: { capacity: 0 }
                 }

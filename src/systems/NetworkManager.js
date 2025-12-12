@@ -8,6 +8,7 @@ import { ClientSender } from './network/ClientSender.js';
 import { LobbyHandler } from './network/LobbyHandler.js';
 import { NetworkEventHandler } from './network/NetworkEventHandler.js';
 import { GameStateSync } from './network/GameStateSync.js';
+import { i18n } from '../services/I18nService.js'; // ✅ NUEVO: Servicio de i18n
 
 export class NetworkManager {
     constructor(game) {
@@ -636,8 +637,8 @@ export class NetworkManager {
             
             const cargo = fromNode.removeSupplies(data.cargo);
             
-            // Crear convoy
-            const convoy = new Convoy(fromNode, toNode, vehicle, data.vehicleType, cargo, this.game);
+            // ⚡ OPTIMIZACIÓN: Obtener convoy del pool
+            const convoy = this.game.convoyManager.acquireConvoy(fromNode, toNode, vehicle, data.vehicleType, cargo);
             convoy.id = data.convoyId; // CRÍTICO: Usar ID del servidor
             convoy.team = data.team; // 🆕 FOG OF WAR: Asignar equipo para filtrado
             
@@ -953,6 +954,9 @@ export class NetworkManager {
                 console.log(`💰 [CLIENT] Currency actualizado inmediatamente: ${oldCurrency} → ${this.game.currency.missionCurrency}$`);
             }
         });
+        
+        // NOTA: Los eventos 'front_currency_gained' se envían automáticamente a través de
+        // visualEvents en game_update y se procesan en GameStateSync.applyStateUpdate()
         
         /**
          * 🆕 NUEVO: Manejo de despliegue de truck assault
@@ -2712,7 +2716,7 @@ export class NetworkManager {
         container.innerHTML = `
             <div class="menu-header">
                 <h1 class="menu-title" style="color: ${mainColor}; text-shadow: 0 0 20px ${mainColor}; font-size: 36px;">
-                    ${isWinner ? 'VICTORIA' : 'DERROTA'}
+                    ${isWinner ? i18n.t('game_end.victory') : i18n.t('game_end.defeat')}
                 </h1>
                 <div style="color: #888; font-size: 14px; margin-top: 8px;">${reasonText}</div>
             </div>
@@ -2729,7 +2733,7 @@ export class NetworkManager {
                     cursor: pointer;
                     transition: all 0.2s;
                     font-size: 14px;
-                ">Resumen</button>
+                ">${i18n.t('game_end.tabs.summary')}</button>
                 <button class="stats-tab" data-tab="graficos" style="
                     padding: 10px 30px;
                     background: rgba(255,255,255,0.1);
@@ -2740,7 +2744,7 @@ export class NetworkManager {
                     cursor: pointer;
                     transition: all 0.2s;
                     font-size: 14px;
-                ">Gráficos</button>
+                ">${i18n.t('game_end.tabs.graphs')}</button>
             </div>
             
             <!-- Contenido de pestañas -->
@@ -2754,32 +2758,32 @@ export class NetworkManager {
                 <div id="tab-resumen" class="tab-content">
                     <div style="text-align: center; margin-bottom: 25px;">
                         <div style="font-size: 28px; font-weight: bold; color: #fff;">${durationStr}</div>
-                        <div style="color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Duración</div>
+                        <div style="color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">${i18n.t('game_end.stats.duration')}</div>
                     </div>
                     
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px;">
                         <!-- Mi rendimiento -->
                         <div style="background: rgba(78, 204, 163, 0.08); padding: 18px; border-radius: 6px; border-left: 3px solid ${winColor};">
-                            <h3 style="color: ${winColor}; margin: 0 0 14px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Tu rendimiento</h3>
+                            <h3 style="color: ${winColor}; margin: 0 0 14px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">${i18n.t('game_end.stats.your_performance')}</h3>
                             <div style="display: flex; flex-direction: column; gap: 10px; color: #fff; font-size: 13px;">
                                 <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #888;">Oro generado</span>
+                                    <span style="color: #888;">${i18n.t('game_end.stats.gold_generated')}</span>
                                     <span style="font-weight: bold; color: #4ecca3;">${myStats.totalCurrency || 0}</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #888;">Oro gastado</span>
+                                    <span style="color: #888;">${i18n.t('game_end.stats.gold_spent')}</span>
                                     <span style="font-weight: bold; color: #e74c3c;">${myStats.currencySpent || 0}</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #888;">Oro/min</span>
+                                    <span style="color: #888;">${i18n.t('game_end.stats.gold_per_min')}</span>
                                     <span style="font-weight: bold;">${myGoldPerMin}</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #888;">Camiones</span>
+                                    <span style="color: #888;">${i18n.t('game_end.stats.trucks')}</span>
                                     <span style="font-weight: bold;">${myStats.trucksDispatched?.total || 0}</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #888;">Edificios</span>
+                                    <span style="color: #888;">${i18n.t('game_end.stats.buildings')}</span>
                                     <span style="font-weight: bold;">${myStats.buildings || 0}</span>
                                 </div>
                             </div>
@@ -2787,26 +2791,26 @@ export class NetworkManager {
                         
                         <!-- Enemigo -->
                         <div style="background: rgba(231, 76, 60, 0.08); padding: 18px; border-radius: 6px; border-left: 3px solid ${loseColor};">
-                            <h3 style="color: ${loseColor}; margin: 0 0 14px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Enemigo</h3>
+                            <h3 style="color: ${loseColor}; margin: 0 0 14px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">${i18n.t('game_end.stats.enemy_performance')}</h3>
                             <div style="display: flex; flex-direction: column; gap: 10px; color: #fff; font-size: 13px;">
                                 <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #888;">Oro generado</span>
+                                    <span style="color: #888;">${i18n.t('game_end.stats.gold_generated')}</span>
                                     <span style="font-weight: bold; color: #4ecca3;">${oppStats.totalCurrency || 0}</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #888;">Oro gastado</span>
+                                    <span style="color: #888;">${i18n.t('game_end.stats.gold_spent')}</span>
                                     <span style="font-weight: bold; color: #e74c3c;">${oppStats.currencySpent || 0}</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #888;">Oro/min</span>
+                                    <span style="color: #888;">${i18n.t('game_end.stats.gold_per_min')}</span>
                                     <span style="font-weight: bold;">${oppGoldPerMin}</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #888;">Camiones</span>
+                                    <span style="color: #888;">${i18n.t('game_end.stats.trucks')}</span>
                                     <span style="font-weight: bold;">${oppStats.trucksDispatched?.total || 0}</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between;">
-                                    <span style="color: #888;">Edificios</span>
+                                    <span style="color: #888;">${i18n.t('game_end.stats.buildings')}</span>
                                     <span style="font-weight: bold;">${oppStats.buildings || 0}</span>
                                 </div>
                             </div>
@@ -2817,26 +2821,26 @@ export class NetworkManager {
                 <!-- Pestaña Gráficos -->
                 <div id="tab-graficos" class="tab-content" style="display: none;">
                     <div style="text-align: center; margin-bottom: 15px;">
-                        <div style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Evolución de la partida</div>
+                        <div style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">${i18n.t('game_end.stats.match_evolution')}</div>
                     </div>
                     
                     <!-- Gráfico de Oro Generado -->
                     <div style="background: rgba(255, 255, 255, 0.03); padding: 15px; border-radius: 6px; margin-bottom: 15px;">
-                        <div style="color: #888; margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Oro generado acumulado</div>
+                        <div style="color: #888; margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">${i18n.t('game_end.stats.accumulated_gold')}</div>
                         <canvas id="chart-currency" width="620" height="140" style="width: 100%; background: rgba(0,0,0,0.2); border-radius: 4px;"></canvas>
                         <div style="display: flex; justify-content: center; gap: 25px; margin-top: 8px; font-size: 11px; color: #666;">
-                            <div><span style="color: ${winColor};">■</span> Tú (${myStats.totalCurrency || 0})</div>
-                            <div><span style="color: ${loseColor};">■</span> Enemigo (${oppStats.totalCurrency || 0})</div>
+                            <div><span style="color: ${winColor};">■</span> ${i18n.t('game_end.stats.you')} (${myStats.totalCurrency || 0})</div>
+                            <div><span style="color: ${loseColor};">■</span> ${i18n.t('game_end.stats.enemy')} (${oppStats.totalCurrency || 0})</div>
                         </div>
                     </div>
                     
                     <!-- Gráfico de Camiones -->
                     <div style="background: rgba(255, 255, 255, 0.03); padding: 15px; border-radius: 6px;">
-                        <div style="color: #888; margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Camiones enviados acumulados</div>
+                        <div style="color: #888; margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">${i18n.t('game_end.stats.accumulated_trucks')}</div>
                         <canvas id="chart-trucks" width="620" height="140" style="width: 100%; background: rgba(0,0,0,0.2); border-radius: 4px;"></canvas>
                         <div style="display: flex; justify-content: center; gap: 25px; margin-top: 8px; font-size: 11px; color: #666;">
-                            <div><span style="color: ${winColor};">■</span> Tú (${myStats.trucksDispatched?.total || 0})</div>
-                            <div><span style="color: ${loseColor};">■</span> Enemigo (${oppStats.trucksDispatched?.total || 0})</div>
+                            <div><span style="color: ${winColor};">■</span> ${i18n.t('game_end.stats.you')} (${myStats.trucksDispatched?.total || 0})</div>
+                            <div><span style="color: ${loseColor};">■</span> ${i18n.t('game_end.stats.enemy')} (${oppStats.trucksDispatched?.total || 0})</div>
                         </div>
                     </div>
                 </div>
@@ -2859,7 +2863,7 @@ export class NetworkManager {
                     text-transform: uppercase;
                     letter-spacing: 1px;
                 ">
-                    Volver al Menú
+                    ${i18n.t('game_end.back_to_menu')}
                 </button>
             </div>
         `;

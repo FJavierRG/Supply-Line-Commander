@@ -2,7 +2,15 @@
 // Entidad puramente visual que solo maneja renderizado, interpolación y estados visuales
 // Toda la lógica de juego (construcción, suministros, efectos, inversión) está en el servidor (ANTI-HACK)
 
-import { interpolatePosition } from '../utils/InterpolationUtils.js';
+import { interpolateWithVelocity } from '../utils/InterpolationUtils.js';
+
+/**
+ * 🔧 Obtener velocidad de frentes desde configuración del servidor (fuente única de verdad)
+ * Fallback a 4.0 si no está disponible aún
+ */
+function getFrontServerSpeed() {
+    return window.game?.serverBuildingConfig?.frontMovement?.advanceSpeed || 4.0;
+}
 
 export class VisualNode {
     static nextId = 1;
@@ -374,14 +382,19 @@ export class VisualNode {
     /**
      * ✅ SEGURO: Actualizar posición visual con interpolación suave (para multijugador)
      * Solo para nodos que se mueven como fronts (usando sistema centralizado)
+     * 🔧 v2.0: Usa interpolación basada en velocidad del servidor para movimiento fluido
      */
     updatePosition(dt = 0.016) {
         // Solo interpolar si es un frente (se mueve)
         if (this.type === 'front') {
-            interpolatePosition(this, dt, {
-                speed: 8.0,
-                threshold: 0.5,
-                snapThreshold: 0.1
+            // 🔧 FIX: Usar interpolación basada en velocidad real del servidor
+            // La velocidad se obtiene de serverBuildingConfig (fuente única de verdad)
+            const serverSpeed = getFrontServerSpeed();
+            interpolateWithVelocity(this, dt, {
+                serverSpeed: serverSpeed,         // Velocidad desde gameConfig.frontMovement.advanceSpeed
+                snapThreshold: 0.1,               // Snap si está muy cerca
+                catchUpSpeed: serverSpeed * 3,    // Velocidad para alcanzar (3x la velocidad normal)
+                catchUpThreshold: 5.0             // Distancia para empezar a acelerar
             });
         }
     }

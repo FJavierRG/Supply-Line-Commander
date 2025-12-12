@@ -1,5 +1,7 @@
 // ===== SISTEMA DE PARTÍCULAS =====
 
+import { ObjectPool } from './ObjectPool.js';
+
 export class Particle {
     constructor(x, y, vx, vy, color, size, life) {
         this.x = x;
@@ -82,13 +84,30 @@ export class ParticleSystem {
         // Sistema de acumulación de textos flotantes para evitar spam
         this.floatingTextAccumulator = new Map(); // baseId -> {amount, lastUpdate}
         this.accumulatorTimeout = 300; // 300ms para acumular textos
+        
+        // ⚡ OPTIMIZACIÓN: Object Pool para textos flotantes (prevenir GC)
+        this.floatingTextPool = new ObjectPool(
+            () => new FloatingText(0, 0, '', '#ffffff', 'up'),
+            50,  // Inicial: 50 textos pre-creados
+            100  // Máximo: 100 textos simultáneos
+        );
     }
     
     update(dt) {
         this.particles = this.particles.filter(p => p.update(dt));
         this.explosionSprites = this.explosionSprites.filter(e => e.update(dt));
         this.droneExplosionSprites = this.droneExplosionSprites.filter(e => e.update(dt)); // 🆕 NUEVO
-        this.floatingTexts = this.floatingTexts.filter(t => t.update(dt));
+        
+        // ⚡ OPTIMIZACIÓN: Devolver textos inactivos al pool en lugar de destruirlos
+        for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+            const text = this.floatingTexts[i];
+            if (!text.update(dt)) {
+                // Texto terminado - devolverlo al pool
+                this.floatingTextPool.release(text);
+                this.floatingTexts.splice(i, 1);
+            }
+        }
+        
         this.floatingSprites = this.floatingSprites.filter(s => s.update(dt));
         this.fallingSprites = this.fallingSprites.filter(s => s.update(dt));
         
@@ -105,13 +124,21 @@ export class ParticleSystem {
                 if (target) {
                     const prefix = data.amount >= 0 ? '+' : '';
                     const yOffset = data.direction === 'down' ? 30 : -30; // Offset según dirección
-                    this.floatingTexts.push(new FloatingText(
-                        target.x,
-                        target.y + yOffset,
-                        `${prefix}${Math.floor(data.amount)}`,
-                        data.color,
-                        data.direction || 'up'
-                    ));
+                    
+                    // ⚡ OPTIMIZACIÓN: Obtener texto del pool
+                    const floatingText = this.floatingTextPool.acquire();
+                    if (floatingText) {
+                        floatingText.x = target.x;
+                        floatingText.y = target.y + yOffset;
+                        floatingText.text = `${prefix}${Math.floor(data.amount)}`;
+                        floatingText.color = data.color;
+                        floatingText.direction = data.direction || 'up';
+                        floatingText.life = 1.2;
+                        floatingText.maxLife = 1.2;
+                        floatingText.alpha = 1;
+                        floatingText.velocityY = floatingText.direction === 'down' ? 25 : -30;
+                        this.floatingTexts.push(floatingText);
+                    }
                 }
                 this.floatingTextAccumulator.delete(baseId);
             }
@@ -186,8 +213,20 @@ export class ParticleSystem {
     createFloatingText(x, y, text, color = '#ffffff', baseId = null, direction = 'up') {
         // Si no hay baseId, crear inmediatamente (sin acumulación)
         if (!baseId) {
-            const floatingText = new FloatingText(x, y, text, color, direction);
-            this.floatingTexts.push(floatingText);
+            // ⚡ OPTIMIZACIÓN: Obtener texto del pool
+            const floatingText = this.floatingTextPool.acquire();
+            if (floatingText) {
+                floatingText.x = x;
+                floatingText.y = y;
+                floatingText.text = text;
+                floatingText.color = color;
+                floatingText.direction = direction;
+                floatingText.life = 1.2;
+                floatingText.maxLife = 1.2;
+                floatingText.alpha = 1;
+                floatingText.velocityY = direction === 'down' ? 25 : -30;
+                this.floatingTexts.push(floatingText);
+            }
             return;
         }
         

@@ -98,20 +98,38 @@
     "difficulty_easy": "Easy",
     "difficulty_medium": "Medium",
     "difficulty_hard": "Hard",
-    "nation_unified": "Unified Forces"
+    "nation_unified": "Unified Forces",
+    "ready_button": "Mark Ready",
+    "cancel_button": "Cancel",
+    "start_game_button": "Start Game",
+    "starting_button": "Starting..."
   },
   
   "game_end": {
     "victory": "VICTORY!",
     "defeat": "DEFEAT",
     "back_to_menu": "Back to Menu",
+    "tabs": {
+      "summary": "Summary",
+      "graphs": "Graphs"
+    },
     "stats": {
-      "title": "Match Statistics",
       "duration": "Duration",
-      "buildings_built": "Buildings built",
-      "units_deployed": "Units deployed",
-      "resources_spent": "Resources spent",
-      "territory_controlled": "Territory controlled"
+      "duration_of_match": "Match duration",
+      "your_performance": "YOUR PERFORMANCE",
+      "enemy_performance": "ENEMY",
+      "currency": "Currency",
+      "gold_generated": "Gold generated",
+      "gold_spent": "Gold spent",
+      "gold_per_min": "Gold/min",
+      "trucks": "Trucks",
+      "buildings": "Buildings",
+      "drones": "Drones",
+      "match_evolution": "Match evolution",
+      "accumulated_gold": "Accumulated gold generated",
+      "accumulated_trucks": "Accumulated trucks sent",
+      "you": "You",
+      "enemy": "Enemy"
     }
   },
   

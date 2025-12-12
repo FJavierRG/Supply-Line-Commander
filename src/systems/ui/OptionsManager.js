@@ -13,7 +13,8 @@ export class OptionsManager {
         this.settings = {
             masterVolume: 1.0, // 0.0 - 1.0
             musicVolume: 1.0,
-            sfxVolume: 1.0
+            sfxVolume: 1.0,
+            showFrontCurrency: true // 🆕 NUEVO: Mostrar contador de dinero en frentes
         };
         
         // Guardar volúmenes base originales
@@ -21,6 +22,8 @@ export class OptionsManager {
         
         // Configurar event listeners
         this.setupKeyboardListeners();
+        this.setupTabListeners();
+        this.setupUIOptionListeners();
         
         // Cargar configuración guardada
         this.loadSettings();
@@ -38,6 +41,59 @@ export class OptionsManager {
                 console.log('🚪 Opciones cerradas con ESC');
             }
         });
+    }
+    
+    /**
+     * 🆕 NUEVO: Configura los listeners de las pestañas
+     */
+    setupTabListeners() {
+        const tabs = document.querySelectorAll('.options-tab');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const targetTab = tab.dataset.tab;
+                this.switchTab(targetTab);
+            });
+        });
+    }
+    
+    /**
+     * 🆕 NUEVO: Cambia entre pestañas
+     */
+    switchTab(tabName) {
+        // Actualizar pestañas activas
+        document.querySelectorAll('.options-tab').forEach(tab => {
+            if (tab.dataset.tab === tabName) {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
+            }
+        });
+        
+        // Mostrar/ocultar contenido
+        const audioContent = document.getElementById('options-audio-content');
+        const uiContent = document.getElementById('options-ui-content');
+        
+        if (tabName === 'audio') {
+            if (audioContent) audioContent.style.display = 'block';
+            if (uiContent) uiContent.style.display = 'none';
+        } else if (tabName === 'ui') {
+            if (audioContent) audioContent.style.display = 'none';
+            if (uiContent) uiContent.style.display = 'block';
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Configura los listeners de opciones de UI
+     */
+    setupUIOptionListeners() {
+        const showFrontCurrencyCheckbox = document.getElementById('show-front-currency-checkbox');
+        if (showFrontCurrencyCheckbox) {
+            showFrontCurrencyCheckbox.addEventListener('change', (e) => {
+                this.settings.showFrontCurrency = e.target.checked;
+                this.saveSettings();
+                console.log(`🎨 Mostrar dinero en frentes: ${e.target.checked}`);
+            });
+        }
     }
     
     /**
@@ -61,6 +117,17 @@ export class OptionsManager {
         if (menu) {
             menu.style.display = 'block';
             this.updateVolumeSliders();
+            this.updateUIOptions();
+        }
+    }
+    
+    /**
+     * 🆕 NUEVO: Actualiza los checkboxes de opciones de UI
+     */
+    updateUIOptions() {
+        const showFrontCurrencyCheckbox = document.getElementById('show-front-currency-checkbox');
+        if (showFrontCurrencyCheckbox) {
+            showFrontCurrencyCheckbox.checked = this.settings.showFrontCurrency;
         }
     }
     
@@ -208,14 +275,23 @@ export class OptionsManager {
         this.settings = {
             masterVolume: 1.0,
             musicVolume: 1.0,
-            sfxVolume: 1.0
+            sfxVolume: 1.0,
+            showFrontCurrency: true
         };
         
         this.applyVolumeSettings();
         this.updateVolumeSliders();
+        this.updateUIOptions();
         this.saveSettings();
         
         console.log('🔄 Opciones restauradas a valores por defecto');
+    }
+    
+    /**
+     * 🆕 NUEVO: Obtiene si se debe mostrar el contador de dinero en frentes
+     */
+    shouldShowFrontCurrency() {
+        return this.settings.showFrontCurrency !== false; // Por defecto true
     }
 }
 

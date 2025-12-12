@@ -3,6 +3,17 @@
     "language": "English",
     "code": "en"
   },
+  "lobby": {
+    "system_name": "System",
+    "room_created": "Room created! Waiting for an opponent...",
+    "player_joined": "{playerName} joined the room",
+    "player_ready": "{playerName} is ready ✅",
+    "player_not_ready": "{playerName} is not ready ❌",
+    "player_kicked": "{playerName} was kicked from the room",
+    "game_starting": "⏱️ The match will start in 3 seconds...",
+    "countdown": "⏱️ {seconds}...",
+    "game_start": "🚀 The match begins!"
+  },
   
   "buildings": {
     "hq": {

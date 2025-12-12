@@ -18,11 +18,10 @@ export const DEFAULT_DECK = {
         'factory',         // Fábrica (genera suministros)     // Sabotaje FOB
         'fob',             // Base de operaciones avanzada
         'antiDrone',
-        'trainStation',
+        'drone',
         'droneLauncher'    // Planta nuclear (genera income pasivo)
     ],
     bench: [
-        'drone'        // Artillería
     ],
     disciplines: [
         'motorized_industry',       // Industria Motorizada
