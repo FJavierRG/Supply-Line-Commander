@@ -30,8 +30,8 @@ export const DISCIPLINES = {
         name: 'Industria Motorizada',
         description: 'Aumenta la velocidad: camiones ligeros +50%, camiones pesados +25%, trenes +10%. Enviar un vehículo cuesta 2 currency.',
         icon: 'assets/sprites/ui/Disciplines/vehicle.png',
-        duration: 60,
-        cooldown: 15,
+        duration: 20,
+        cooldown: 50,
         enabled: true,
         
         effects: {
@@ -53,15 +53,15 @@ export const DISCIPLINES = {
     'improved_infrastructure': {
         id: 'improved_infrastructure',
         name: 'Infraestructuras Mejoradas',
-        description: 'Por cada paquete que una fábrica entrega al HQ genera +3 currency. Los suministros de las fábricas disminuyen en -3.',
+        description: 'Por cada paquete que una fábrica entrega al HQ genera +6 currency. Los suministros de las fábricas disminuyen en -3.',
         icon: 'assets/sprites/ui/Disciplines/production_focus2.png',
-        duration: 60,
-        cooldown: 50,
+        duration: 20,
+        cooldown: 60,
         enabled: true,
         
         effects: {
             factory: {
-                currencyPerDelivery: 4,
+                currencyPerDelivery: 6,
                 supplyPenalty: -3
             }
         }
@@ -75,8 +75,8 @@ export const DISCIPLINES = {
         name: 'Combate Defensivo',
         description: 'En modo Mantener: el gasto de suministros disminuye un 20% adicional y otorga +1 currency/segundo por frente.',
         icon: 'assets/sprites/ui/Disciplines/defense_focus.png',
-        duration: 60,
-        cooldown: 20,
+        duration: 30,
+        cooldown: 60,
         enabled: true,
         
         effects: {
@@ -96,8 +96,8 @@ export const DISCIPLINES = {
         name: 'Endeudamiento',
         description: 'Permite gastar currency por debajo de 0 hasta -150. Ideal para inversiones agresivas durante la ventana activa.',
         icon: 'assets/sprites/ui/Disciplines/endeudamiento2.png',
-        duration: 120,
-        cooldown: 60,
+        duration: 10,
+        cooldown: 90,
         enabled: true,
 
         effects: {

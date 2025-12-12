@@ -223,31 +223,44 @@ export class ParticleRenderer {
                 const textAlpha = isCurrencyText ? (text.alpha * 0.5) : text.alpha;
                 this.ctx.globalAlpha = textAlpha;
                 
-                // 🆕 Compensar Mirror View para textos "Disabled" (no deben verse volteados)
-                if (isDisabledText && this.renderContext && this.renderContext.mirrorViewApplied) {
+                // 🔧 FIX v2: Compensación LOCAL para que el texto se lea correctamente
+                // El mirror view voltea todo el canvas, incluyendo el texto (se lee al revés)
+                // Aplicamos un flip local alrededor del punto del texto para "des-voltearlo"
+                // sin cambiar su posición en el mundo
+                const needsLocalFlip = this.renderContext && this.renderContext.mirrorViewApplied;
+                
+                if (isDisabledText) {
                     this.ctx.save();
-                    // 🆕 NUEVO: Compensar el mirror view usando método unificado para elementos globales
-                    this.renderContext.applyGlobalMirrorCompensation();
                     
-                    // Contorno negro (stroke) para mejor legibilidad
-                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-                    this.ctx.lineWidth = 3;
-                    this.ctx.strokeText(text.text, text.x, text.y);
-                    // Texto principal en rojo
-                    this.ctx.fillText(text.text, text.x, text.y);
-                    this.ctx.restore();
-                } else if (isDisabledText) {
-                    this.ctx.save();
-                    // Contorno negro (stroke) para mejor legibilidad
-                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-                    this.ctx.lineWidth = 3;
-                    this.ctx.strokeText(text.text, text.x, text.y);
-                    // Texto principal en rojo
-                    this.ctx.fillText(text.text, text.x, text.y);
+                    // Compensación local para texto legible
+                    if (needsLocalFlip) {
+                        this.ctx.translate(text.x, text.y);
+                        this.ctx.scale(-1, 1);
+                        // Contorno negro (stroke) para mejor legibilidad
+                        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                        this.ctx.lineWidth = 3;
+                        this.ctx.strokeText(text.text, 0, 0);
+                        this.ctx.fillText(text.text, 0, 0);
+                    } else {
+                        // Contorno negro (stroke) para mejor legibilidad
+                        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                        this.ctx.lineWidth = 3;
+                        this.ctx.strokeText(text.text, text.x, text.y);
+                        this.ctx.fillText(text.text, text.x, text.y);
+                    }
+                    
                     this.ctx.restore();
                 } else {
-                    // Textos normales (incluye currency) sin contorno
-                    this.ctx.fillText(text.text, text.x, text.y);
+                    // Textos normales (incluye currency)
+                    if (needsLocalFlip) {
+                        this.ctx.save();
+                        this.ctx.translate(text.x, text.y);
+                        this.ctx.scale(-1, 1);
+                        this.ctx.fillText(text.text, 0, 0);
+                        this.ctx.restore();
+                    } else {
+                        this.ctx.fillText(text.text, text.x, text.y);
+                    }
                 }
             }
         }
