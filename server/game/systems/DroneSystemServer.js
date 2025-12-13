@@ -1,13 +1,22 @@
 // ===== SISTEMA DE DRONES BOMBA (SERVIDOR) =====
 // Versión servidor del DroneSystem.js - Simulación autoritativa
+// 🆕 REFACTOR: Usa droneFlightUtils para lógica de vuelo compartida
+
+import { 
+    getDroneFlightConfig, 
+    calculateDroneFlightPosition,
+    getDroneStartPosition 
+} from '../utils/droneFlightUtils.js';
 
 export class DroneSystemServer {
     constructor(gameState) {
         this.gameState = gameState;
         this.drones = []; // Array de drones activos
-        this.droneSpeed = 300; // Velocidad del dron (px/s) - mismo que cliente
         this.nextDroneId = 1; // Contador para IDs únicos
         this.alertSoundPlayed = new Map(); // Para trackear si ya se reprodujo el sonido de alerta
+        
+        // 🆕 REFACTOR: Velocidad desde configuración centralizada
+        this.flightConfig = getDroneFlightConfig('drone');
     }
     
     /**
@@ -16,19 +25,15 @@ export class DroneSystemServer {
     launchDrone(playerTeam, launcherNode, targetNode) {
         const droneId = `drone_${this.nextDroneId++}`;
         
-        // CRÍTICO: Dron sale desde el EXTREMO del mapa del jugador (igual que singleplayer)
-        // Player1 (izquierda) → x=0
-        // Player2 (derecha) → x=1920 (worldWidth)
-        const worldWidth = 1920;
-        const droneStartX = playerTeam === 'player1' ? 0 : worldWidth;
-        const droneStartY = targetNode.y; // Altura del objetivo
+        // 🆕 REFACTOR: Usar utilidad compartida para posición inicial
+        const startPos = getDroneStartPosition(playerTeam, targetNode.y);
         
         const drone = {
             id: droneId,
-            x: droneStartX,
-            y: droneStartY,
+            x: startPos.x,
+            y: startPos.y,
             targetId: targetNode.id,
-            speed: this.droneSpeed,
+            speed: this.flightConfig.speed,
             team: playerTeam,
             active: true
         };
@@ -112,17 +117,22 @@ export class DroneSystemServer {
             }
             
             // === MOVER HACIA EL OBJETIVO ===
-            const dx = target.x - drone.x;
-            const dy = target.y - drone.y;
-            const distance = Math.hypot(dx, dy);
+            // 🆕 REFACTOR: Usar utilidad compartida para cálculo de vuelo
+            const flightResult = calculateDroneFlightPosition(
+                { x: drone.x, y: drone.y },
+                { x: target.x, y: target.y },
+                drone.speed,
+                dt
+            );
             
-            // Calcular cuánto se movería este frame
-            const speed = drone.speed * dt;
+            // Actualizar posición
+            drone.x = flightResult.x;
+            drone.y = flightResult.y;
             
-            // IMPACTO: Si está muy cerca O si el próximo movimiento lo pasaría
-            if (distance < 5 || distance <= speed) {
+            // IMPACTO: Si llegó al objetivo
+            if (flightResult.arrived) {
                 // IMPACTO - Destruir objetivo
-                console.log(`💥 Dron ${drone.id} impactó ${target.type} ${target.id} (distancia: ${distance.toFixed(2)}px)`);
+                console.log(`💥 Dron ${drone.id} impactó ${target.type} ${target.id}`);
                 
                 // Marcar objetivo como destruido
                 target.active = false;
@@ -145,13 +155,6 @@ export class DroneSystemServer {
                 
                 // Desactivar dron
                 drone.active = false;
-            } else {
-                // Mover hacia el objetivo (mismo cálculo que cliente)
-                const vx = (dx / distance) * drone.speed * dt;
-                const vy = (dy / distance) * drone.speed * dt;
-                
-                drone.x += vx;
-                drone.y += vy;
             }
         }
         

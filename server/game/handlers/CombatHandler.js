@@ -1,5 +1,6 @@
 // ===== HANDLER DE COMBATE (SNIPER Y DRONES) =====
 import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
+import { getDroneStartPosition } from '../utils/droneFlightUtils.js'; // 🆕 REFACTOR: Utilidades de vuelo de drones
 
 export class CombatHandler {
     constructor(gameState) {
@@ -777,15 +778,11 @@ export class CombatHandler {
             this.gameState.abandonmentSystem.startAbandonment(launcher);
         }
         
-        // 🆕 CRÍTICO: Camera drone sale desde el EXTREMO del mapa del jugador (igual que drones bomba)
-        // Player1 (izquierda) → x=0
-        // Player2 (derecha) → x=1920 (worldWidth)
-        const worldWidth = 1920;
-        const droneStartX = playerTeam === 'player1' ? 0 : worldWidth;
-        const droneStartY = y; // Altura del objetivo
+        // 🆕 REFACTOR: Usar utilidad compartida para posición inicial
+        const startPos = getDroneStartPosition(playerTeam, y);
         
         // Crear nodo del camera drone (inicialmente como dron en vuelo)
-        const cameraDroneNode = this.gameState.buildHandler.createNode('cameraDrone', playerTeam, droneStartX, droneStartY);
+        const cameraDroneNode = this.gameState.buildHandler.createNode('cameraDrone', playerTeam, startPos.x, startPos.y);
         cameraDroneNode.constructed = false; // Se construye cuando llega al destino
         cameraDroneNode.isConstructing = false;
         cameraDroneNode.active = true;
@@ -798,7 +795,7 @@ export class CombatHandler {
         // Agregar al estado del juego
         this.gameState.nodes.push(cameraDroneNode);
         
-        console.log(`📹 Camera Drone desplegado por ${playerTeam} desde extremo (${droneStartX}, ${droneStartY}) hacia (${x.toFixed(0)}, ${y.toFixed(0)}) - Radio: ${detectionRadius}px`);
+        console.log(`📹 Camera Drone desplegado por ${playerTeam} desde extremo (${startPos.x}, ${startPos.y}) hacia (${x.toFixed(0)}, ${y.toFixed(0)}) - Radio: ${detectionRadius}px`);
         
         return { success: true, cameraDrone: cameraDroneNode };
     }

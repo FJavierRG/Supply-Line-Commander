@@ -242,3 +242,4 @@ Antes y después de cada fase, deberíamos medir:
 4. **Commits pequeños y atómicos** para poder revertir si algo falla
 
 
+

@@ -1257,18 +1257,29 @@ export class Game {
         this.storeUI.updateLayout(this.canvas.width, this.canvas.height, storeIconX);
         this.storeUI.render(this.renderer.ctx, benchIconX);
         
-        // 🆕 NUEVO: Renderizar textos flotantes, sprites flotantes y sprites que caen ENCIMA del TopBar
-        // (movido desde línea ~1030 para que aparezcan sobre la UI)
-        if (floatingTexts.length > 0) {
-            this.renderer.renderFloatingTextsBatch(floatingTexts);
-        }
-        
-        if (floatingSprites.length > 0) {
-            this.renderer.renderFloatingSprites(floatingSprites);
-        }
-        
-        if (fallingSprites.length > 0) {
-            this.renderer.renderFallingSprites(fallingSprites);
+        // 🆕 FIX: Renderizar textos flotantes, sprites flotantes y sprites que caen ENCIMA del TopBar
+        // PERO con el mirror view re-aplicado para que las coordenadas sean correctas para player2
+        // Esto soluciona el bug donde los efectos aparecían en el lado equivocado del mapa para player2
+        if (floatingTexts.length > 0 || floatingSprites.length > 0 || fallingSprites.length > 0) {
+            // Re-aplicar cámara y mirror view solo para los efectos flotantes
+            this.camera.applyToContext(this.renderer.ctx);
+            this.renderer.applyMirrorView();
+            
+            if (floatingTexts.length > 0) {
+                this.renderer.renderFloatingTextsBatch(floatingTexts);
+            }
+            
+            if (floatingSprites.length > 0) {
+                this.renderer.renderFloatingSprites(floatingSprites);
+            }
+            
+            if (fallingSprites.length > 0) {
+                this.renderer.renderFallingSprites(fallingSprites);
+            }
+            
+            // Restaurar mirror view y cámara
+            this.renderer.restoreMirrorView();
+            this.camera.restoreContext(this.renderer.ctx);
         }
         
         // Renderizar tooltip de hover prolongado (siempre encima de todo)

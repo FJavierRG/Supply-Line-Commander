@@ -18,10 +18,14 @@ export class CameraDroneSystem {
     /**
      * Actualiza el sistema de camera drone
      * Detecta camiones ligeros que pasan por el área y otorga currency
+     * También verifica expiración de camera drones desplegados
      * @param {number} dt - Delta time en segundos
      */
     update(dt) {
-        // Encontrar todos los camera drones activos
+        // 🆕 NUEVO: Verificar expiración de camera drones desplegados
+        const expiredDrones = this.checkExpiredCameraDrones();
+        
+        // Encontrar todos los camera drones activos (excluyendo los que acaban de expirar)
         const cameraDrones = this.gameState.nodes.filter(n => 
             n.isCameraDrone && 
             n.active && 
@@ -211,6 +215,43 @@ export class CameraDroneSystem {
         
         // Limpiar tracking de convoyes que ya no existen
         this.cleanupDetectedConvoys();
+    }
+    
+    /**
+     * 🆕 NUEVO: Verifica y expira camera drones que han superado su duración
+     * @returns {Array} IDs de camera drones expirados
+     */
+    checkExpiredCameraDrones() {
+        const expiredDrones = [];
+        const gameTime = this.gameState.gameTime;
+        
+        // Buscar camera drones desplegados con tiempo de expiración
+        const deployedCameraDrones = this.gameState.nodes.filter(n => 
+            n.isCameraDrone && 
+            n.active && 
+            n.deployed &&
+            !n.isAbandoning &&
+            n.expiresAt !== undefined
+        );
+        
+        for (const cameraDrone of deployedCameraDrones) {
+            // Verificar si ha expirado
+            if (gameTime >= cameraDrone.expiresAt) {
+                // Camera drone expirado: marcar para eliminación
+                cameraDrone.active = false;
+                cameraDrone.isAbandoning = true;
+                expiredDrones.push(cameraDrone.id);
+                
+                const duration = cameraDrone.expiresAt - cameraDrone.spawnTime;
+                console.log(`⏰ Camera Drone ${cameraDrone.id.substring(0, 8)} expirado después de ${duration.toFixed(1)}s`);
+                
+                // Limpiar tracking de este drone
+                this.detectedConvoys.delete(cameraDrone.id);
+                this.previousConvoyStates.delete(cameraDrone.id);
+            }
+        }
+        
+        return expiredDrones;
     }
     
     /**

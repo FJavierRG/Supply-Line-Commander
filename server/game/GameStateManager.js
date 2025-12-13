@@ -34,6 +34,7 @@ import { VehicleWorkshopSystem } from './systems/VehicleWorkshopSystem.js';
 import { CameraDroneSystem } from './systems/CameraDroneSystem.js';
 import { DisciplineManager } from './managers/DisciplineManager.js'; // 🆕 NUEVO: Sistema de disciplinas
 import { MAP_CONFIG, calculateAbsolutePosition } from '../utils/mapGenerator.js';
+import { getDroneFlightConfig, calculateDroneFlightPosition } from './utils/droneFlightUtils.js'; // 🆕 REFACTOR: Utilidades de vuelo de drones
 
 export class GameStateManager {
     constructor(room) {
@@ -727,10 +728,11 @@ export class GameStateManager {
     
     /**
      * Actualiza el vuelo de camera drones hacia su objetivo
-     * 🆕 NUEVO: Maneja el movimiento inicial de camera drones antes de desplegarse
+     * 🆕 REFACTOR: Usa droneFlightUtils para lógica de vuelo compartida
      */
     updateCameraDronesFlight(dt) {
-        const cameraDroneSpeed = 300; // Velocidad del camera drone (px/s) - igual que drones bomba
+        // 🆕 REFACTOR: Velocidad desde configuración centralizada
+        const flightConfig = getDroneFlightConfig('cameraDrone');
         
         // Buscar todos los camera drones que aún no están desplegados
         const cameraDrones = this.nodes.filter(n => 
@@ -742,36 +744,36 @@ export class GameStateManager {
         );
         
         for (const cameraDrone of cameraDrones) {
-            // Calcular distancia al objetivo
-            const dx = cameraDrone.targetX - cameraDrone.x;
-            const dy = cameraDrone.targetY - cameraDrone.y;
-            const distance = Math.hypot(dx, dy);
+            // 🆕 REFACTOR: Usar utilidad compartida para cálculo de vuelo
+            const flightResult = calculateDroneFlightPosition(
+                { x: cameraDrone.x, y: cameraDrone.y },
+                { x: cameraDrone.targetX, y: cameraDrone.targetY },
+                flightConfig.speed,
+                dt
+            );
             
-            // Calcular cuánto se movería este frame
-            const speed = cameraDroneSpeed * dt;
+            // Actualizar posición
+            cameraDrone.x = flightResult.x;
+            cameraDrone.y = flightResult.y;
             
-            // Si está muy cerca O si el próximo movimiento lo pasaría, desplegar
-            if (distance < 5 || distance <= speed) {
-                // Llegó al destino - desplegar
-                cameraDrone.x = cameraDrone.targetX;
-                cameraDrone.y = cameraDrone.targetY;
+            // Si llegó al destino, desplegar
+            if (flightResult.arrived) {
                 cameraDrone.deployed = true;
                 cameraDrone.constructed = true;
                 cameraDrone.isConstructing = false;
                 
-                console.log(`📹 Camera Drone ${cameraDrone.id.substring(0, 8)} desplegado en (${cameraDrone.x.toFixed(0)}, ${cameraDrone.y.toFixed(0)})`);
+                // 🆕 NUEVO: Añadir tiempo de expiración cuando se despliega
+                const cameraDroneConfig = SERVER_NODE_CONFIG.specialNodes?.cameraDrone || {};
+                const duration = cameraDroneConfig.duration || 20;
+                cameraDrone.spawnTime = this.gameTime;
+                cameraDrone.expiresAt = this.gameTime + duration;
+                
+                console.log(`📹 Camera Drone ${cameraDrone.id.substring(0, 8)} desplegado en (${cameraDrone.x.toFixed(0)}, ${cameraDrone.y.toFixed(0)}) - Duración: ${duration}s`);
                 
                 // 🎯 NUEVO: Notificar a la IA si existe (amenaza ahora desplegada)
                 if (this.aiSystem) {
                     this.aiSystem.onThreatDetected('cameraDrone', cameraDrone, true, null);
                 }
-            } else {
-                // Mover hacia el objetivo
-                const vx = (dx / distance) * cameraDroneSpeed * dt;
-                const vy = (dy / distance) * cameraDroneSpeed * dt;
-                
-                cameraDrone.x += vx;
-                cameraDrone.y += vy;
             }
         }
     }

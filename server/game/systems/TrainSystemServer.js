@@ -11,9 +11,12 @@ export class TrainSystemServer {
         
         // Obtener configuración desde serverNodes.js
         const trainConfig = SERVER_NODE_CONFIG.effects.trainStation || {};
-        this.TRAIN_INTERVAL = trainConfig.trainInterval || 15; // Segundos entre envíos de tren
+        this.TRAIN_INTERVAL_BASE = trainConfig.trainInterval || 15; // Intervalo BASE entre envíos
         this.TRAIN_SPEED = trainConfig.trainSpeed || 100; // Píxeles por segundo
         this.TRAIN_CARGO = trainConfig.trainCargo || 50; // Suministros que entrega cada tren
+        // Configuración de escalado por FOBs
+        this.FOB_THRESHOLD = trainConfig.fobThreshold ?? 2; // FOBs sin penalización
+        this.INTERVAL_PENALTY_PER_FOB = trainConfig.intervalPenaltyPerFOB ?? 4; // +segundos por FOB extra
     }
     
     /**
@@ -33,6 +36,39 @@ export class TrainSystemServer {
         
         // Verificar llegadas de trenes
         this.checkTrainArrivals();
+    }
+    
+    /**
+     * Cuenta los FOBs activos de un equipo
+     * @param {string} team - Equipo del jugador
+     * @returns {number} Número de FOBs activos
+     */
+    countActiveFOBs(team) {
+        return this.gameState.nodes.filter(n => 
+            n.type === 'fob' && 
+            n.team === team && 
+            !n.isConstructing && 
+            !n.isAbandoning
+        ).length;
+    }
+    
+    /**
+     * Calcula el intervalo dinámico de envío basado en el número de FOBs
+     * Fórmula: intervaloBase + max(0, (numFOBs - threshold)) * penaltyPerFOB
+     * 
+     * Ejemplos con config por defecto (base=15, threshold=2, penalty=4):
+     *   - 1 FOB:  15 + max(0, 1-2)*4 = 15s
+     *   - 2 FOBs: 15 + max(0, 2-2)*4 = 15s
+     *   - 3 FOBs: 15 + max(0, 3-2)*4 = 19s
+     *   - 4 FOBs: 15 + max(0, 4-2)*4 = 23s
+     * 
+     * @param {string} team - Equipo del jugador
+     * @returns {number} Intervalo en segundos
+     */
+    calculateDynamicInterval(team) {
+        const fobCount = this.countActiveFOBs(team);
+        const extraFOBs = Math.max(0, fobCount - this.FOB_THRESHOLD);
+        return this.TRAIN_INTERVAL_BASE + (extraFOBs * this.INTERVAL_PENALTY_PER_FOB);
     }
     
     /**
@@ -57,8 +93,12 @@ export class TrainSystemServer {
             let timer = this.trainTimers.get(station.id);
             timer += dt;
             
-            // Si pasó el intervalo configurado, enviar trenes a todos los FOBs del equipo
-            if (timer >= this.TRAIN_INTERVAL) {
+            // Calcular intervalo dinámico basado en FOBs actuales
+            // (se recalcula en cada comprobación, no durante el intervalo)
+            const dynamicInterval = this.calculateDynamicInterval(station.team);
+            
+            // Si pasó el intervalo dinámico, enviar trenes a todos los FOBs del equipo
+            if (timer >= dynamicInterval) {
                 timer = 0; // Resetear timer
                 this.sendTrainsFromStation(station);
             }

@@ -515,18 +515,45 @@ export class AudioManager {
     /**
      * Detiene el sonido de un dron específico
      * @param {string} droneId - ID único del dron
+     * @param {boolean} fadeOut - Si true, aplica fade out antes de detener (default: false)
+     * @param {number} fadeDuration - Duración del fade out en ms (default: 600)
      */
-    stopDroneSound(droneId) {
+    stopDroneSound(droneId, fadeOut = false, fadeDuration = 600) {
         const droneSound = this.activeDroneSounds.get(droneId);
         if (droneSound) {
-            // 🆕 SEGURIDAD: Limpiar timeout de seguridad
+            // Limpiar timeout de seguridad
             if (droneSound._safetyTimeout) {
                 clearTimeout(droneSound._safetyTimeout);
             }
             
-            droneSound.pause();
-            droneSound.currentTime = 0;
-            this.activeDroneSounds.delete(droneId);
+            if (fadeOut) {
+                // Fade out agresivo (máximo 1 segundo)
+                const fadeMs = Math.min(fadeDuration, 1000);
+                const fadeSteps = 20; // 20 pasos de fade
+                const stepDuration = fadeMs / fadeSteps;
+                const volumeStep = droneSound.volume / fadeSteps;
+                
+                let currentStep = 0;
+                const fadeInterval = setInterval(() => {
+                    currentStep++;
+                    droneSound.volume = Math.max(0, droneSound.volume - volumeStep);
+                    
+                    if (currentStep >= fadeSteps) {
+                        clearInterval(fadeInterval);
+                        droneSound.pause();
+                        droneSound.currentTime = 0;
+                        this.activeDroneSounds.delete(droneId);
+                    }
+                }, stepDuration);
+                
+                // Marcar como "fading" para evitar múltiples fades
+                droneSound._isFading = true;
+            } else {
+                // Parada inmediata
+                droneSound.pause();
+                droneSound.currentTime = 0;
+                this.activeDroneSounds.delete(droneId);
+            }
         }
     }
     

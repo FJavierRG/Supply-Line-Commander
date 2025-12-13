@@ -73,8 +73,8 @@ export class StateSerializer {
             return true;
         }
         
-        // 🆕 NUEVO: Cambios en tiempo de comando (spawnTime y expiresAt)
-        if (node.isCommando) {
+        // 🆕 NUEVO: Cambios en tiempo de comando o camera drone (spawnTime y expiresAt)
+        if (node.isCommando || node.isCameraDrone) {
             if (node.spawnTime !== lastNodeState.spawnTime ||
                 node.expiresAt !== lastNodeState.expiresAt) {
                 return true;
@@ -174,11 +174,15 @@ export class StateSerializer {
                     abandonPhase2Duration: node.abandonPhase2Duration || 3000,
                     disabled: node.disabled || false, // 🆕 NUEVO: Estado disabled (genérico)
                     broken: node.broken || false, // 🆕 NUEVO: Estado broken (roto)
-                    // 🆕 NUEVO: Propiedades de comando (spawnTime y expiresAt)
-                    spawnTime: node.isCommando ? node.spawnTime : undefined,
-                    expiresAt: node.isCommando ? node.expiresAt : undefined,
+                    // 🆕 NUEVO: Propiedades de tiempo (spawnTime y expiresAt) para comandos y camera drones
+                    spawnTime: (node.isCommando || node.isCameraDrone) ? node.spawnTime : undefined,
+                    expiresAt: (node.isCommando || node.isCameraDrone) ? node.expiresAt : undefined,
                     // 🆕 NUEVO: detectionRadius para comandos, truck assaults y camera drones
                     detectionRadius: (node.isCommando || node.isTruckAssault || node.isCameraDrone) ? node.detectionRadius : undefined,
+                    // 🆕 FIX: Propiedades de camera drone (deployed, targetX, targetY)
+                    deployed: node.isCameraDrone ? node.deployed : undefined,
+                    targetX: node.isCameraDrone ? node.targetX : undefined,
+                    targetY: node.isCameraDrone ? node.targetY : undefined,
                     // 🆕 NUEVO: Sistema de modos de frente
                     frontMode: node.type === 'front' ? node.frontMode : undefined,
                     modeCooldownUntil: node.type === 'front' ? node.modeCooldownUntil : undefined
@@ -325,11 +329,15 @@ export class StateSerializer {
                     abandonPhase2Duration: node.abandonPhase2Duration || 3000,
                     disabled: node.disabled || false, // 🆕 NUEVO: Estado disabled (genérico)
                     broken: node.broken || false, // 🆕 NUEVO: Estado broken (roto)
-                    // 🆕 NUEVO: Propiedades de comando (spawnTime y expiresAt)
-                    spawnTime: node.isCommando ? node.spawnTime : undefined,
-                    expiresAt: node.isCommando ? node.expiresAt : undefined,
+                    // 🆕 NUEVO: Propiedades de tiempo (spawnTime y expiresAt) para comandos y camera drones
+                    spawnTime: (node.isCommando || node.isCameraDrone) ? node.spawnTime : undefined,
+                    expiresAt: (node.isCommando || node.isCameraDrone) ? node.expiresAt : undefined,
                     // 🆕 NUEVO: detectionRadius para comandos, truck assaults y camera drones
                     detectionRadius: (node.isCommando || node.isTruckAssault || node.isCameraDrone) ? node.detectionRadius : undefined,
+                    // 🆕 FIX: Propiedades de camera drone (deployed, targetX, targetY)
+                    deployed: node.isCameraDrone ? node.deployed : undefined,
+                    targetX: node.isCameraDrone ? node.targetX : undefined,
+                    targetY: node.isCameraDrone ? node.targetY : undefined,
                     // 🆕 NUEVO: Contador de usos para lanzadera de drones
                     uses: (node.type === 'droneLauncher' && typeof node.uses === 'number') ? node.uses : undefined,
                     // 🆕 NUEVO: Sistema de modos de frente

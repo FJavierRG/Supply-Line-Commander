@@ -305,3 +305,4 @@ Implementadas **3 optimizaciones críticas** que deberían proporcionar:
 
 **🎮 ¡A testear!**
 
+

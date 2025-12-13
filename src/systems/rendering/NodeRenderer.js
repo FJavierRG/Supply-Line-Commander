@@ -641,6 +641,8 @@ export class NodeRenderer {
                 if (isSelected || node === game?.hoveredNode) {
                     this.renderCameraDroneDetectionArea(node);
                 }
+                // 🆕 NUEVO: Anillo de duración del camera drone (solo cuando está desplegado)
+                this.renderCameraDroneDurationRing(node, game);
             }
         }
         
@@ -2111,6 +2113,41 @@ export class NodeRenderer {
             colorEnd: { r: 255, g: 165, b: 0 },  // Naranja (a punto de expirar)
             pulse: true,
             pulseSpeed: 400,
+            pulseRange: 0.2,
+            backgroundAlpha: 0.3
+        });
+    }
+    
+    /**
+     * Renderiza el anillo de duración del camera drone
+     */
+    renderCameraDroneDurationRing(node, game) {
+        // Solo renderizar si está desplegado y tiene tiempo de expiración
+        if (!node.isCameraDrone || !node.deployed || !node.expiresAt || !node.spawnTime) return;
+        
+        // Obtener gameTime del servidor
+        const gameTime = game?.network?.gameStateSync?.lastGameState?.gameTime || 0;
+        if (!gameTime) return;
+        
+        // Calcular progreso del camera drone (0 a 1, donde 1 = recién desplegado, 0 = a punto de expirar)
+        let progress = 1;
+        if (node.spawnTime && node.expiresAt) {
+            const duration = node.expiresAt - node.spawnTime;
+            const elapsed = gameTime - node.spawnTime;
+            progress = Math.max(0, Math.min(1, 1 - (elapsed / duration)));
+        }
+        
+        // Radio del anillo (alrededor del camera drone completo)
+        const nodeRadius = node.radius || 25;
+        const ringRadius = nodeRadius + 6; // 6px de padding alrededor del camera drone
+        
+        // Usar función genérica de anillo de progreso (azul → amarillo)
+        this.renderProgressRing(node.x, node.y, ringRadius, progress, {
+            width: 3,
+            colorStart: { r: 52, g: 152, b: 219 },   // Azul (recién desplegado)
+            colorEnd: { r: 241, g: 196, b: 15 },     // Amarillo (a punto de expirar)
+            pulse: true,
+            pulseSpeed: 350,
             pulseRange: 0.2,
             backgroundAlpha: 0.3
         });
