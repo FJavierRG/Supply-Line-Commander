@@ -232,8 +232,13 @@ export class NetworkEventHandler {
             }
         }
         
-        // Si se eliminó un camera drone, crear animación de explosión
+        // Si se eliminó un camera drone, crear animación de explosión y detener sonido
         if (data.eliminated && data.targetType === 'cameraDrone') {
+            // 🆕 FIX: Detener el sonido del dron si estaba sonando (ej. en vuelo)
+            if (this.game.audio && this.game.audio.stopDroneSound) {
+                this.game.audio.stopDroneSound(data.targetId);
+            }
+            
             // Crear partículas de explosión (gris)
             this.game.particleSystem.createExplosion(
                 feedX, 

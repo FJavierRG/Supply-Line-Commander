@@ -236,13 +236,31 @@ export class GameStateSync {
                 
                 // 🆕 NUEVO: Actualizar propiedades específicas del camera drone
                 if (node.isCameraDrone) {
+                    // 🆕 FIX: Guardar estado anterior ANTES de actualizar para detectar transición
+                    const wasDeployed = node.deployed;
+                    
                     node.deployed = nodeData.deployed || false;
                     node.targetX = nodeData.targetX;
                     node.targetY = nodeData.targetY;
                     node.detectionRadius = nodeData.detectionRadius || 200;
                     
-                    // Si cambió de volando a desplegado, actualizar posición directamente
-                    if (nodeData.deployed && !node.deployed) {
+                    // 🆕 NUEVO: Sincronizar tiempo de expiración del camera drone
+                    if (nodeData.spawnTime !== undefined) {
+                        node.spawnTime = nodeData.spawnTime;
+                    }
+                    if (nodeData.expiresAt !== undefined) {
+                        node.expiresAt = nodeData.expiresAt;
+                    }
+                    
+                    // 🆕 FIX: Si cambió de volando a desplegado, detener sonido y actualizar posición
+                    if (nodeData.deployed && !wasDeployed) {
+                        // 🆕 FIX: Detener el sonido del dron cuando llega a su destino
+                        if (this.game.audio && this.game.audio.stopDroneSound) {
+                            this.game.audio.stopDroneSound(node.id);
+                            console.log(`📹 Camera drone ${node.id.substring(0, 8)} desplegado - sonido detenido`);
+                        }
+                        
+                        // Actualizar posición directamente
                         node.x = nodeData.x;
                         node.y = nodeData.y;
                         // Limpiar interpolación cuando se despliega
@@ -419,6 +437,10 @@ export class GameStateSync {
             // Eliminar cualquier nodo que ya no esté en el servidor
             // (edificios destruidos por drones, abandonados, etc.)
             if (!serverNodeIds.includes(localNode.id)) {
+                // 🆕 FIX: Si es un cameraDrone, detener su sonido antes de eliminarlo
+                if (localNode.isCameraDrone && this.game.audio && this.game.audio.stopDroneSound) {
+                    this.game.audio.stopDroneSound(localNode.id);
+                }
                 this.game.nodes.splice(i, 1);
             }
         }

@@ -87,9 +87,12 @@ export const SERVER_NODE_CONFIG = {
             affectedVehicles: ['heavy_truck']
         },
         trainStation: {
-            trainInterval: 15,      // 🆕 Segundos entre envíos de tren
-            trainSpeed: 60,        // 🆕 Velocidad del tren (píxeles por segundo)
-            trainCargo: 35          // 🆕 Suministros que entrega cada tren
+            trainInterval: 15,      // Segundos BASE entre envíos de tren
+            trainSpeed: 60,         // Velocidad del tren (píxeles por segundo)
+            trainCargo: 35,         // Suministros que entrega cada tren
+            // Escalado de intervalo por número de FOBs
+            fobThreshold: 2,        // FOBs sin penalización de intervalo
+            intervalPenaltyPerFOB: 4 // +4s por cada FOB después del threshold
         },
         droneLauncher: {
             maxUses: 3                   // 🆕 Número máximo de usos antes de entrar en abandono
@@ -278,7 +281,8 @@ export const SERVER_NODE_CONFIG = {
             detectionRadius: 120,           // Área de detección de vehículos ligeros
             buildRadius: 300,               // Radio para permitir construcción en territorio enemigo
             health: 50,                     // Vida del camera drone (puede ser destruido por sniper)
-            currencyReward: 10,              // Currency otorgado por cada camión ligero detectado
+            currencyReward: 10,             // Currency otorgado por cada camión ligero detectado
+            duration: 20,                   // 🆕 NUEVO: Duración en segundos antes de expirar (tras desplegarse)
             sprite: 'camera-drone'          // Sprite del camera drone
         }
     },
@@ -622,14 +626,33 @@ export const SERVER_NODE_CONFIG = {
     },
 
     // ═══════════════════════════════════════════════════════════════
+    // CONFIGURACIÓN DE VUELO DE DRONES
+    // ═══════════════════════════════════════════════════════════════
+    // Parámetros de vuelo para todos los tipos de drones (velocidad, etc.)
+    // Centralizado para evitar hardcodeo en múltiples sistemas
+    droneFlightConfig: {
+        default: {
+            speed: 300  // Velocidad por defecto (px/s)
+        },
+        drone: {
+            speed: 300  // Velocidad del dron bomba (px/s)
+        },
+        cameraDrone: {
+            speed: 300  // Velocidad del camera drone (px/s) - igual que bomba
+        }
+    },
+
+    // ═══════════════════════════════════════════════════════════════
     // LÍMITES DE CONSTRUCCIÓN
     // ═══════════════════════════════════════════════════════════════
     // Límites por equipo (cada bando puede tener hasta X de este edificio)
     buildLimits: {
         nuclearPlant: {
             maxPerGame: 1  // Cada bando solo puede tener 1 central nuclear construida
+        },
+        trainStation: {
+            maxPerGame: 1  // Cada bando solo puede tener 1 estación de trenes
         }
-        // TODO: Añadir otros edificios con límites aquí si es necesario
     },
     
     // ═══════════════════════════════════════════════════════════════

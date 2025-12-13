@@ -379,6 +379,14 @@ export class NetworkManager {
             }
         });
         
+        this.socket.on('build_failed', (data) => {
+            console.warn('⚠️ Construcción rechazada:', data.reason);
+            // Mostrar notificación de error al usuario
+            if (this.game && this.game.arsenalManager) {
+                this.game.arsenalManager.showNotification(data.reason || 'No se pudo construir', 'error');
+            }
+        });
+        
         // === EVENTOS DE DISCIPLINAS ===
         
         this.socket.on('discipline_activated', (data) => {
