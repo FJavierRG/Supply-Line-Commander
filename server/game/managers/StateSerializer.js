@@ -179,6 +179,10 @@ export class StateSerializer {
                     expiresAt: (node.isCommando || node.isCameraDrone) ? node.expiresAt : undefined,
                     // 🆕 NUEVO: detectionRadius para comandos, truck assaults y camera drones
                     detectionRadius: (node.isCommando || node.isTruckAssault || node.isCameraDrone) ? node.detectionRadius : undefined,
+                    // 🆕 FIX: Propiedades de camera drone (deployed, targetX, targetY)
+                    deployed: node.isCameraDrone ? node.deployed : undefined,
+                    targetX: node.isCameraDrone ? node.targetX : undefined,
+                    targetY: node.isCameraDrone ? node.targetY : undefined,
                     // 🆕 NUEVO: Sistema de modos de frente
                     frontMode: node.type === 'front' ? node.frontMode : undefined,
                     modeCooldownUntil: node.type === 'front' ? node.modeCooldownUntil : undefined
@@ -330,6 +334,10 @@ export class StateSerializer {
                     expiresAt: (node.isCommando || node.isCameraDrone) ? node.expiresAt : undefined,
                     // 🆕 NUEVO: detectionRadius para comandos, truck assaults y camera drones
                     detectionRadius: (node.isCommando || node.isTruckAssault || node.isCameraDrone) ? node.detectionRadius : undefined,
+                    // 🆕 FIX: Propiedades de camera drone (deployed, targetX, targetY)
+                    deployed: node.isCameraDrone ? node.deployed : undefined,
+                    targetX: node.isCameraDrone ? node.targetX : undefined,
+                    targetY: node.isCameraDrone ? node.targetY : undefined,
                     // 🆕 NUEVO: Contador de usos para lanzadera de drones
                     uses: (node.type === 'droneLauncher' && typeof node.uses === 'number') ? node.uses : undefined,
                     // 🆕 NUEVO: Sistema de modos de frente

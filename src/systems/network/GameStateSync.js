@@ -235,11 +235,14 @@ export class GameStateSync {
                 node.active = nodeData.active;
                 
                 // 🆕 NUEVO: Actualizar propiedades específicas del camera drone
-                if (node.isCameraDrone) {
+                // Verificar por isCameraDrone o por type para cubrir todos los casos
+                if (node.isCameraDrone || node.type === 'cameraDrone' || nodeData.type === 'cameraDrone') {
+                    node.isCameraDrone = true;
                     // 🆕 FIX: Guardar estado anterior ANTES de actualizar para detectar transición
                     const wasDeployed = node.deployed;
+                    const newDeployed = nodeData.deployed || false;
                     
-                    node.deployed = nodeData.deployed || false;
+                    node.deployed = newDeployed;
                     node.targetX = nodeData.targetX;
                     node.targetY = nodeData.targetY;
                     node.detectionRadius = nodeData.detectionRadius || 200;
@@ -252,18 +255,16 @@ export class GameStateSync {
                         node.expiresAt = nodeData.expiresAt;
                     }
                     
-                    // 🆕 FIX: Si cambió de volando a desplegado, detener sonido y actualizar posición
-                    if (nodeData.deployed && !wasDeployed) {
-                        // 🆕 FIX: Detener el sonido del dron cuando llega a su destino
+                    // Si cambió de volando a desplegado, detener sonido y actualizar posición
+                    if (newDeployed && !wasDeployed) {
+                        // Detener el sonido del dron con fade out cuando llega a su destino
                         if (this.game.audio && this.game.audio.stopDroneSound) {
-                            this.game.audio.stopDroneSound(node.id);
-                            console.log(`📹 Camera drone ${node.id.substring(0, 8)} desplegado - sonido detenido`);
+                            this.game.audio.stopDroneSound(node.id, true); // true = fade out
                         }
                         
                         // Actualizar posición directamente
                         node.x = nodeData.x;
                         node.y = nodeData.y;
-                        // Limpiar interpolación cuando se despliega
                         if (node.updateServerPosition) {
                             node.updateServerPosition(nodeData.x, nodeData.y);
                         }

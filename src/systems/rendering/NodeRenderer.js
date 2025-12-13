@@ -2119,11 +2119,11 @@ export class NodeRenderer {
     }
     
     /**
-     * 🆕 NUEVO: Renderiza el anillo de duración del camera drone
+     * Renderiza el anillo de duración del camera drone
      */
     renderCameraDroneDurationRing(node, game) {
         // Solo renderizar si está desplegado y tiene tiempo de expiración
-        if (!node.isCameraDrone || !node.deployed || !node.expiresAt) return;
+        if (!node.isCameraDrone || !node.deployed || !node.expiresAt || !node.spawnTime) return;
         
         // Obtener gameTime del servidor
         const gameTime = game?.network?.gameStateSync?.lastGameState?.gameTime || 0;
