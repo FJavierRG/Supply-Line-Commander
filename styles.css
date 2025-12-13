@@ -2515,9 +2515,9 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 .arsenal-container {
     max-width: 1600px; /* Aumentado de 1400px para más espacio */
     width: 98%; /* Aumentado de 95% para aprovechar más espacio */
-    max-height: 85vh;
+    max-height: 96vh; /* Aumentado para mostrar más cartas */
     margin: 0 auto;
-    padding: 32px;
+    padding: 16px 32px; /* Reducido el padding vertical para ganar espacio */
     overflow: hidden;
     position: relative;
     box-sizing: border-box;
@@ -2542,8 +2542,8 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 24px;
-    padding-bottom: 16px;
+    margin-bottom: 10px; /* Reducido para ganar espacio vertical */
+    padding-bottom: 8px; /* Reducido para ganar espacio vertical */
     border-bottom: 1px solid rgba(78, 204, 163, 0.2);
 }
 
@@ -2567,7 +2567,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     display: grid;
     grid-template-columns: 1fr 360px; /* Izquierda más ancha, derecha reducida para dar más espacio */
     gap: 32px;
-    height: calc(85vh - 140px);
+    height: calc(92vh - 120px); /* Aumentado para mostrar más cartas */
 }
 
 /* Responsive: Stack en móvil */
@@ -2596,7 +2596,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 .arsenal-left-section {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px; /* Reducido de 12px para ganar espacio */
     min-height: 0; /* Necesario para que el scroll funcione en grid */
     height: 100%; /* Ocupar toda la altura del grid */
 }
@@ -2607,7 +2607,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
     background: rgba(0, 0, 0, 0.85); /* Fondo negro placeholder (se sustituirá con UIFrame) - alpha aumentado */
     border: 2px solid rgba(76, 175, 80, 0.6); /* Verde más visible */
     border-radius: 12px;
-    padding: 20px 20px 20px 20px; /* Padding uniforme */
+    padding: 16px 20px 16px 20px; /* Reducido padding vertical de 20px a 16px */
     overflow: hidden;
     flex: 1; /* Ocupar el espacio disponible en arsenal-left-section */
     min-height: 0; /* Necesario para que el scroll funcione */
@@ -2619,7 +2619,7 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 .arsenal-tabs {
     display: flex;
     gap: 0;
-    margin-bottom: 16px;
+    margin-bottom: 12px; /* Reducido de 16px para ganar espacio */
     border-bottom: 2px solid rgba(76, 175, 80, 0.3);
 }
 
@@ -2695,9 +2695,9 @@ body:has(.editor-toolbar:not(.hidden)) #main-game {
 
 /* Texto informativo FUERA del panel, debajo */
 .arsenal-help-text {
-    padding: 8px 0;
+    padding: 4px 0; /* Reducido de 8px para ganar espacio */
     text-align: center;
-    font-size: 17px; 
+    font-size: 16px; /* Reducido ligeramente */
     color: rgba(102, 187, 106, 0.8);
     font-family: 'Courier New', monospace;
     display: flex;

@@ -1371,11 +1371,11 @@ export class GameStateManager {
         const snapshot = {
             time: currentTime,
             player1: {
-                currency: Math.floor(this.currency?.player1 || 0), // 🔧 FIX: Usar currency actual, no generado
+                currency: Math.floor(this.currencyGenerated?.player1 || 0), // 🔧 FIX: Usar total generado, no balance actual
                 trucks: this.trucksDispatched?.player1?.total || 0
             },
             player2: {
-                currency: Math.floor(this.currency?.player2 || 0), // 🔧 FIX: Usar currency actual, no generado
+                currency: Math.floor(this.currencyGenerated?.player2 || 0), // 🔧 FIX: Usar total generado, no balance actual
                 trucks: this.trucksDispatched?.player2?.total || 0
             }
         };

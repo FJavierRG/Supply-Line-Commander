@@ -255,6 +255,11 @@ export class CombatHandler {
             }
         }
         
+        // 🆕 NUEVO: Validar que el FOB no esté ya afectado por sabotaje
+        if (targetNode.effects && targetNode.effects.some(e => e.type === 'fobSabotage')) {
+            return { success: false, reason: 'Este FOB ya está siendo saboteado' };
+        }
+        
         // Costo del sabotaje
         // ✅ Costo del sabotaje (lee de costs - fuente única de verdad)
         const sabotageCost = SERVER_NODE_CONFIG.costs.fobSabotage;

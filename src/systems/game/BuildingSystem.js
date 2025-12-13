@@ -864,6 +864,14 @@ export class BuildingSystem {
             return;
         }
         
+        // 🆕 NUEVO: Validación UX cliente - feedback inmediato si el FOB ya está saboteado
+        // (El servidor también valida esto, pero así evitamos esperar la respuesta)
+        if (targetFOB.isSabotaged && targetFOB.isSabotaged()) {
+            console.log('⚠️ Este FOB ya está siendo saboteado');
+            this.exitFobSabotageMode();
+            return;
+        }
+        
         // Delegar TODO al servidor autoritativo
         if (!this.game.network || !this.game.network.roomId) {
             console.error('❌ No hay conexión al servidor. No se puede lanzar sabotaje.');
