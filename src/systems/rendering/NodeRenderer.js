@@ -2315,6 +2315,9 @@ export class NodeRenderer {
             this.renderTerritoryOverlay(rules.territoryType);
         }
         
+        // 🆕 NUEVO: Renderizar zonas de exclusión en los BORDES del mapa
+        this.renderWorldBoundsExclusion(buildingType);
+        
         // 🆕 NUEVO: Para el taller de drones y taller de vehículos, mostrar áreas válidas de FOBs aliados
         if ((buildingType === 'droneWorkshop' || buildingType === 'vehicleWorkshop') && rules.showFobAreas) {
             const myTeam = this.game?.myTeam || 'player1';
@@ -2362,6 +2365,86 @@ export class NodeRenderer {
                 this.renderExclusionCircle(node.x, node.y, radius, rule.color);
             }
         }
+    }
+    
+    /**
+     * 🆕 NUEVO: Calcula el margen de los bordes del mundo para un tipo de edificio
+     * Centralizado para evitar duplicación de código
+     * @param {string} buildingType - Tipo de edificio
+     * @returns {number} Margen en píxeles
+     */
+    getWorldBoundsMargin(buildingType) {
+        if (!this.game) return 35; // Fallback razonable
+        
+        // Obtener radio del edificio desde configuración del servidor
+        const serverRadii = this.game.serverBuildingConfig?.radii || {};
+        const buildingRadius = serverRadii[buildingType] || 30;
+        
+        // Obtener configuración de límites desde el servidor (con fallback)
+        const buildBounds = this.game.serverBuildingConfig?.buildBounds || { extraPadding: 5, useRadiusForBounds: true };
+        const extraPadding = buildBounds.extraPadding || 5;
+        
+        // Calcular el margen total
+        return buildBounds.useRadiusForBounds 
+            ? buildingRadius + extraPadding 
+            : extraPadding;
+    }
+    
+    /**
+     * 🆕 NUEVO: Verifica si una posición está fuera de los límites válidos del mundo
+     * @param {number} x - Coordenada X
+     * @param {number} y - Coordenada Y
+     * @param {string} buildingType - Tipo de edificio
+     * @returns {boolean} True si está fuera de los límites
+     */
+    isOutOfWorldBounds(x, y, buildingType) {
+        if (!this.game) return false;
+        
+        const worldWidth = this.game.worldWidth || 1920;
+        const worldHeight = this.game.worldHeight || 1080;
+        const margin = this.getWorldBoundsMargin(buildingType);
+        
+        // Verificar si está fuera de los límites
+        const isOutX = x < margin || x > (worldWidth - margin);
+        const isOutY = y < margin || y > (worldHeight - margin);
+        
+        return isOutX || isOutY;
+    }
+    
+    /**
+     * 🆕 NUEVO: Renderiza zonas de exclusión en los bordes del mapa
+     * Muestra al usuario que no puede construir cerca de los límites
+     * @param {string} buildingType - Tipo de edificio que se está construyendo
+     */
+    renderWorldBoundsExclusion(buildingType) {
+        if (!this.game) return;
+        
+        const worldWidth = this.game.worldWidth || 1920;
+        const worldHeight = this.game.worldHeight || 1080;
+        const margin = this.getWorldBoundsMargin(buildingType);
+        
+        // Si el margen es muy pequeño, no mostrar (no es necesario)
+        if (margin < 10) return;
+        
+        this.ctx.save();
+        
+        // Color rojo semi-transparente para las zonas de exclusión
+        const excludeColor = 'rgba(231, 76, 60, 0.15)';
+        this.ctx.fillStyle = excludeColor;
+        
+        // Borde SUPERIOR
+        this.ctx.fillRect(0, 0, worldWidth, margin);
+        
+        // Borde INFERIOR
+        this.ctx.fillRect(0, worldHeight - margin, worldWidth, margin);
+        
+        // Borde IZQUIERDO (excluyendo esquinas ya cubiertas)
+        this.ctx.fillRect(0, margin, margin, worldHeight - margin * 2);
+        
+        // Borde DERECHO (excluyendo esquinas ya cubiertas)
+        this.ctx.fillRect(worldWidth - margin, margin, margin, worldHeight - margin * 2);
+        
+        this.ctx.restore();
     }
     
     /**

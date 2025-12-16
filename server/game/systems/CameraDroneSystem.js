@@ -183,6 +183,10 @@ export class CameraDroneSystem {
                     // Otorgar currency al equipo del camera drone
                     if (this.gameState.currency && this.gameState.currency[cameraDrone.team] !== undefined) {
                         this.gameState.currency[cameraDrone.team] += currencyReward;
+                        // 🔧 FIX: También sumar al total generado para estadísticas
+                        if (this.gameState.currencyGenerated) {
+                            this.gameState.currencyGenerated[cameraDrone.team] += currencyReward;
+                        }
                         
                         // 🆕 NUEVO: Agregar evento visual para mostrar número flotante en el cliente
                         if (this.gameState.addVisualEvent) {

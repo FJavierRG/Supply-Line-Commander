@@ -2,6 +2,7 @@
 // Maneja el renderizado de previews de construcción y cursors especiales
 
 import { getNodeConfig } from '../../config/nodes.js';
+import { createShakeState, triggerShake, getShakeOffset } from '../../utils/ShakeUtils.js';
 
 /**
  * PreviewRenderer - Renderiza previews de construcción y cursors especiales
@@ -17,6 +18,128 @@ export class PreviewRenderer {
         this.assetManager = assetManager;
         this.game = game;
         this.nodeRenderer = nodeRenderer; // Para acceso a isInFobBuildArea e isInCameraDroneBuildArea
+        
+        // 🆕 NUEVO: Estado de shake para cuando no se puede construir
+        this.buildShake = createShakeState(400);
+    }
+    
+    /**
+     * 🆕 NUEVO: Activa el shake del preview de construcción
+     */
+    triggerBuildShake() {
+        triggerShake(this.buildShake);
+    }
+    
+    /**
+     * 🆕 NUEVO: Verifica si una posición es válida para construir
+     * Centraliza la lógica de validación para reutilizarla en varios lugares
+     * @param {number} x - Posición X
+     * @param {number} y - Posición Y
+     * @param {string} buildingType - Tipo de edificio
+     * @returns {boolean} true si la posición es válida
+     */
+    isValidBuildPosition(x, y, buildingType) {
+        // Verificar si está fuera de los límites del mundo
+        if (this.isOutOfWorldBounds(x, y, buildingType)) {
+            return false;
+        }
+        
+        // Combinar bases y nodos para verificar colisiones
+        const allNodes = [...(this.game?.nodes || [])];
+        const config = getNodeConfig(buildingType);
+        
+        // Tipos especiales con reglas distintas
+        const isCommando = buildingType === 'specopsCommando';
+        const isTruckAssault = buildingType === 'truckAssault';
+        const isCameraDrone = buildingType === 'cameraDrone';
+        const isVigilanceTower = buildingType === 'vigilanceTower';
+        const isDroneWorkshop = buildingType === 'droneWorkshop';
+        const isVehicleWorkshop = buildingType === 'vehicleWorkshop';
+        
+        // Verificar colisiones
+        let tooClose = false;
+        
+        if (isCommando || isTruckAssault || isCameraDrone) {
+            // Solo verificar colisión física básica (no áreas de detección)
+            for (const node of allNodes) {
+                if (!node.active) continue;
+                const dist = Math.hypot(x - node.x, y - node.y);
+                const existingConfig = getNodeConfig(node.type);
+                const existingRadius = existingConfig?.radius || 30;
+                const newRadius = config?.radius || 25;
+                if (dist < existingRadius + newRadius) {
+                    tooClose = true;
+                    break;
+                }
+            }
+            
+            // Verificar torres de vigilancia enemigas cerca
+            if (!tooClose) {
+                const myTeam = this.game?.myTeam || 'player1';
+                const enemyTowers = allNodes.filter(n => 
+                    (n.type === 'vigilanceTower' || n.isVigilanceTower) &&
+                    n.team !== myTeam && n.active && n.constructed
+                );
+                const specialNodes = this.game?.serverBuildingConfig?.specialNodes || {};
+                const specialConfig = specialNodes[buildingType] || {};
+                const detectionRadius = specialConfig?.detectionRadius || 200;
+                for (const tower of enemyTowers) {
+                    const dist = Math.hypot(x - tower.x, y - tower.y);
+                    const towerConfig = getNodeConfig('vigilanceTower');
+                    const towerDetectionRadius = towerConfig?.detectionRadius || 150;
+                    if (dist < detectionRadius + towerDetectionRadius) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+            }
+        } else {
+            // Lógica normal de detección para otros edificios
+            const buildRadii = this.game?.serverBuildingConfig?.buildRadii || {};
+            const newBuildRadius = buildRadii[buildingType] || config?.detectionRadius || (config?.radius || 30) * 2.5;
+            
+            for (const node of allNodes) {
+                if (!node.active) continue;
+                
+                // Excepciones especiales
+                if (isVigilanceTower && node.isCommando) continue;
+                if ((isDroneWorkshop || isVehicleWorkshop) && node.type === 'fob') {
+                    const myTeam = this.game?.myTeam || 'player1';
+                    if (node.team === myTeam && node.constructed && !node.isAbandoning) continue;
+                }
+                
+                const dist = Math.hypot(x - node.x, y - node.y);
+                const existingConfig = getNodeConfig(node.type);
+                const existingBuildRadius = buildRadii[node.type] || existingConfig?.detectionRadius || (existingConfig?.radius || 30) * 2.5;
+                if (dist < Math.max(existingBuildRadius, newBuildRadius)) {
+                    tooClose = true;
+                    break;
+                }
+            }
+        }
+        
+        if (tooClose) return false;
+        
+        // Verificar territorio
+        const inAllyTerritory = this.game?.territory?.isInAllyTerritory(x, y) || false;
+        const inEnemyTerritory = !inAllyTerritory;
+        
+        // Verificaciones específicas por tipo
+        if (isCommando || isTruckAssault || isCameraDrone) {
+            return inEnemyTerritory;
+        }
+        
+        if (isDroneWorkshop || isVehicleWorkshop) {
+            const isInFobArea = this.nodeRenderer?.isInFobBuildArea(x, y) || false;
+            return inAllyTerritory && isInFobArea;
+        }
+        
+        if (isVigilanceTower) {
+            const isInCameraDroneArea = this.nodeRenderer?.isInCameraDroneBuildArea(x, y) || false;
+            return inAllyTerritory || (inEnemyTerritory && isInCameraDroneArea);
+        }
+        
+        return inAllyTerritory;
     }
     
     /**
@@ -27,6 +150,9 @@ export class PreviewRenderer {
      * @param {string} buildingType - Tipo de edificio que se está construyendo
      */
     renderBuildPreview(x, y, bases, buildingType = 'fob') {
+        // 🆕 NUEVO: Verificar si está fuera de los límites del mundo
+        const isOutOfBounds = this.isOutOfWorldBounds(x, y, buildingType);
+        
         // Verificar colisiones usando la nueva lógica de detectionRadius
         let tooClose = false;
         
@@ -173,23 +299,33 @@ export class PreviewRenderer {
         // Para torre de vigilancia: válido si está en territorio aliado O (territorio enemigo con camera drone cerca) y no muy cerca
         // Para taller de drones y taller de vehículos: válido si está en territorio aliado, no muy cerca Y en área de FOB
         // Para otros: válido si está en territorio aliado y no muy cerca
+        // 🆕 NUEVO: También verificar que no esté fuera de los límites del mundo
         let isValid;
         if (isCommando || isTruckAssault || isCameraDrone) {
-            isValid = !tooClose && inEnemyTerritory;
+            isValid = !tooClose && !isOutOfBounds && inEnemyTerritory;
         } else if (isVigilanceTower) {
-            isValid = !tooClose && (inAllyTerritory || (inEnemyTerritory && isInCameraDroneArea));
+            isValid = !tooClose && !isOutOfBounds && (inAllyTerritory || (inEnemyTerritory && isInCameraDroneArea));
         } else if (isDroneWorkshop || isVehicleWorkshop) {
-            isValid = !tooClose && inAllyTerritory && isInFobArea;
+            isValid = !tooClose && !isOutOfBounds && inAllyTerritory && isInFobArea;
         } else {
-            isValid = !tooClose && inAllyTerritory;
+            isValid = !tooClose && !isOutOfBounds && inAllyTerritory;
         }
         const previewColor = isValid ? 'rgba(52, 152, 219, 0.5)' : 'rgba(231, 76, 60, 0.5)';
         const borderColor = isValid ? '#3498db' : '#e74c3c';
         
+        // 🆕 NUEVO: Calcular offset de shake si está activo (solo cuando es inválido)
+        const shakeOffset = getShakeOffset(this.buildShake, 8, 30);
+        const shakeX = shakeOffset.x;
+        const shakeY = shakeOffset.y;
+        
+        // Coordenadas con shake aplicado
+        const drawX = x + shakeX;
+        const drawY = y + shakeY;
+        
         // Base semi-transparente
         this.ctx.fillStyle = previewColor;
         this.ctx.beginPath();
-        this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+        this.ctx.arc(drawX, drawY, radius, 0, Math.PI * 2);
         this.ctx.fill();
         
         // Borde punteado
@@ -206,8 +342,8 @@ export class PreviewRenderer {
             this.ctx.globalAlpha = isValid ? 0.8 : 0.5;
             this.ctx.drawImage(
                 buildingSprite,
-                x - spriteSize/2,
-                y - spriteSize/2,
+                drawX - spriteSize/2,
+                drawY - spriteSize/2,
                 spriteSize,
                 spriteSize
             );
@@ -218,7 +354,7 @@ export class PreviewRenderer {
             this.ctx.font = '16px Arial';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(config?.icon || config?.name || buildingType.toUpperCase(), x, y);
+            this.ctx.fillText(config?.icon || config?.name || buildingType.toUpperCase(), drawX, drawY);
         }
         
         // Etiqueta con nombre del edificio
@@ -229,7 +365,9 @@ export class PreviewRenderer {
         
         // Mostrar mensaje de error específico
         let label = config?.name || buildingType.toUpperCase();
-        if (tooClose) {
+        if (isOutOfBounds) {
+            label = '⚠️ FUERA DEL MAPA';
+        } else if (tooClose) {
             label = '⚠️ MUY CERCA';
         } else if ((isCommando || isTruckAssault || isCameraDrone) && !inEnemyTerritory) {
             label = '⚠️ DEBE SER EN TERRITORIO ENEMIGO';
@@ -238,10 +376,11 @@ export class PreviewRenderer {
         } else if (!isCommando && !isTruckAssault && !isCameraDrone && !inAllyTerritory) {
             label = '⚠️ FUERA DE TERRITORIO';
         }
-        this.ctx.fillText(label, x, y - radius - 10);
+        this.ctx.fillText(label, drawX, drawY - radius - 10);
         
-        // Círculo de área de detección (naranja) - siempre visible para dev
-        // ✅ Para comando, truck assault y camera drone, usar specialNodes del servidor (fuente única de verdad)
+        // 🚫 DESACTIVADO: Círculo de área de detección (naranja) - confunde a los usuarios
+        // Se puede reactivar descomentando si se necesita para debug
+        /*
         let detectionRadius;
         if (buildingType === 'specopsCommando' || buildingType === 'truckAssault' || buildingType === 'cameraDrone') {
             const specialNodes = this.game?.serverBuildingConfig?.specialNodes || {};
@@ -254,9 +393,10 @@ export class PreviewRenderer {
         this.ctx.lineWidth = 2;
         this.ctx.setLineDash([8, 8]);
         this.ctx.beginPath();
-        this.ctx.arc(x, y, detectionRadius, 0, Math.PI * 2);
+        this.ctx.arc(drawX, drawY, detectionRadius, 0, Math.PI * 2);
         this.ctx.stroke();
         this.ctx.setLineDash([]);
+        */
         
         // Mostrar círculo de rango de acción si el edificio tiene rango (solo si es válido)
         if (config?.showRangePreview && isValid) {
@@ -268,7 +408,7 @@ export class PreviewRenderer {
                     this.ctx.lineWidth = 2;
                     this.ctx.setLineDash([10, 5]);
                     this.ctx.beginPath();
-                    this.ctx.arc(x, y, nuclearPlantRange, 0, Math.PI * 2);
+                    this.ctx.arc(drawX, drawY, nuclearPlantRange, 0, Math.PI * 2);
                     this.ctx.stroke();
                     this.ctx.setLineDash([]);
                 }
@@ -279,7 +419,7 @@ export class PreviewRenderer {
                 this.ctx.lineWidth = 2;
                 this.ctx.setLineDash([10, 5]);
                 this.ctx.beginPath();
-                this.ctx.arc(x, y, config.detectionRange, 0, Math.PI * 2);
+                this.ctx.arc(drawX, drawY, config.detectionRange, 0, Math.PI * 2);
                 this.ctx.stroke();
                 this.ctx.setLineDash([]);
             }
@@ -289,7 +429,7 @@ export class PreviewRenderer {
                 this.ctx.lineWidth = 2;
                 this.ctx.setLineDash([10, 5]);
                 this.ctx.beginPath();
-                this.ctx.arc(x, y, config.actionRange, 0, Math.PI * 2);
+                this.ctx.arc(drawX, drawY, config.actionRange, 0, Math.PI * 2);
                 this.ctx.stroke();
                 this.ctx.setLineDash([]);
             }
@@ -626,5 +766,18 @@ export class PreviewRenderer {
         this.ctx.arc(x, y, 160, 0, Math.PI * 2); // Rango de detección del anti-drone
         this.ctx.stroke();
         this.ctx.setLineDash([]);
+    }
+    
+    /**
+     * 🆕 NUEVO: Verifica si una posición está fuera de los límites válidos del mundo
+     * Delega a NodeRenderer para evitar duplicación de código
+     * @param {number} x - Coordenada X
+     * @param {number} y - Coordenada Y
+     * @param {string} buildingType - Tipo de edificio
+     * @returns {boolean} True si está fuera de los límites
+     */
+    isOutOfWorldBounds(x, y, buildingType) {
+        // Delegar a NodeRenderer (fuente única de verdad)
+        return this.nodeRenderer?.isOutOfWorldBounds(x, y, buildingType) || false;
     }
 }

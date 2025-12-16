@@ -513,7 +513,7 @@ export const SERVER_NODE_CONFIG = {
         truckAssault: {
             // ✅ detectionRadius está en specialNodes.truckAssault.detectionRadius (fuente única de verdad)
             duration: 25,          // Duración en segundos antes de que el truck assault expire (25s)
-            speedPenalty: 0.5     // Multiplicador de velocidad (0.75 = 25% de ralentización)
+            speedPenalty: 0.75     // Multiplicador de velocidad (0.75 = 25% de ralentización)
         },
         
         // Propiedades del Destructor de mundos

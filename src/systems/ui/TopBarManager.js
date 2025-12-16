@@ -1,6 +1,7 @@
-
 // ===== GESTOR DEL BANNER SUPERIOR (TOP BAR) =====
 // Centraliza toda la UI del banner superior del juego
+
+import { createShakeState, triggerShake, getShakeOffset } from '../../utils/ShakeUtils.js';
 
 export class TopBarManager {
     constructor(assetManager, game) {
@@ -47,20 +48,15 @@ export class TopBarManager {
         // Hitboxes para clicks
         this.hitboxes = [];
         
-        // 🆕 NUEVO: Estado de animación "no puedes pagar"
-        this.currencyShake = {
-            active: false,
-            startTime: 0,
-            duration: 400 // ms
-        };
+        // 🆕 REFACTOR: Estado de animación "no puedes pagar" usando ShakeUtils
+        this.currencyShake = createShakeState(400);
     }
     
     /**
-     * 🆕 NUEVO: Activa la animación de "no puedes pagar" en el currency
+     * 🆕 REFACTOR: Activa la animación de "no puedes pagar" en el currency
      */
     triggerCurrencyShake() {
-        this.currencyShake.active = true;
-        this.currencyShake.startTime = Date.now();
+        triggerShake(this.currencyShake);
     }
     
     /**
@@ -403,22 +399,10 @@ export class TopBarManager {
         const currencyIcon = this.layout.currencyIcon;
         const sprite = this.assetManager.getSprite('ui-currency-icon');
         
-        // 🆕 NUEVO: Calcular offset de shake si está activo
-        let shakeOffsetX = 0;
-        let isShaking = false;
-        if (this.currencyShake.active) {
-            const elapsed = Date.now() - this.currencyShake.startTime;
-            if (elapsed < this.currencyShake.duration) {
-                // Vibración sinusoidal que se atenúa
-                const progress = elapsed / this.currencyShake.duration;
-                const intensity = 6 * (1 - progress); // Empieza en 6px, se reduce a 0
-                const frequency = 25; // Vibraciones rápidas
-                shakeOffsetX = Math.sin(elapsed * frequency / 100) * intensity;
-                isShaking = true;
-            } else {
-                this.currencyShake.active = false;
-            }
-        }
+        // 🆕 REFACTOR: Calcular offset de shake usando ShakeUtils
+        const shakeOffset = getShakeOffset(this.currencyShake, 6, 25);
+        const shakeOffsetX = shakeOffset.x;
+        const isShaking = this.currencyShake.active;
         
         // Renderizar icono (ancho 80%, alto 90%)
         if (sprite) {

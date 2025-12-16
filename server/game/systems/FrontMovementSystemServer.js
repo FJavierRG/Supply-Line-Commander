@@ -590,6 +590,10 @@ export class FrontMovementSystemServer {
             finalCurrencyToAward = Math.floor(finalCurrencyToAward * currencyMultiplier);
             
             this.gameState.currency[team] += finalCurrencyToAward;
+            // 🔧 FIX: También sumar al total generado para estadísticas
+            if (this.gameState.currencyGenerated) {
+                this.gameState.currencyGenerated[team] += finalCurrencyToAward;
+            }
             this.pendingCurrencyPixels[team] -= currencyToAward * GAME_CONFIG.currency.pixelsPerCurrency;
             
             // 🆕 NUEVO: Emitir evento al cliente para mostrar texto flotante
@@ -646,6 +650,10 @@ export class FrontMovementSystemServer {
             
             if (currencyToAward > 0) {
                 this.gameState.currency[team] += currencyToAward;
+                // 🔧 FIX: También sumar al total generado para estadísticas
+                if (this.gameState.currencyGenerated) {
+                    this.gameState.currencyGenerated[team] += currencyToAward;
+                }
                 this.pendingRetreatPixels[team] -= baseCurrency * GAME_CONFIG.currency.pixelsPerCurrency;
                 
                 // 🆕 NUEVO: Emitir evento al cliente para mostrar texto flotante

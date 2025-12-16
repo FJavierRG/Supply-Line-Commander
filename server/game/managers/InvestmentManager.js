@@ -24,6 +24,10 @@ export class InvestmentManager {
                     // Pagar inversión al jugador
                     if (node.team && this.gameState.currency[node.team] !== undefined) {
                         this.gameState.currency[node.team] += node.investmentReturn;
+                        // 🔧 FIX: También sumar al total generado para estadísticas
+                        if (this.gameState.currencyGenerated && this.gameState.currencyGenerated[node.team] !== undefined) {
+                            this.gameState.currencyGenerated[node.team] += node.investmentReturn;
+                        }
                         console.log(`💰 intelRadio ${node.id} pagó ${node.investmentReturn}$ a ${node.team} (inversión completada)`);
                     }
                     

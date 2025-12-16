@@ -254,6 +254,10 @@ export class FactorySupplySystem {
                     if (disciplineModifiers.currencyPerDelivery && disciplineModifiers.currencyPerDelivery > 0) {
                         const currencyBonus = disciplineModifiers.currencyPerDelivery;
                         this.gameState.currency[delivery.team] += currencyBonus;
+                        // 🔧 FIX: También sumar al total generado para estadísticas
+                        if (this.gameState.currencyGenerated) {
+                            this.gameState.currencyGenerated[delivery.team] += currencyBonus;
+                        }
                         
                         // 🆕 NUEVO: Crear evento visual para mostrar texto flotante en la fábrica
                         const factory = this.gameState.nodes.find(n => n.id === delivery.factoryId);

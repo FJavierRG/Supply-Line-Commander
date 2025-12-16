@@ -292,6 +292,8 @@ export class GameStateManager {
                 bonuses: this.buildHandler.getBuildingBonuses(),
                 gameplay: this.buildHandler.getGameplayProperties(),
                 buildRadii: this.buildHandler.getBuildRadii(), // 🆕 Radio de construcción (proximidad)
+                radii: this.buildHandler.getRadii(), // 🆕 NUEVO: Radios físicos de edificios (tamaño visual)
+                buildBounds: this.buildHandler.getBuildBounds(), // 🆕 NUEVO: Límites de construcción en bordes del mundo
                 detectionRadii: this.buildHandler.getDetectionRadii(),
                 ranges: this.buildHandler.getRanges(), // 🆕 NUEVO: Rangos de acción de edificios
                 temporaryEffects: this.buildHandler.getTemporaryEffects(), // 🆕 NUEVO: Efectos temporales (trained, wounded)
@@ -1371,11 +1373,11 @@ export class GameStateManager {
         const snapshot = {
             time: currentTime,
             player1: {
-                currency: Math.floor(this.currency?.player1 || 0), // 🔧 FIX: Usar currency actual, no generado
+                currency: Math.floor(this.currencyGenerated?.player1 || 0), // 🔧 FIX: Usar total generado, no balance actual
                 trucks: this.trucksDispatched?.player1?.total || 0
             },
             player2: {
-                currency: Math.floor(this.currency?.player2 || 0), // 🔧 FIX: Usar currency actual, no generado
+                currency: Math.floor(this.currencyGenerated?.player2 || 0), // 🔧 FIX: Usar total generado, no balance actual
                 trucks: this.trucksDispatched?.player2?.total || 0
             }
         };

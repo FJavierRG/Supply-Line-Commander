@@ -1816,12 +1816,19 @@ async function startGame(roomId) {
         
         try {
             if (hasAI) {
-                // IA en player2 - usar mazo de IA
+                // IA en player2 - usar mazo de IA según selección del lobby
                 console.log(`🤖 [startGame] Configurando IA para player2: ${room.aiPlayer.race} (${room.aiPlayer.difficulty})`);
                 
-                // 🎯 NUEVO: Establecer mazo de IA
-                const { getDefaultAIDeck } = await import('./game/ai/config/AIDecks.js');
-                const aiDeck = getDefaultAIDeck();
+                // 🎯 NUEVO: Seleccionar mazo de IA según la selección del lobby (room.aiPlayer.race)
+                const { getAIDeck, getDefaultAIDeck } = await import('./game/ai/config/AIDecks.js');
+                let aiDeck = getAIDeck(room.aiPlayer.race);
+                
+                // Fallback a mazo default si no se encuentra el seleccionado
+                if (!aiDeck) {
+                    console.warn(`⚠️ [startGame] Mazo de IA '${room.aiPlayer.race}' no encontrado, usando default`);
+                    aiDeck = getDefaultAIDeck();
+                }
+                
                 gameState.setPlayerDeck('player2', aiDeck);
                 console.log(`✅ [startGame] Mazo de IA establecido para player2: "${aiDeck.name}" (${aiDeck.units.length} unidades)`);
                 

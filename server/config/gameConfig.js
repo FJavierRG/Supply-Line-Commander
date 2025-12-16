@@ -190,6 +190,18 @@ export const GAME_CONFIG = {
     },
     
     // ═══════════════════════════════════════════════════════════════
+    // LÍMITES DE CONSTRUCCIÓN EN BORDES DEL MAPA
+    // ═══════════════════════════════════════════════════════════════
+    buildBounds: {
+        // Padding mínimo adicional desde el borde (se suma al radio del edificio)
+        // Útil si quieres un margen extra más allá del radio del edificio
+        extraPadding: 5,
+        // Si true, usa el radio del edificio para calcular el límite
+        // Si false, usa solo extraPadding como margen fijo
+        useRadiusForBounds: true
+    },
+    
+    // ═══════════════════════════════════════════════════════════════
     // DISCIPLINAS
     // ═══════════════════════════════════════════════════════════════
     disciplines: {

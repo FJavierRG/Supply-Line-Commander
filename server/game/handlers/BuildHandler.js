@@ -65,6 +65,20 @@ export class BuildHandler {
     }
     
     /**
+     * 🆕 NUEVO: Obtiene radios físicos de edificios (tamaño visual/hitbox)
+     */
+    getRadii() {
+        return { ...SERVER_NODE_CONFIG.radius };
+    }
+    
+    /**
+     * 🆕 NUEVO: Obtiene configuración de límites de construcción en bordes del mundo
+     */
+    getBuildBounds() {
+        return { ...GAME_CONFIG.buildBounds };
+    }
+    
+    /**
      * 🆕 SERVIDOR COMO AUTORIDAD: Obtiene efectos temporales (trained, wounded, etc.)
      */
     getTemporaryEffects() {
@@ -610,6 +624,11 @@ export class BuildHandler {
     isValidLocation(x, y, buildingType, options = {}) {
         const { ignoreDetectionLimits = false, allowEnemyTerritory = false, playerTeam = null } = options;
         
+        // 🆕 NUEVO: Verificar que el edificio no se salga de los bordes del mundo
+        if (!this.isWithinWorldBounds(x, y, buildingType)) {
+            return false;
+        }
+        
         // Si ignoreDetectionLimits está activado, solo verificar colisiones físicas básicas (no áreas de detección)
         if (ignoreDetectionLimits) {
             // Solo verificar que no haya otro nodo exactamente en la misma posición
@@ -687,6 +706,41 @@ export class BuildHandler {
         }
         
         return true;
+    }
+    
+    /**
+     * 🆕 NUEVO: Verifica si un edificio cabe dentro de los límites del mundo
+     * Evita que los edificios se construyan parcialmente fuera del mapa
+     * @param {number} x - Posición X del centro del edificio
+     * @param {number} y - Posición Y del centro del edificio
+     * @param {string} buildingType - Tipo de edificio
+     * @returns {boolean} True si el edificio cabe completamente dentro del mundo
+     */
+    isWithinWorldBounds(x, y, buildingType) {
+        const worldWidth = this.gameState.worldWidth || GAME_CONFIG.match.worldWidth;
+        const worldHeight = this.gameState.worldHeight || GAME_CONFIG.match.worldHeight;
+        
+        // Obtener radio del edificio
+        const buildingRadius = SERVER_NODE_CONFIG.radius[buildingType] || 30;
+        
+        // Obtener configuración de límites
+        const boundsConfig = GAME_CONFIG.buildBounds || { extraPadding: 5, useRadiusForBounds: true };
+        const extraPadding = boundsConfig.extraPadding || 0;
+        
+        // Calcular el margen total (radio + padding extra)
+        const margin = boundsConfig.useRadiusForBounds 
+            ? buildingRadius + extraPadding 
+            : extraPadding;
+        
+        // Verificar que el edificio completo esté dentro del mundo
+        const isWithinX = x >= margin && x <= (worldWidth - margin);
+        const isWithinY = y >= margin && y <= (worldHeight - margin);
+        
+        if (!isWithinX || !isWithinY) {
+            console.log(`❌ Construcción rechazada: ${buildingType} fuera de límites del mundo (x=${x.toFixed(0)}, y=${y.toFixed(0)}, margin=${margin})`);
+        }
+        
+        return isWithinX && isWithinY;
     }
     
     /**

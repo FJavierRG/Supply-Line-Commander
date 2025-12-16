@@ -4,6 +4,7 @@
 import { AIActionHandler } from '../handlers/AIActionHandler.js';
 import { AICoreSystem } from '../ai/core/AICoreSystem.js';
 import { DefaultDeckProfile } from '../ai/profiles/DefaultDeckProfile.js';
+import { SpecOpsDeckProfile } from '../ai/profiles/SpecOpsDeckProfile.js';
 import { AIGameStateAnalyzer } from '../ai/core/AIGameStateAnalyzer.js';
 import { AIActionSelector } from '../ai/core/AIActionSelector.js';
 import { AICardEvaluator } from '../ai/core/AICardEvaluator.js';
@@ -14,7 +15,7 @@ import AIConfig, {
 } from '../ai/config/AIConfig.js';
 import { GAME_CONFIG } from '../../config/gameConfig.js';
 import { DEFAULT_DECK } from '../../config/defaultDeck.js';
-import { getDefaultAIDeck } from '../ai/config/AIDecks.js';
+import { getDefaultAIDeck, getAIDeck } from '../ai/config/AIDecks.js';
 import { SERVER_NODE_CONFIG } from '../../config/serverNodes.js';
 
 export class AISystem {
@@ -29,20 +30,21 @@ export class AISystem {
         this.difficulty = this.gameState.room?.aiPlayer?.difficulty || 'medium';
         this.coreSystem = new AICoreSystem(gameState, io, roomId, this.raceId, this.difficulty);
         
-        // 🎯 NUEVO: Sistema de perfiles - Usa mazos de IA separados del mazo del jugador
+        // 🎯 NUEVO: Sistema de perfiles - Selecciona perfil según el mazo configurado en el lobby
         // Los mazos de IA están definidos en game/ai/config/AIDecks.js
-        // TODO FUTURO: Seleccionar perfil aleatoriamente o según configuración
-        const aiDeck = getDefaultAIDeck();
+        const aiRace = this.gameState.room?.aiPlayer?.race || 'A_Nation';
+        let aiDeck = getAIDeck(aiRace);
         
-        // 🎯 HARDCODEADO: Siempre usar DefaultDeckProfile con el mazo default de IA
+        // Fallback a mazo default si no se encuentra
         if (!aiDeck || !aiDeck.units || aiDeck.units.length === 0) {
-            console.error('❌ IA: Error cargando mazo de IA, usando fallback');
-            // Fallback: usar DEFAULT_DECK del servidor (solo en caso de error)
-            this.profile = new DefaultDeckProfile(DEFAULT_DECK);
-        } else {
-            this.profile = new DefaultDeckProfile(aiDeck);
-            console.log(`✅ IA: Mazo cargado desde AIDecks: ${aiDeck.name} (${aiDeck.units.length} unidades)`);
+            console.warn(`⚠️ IA: Mazo '${aiRace}' no encontrado, usando default`);
+            aiDeck = getDefaultAIDeck();
         }
+        
+        // 🎯 Seleccionar perfil según el ID del mazo
+        this.profile = this.createProfileForDeck(aiDeck);
+        
+        console.log(`✅ IA: Perfil '${this.profile.getProfileId()}' cargado con mazo "${aiDeck.name}" (${aiDeck.units.length} unidades)`);
         
         // Verificar que el perfil se creó correctamente
         if (!this.profile) {
@@ -244,6 +246,28 @@ export class AISystem {
         const raceManager = this.gameState.raceManager;
         const team = 'player2';
         return raceManager.getPlayerRace(team) || 'A_Nation'; // Fallback a A_Nation
+    }
+    
+    /**
+     * 🎯 NUEVO: Crea el perfil correcto según el ID del mazo
+     * @param {Object} deck - Mazo de IA
+     * @returns {BaseProfile} Instancia del perfil correspondiente
+     */
+    createProfileForDeck(deck) {
+        if (!deck || !deck.id) {
+            console.warn('⚠️ IA: Mazo sin ID, usando DefaultDeckProfile');
+            return new DefaultDeckProfile(deck || DEFAULT_DECK);
+        }
+        
+        // Seleccionar perfil según el ID del mazo
+        switch (deck.id) {
+            case 'ai_specops':
+                return new SpecOpsDeckProfile(deck);
+            
+            case 'ai_default':
+            default:
+                return new DefaultDeckProfile(deck);
+        }
     }
     
     /**

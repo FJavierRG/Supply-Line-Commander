@@ -2504,4 +2504,34 @@ export class Game {
         
         return capacity;
     }
+    
+    /**
+     * 🆕 NUEVO: Muestra una notificación temporal al usuario
+     * Reutiliza el contenedor de notificaciones del Arsenal
+     * @param {string} message - Mensaje a mostrar
+     * @param {string} type - Tipo: 'success', 'error', 'info'
+     */
+    showNotification(message, type = 'info') {
+        const container = document.getElementById('notification-container');
+        if (!container) {
+            console.warn(`[Notificación ${type}] ${message}`);
+            return;
+        }
+        
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+        
+        container.appendChild(notification);
+        
+        // Auto-eliminar después de 3 segundos
+        setTimeout(() => {
+            notification.classList.add('notification-fade-out');
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+    }
 }
