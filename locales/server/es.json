@@ -67,9 +67,9 @@
       "details": "Genera {incomeBonus}$ por segundo de forma pasiva. Cada planta adicional suma más income."
     },
     "machineNest": {
-      "name": "Nido de Máquinas",
-      "description": "Sistema defensivo automático que ataca unidades enemigas cercanas.",
-      "details": "Torreta defensiva automática que detecta y ataca unidades enemigas dentro de su rango. Excelente para defender posiciones estratégicas."
+      "name": "Nido Trinchera",
+      "description": "Cuando un frente aliado pasa por encima, entra en modo Mantener durante 10s.",
+      "details": "Posición defensiva fortificada. Cuando un nodo de Frente aliado pasa por encima del nido (los centros coinciden), el frente entra automáticamente en modo \"Mantener\" durante {holdDuration} segundos."
     },
     "campaignHospital": {
       "name": "Hospital de Campaña",
@@ -140,6 +140,11 @@
       "name": "Servidores",
       "description": "Aumenta la generación pasiva de currency en +0.5 por segundo.",
       "details": "Centro de cómputo que aumenta la generación pasiva de currency en +{incomeBonus}$ por segundo. Se suma a la generación base."
+    },
+    "telecomsTower": {
+      "name": "Torre de Telecomunicaciones",
+      "description": "Genera +2$/s por cada Radio Intel aliada consumida en la partida. No acumulable.",
+      "details": "Torre de comunicaciones que genera {baseIncomeBonus}$/s de base, incrementándose en +{bonusPerIntelRadio}$/s por cada Radio de Inteligencia aliada que haya completado su inversión durante la partida. Múltiples torres no acumulan el efecto."
     }
   },
   

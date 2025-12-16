@@ -241,6 +241,9 @@ export class NodeRenderer {
         // Verificar si el frente está en retirada (sin munición)
         const hasNoAmmo = node.type === 'front' && node.hasEffect && node.hasEffect('no_supplies');
         
+        // 🆕 Verificar si el frente tiene efecto trenchHold (Nido Trinchera)
+        const hasTrenchHold = node.type === 'front' && node.effects?.some(e => e.type === 'trenchHold');
+        
         // Obtener sprite
         let sprite = null;
         let spriteKey = node.spriteKey;
@@ -254,7 +257,7 @@ export class NodeRenderer {
             // También usar para FOBs que necesitan sprites diferentes según equipo
             if (node.category === 'map_node' || node.type === 'fob') {
                 // Pasar 'ally' o 'enemy' según si es mi equipo
-                sprite = this.assetManager?.getBaseSprite(node.type, false, false, isCritical, hasNoAmmo, isMyBuilding ? 'ally' : 'enemy', nodeRaceId);
+                sprite = this.assetManager?.getBaseSprite(node.type, false, false, isCritical, hasNoAmmo, isMyBuilding ? 'ally' : 'enemy', nodeRaceId, hasTrenchHold);
             } else {
                 // Para edificios construibles, usar spriteKey directamente
                 sprite = this.assetManager.getSprite(spriteKey);
@@ -789,6 +792,9 @@ export class NodeRenderer {
         // Verificar si el frente está en retirada (sin munición)
         const hasNoAmmo = base.type === 'front' && base.hasEffect && base.hasEffect('no_supplies');
         
+        // 🆕 Verificar si el frente tiene efecto trenchHold (Nido Trinchera)
+        const hasTrenchHold = base.type === 'front' && base.effects?.some(e => e.type === 'trenchHold');
+        
         // 🆕 NUEVO: Obtener raza del nodo
         let nodeRaceId = null;
         if (game && game.playerRaces && base.team) {
@@ -812,7 +818,7 @@ export class NodeRenderer {
         const teamForSprite = isMyBuilding ? 'ally' : 'enemy';
         
         // Intentar usar sprite si está disponible (SIEMPRE usar sprite normal, no placeholder)
-        const sprite = this.assetManager?.getBaseSprite(base.type, false, false, isCritical, hasNoAmmo, teamForSprite, nodeRaceId);
+        const sprite = this.assetManager?.getBaseSprite(base.type, false, false, isCritical, hasNoAmmo, teamForSprite, nodeRaceId, hasTrenchHold);
         
         if (sprite) {
             // RENDERIZADO CON SPRITE
@@ -1100,11 +1106,13 @@ export class NodeRenderer {
                 hold: { bg: '#1a4a6b', border: '#2a7aa6' }      // Azul (defensa/ancla)
             };
             
-            // Configuración de los modos
+            // Configuración de los modos disponibles en UI
+            // NOTA: 'hold' está deshabilitado en UI pero la lógica se conserva en el servidor
+            // para posible uso futuro desde edificios o habilidades
             const modes = [
                 { id: 'advance', icon: 'ui-mode-advance', name: 'Avanzar' },
-                { id: 'retreat', icon: 'ui-mode-retreat', name: 'Retroceder' },
-                { id: 'hold', icon: 'ui-mode-hold', name: 'Mantener' }
+                { id: 'retreat', icon: 'ui-mode-retreat', name: 'Retroceder' }
+                // { id: 'hold', icon: 'ui-mode-hold', name: 'Mantener' } // Deshabilitado en UI
             ];
             
             // 🆕 MODIFICADO: Botones alineados verticalmente hacia el lado del enemigo

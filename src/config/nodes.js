@@ -260,6 +260,16 @@ export const NODE_CONFIG = {
         isServers: true // Flag para identificación
     },
     
+    telecomsTower: {
+        id: 'telecomsTower',
+        spriteKey: 'building-telecoms-tower',
+        category: 'buildable',
+        
+        radius: 35, // Tamaño visual del sprite
+        
+        isTelecomsTower: true // Flag para identificación
+    },
+    
     armoredFactory: {
         id: 'armoredFactory',
         spriteKey: 'armored_vehicles', // Sprite: @armored_vehicles.png

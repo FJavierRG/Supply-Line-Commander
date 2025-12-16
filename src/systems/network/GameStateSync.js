@@ -42,6 +42,7 @@ export class GameStateSync {
         this.syncLightVehicles(gameState);
         this.syncMedicalEmergencies(gameState);
         this.syncDisciplines(gameState); // 🆕 NUEVO: Estado de disciplinas
+        this.syncIntelRadiosConsumed(gameState); // 🆕 NUEVO: Contador de Radio Intel consumidas
         
         // 🆕 PROCESAR EVENTOS DE SONIDO ===
         if (gameState.soundEvents && gameState.soundEvents.length > 0) {
@@ -797,6 +798,23 @@ export class GameStateSync {
             active: null,
             timeRemaining: 0,
             cooldowns: {}  // 🆕 NUEVO: Cooldowns individuales { disciplineId: secondsRemaining }
+        };
+    }
+
+    // ========== SINCRONIZACIÓN DE INTEL RADIOS ==========
+
+    /**
+     * 🆕 NUEVO: Sincronizar contador de Radio Intel consumidas desde el servidor
+     * Usado por la Torre de Telecomunicaciones para calcular bonus de income
+     * (cuenta las Radio Intel que completaron su inversión, no las construidas)
+     */
+    syncIntelRadiosConsumed(gameState) {
+        if (!gameState.intelRadiosConsumed) return;
+        
+        // Guardar contador en el game
+        this.game.intelRadiosConsumed = {
+            player1: gameState.intelRadiosConsumed.player1 || 0,
+            player2: gameState.intelRadiosConsumed.player2 || 0
         };
     }
 

@@ -32,6 +32,13 @@ export class EffectsSystem {
                                 node.consumeRate = (node.consumeRate || 3.2) / woundedConfig.consumeMultiplier;
                                 console.log(`⚠️ Efecto wounded expirado en frente ${node.id} (sin originalConsumeRate) - Consumo restaurado: ${node.consumeRate}`);
                             }
+                        } else if (effect.type === 'trenchHold' && node.type === 'front') {
+                            // 🆕 NUEVO: Restaurar modo original cuando expira el efecto del Nido Trinchera
+                            // El hold forzado es irrompible, así que siempre restauramos
+                            if (effect.originalMode) {
+                                node.frontMode = effect.originalMode;
+                                console.log(`✅ Efecto trenchHold expirado en frente ${node.id} - Modo restaurado: ${effect.originalMode}`);
+                            }
                         } else if (effect.type === 'commandoResidual' && effect.keepsDisabled) {
                             // 🆕 NUEVO: Restaurar disabled cuando expira el efecto residual del comando
                             // Solo restaurar si no hay otros comandos activos afectándolo

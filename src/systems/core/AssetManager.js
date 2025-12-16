@@ -14,6 +14,7 @@ export class AssetManager {
             'base-fob': 'assets/sprites/bases/FOB.png',
             'base-front': 'assets/sprites/bases/front.png',
             'base-front-no-ammo': 'assets/sprites/bases/front_no_ammo.png',
+            'base-front-trench': 'assets/sprites/bases/front_trench.png', // 🆕 Frente atrincherado
             // Sprites enemigos (usados dinámicamente según team)
             'base-enemy-front': 'assets/sprites/bases/front_enemy.png',
             'base-enemy-front-no-ammo': 'assets/sprites/bases/front_enemy_no_ammo.png',
@@ -42,6 +43,7 @@ export class AssetManager {
             'building-training-camp': 'assets/sprites/buildings/training_camp.png', // 🆕 Campo de Entrenamiento
             'building-deadly-build': 'assets/sprites/buildings/deadlyBuild.png', // 🆕 Construcción Prohibida
             'building-servers': 'assets/sprites/buildings/server.png', // 🆕 Servidores
+            'building-telecoms-tower': 'assets/sprites/buildings/telecomsTower.png', // 🆕 Torre de Telecomunicaciones
             'armored_vehicles': 'assets/sprites/buildings/armored_vehicles.png', // 🆕 Fábrica de Vehículos Artillados
             
             // 🆕 NUEVO: Sprites del Destructor de mundos
@@ -84,6 +86,7 @@ export class AssetManager {
             'ui-supplies': 'assets/sprites/ui/supplies.png',
             'ui-wounded': 'assets/sprites/ui/wounded.png',
             'ui-vigor-up': 'assets/sprites/ui/vigor_up.png',
+            'ui-defensive': 'assets/sprites/ui/defensive.png', // 🆕 Efecto de Nido Trinchera (hold forzado)
             'ui-no-supplies': 'assets/sprites/ui/no_supplies.png',
             'ui-sniper-kill': 'assets/sprites/ui/sniper_kill_feed.png',
             'ui-emergency-medic': 'assets/sprites/ui/emergency_medic.png',
@@ -363,15 +366,22 @@ export class AssetManager {
      * @param {boolean} hasNoAmmo - Si no tiene munición (solo front)
      * @param {string} team - Equipo del nodo ('ally', 'player2', 'player1')
      * @param {string} raceId - ID de la raza (opcional, no usado actualmente)
+     * @param {boolean} hasTrenchHold - Si tiene efecto trenchHold activo (solo front)
      * @returns {Image|null}
      */
-    getBaseSprite(type, isSelected = false, isHovered = false, isCritical = false, hasNoAmmo = false, team = 'ally', raceId = null) {
+    getBaseSprite(type, isSelected = false, isHovered = false, isCritical = false, hasNoAmmo = false, team = 'ally', raceId = null, hasTrenchHold = false) {
         // Determinar prefijo según si es aliado o enemigo (team ahora es 'ally' o 'enemy')
         const prefix = team === 'enemy' ? 'base-enemy-' : 'base-';
         
         // Front crítico tiene prioridad
         if (type === 'front' && isCritical) {
             const sprite = this.getSprite('base-front-critical');
+            if (sprite) return sprite;
+        }
+        
+        // 🆕 Front atrincherado (efecto trenchHold del Nido Trinchera)
+        if (type === 'front' && hasTrenchHold) {
+            const sprite = this.getSprite('base-front-trench');
             if (sprite) return sprite;
         }
         

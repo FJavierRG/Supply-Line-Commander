@@ -387,6 +387,28 @@ export class TopBarManager {
             const serverBonus = servers * serversBonus;
             
             totalIncome += nuclearBonus + serverBonus;
+            
+            // 🆕 NUEVO: Bonus de Torre de Telecomunicaciones
+            // Genera +2$/s por cada Radio Intel aliada construida en la partida (no acumulable)
+            const telecomsTowerConfig = this.game.serverBuildingConfig?.effects?.telecomsTower;
+            if (telecomsTowerConfig) {
+                const hasTelecomsTower = this.game.nodes.some(n => 
+                    n.type === 'telecomsTower' && 
+                    n.team === myTeam && 
+                    n.active && 
+                    !n.isConstructing && 
+                    !n.isAbandoned &&
+                    !n.disabled &&
+                    !n.broken
+                );
+                
+                if (hasTelecomsTower) {
+                    const intelRadioCount = this.game.intelRadiosConsumed?.[myTeam] || 0;
+                    const telecomsBonus = (telecomsTowerConfig.baseIncomeBonus || 0) + 
+                                         (intelRadioCount * (telecomsTowerConfig.bonusPerIntelRadio || 2));
+                    totalIncome += telecomsBonus;
+                }
+            }
         }
         
         return totalIncome;

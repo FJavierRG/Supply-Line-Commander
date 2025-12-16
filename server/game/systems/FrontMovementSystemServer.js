@@ -177,13 +177,13 @@ export class FrontMovementSystemServer {
 
     /**
      * ✅ FASE 1.4: Verifica si un frente es un ancla inmóvil
-     * Un frente es ancla si está en modo HOLD y tiene supplies > 0
+     * Un frente es ancla si está en modo HOLD (independientemente de supplies)
      * @param {Object} front - Frente a verificar
      * @returns {boolean} True si es ancla
      */
     isAnchor(front) {
         const modeConfig = this.getFrontModeConfig(front);
-        return modeConfig.isAnchor && front.supplies > 0;
+        return modeConfig.isAnchor; // HOLD siempre es ancla, con o sin supplies
     }
 
     /**
@@ -212,16 +212,13 @@ export class FrontMovementSystemServer {
         let reason = '';
         let isVoluntaryRetreat = false;
 
-        // MODO HOLD: Ancla defensiva
+        // MODO HOLD: Ancla defensiva - SIEMPRE quieto (con o sin supplies)
         if (modeConfig.isAnchor) {
+            movement = 0;
             if (front.supplies > 0) {
-                // Con supplies: quieto (ancla)
-                movement = 0;
                 reason = `HOLD (supplies: ${front.supplies.toFixed(0)})`;
             } else {
-                // Sin supplies: pierde ancla y retrocede
-                movement = -this.retreatSpeed * dt * direction;
-                reason = `HOLD-SIN-SUMINISTROS (retrocede)`;
+                reason = `HOLD-SIN-SUMINISTROS (quieto)`;
             }
         }
         // MODO RETREAT: Retroceso voluntario
@@ -258,7 +255,7 @@ export class FrontMovementSystemServer {
      * Solo puede empujar si:
      * 1. Está en modo ADVANCE
      * 2. Tiene más supplies que el enemigo
-     * 3. El enemigo NO es un ancla con supplies
+     * 3. El enemigo NO está en modo HOLD (ancla)
      * @param {Object} pusher - Frente que intenta empujar
      * @param {Object} pushed - Frente que podría ser empujado
      * @returns {boolean} True si puede empujar
@@ -271,7 +268,7 @@ export class FrontMovementSystemServer {
             return false;
         }
         
-        // No puede empujar si el enemigo es un ancla con supplies
+        // No puede empujar si el enemigo está en modo HOLD (ancla inmóvil)
         if (this.isAnchor(pushed)) {
             return false;
         }
@@ -340,20 +337,18 @@ export class FrontMovementSystemServer {
             // PASO 2: RESOLVER COLISIÓN
             // ═══════════════════════════════════════════════════════════════
             
-            // CASO A: Este frente es ANCLA con supplies
+            // CASO A: Este frente es ANCLA (modo HOLD) - siempre quieto
             if (this.isAnchor(front)) {
                 movement = 0;
-                reason = `HOLD-ANCLA (supplies: ${front.supplies.toFixed(0)})`;
+                if (front.supplies > 0) {
+                    reason = `HOLD-ANCLA (supplies: ${front.supplies.toFixed(0)})`;
+                } else {
+                    reason = `HOLD-SIN-SUMINISTROS (quieto)`;
+                    this.handleNoAmmoSound(front);
+                }
             }
             
-            // CASO B: Este frente es ANCLA SIN supplies (pierde ancla)
-            else if (modeConfig.isAnchor && front.supplies === 0) {
-                movement = -this.retreatSpeed * dt * direction;
-                reason = `HOLD-SIN-SUMINISTROS (retrocede)`;
-                this.handleNoAmmoSound(front);
-            }
-            
-            // CASO C: Este frente NO tiene supplies (retrocede automáticamente)
+            // CASO B: Este frente NO tiene supplies y NO es HOLD (retrocede automáticamente)
             else if (front.supplies === 0) {
                 // Verificar si el enemigo lo está empujando activamente
                 const enemyPushForce = this.calculateCollisionForce(nearestEnemy, front, direction, dt);
@@ -582,7 +577,6 @@ export class FrontMovementSystemServer {
                     const trainedConfig = SERVER_NODE_CONFIG.temporaryEffects.trained;
                     // Añadir bonus de currency del efecto trained
                     finalCurrencyToAward += trainedConfig.currencyBonus;
-                    console.log(`🎓 Frente ${front.id} tiene efecto "trained" - Bonus: +${trainedConfig.currencyBonus}$ por avance`);
                 }
             }
             
@@ -610,10 +604,6 @@ export class FrontMovementSystemServer {
                 }
             }
             
-            // Log solo cada 50$ para no spamear (o si hay bonus de trained)
-            if (finalCurrencyToAward >= 50 || (front && front.effects?.some(e => e.type === 'trained'))) {
-                console.log(`📈 ${team}: +${finalCurrencyToAward}$ por avance de frente (total: ${this.gameState.currency[team]}$)`);
-            }
         }
     }
 
