@@ -32,6 +32,7 @@ import { CommandoSystem } from './systems/CommandoSystem.js';
 import { TruckAssaultSystem } from './systems/TruckAssaultSystem.js';
 import { VehicleWorkshopSystem } from './systems/VehicleWorkshopSystem.js';
 import { CameraDroneSystem } from './systems/CameraDroneSystem.js';
+import { TrenchNestSystem } from './systems/TrenchNestSystem.js'; // 🆕 NUEVO: Sistema de Nido Trinchera
 import { DisciplineManager } from './managers/DisciplineManager.js'; // 🆕 NUEVO: Sistema de disciplinas
 import { MAP_CONFIG, calculateAbsolutePosition } from '../utils/mapGenerator.js';
 import { getDroneFlightConfig, calculateDroneFlightPosition } from './utils/droneFlightUtils.js'; // 🆕 REFACTOR: Utilidades de vuelo de drones
@@ -64,6 +65,12 @@ export class GameStateManager {
         };
         this.buildingsDestroyed = {
             player1: 0, // Edificios que player1 ha destruido al enemigo
+            player2: 0
+        };
+        // 🆕 NUEVO: Contador de Radio Intel consumidas en la partida (para telecomsTower)
+        // Se incrementa cuando la Radio Intel completa su tiempo de inversión
+        this.intelRadiosConsumed = {
+            player1: 0,
             player2: 0
         };
         // 🆕 NUEVO: Historial temporal para gráficos (snapshots cada 10s)
@@ -125,6 +132,7 @@ export class GameStateManager {
         this.truckAssaultSystem = new TruckAssaultSystem(this); // 🆕 NUEVO: Sistema de truck assault
         this.vehicleWorkshopSystem = new VehicleWorkshopSystem(this); // 🆕 NUEVO: Sistema de taller de vehículos
         this.cameraDroneSystem = new CameraDroneSystem(this); // 🆕 NUEVO: Sistema de camera drone
+        this.trenchNestSystem = new TrenchNestSystem(this); // 🆕 NUEVO: Sistema de Nido Trinchera
         
         // 🆕 NUEVO: Estado del Destructor de mundos
         this.worldDestroyerActive = false;
@@ -701,6 +709,18 @@ export class GameStateManager {
             return { success: false, reason: `El frente ya está en modo ${newMode}` };
         }
         
+        // 🆕 Verificar si el frente tiene efecto trenchHold activo (hold forzado por Nido Trinchera)
+        const hasTrenchHold = front.effects?.some(e => 
+            e.type === 'trenchHold' && 
+            (!e.expiresAt || this.gameTime < e.expiresAt)
+        );
+        if (hasTrenchHold) {
+            return { 
+                success: false, 
+                reason: 'El frente está atrincherado. No puede cambiar de modo.' 
+            };
+        }
+        
         // Cambiar modo
         const oldMode = front.frontMode;
         front.frontMode = newMode;
@@ -1083,6 +1103,9 @@ export class GameStateManager {
             }
         }
         
+        // === ACTUALIZAR NIDO TRINCHERA ===
+        this.trenchNestSystem.update(dt);
+        
         // === ACTUALIZAR EFECTOS TEMPORALES ===
         this.effectsSystem.updateEffects(dt);
         
@@ -1127,6 +1150,10 @@ export class GameStateManager {
             disciplines: { // 🆕 NUEVO: Estado de disciplinas
                 player1: this.disciplineManager.getPlayerState('player1', Date.now()),
                 player2: this.disciplineManager.getPlayerState('player2', Date.now())
+            },
+            intelRadiosConsumed: { // 🆕 NUEVO: Contador de Radio Intel consumidas (para telecomsTower)
+                player1: this.intelRadiosConsumed.player1 || 0,
+                player2: this.intelRadiosConsumed.player2 || 0
             }
         };
         
@@ -1272,6 +1299,7 @@ export class GameStateManager {
             this.truckAssaultSystem = null;
             this.vehicleWorkshopSystem = null;
             this.cameraDroneSystem = null;
+            this.trenchNestSystem = null;
             console.log(`✅ [cleanup] Sistemas de actualización limpiados`);
             
             // 11. Limpiar referencia circular a room (importante)

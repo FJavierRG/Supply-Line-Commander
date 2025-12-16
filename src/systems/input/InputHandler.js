@@ -952,8 +952,9 @@ export class InputHandler {
         const buttonRadius = buttonSize / 2;
         const hitboxPadding = 5;
         
-        // Los modos disponibles
-        const modes = ['advance', 'retreat', 'hold'];
+        // Los modos disponibles en UI
+        // NOTA: 'hold' está deshabilitado en UI pero la lógica se conserva en el servidor
+        const modes = ['advance', 'retreat'];
         
         // 🆕 MODIFICADO: Botones alineados verticalmente hacia el lado del enemigo
         const isPlayer1 = front.team === 'player1' || front.team === 'ally';

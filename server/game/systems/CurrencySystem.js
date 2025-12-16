@@ -104,6 +104,34 @@ export class CurrencySystem {
         player1Income += player1Servers * serversBonus;
         player2Income += player2Servers * serversBonus;
         
+        // 🆕 Bonus de Torre de Telecomunicaciones: +2$/s por cada Radio Intel aliada jugada en la partida
+        // No se acumula con otras torres (solo cuenta una)
+        const telecomsTowerConfig = SERVER_NODE_CONFIG.effects.telecomsTower;
+        
+        // Verificar si hay al menos una torre de telecomunicaciones construida y no disabled para cada jugador
+        const player1HasTelecomsTower = this.gameState.nodes.some(n => 
+            n.type === 'telecomsTower' && 
+            n.team === 'player1' && 
+            this.raceManager.canNodeProvideBonus(n)
+        );
+        const player2HasTelecomsTower = this.gameState.nodes.some(n => 
+            n.type === 'telecomsTower' && 
+            n.team === 'player2' && 
+            this.raceManager.canNodeProvideBonus(n)
+        );
+        
+        // Aplicar bonus si hay al menos una torre (no se acumula con otras torres)
+        if (player1HasTelecomsTower) {
+            const intelRadioCount = this.gameState.intelRadiosConsumed.player1 || 0;
+            const telecomsBonus = telecomsTowerConfig.baseIncomeBonus + (intelRadioCount * telecomsTowerConfig.bonusPerIntelRadio);
+            player1Income += telecomsBonus;
+        }
+        if (player2HasTelecomsTower) {
+            const intelRadioCount = this.gameState.intelRadiosConsumed.player2 || 0;
+            const telecomsBonus = telecomsTowerConfig.baseIncomeBonus + (intelRadioCount * telecomsTowerConfig.bonusPerIntelRadio);
+            player2Income += telecomsBonus;
+        }
+        
         // 🆕 DISCIPLINA: Bonus de "Combate Defensivo" (+1 currency/segundo por frente en modo hold)
         const disciplineBonus = this.applyDisciplineBonus();
         player1Income += disciplineBonus.player1;

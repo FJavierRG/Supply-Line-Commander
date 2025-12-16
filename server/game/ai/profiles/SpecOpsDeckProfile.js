@@ -134,7 +134,8 @@ export class SpecOpsDeckProfile extends BaseProfile {
                 bonuses: {
                     midPhase: 20,
                     latePhase: 25,
-                    hasEnemyConvoys: 15  // +15 si hay convoyes enemigos activos
+                    hasEnemyConvoys: 15,  // +15 si hay convoyes enemigos activos
+                    allEnemyFOBsSabotaged: 40  // +40 si todos los FOBs enemigos ya están saboteados
                 }
             }
         };
@@ -331,6 +332,30 @@ export class SpecOpsDeckProfile extends BaseProfile {
                     return enemyConvoys.length > 0;
                 }
                 return false;
+            
+            case 'allEnemyFOBsSabotaged':
+                // TODOS los FOBs enemigos ya tienen el efecto de sabotaje activo
+                const enemyTeamForSabotage = team === 'player1' ? 'player2' : 'player1';
+                const allEnemyFOBs = gameState.nodes.filter(n => 
+                    n.team === enemyTeamForSabotage && 
+                    n.type === 'fob' && 
+                    n.active && 
+                    n.constructed
+                );
+                
+                // Si no hay FOBs enemigos, no aplica
+                if (allEnemyFOBs.length === 0) return false;
+                
+                // Verificar si TODOS tienen el efecto de sabotaje
+                const allSabotaged = allEnemyFOBs.every(fob => 
+                    fob.effects && fob.effects.some(e => e.type === 'fobSabotage')
+                );
+                
+                if (allSabotaged) {
+                    console.log(`🎯 IA SpecOps: Todos los FOBs enemigos (${allEnemyFOBs.length}) están saboteados → priorizar truckAssault`);
+                }
+                
+                return allSabotaged;
             
             default:
                 return undefined;

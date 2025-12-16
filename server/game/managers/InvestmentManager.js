@@ -28,6 +28,13 @@ export class InvestmentManager {
                         if (this.gameState.currencyGenerated && this.gameState.currencyGenerated[node.team] !== undefined) {
                             this.gameState.currencyGenerated[node.team] += node.investmentReturn;
                         }
+                        
+                        // 🆕 NUEVO: Incrementar contador de Radio Intel consumidas (para telecomsTower)
+                        if (this.gameState.intelRadiosConsumed) {
+                            this.gameState.intelRadiosConsumed[node.team]++;
+                            console.log(`📡 Radio Intel consumida por ${node.team} - Total: ${this.gameState.intelRadiosConsumed[node.team]}`);
+                        }
+                        
                         console.log(`💰 intelRadio ${node.id} pagó ${node.investmentReturn}$ a ${node.team} (inversión completada)`);
                     }
                     

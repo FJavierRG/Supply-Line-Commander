@@ -21,7 +21,7 @@ export const SERVER_NODE_CONFIG = {
         campaignHospital: 50,
         intelCenter: 150, 
         vigilanceTower: 140, 
-        trainStation: 150,
+        trainStation: 165,
         droneWorkshop: 125,
         vehicleWorkshop: 90,
         armoredFactory: 150,
@@ -30,8 +30,10 @@ export const SERVER_NODE_CONFIG = {
         trainingCamp: 80,
         deadlyBuild: 140,
         servers: 45,
+        telecomsTower: 145,
+        machineNest: 90,      // 🆕 Nido Trinchera
         // 🆕 CONSUMIBLES/PROYECTILES
-        drone: 170,
+        drone: 150,
         sniperStrike: 70,
         fobSabotage: 90,
         specopsCommando: 90,  
@@ -55,6 +57,7 @@ export const SERVER_NODE_CONFIG = {
         engineerCenter: 4,
         factory: 5,
         campaignHospital: 3,
+        machineNest: 4,       // 🆕 Nido Trinchera
         intelRadio: 4, 
         aerialBase: 4, 
         intelCenter: 4, 
@@ -67,7 +70,8 @@ export const SERVER_NODE_CONFIG = {
         secretLaboratory: 5,
         trainingCamp: 6,
         deadlyBuild: 7,
-        servers: 3
+        servers: 3,
+        telecomsTower: 5
     },
 
     // ═══════════════════════════════════════════════════════════════
@@ -75,12 +79,12 @@ export const SERVER_NODE_CONFIG = {
     // ═══════════════════════════════════════════════════════════════
     effects: {
         nuclearPlant: {
-            incomeBonus: 1, // +1$/s por planta
+            incomeBonus: 1.5, // +1$/s por planta
             factorySpeedBonus: 1 // 🆕 -1 segundo en intervalo de producción de fábricas en rango
         },
         truckFactory: {
             vehicleBonus: 1,      // +1 vehículo al HQ
-            capacityBonus: 5     // +5 capacidad para heavy_trucks
+            capacityBonus: 2     // +5 capacidad para heavy_trucks
         },
         engineerCenter: {
             speedMultiplier: 1.5,        // +50% velocidad para heavy_truck
@@ -130,6 +134,14 @@ export const SERVER_NODE_CONFIG = {
         },
         servers: {
             incomeBonus: 0.5         // 🆕 +0.5 currency/segundo pasivo
+        },
+        telecomsTower: {
+            baseIncomeBonus: 0,      // 🆕 Ingreso base por segundo (empieza en 0)
+            bonusPerIntelRadio: 1    // 🆕 +2$/s por cada Radio Intel aliada consumida en la partida
+        },
+        machineNest: {
+            holdDuration: 10,        // 🆕 Duración en segundos del efecto "hold" forzado
+            detectionRadius: 30      // 🆕 Radio de detección para activar el efecto (centros deben coincidir aprox)
         }
     },
 
@@ -184,6 +196,12 @@ export const SERVER_NODE_CONFIG = {
             currencyBonus: 1,       // +1 currency adicional por avance
             icon: 'ui-vigor-up',
             tooltip: 'Entrenado: +1 currency por avance'
+        },
+        trenchHold: {
+            duration: 10,           // 10 segundos en modo hold forzado
+            forcedMode: 'hold',     // Modo forzado
+            icon: 'ui-defensive',
+            tooltip: 'Atrincherado: El Frente no puede ser empujado'
         }
     },
 
@@ -208,7 +226,7 @@ export const SERVER_NODE_CONFIG = {
         truckFactory: 130,   
         engineerCenter: 130,   
         nuclearPlant: 140,    
-        machineNest: 120,     
+        machineNest: 120,      // Radio de construcción del Nido Trinchera     
         campaignHospital: 130,
         intelRadio: 120,      
         intelCenter: 130,     
@@ -222,7 +240,8 @@ export const SERVER_NODE_CONFIG = {
         secretLaboratory: 130,
         trainingCamp: 130,
         deadlyBuild: 140,
-        servers: 120
+        servers: 120,
+        telecomsTower: 130
     },
     
     // ═══════════════════════════════════════════════════════════════
@@ -259,7 +278,8 @@ export const SERVER_NODE_CONFIG = {
         secretLaboratory: 35,
         trainingCamp: 35,
         deadlyBuild: 40,
-        servers: 30
+        servers: 30,
+        telecomsTower: 35
     },
     
     // 🆕 NUEVO: Configuración de nodos especiales que se despliegan como unidades
@@ -315,7 +335,7 @@ export const SERVER_NODE_CONFIG = {
             id: 'helicopter',
             name: 'Aéreo',
             icon: 'ui-chopper-icon',
-            enabled: true,
+            enabled: false,
             // Usa landedHelicopters/maxHelicopters
             usesStandardSystem: false,
             availabilityProperty: 'landedHelicopters',
@@ -487,7 +507,7 @@ export const SERVER_NODE_CONFIG = {
         // Propiedades de radio inteligencia
         intelRadio: {
             investmentTime: 20,      // Tiempo en segundos antes de pagar
-            investmentBonus: 30       // Beneficio adicional (se suma al costo del edificio)
+            investmentBonus: 40       // Beneficio adicional (se suma al costo del edificio)
         },
         
         // Propiedades de sniper
@@ -541,7 +561,7 @@ export const SERVER_NODE_CONFIG = {
             engineerCenter: true,
             factory: true,
             nuclearPlant: true,
-            machineNest: false,
+            machineNest: true,  // 🆕 Nido Trinchera habilitado
             campaignHospital: false,
             intelRadio: true,
             intelCenter: true,   
@@ -555,6 +575,7 @@ export const SERVER_NODE_CONFIG = {
             trainingCamp: true,
             deadlyBuild: true,
             servers: true,
+            telecomsTower: true,
             armoredFactory: true, // ✅ Fábrica de Vehículos Artillados
             // 🆕 CONSUMIBLES/PROYECTILES
             drone: true,

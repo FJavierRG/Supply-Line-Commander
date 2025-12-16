@@ -1,10 +1,12 @@
 // ===== GESTOR DE MODOS DE FRENTE PARA IA =====
-// Gestiona las decisiones de cambio de modo (ADVANCE, RETREAT, HOLD) para los frentes de la IA
+// Gestiona las decisiones de cambio de modo (ADVANCE, RETREAT) para los frentes de la IA
 //
 // LÓGICA DE DECISIÓN:
 // - ADVANCE: Cuando tiene más supplies que el enemigo → empujar y ganar terreno/currency
 // - RETREAT: Cuando el enemigo tiene más supplies → retroceder voluntariamente y ganar currency (75%)
-// - HOLD: Cuando necesita ganar tiempo → ancla defensiva que bloquea avance enemigo
+//
+// NOTA: El modo HOLD está deshabilitado en la UI y en la IA por razones de diseño.
+// La lógica se conserva en el servidor para posible uso futuro desde edificios o habilidades.
 //
 // FACTOR DIFICULTAD:
 // - Easy: 60% de tomar decisión óptima, 3s de delay
@@ -107,7 +109,10 @@ export class AIFrontModeManager {
      * Calcula el modo óptimo para un frente dado el contexto
      * @param {Object} myFront - Frente propio
      * @param {Object|null} enemyFront - Frente enemigo más cercano
-     * @returns {string|null} Modo óptimo ('advance', 'retreat', 'hold') o null si no hay cambio
+     * @returns {string|null} Modo óptimo ('advance', 'retreat') o null si no hay cambio
+     * 
+     * NOTA: El modo 'hold' está deshabilitado por razones de diseño.
+     * La lógica se conserva en el servidor para uso futuro desde edificios o habilidades.
      */
     calculateOptimalMode(myFront, enemyFront) {
         const config = AIConfig.frontModes;
@@ -139,18 +144,12 @@ export class AIFrontModeManager {
         
         // 2. Si tenemos mucho menos que el enemigo → RETREAT (ganar currency retrocediendo)
         if (supplyRatio <= thresholds.retreatWhenBehind) {
-            // Caso especial: si estamos muy bajo (< holdWhenDefending), considerar HOLD
-            if (supplyRatio <= thresholds.holdWhenDefending && mySupplies > 0) {
-                // HOLD para ganar tiempo si tenemos algo de supplies
-                // Esto evita que nos empujen mientras esperamos reabastecimiento
-                return 'hold';
-            }
             return 'retreat';
         }
         
         // 3. En zona neutral (entre 0.7 y 1.2) → mantener modo actual o ADVANCE por defecto
-        // Si estamos en RETREAT o HOLD sin necesidad, volver a ADVANCE
-        if (myFront.frontMode === 'retreat' || myFront.frontMode === 'hold') {
+        // Si estamos en RETREAT sin necesidad, volver a ADVANCE
+        if (myFront.frontMode === 'retreat') {
             return 'advance';
         }
         

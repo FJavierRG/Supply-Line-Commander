@@ -67,9 +67,9 @@
       "details": "Generates {incomeBonus}$ per second passively. Each additional plant adds more income."
     },
     "machineNest": {
-      "name": "Machine Nest",
-      "description": "Automatic defensive system that attacks nearby enemy units.",
-      "details": "Automatic defensive turret that detects and attacks enemy units within its range. Excellent for defending strategic positions."
+      "name": "Trench Nest",
+      "description": "When an allied front passes over, it enters Hold mode for 10s.",
+      "details": "Fortified defensive position. When an allied Front node passes over the nest (centers coincide), the front automatically enters \"Hold\" mode for {holdDuration} seconds."
     },
     "campaignHospital": {
       "name": "Field Hospital",
@@ -140,6 +140,11 @@
       "name": "Servers",
       "description": "Increases passive currency generation by +0.5 per second.",
       "details": "Computing center that increases passive currency generation by +{incomeBonus}$ per second. Adds to base generation."
+    },
+    "telecomsTower": {
+      "name": "Telecommunications Tower",
+      "description": "Generates +2$/s for each allied Intel Radio consumed during the match. Non-stackable.",
+      "details": "Communications tower that generates {baseIncomeBonus}$/s base, increasing by +{bonusPerIntelRadio}$/s for each allied Intel Radio that completed its investment during the match. Multiple towers do not stack."
     }
   },
   
