@@ -1,9 +1,10 @@
 // ===== SISTEMA CORE DE IA =====
-// Orquesta toda la lógica común de la IA (abastecimiento, emergencias, reparaciones)
+// Orquesta toda la lógica común de la IA (abastecimiento, emergencias, reparaciones, modos de frente)
 
 import { AISupplyManager } from './AISupplyManager.js';
 import { AIMedicalManager } from './AIMedicalManager.js';
 import { AIRepairManager } from './AIRepairManager.js';
+import { AIFrontModeManager } from './AIFrontModeManager.js';
 import AIConfig from '../config/AIConfig.js';
 import { getAdjustedInterval } from '../config/AIConfig.js';
 
@@ -19,6 +20,7 @@ export class AICoreSystem {
         this.supplyManager = new AISupplyManager(gameState, io, roomId, raceId, difficulty);
         this.medicalManager = new AIMedicalManager(gameState, io, roomId);
         this.repairManager = new AIRepairManager(gameState, io, roomId);
+        this.frontModeManager = new AIFrontModeManager(gameState, difficulty);
         
         // Timers para cada tipo de acción
         this.timers = {
@@ -87,6 +89,9 @@ export class AICoreSystem {
             this.timers.repair = 0;
             this.repairManager.handleRepairs(team, currency);
         }
+        
+        // 6. Gestión de modos de frente (evaluación periódica con delay por dificultad)
+        this.frontModeManager.update(dt);
     }
     
     /**

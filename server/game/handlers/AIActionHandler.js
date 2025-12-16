@@ -385,11 +385,16 @@ export class AIActionHandler {
         const result = this.combatHandler.handleFobSabotage(team, target.id);
         
         if (result.success) {
-            // Broadcast
-            this.io.to(this.roomId).emit('fob_sabotage', {
-                targetId: target.id,
-                team: team
+            // Broadcast EXACTAMENTE igual que un jugador real (ver server.js)
+            this.io.to(this.roomId).emit('fob_sabotage_fired', {
+                saboteurId: team,
+                targetId: result.targetId,
+                effect: result.effect
             });
+            
+            if (AIConfig.debug.logActions) {
+                console.log(`⚡ IA: FOB sabotajeada exitosamente → ${target.id.substring(0, 8)}`);
+            }
         }
         
         return result.success;
@@ -461,8 +466,8 @@ export class AIActionHandler {
      * Ejecuta despliegue de truck assault
      */
     async executeTruckAssault(myNodes, team) {
-        // Encontrar posición en territorio enemigo (cerca de rutas de convoyes)
-        const position = this.findEnemyTerritoryPosition(team);
+        // Encontrar posición óptima en ruta de convoyes enemigos (entre FOB y frente)
+        const position = this.findTruckAssaultTargetPosition(team);
         
         if (!position) {
             return false;
@@ -472,13 +477,19 @@ export class AIActionHandler {
         const result = this.combatHandler.handleTruckAssaultDeploy(team, position.x, position.y);
         
         if (result.success) {
-            // Broadcast
+            // Broadcast EXACTAMENTE igual que un jugador real (ver server.js)
             this.io.to(this.roomId).emit('truck_assault_deployed', {
-                nodeId: result.truckAssault.id,
-                x: position.x,
-                y: position.y,
-                team: team
+                truckAssaultId: result.truckAssault.id,  // ✅ Mismo nombre que jugador real
+                team: team,
+                x: result.truckAssault.x,
+                y: result.truckAssault.y,
+                detectionRadius: result.truckAssault.detectionRadius,  // ✅ Campo requerido
+                spawnTime: result.truckAssault.spawnTime  // ✅ Campo requerido
             });
+            
+            if (AIConfig.debug.logActions) {
+                console.log(`🚛 IA: Truck Assault desplegado exitosamente → (${result.truckAssault.x.toFixed(0)}, ${result.truckAssault.y.toFixed(0)})`);
+            }
         }
         
         return result.success;
@@ -723,6 +734,97 @@ export class AIActionHandler {
         
         // 🚫 Todos los FOBs ya tienen camera drones cerca
         console.log(`⚠️ IA CAMERA DRONE: Todos los FOBs (${enemyFOBs.length}) ya tienen camera drones. No se lanzará.`);
+        return null; // No hay target válido
+    }
+    
+    /**
+     * Encuentra posición óptima para desplegar truck assault
+     * Busca el punto medio entre FOB enemigo y su frente más cercano (ruta de convoyes)
+     * @param {string} team - Equipo de la IA
+     * @returns {Object|null} { x, y } o null si no hay target válido
+     */
+    findTruckAssaultTargetPosition(team) {
+        const enemyTeam = team === 'player1' ? 'player2' : 'player1';
+        const enemyNodes = this.gameState.nodes.filter(n => n.team === enemyTeam && n.active && n.constructed);
+        
+        // Buscar todos los FOBs enemigos
+        const enemyFOBs = enemyNodes.filter(n => n.type === 'fob');
+        
+        if (enemyFOBs.length === 0) {
+            console.log(`⚠️ IA TRUCK ASSAULT: No hay FOBs enemigos, no se puede desplegar`);
+            return null;
+        }
+        
+        // Buscar todos los frentes enemigos
+        const enemyFronts = enemyNodes.filter(n => n.type === 'front');
+        
+        if (enemyFronts.length === 0) {
+            console.log(`⚠️ IA TRUCK ASSAULT: No hay frentes enemigos, no se puede desplegar`);
+            return null;
+        }
+        
+        // Buscar truck assaults activos de la IA (evitar duplicados)
+        const myTruckAssaults = this.gameState.nodes.filter(n => 
+            n.team === team && 
+            n.type === 'truckAssault' && 
+            n.active
+        );
+        
+        // Radio para considerar que una ruta ya tiene truck assault (250px - un poco más amplio)
+        const PROXIMITY_RADIUS = 250;
+        
+        // Barajar FOBs para variar la selección
+        const shuffledFOBs = [...enemyFOBs].sort(() => Math.random() - 0.5);
+        
+        // Iterar sobre FOBs hasta encontrar uno sin truck assault cerca
+        for (const targetFOB of shuffledFOBs) {
+            // Encontrar el frente más cercano a este FOB
+            let closestFront = null;
+            let minDistance = Infinity;
+            
+            for (const front of enemyFronts) {
+                const dx = front.x - targetFOB.x;
+                const dy = front.y - targetFOB.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestFront = front;
+                }
+            }
+            
+            if (!closestFront) {
+                continue; // Este FOB no tiene frente cercano, probar siguiente
+            }
+            
+            // Calcular punto medio entre FOB y frente (ruta de convoyes)
+            const midX = (targetFOB.x + closestFront.x) / 2;
+            const midY = (targetFOB.y + closestFront.y) / 2;
+            
+            // Verificar si ya hay un truck assault cerca de este punto
+            const hasTruckAssaultNearby = myTruckAssaults.some(ta => {
+                const dx = ta.x - midX;
+                const dy = ta.y - midY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                return distance < PROXIMITY_RADIUS;
+            });
+            
+            if (hasTruckAssaultNearby) {
+                console.log(`⏭️ IA TRUCK ASSAULT: Ya hay truck assault cerca de la ruta FOB→Frente, probando siguiente...`);
+                continue; // Ya hay truck assault cerca, probar siguiente FOB
+            }
+            
+            // ✅ Esta ruta no tiene truck assault cerca, usar este target
+            console.log(`🎯 IA TRUCK ASSAULT: Target calculado entre FOB (${targetFOB.x.toFixed(0)}, ${targetFOB.y.toFixed(0)}) y frente (${closestFront.x.toFixed(0)}, ${closestFront.y.toFixed(0)}) → punto medio: (${midX.toFixed(0)}, ${midY.toFixed(0)})`);
+            
+            return {
+                x: midX,
+                y: midY
+            };
+        }
+        
+        // 🚫 Todas las rutas ya tienen truck assaults cerca
+        console.log(`⚠️ IA TRUCK ASSAULT: Todas las rutas FOB→Frente (${enemyFOBs.length}) ya tienen truck assaults. No se desplegará.`);
         return null; // No hay target válido
     }
     

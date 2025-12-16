@@ -91,6 +91,34 @@ const AIConfig = {
             medium: 0.85,
             hard: 1.35
         }
+    },
+    
+    // === GESTIÓN DE MODOS DE FRENTE ===
+    frontModes: {
+        evaluationInterval: 2.0,  // Segundos entre evaluaciones
+        
+        // Umbrales de decisión (base, ajustados por dificultad)
+        thresholds: {
+            retreatWhenBehind: 0.7,   // Si supplies < 70% del enemigo → RETREAT
+            advanceWhenAhead: 1.2,    // Si supplies > 120% del enemigo → ADVANCE  
+            holdWhenDefending: 0.5    // Si supplies < 50% y necesita tiempo → HOLD
+        },
+        
+        // Modificadores por dificultad
+        difficultyModifiers: {
+            easy: {
+                decisionAccuracy: 0.6,    // 60% de tomar decisión óptima
+                reactionDelay: 3.0        // Tarda 3s extra en reaccionar
+            },
+            medium: {
+                decisionAccuracy: 0.8,
+                reactionDelay: 1.5
+            },
+            hard: {
+                decisionAccuracy: 0.95,
+                reactionDelay: 0.5
+            }
+        }
     }
 };
 

@@ -296,6 +296,15 @@ export class BuildingSystem {
         
         const buildingId = this.currentBuildingType;
         
+        // 🆕 NUEVO: Validar posición localmente ANTES de enviar al servidor
+        // Si es inválida, triggerear shake y NO desactivar modo construcción
+        const previewRenderer = this.game.renderer?.previewRenderer;
+        if (previewRenderer && !previewRenderer.isValidBuildPosition(x, y, buildingId)) {
+            console.log(`❌ Posición inválida para ${buildingId} en (${x}, ${y}) - triggering shake`);
+            previewRenderer.triggerBuildShake();
+            return; // No desactivar modo construcción, permitir reintentar
+        }
+        
         // Delegar TODO al servidor autoritativo
         // Esto maneja validaciones, currency, territorio, colisiones, etc.
         if (!this.game.network || !this.game.network.roomId) {
