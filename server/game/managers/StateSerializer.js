@@ -243,7 +243,9 @@ export class StateSerializer {
                     isRepair: convoy.isRepair || false, // ✅ NUEVO: Flag de camión de reparación
                     repairing: convoy.repairing || false, // ✅ NUEVO: Si está reparando
                     repairStartTime: convoy.repairStartTime || null, // ✅ NUEVO: Tiempo de inicio de reparación
-                    repairDuration: convoy.repairDuration || 4 // ✅ NUEVO: Duración de reparación (4 segundos)
+                    repairDuration: convoy.repairDuration || 4, // ✅ NUEVO: Duración de reparación (4 segundos)
+                    affectedByTruckAssaultId: convoy.affectedByTruckAssaultId || null, // 🆕 ID del truck assault que afecta
+                    sabotagePenaltyApplied: convoy.sabotagePenaltyApplied || false // 🆕 Si está afectado por FOB Sabotage
                 };
             });
     }
@@ -368,7 +370,9 @@ export class StateSerializer {
                 progress: convoy.progress,
                 returning: convoy.returning,
                 isMedical: convoy.isMedical || false,
-                targetFrontId: convoy.targetFrontId || null
+                targetFrontId: convoy.targetFrontId || null,
+                affectedByTruckAssaultId: convoy.affectedByTruckAssaultId || null, // 🆕 ID del truck assault que afecta
+                sabotagePenaltyApplied: convoy.sabotagePenaltyApplied || false // 🆕 Si está afectado por FOB Sabotage
             };
         });
     }

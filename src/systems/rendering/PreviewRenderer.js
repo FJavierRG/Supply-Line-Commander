@@ -398,39 +398,24 @@ export class PreviewRenderer {
         this.ctx.setLineDash([]);
         */
         
-        // Mostrar círculo de rango de acción si el edificio tiene rango (solo si es válido)
-        if (config?.showRangePreview && isValid) {
-            // 🆕 Para plantas nucleares, mostrar rango de efecto sobre fábricas
-            if (buildingType === 'nuclearPlant') {
-                const nuclearPlantRange = this.game?.serverBuildingConfig?.ranges?.nuclearPlant || 0;
-                if (nuclearPlantRange > 0) {
-                    this.ctx.strokeStyle = 'rgba(0, 200, 255, 0.6)'; // Azul cian para efecto de planta nuclear
-                    this.ctx.lineWidth = 2;
-                    this.ctx.setLineDash([10, 5]);
-                    this.ctx.beginPath();
-                    this.ctx.arc(drawX, drawY, nuclearPlantRange, 0, Math.PI * 2);
-                    this.ctx.stroke();
-                    this.ctx.setLineDash([]);
-                }
-            }
-            // Para anti-drones, mostrar rango de detección
-            else if (config.detectionRange) {
-                this.ctx.strokeStyle = 'rgba(255, 200, 0, 0.6)';
+        // 🆕 UNIFICADO: Mostrar círculo de área de efecto si el edificio tiene rango
+        // Lee desde serverBuildingConfig de forma centralizada
+        if (isValid) {
+            const effectRadius = this.getEffectRadius(buildingType);
+            
+            if (effectRadius && effectRadius > 0) {
+                const colors = this.getEffectRadiusColors(buildingType);
+                
+                this.ctx.strokeStyle = colors.stroke;
+                this.ctx.fillStyle = colors.fill;
                 this.ctx.lineWidth = 2;
-                this.ctx.setLineDash([10, 5]);
+                this.ctx.setLineDash([8, 4]);
+                
                 this.ctx.beginPath();
-                this.ctx.arc(drawX, drawY, config.detectionRange, 0, Math.PI * 2);
+                this.ctx.arc(drawX, drawY, effectRadius, 0, Math.PI * 2);
+                this.ctx.fill();
                 this.ctx.stroke();
-                this.ctx.setLineDash([]);
-            }
-            // Para hospitales, mostrar rango de acción
-            else if (config.actionRange) {
-                this.ctx.strokeStyle = 'rgba(0, 255, 100, 0.6)';
-                this.ctx.lineWidth = 2;
-                this.ctx.setLineDash([10, 5]);
-                this.ctx.beginPath();
-                this.ctx.arc(drawX, drawY, config.actionRange, 0, Math.PI * 2);
-                this.ctx.stroke();
+                
                 this.ctx.setLineDash([]);
             }
         }
@@ -779,5 +764,71 @@ export class PreviewRenderer {
     isOutOfWorldBounds(x, y, buildingType) {
         // Delegar a NodeRenderer (fuente única de verdad)
         return this.nodeRenderer?.isOutOfWorldBounds(x, y, buildingType) || false;
+    }
+    
+    /**
+     * 🆕 NUEVO: Obtiene el radio de efecto de un edificio desde serverBuildingConfig
+     * Unifica la obtención de radios desde diferentes ubicaciones de la configuración
+     * @param {string} buildingType - Tipo de edificio
+     * @returns {number|null} Radio de efecto o null si no tiene
+     */
+    getEffectRadius(buildingType) {
+        const serverConfig = this.game?.serverBuildingConfig;
+        if (!serverConfig) return null;
+        
+        // 1. Buscar en specialNodes (comando, truckAssault, cameraDrone)
+        const specialNode = serverConfig.specialNodes?.[buildingType];
+        if (specialNode) {
+            if (specialNode.detectionRadius) return specialNode.detectionRadius;
+            if (specialNode.detectionRange) return specialNode.detectionRange;
+        }
+        
+        // 2. Buscar en gameplay (artillery, campaignHospital, antiDrone)
+        const gameplayConfig = serverConfig.gameplay?.[buildingType];
+        if (gameplayConfig) {
+            if (gameplayConfig.areaRadius) return gameplayConfig.areaRadius;
+            if (gameplayConfig.actionRange) return gameplayConfig.actionRange;
+            if (gameplayConfig.detectionRange) return gameplayConfig.detectionRange;
+        }
+        
+        // 3. Buscar en ranges (nuclearPlant)
+        if (serverConfig.ranges?.[buildingType]) {
+            return serverConfig.ranges[buildingType];
+        }
+        
+        // 4. Buscar en detectionRadius (vigilanceTower)
+        if (serverConfig.detectionRadius?.[buildingType]) {
+            return serverConfig.detectionRadius[buildingType];
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 🆕 NUEVO: Obtiene el color del área de efecto según el tipo de edificio
+     * @param {string} buildingType - Tipo de edificio
+     * @returns {Object} { stroke: string, fill: string }
+     */
+    getEffectRadiusColors(buildingType) {
+        const colors = {
+            // Defensivos (amarillo/naranja)
+            antiDrone: { stroke: 'rgba(255, 200, 0, 0.8)', fill: 'rgba(255, 200, 0, 0.1)' },
+            vigilanceTower: { stroke: 'rgba(255, 200, 0, 0.8)', fill: 'rgba(255, 200, 0, 0.1)' },
+            
+            // Ofensivos (rojo)
+            truckAssault: { stroke: 'rgba(231, 76, 60, 0.8)', fill: 'rgba(231, 76, 60, 0.1)' },
+            specopsCommando: { stroke: 'rgba(231, 76, 60, 0.8)', fill: 'rgba(231, 76, 60, 0.1)' },
+            artillery: { stroke: 'rgba(255, 140, 0, 0.8)', fill: 'rgba(255, 140, 0, 0.1)' },
+            
+            // Utilidad (verde/azul)
+            cameraDrone: { stroke: 'rgba(52, 152, 219, 0.8)', fill: 'rgba(52, 152, 219, 0.1)' },
+            campaignHospital: { stroke: 'rgba(0, 255, 100, 0.8)', fill: 'rgba(0, 255, 100, 0.1)' },
+            nuclearPlant: { stroke: 'rgba(0, 200, 255, 0.8)', fill: 'rgba(0, 200, 255, 0.1)' },
+            
+            // Default
+            default: { stroke: 'rgba(255, 255, 255, 0.6)', fill: 'rgba(255, 255, 255, 0.1)' }
+        };
+        
+        return colors[buildingType] || colors.default;
     }
 }

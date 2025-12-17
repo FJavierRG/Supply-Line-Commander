@@ -154,7 +154,13 @@ export class AssetManager {
             'drone-explosion-1': 'assets/sprites/particles/drone_explosion_1.png', // 🆕 NUEVO: Explosión de drones
             'drone-explosion-2': 'assets/sprites/particles/drone_explosion_2.png', // 🆕 NUEVO: Explosión de drones
             'impact-1': 'assets/sprites/particles/impact_icon.png',
-            'impact-2': 'assets/sprites/particles/impact_icon2.png'
+            'impact-2': 'assets/sprites/particles/impact_icon2.png',
+            
+            // 🌥️ NUEVO: Sprites de sombras de nubes
+            'cloud-1': 'assets/sprites/particles/cloud1.png',
+            'cloud-2': 'assets/sprites/particles/cloud2.png',
+            'cloud-3': 'assets/sprites/particles/cloud3.png',
+            'cloud-4': 'assets/sprites/particles/cloud4.png'
         };
     }
     

@@ -127,6 +127,25 @@ export const DISCIPLINES = {
                 consumeMultiplierBonus: 1.5  // Base 1.0 + 1.5 = 2.5 total
             }
         }
+    },
+    
+    // ============================================================
+    // SUMINISTROS AÉREOS
+    // ============================================================
+    'air_supplies': {
+        id: 'air_supplies',
+        name: 'Suministros Aéreos',
+        description: 'Recarga instantáneamente toda la barra de suministros de todos tus nodos de Frente.',
+        icon: 'assets/sprites/ui/Disciplines/air_supplies.png',
+        duration: 1,           // Duración mínima (efecto instantáneo)
+        cooldown: 90,
+        enabled: true,
+        
+        effects: {
+            instant: {
+                refillFrontSupplies: true  // Efecto especial: recarga todos los frentes
+            }
+        }
     }
 
     // ✅ Para añadir una nueva disciplina, simplemente copia el bloque anterior

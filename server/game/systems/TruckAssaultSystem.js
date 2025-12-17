@@ -53,6 +53,12 @@ export class TruckAssaultSystem {
             return null;
         }
         
+        // ✅ Verificar si el tipo de vehículo está afectado por truck assault
+        const affectedVehicles = SERVER_NODE_CONFIG.gameplay?.truckAssault?.affectedVehicles || ['truck'];
+        if (!affectedVehicles.includes(convoy.vehicleType)) {
+            return null; // Este tipo de vehículo no es afectado por truck assault
+        }
+        
         // Obtener nodos origen y destino del convoy
         const fromNode = this.gameState.nodes.find(n => n.id === convoy.fromId);
         const toNode = this.gameState.nodes.find(n => n.id === convoy.toId);

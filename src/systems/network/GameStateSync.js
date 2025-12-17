@@ -476,6 +476,10 @@ export class GameStateSync {
                 convoy.repairing = convoyData.repairing || false;
                 convoy.repairStartTime = convoyData.repairStartTime || null;
                 convoy.repairDuration = convoyData.repairDuration || 4;
+                // 🆕 NUEVO: Sincronizar ID del truck assault que afecta
+                convoy.affectedByTruckAssaultId = convoyData.affectedByTruckAssaultId || null;
+                // 🆕 NUEVO: Sincronizar flag de FOB Sabotage
+                convoy.sabotagePenaltyApplied = convoyData.sabotagePenaltyApplied || false;
             }
             // Si no existe, será creado por el evento convoy_spawned o ambulance_spawned
         });

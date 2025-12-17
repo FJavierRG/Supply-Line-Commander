@@ -221,6 +221,10 @@
     "aggressive_advance": {
       "name": "Avance Agresivo",
       "description": "Los nodos en modo avanzar aumentan su velocidad de avance x2 así como su consumo de suministros x2.5."
+    },
+    "air_supplies": {
+      "name": "Suministros Aéreos",
+      "description": "Recarga instantáneamente toda la barra de suministros de todos tus nodos de Frente."
     }
   },
   

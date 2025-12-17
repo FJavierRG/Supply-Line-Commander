@@ -52,6 +52,7 @@ import { i18n } from './services/I18nService.js'; // ✅ NUEVO: Servicio de i18n
 import { NetworkManager } from './systems/NetworkManager.js';
 import { RenderSystem } from './systems/RenderSystem.js';
 import { FogOfWarRenderer } from './systems/rendering/FogOfWarRenderer.js';
+import { CloudShadowRenderer } from './systems/rendering/CloudShadowRenderer.js';
 import { GAME_CONFIG } from './config/constants.js';
 // ELIMINADO: MAP_CONFIG, calculateAbsolutePosition - Ya no se genera el mapa en el cliente
 import { getNodeConfig } from './config/nodes.js';
@@ -155,6 +156,9 @@ export class Game {
         
         // ⚠️ DESACTIVADO TEMPORALMENTE - Activar cuando se implemente efecto de edificio
         this.fogOfWar.setEnabled(false);
+        
+        // 🌥️ NUEVO: Sistema de sombras de nubes (efecto ambiental)
+        this.cloudShadowRenderer = new CloudShadowRenderer(this.renderer.ctx, this, this.assetManager);
         
         // 🆕 NUEVO: Enlazar territory con topBar
         this.topBar.territory = this.territory;
@@ -507,6 +511,11 @@ export class Game {
         this.audio.resetEventFlags();
         this.camera.reset();
         
+        // 🌥️ Reset sombras de nubes
+        if (this.cloudShadowRenderer) {
+            this.cloudShadowRenderer.reset();
+        }
+        
         // Limpiar background tiles
         this.backgroundTiles = null;
         
@@ -677,6 +686,11 @@ export class Game {
         // 🆕 NUEVO: Actualizar visualizaciones de fábricas
         if (this.renderer.effectRenderer) {
             this.renderer.effectRenderer.updateFactoryVisuals(dt);
+        }
+        
+        // 🌥️ NUEVO: Actualizar sombras de nubes
+        if (this.cloudShadowRenderer) {
+            this.cloudShadowRenderer.update(dt);
         }
         this.ui.updateHUD(this.getGameState());
         this.inputHandler.updateHoverTooltip();
@@ -1012,6 +1026,11 @@ export class Game {
         
         // Renderizar territorio controlado (debajo de las bases, por encima de carreteras)
         this.territory.render(this.renderer.ctx);
+        
+        // 🌥️ NUEVO: Renderizar sombras de nubes (efecto ambiental sutil)
+        if (this.cloudShadowRenderer) {
+            this.cloudShadowRenderer.render();
+        }
         
         // 🆕 NUEVO: Renderizar niebla de guerra (sobre territorio, debajo de nodos)
         if (this.fogOfWarRenderer && this.isMultiplayer) {

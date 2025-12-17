@@ -203,6 +203,37 @@ export class VehicleRenderer {
             }
         }
         
+        // 🆕 NUEVO: Línea roja al truck assault que afecta al convoy
+        if (convoy.affectedByTruckAssaultId && this.game?.nodes) {
+            const assault = this.game.nodes.find(n => n.id === convoy.affectedByTruckAssaultId);
+            if (assault) {
+                this.ctx.strokeStyle = 'rgba(255, 50, 50, 0.7)';
+                this.ctx.lineWidth = 2;
+                this.ctx.setLineDash([4, 4]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(convoy.x, convoy.y);
+                this.ctx.lineTo(assault.x, assault.y);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+            }
+        }
+        
+        // 🆕 NUEVO: Icono de debuff cuando el convoy está afectado por FOB Sabotage
+        if (convoy.sabotagePenaltyApplied) {
+            const sabotageIcon = this.assetManager?.getSprite('ui-no-supplies');
+            if (sabotageIcon) {
+                const iconSize = 24;
+                const iconY = convoy.y - 35; // Encima del convoy
+                this.ctx.drawImage(
+                    sabotageIcon,
+                    convoy.x - iconSize / 2,
+                    iconY - iconSize / 2,
+                    iconSize,
+                    iconSize
+                );
+            }
+        }
+        
         this.ctx.globalAlpha = 1;
     }
     

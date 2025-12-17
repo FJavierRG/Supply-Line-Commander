@@ -5,8 +5,9 @@
 import { getDiscipline, disciplineExists } from '../../config/disciplines.js';
 
 export class DisciplineManager {
-    constructor(gameId) {
+    constructor(gameId, gameState = null) {
         this.gameId = gameId;
+        this.gameState = gameState; // 🆕 NUEVO: Referencia al gameState para efectos instantáneos
         
         // Estado de disciplinas por jugador
         this.playerDisciplines = {
@@ -25,6 +26,14 @@ export class DisciplineManager {
                 cooldowns: {}        // 🆕 NUEVO: Cooldowns individuales por disciplina { disciplineId: cooldownUntil }
             }
         };
+    }
+    
+    /**
+     * 🆕 NUEVO: Establece la referencia al gameState (llamar después de construir)
+     * @param {Object} gameState - Referencia al GameStateManager
+     */
+    setGameState(gameState) {
+        this.gameState = gameState;
     }
     
     /**
@@ -123,6 +132,11 @@ export class DisciplineManager {
         playerState.activeStartTime = currentTime;
         playerState.activeDuration = discipline.duration * 1000; // Convertir a ms
         
+        // 🆕 NUEVO: Aplicar efectos instantáneos (si los tiene)
+        if (discipline.effects?.instant) {
+            this.applyInstantEffects(playerId, discipline.effects.instant);
+        }
+        
         console.log(`✅ ${playerId} activó disciplina: ${disciplineId} (${discipline.duration}s)`);
         
         return { 
@@ -130,6 +144,48 @@ export class DisciplineManager {
             reason: 'Disciplina activada',
             discipline: discipline
         };
+    }
+    
+    /**
+     * 🆕 NUEVO: Aplica efectos instantáneos de una disciplina
+     * @param {string} playerId - 'player1' o 'player2'
+     * @param {Object} instantEffects - Objeto con efectos instantáneos a aplicar
+     */
+    applyInstantEffects(playerId, instantEffects) {
+        if (!this.gameState) {
+            console.error('❌ DisciplineManager: gameState no disponible para efectos instantáneos');
+            return;
+        }
+        
+        // === EFECTO: Recargar suministros de todos los frentes ===
+        if (instantEffects.refillFrontSupplies) {
+            const fronts = this.gameState.nodes.filter(n => 
+                n.type === 'front' && 
+                n.team === playerId && 
+                n.hasSupplies
+            );
+            
+            let refillCount = 0;
+            for (const front of fronts) {
+                if (front.supplies < front.maxSupplies) {
+                    front.supplies = front.maxSupplies;
+                    refillCount++;
+                }
+            }
+            
+            console.log(`🪂 Suministros Aéreos: ${playerId} recargó ${refillCount} frentes al máximo`);
+            
+            // 🆕 Crear evento visual para el cliente
+            if (this.gameState.addVisualEvent) {
+                this.gameState.addVisualEvent('air_supplies_drop', {
+                    team: playerId,
+                    frontsAffected: refillCount,
+                    frontIds: fronts.map(f => f.id)
+                });
+            }
+        }
+        
+        // === Aquí se pueden añadir más efectos instantáneos en el futuro ===
     }
     
     /**

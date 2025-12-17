@@ -120,6 +120,7 @@ export class GameStateManager {
         this.supplyManager = new SupplyManager(this);
         this.investmentManager = new InvestmentManager(this);
         this.disciplineManager = new DisciplineManager(room.id); // 🆕 NUEVO: Gestor de disciplinas
+        this.disciplineManager.setGameState(this); // 🆕 NUEVO: Permitir efectos instantáneos
         // AISystem se inicializa después con io y roomId
         this.aiSystem = null;
         

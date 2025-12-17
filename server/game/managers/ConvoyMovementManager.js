@@ -237,9 +237,15 @@ export class ConvoyMovementManager {
         const affectingAssault = this.truckAssaultSystem.getAffectingTruckAssault(convoy);
         
         if (affectingAssault) {
+            // Guardar ID del truck assault que afecta (para renderizado en cliente)
+            convoy.affectedByTruckAssaultId = affectingAssault.id;
+            
             // Aplicar penalización de velocidad (25% de reducción = multiplicador 0.75)
             const speedPenalty = SERVER_NODE_CONFIG.gameplay?.truckAssault?.speedPenalty || 0.75;
             vehicleSpeed *= speedPenalty;
+        } else {
+            // Limpiar si ya no está afectado
+            convoy.affectedByTruckAssaultId = null;
         }
         
         return vehicleSpeed;

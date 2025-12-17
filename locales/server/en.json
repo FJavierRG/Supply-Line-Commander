@@ -221,6 +221,10 @@
     "aggressive_advance": {
       "name": "Aggressive Advance",
       "description": "Nodes in advance mode increase their advance speed x2 as well as their supply consumption x2.5."
+    },
+    "air_supplies": {
+      "name": "Air Supplies",
+      "description": "Instantly refills the entire supply bar of all your Front nodes."
     }
   },
   
